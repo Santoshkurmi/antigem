@@ -259,7 +259,7 @@ class AndroidLocalBridgeServer private constructor() {
                     path == "/google_flow" -> handleMcpHttp(McpEndpoint.GOOGLE_FLOW, method, body, out)
                     path == "/android" -> handleMcpHttp(McpEndpoint.ANDROID, method, body, out)
                     path == "/notes" -> handleMcpHttp(McpEndpoint.NOTES, method, body, out)
-                    path == "/jarvis" -> handleMcpHttp(McpEndpoint.JARVIS, method, body, out)
+                    path == "/jarvis" -> handleMcpHttp(McpEndpoint.JARVIS, method, body, out, headers["mcp-session-id"])
                     path == "/theme" -> handleMcpHttp(McpEndpoint.THEME, method, body, out)
                     path == "/api/health" -> {
                         val res = JSONObject().apply {
@@ -311,7 +311,20 @@ class AndroidLocalBridgeServer private constructor() {
      * MCP over HTTP: a POSTed JSON-RPC request gets its response, notifications (no id) get 202 with no body, a
      * batch gets an array, and GET (the optional server-sent event stream) is not offered (405).
      */
-    private suspend fun handleMcpHttp(endpoint: McpEndpoint, method: String, body: String, out: OutputStream) {
+    /**
+     * Jarvis' endpoint gives every MCP connection its own session id (each agent process of a chat connects on its own),
+     * and passes it with each tool call as `_mcp_session`: Jarvis then knows which of its chats is calling, even when
+     * several work at once (see JarvisManagers.resolveCaller).
+     */
+    private fun withJarvisSession(req: JSONObject, endpoint: McpEndpoint, session: String?): JSONObject {
+        if (endpoint != McpEndpoint.JARVIS || session.isNullOrBlank() || req.optString("method") != "tools/call") return req
+        val params = req.optJSONObject("params") ?: return req
+        val args = params.optJSONObject("arguments") ?: JSONObject().also { params.put("arguments", it) }
+        args.put("_mcp_session", session)
+        return req
+    }
+
+    private suspend fun handleMcpHttp(endpoint: McpEndpoint, method: String, body: String, out: OutputStream, session: String? = null) {
         if (method != "POST") {
             sendResponse(out, 405, "application/json", jsonRpcError(null, -32600, "Use POST for MCP requests").toString(), allow = "POST, OPTIONS")
             return
@@ -331,7 +344,7 @@ class AndroidLocalBridgeServer private constructor() {
                     continue
                 }
                 if (!item.has("id")) continue
-                responses.put(runMcpRequest(item, endpoint))
+                responses.put(runMcpRequest(withJarvisSession(item, endpoint, session), endpoint))
             }
             if (responses.length() == 0) sendResponse(out, 202, "application/json", "")
             else sendResponse(out, 200, "application/json", responses.toString())
@@ -342,7 +355,12 @@ class AndroidLocalBridgeServer private constructor() {
             req == null -> sendResponse(out, 200, "application/json", jsonRpcError(null, -32700, "Parse error").toString())
             // a notification (e.g. notifications/initialized) has no id and gets no response
             !req.has("id") -> sendResponse(out, 202, "application/json", "")
-            else -> sendResponse(out, 200, "application/json", runMcpRequest(req, endpoint).toString())
+            else -> {
+                // a new connection of Jarvis' endpoint gets its session id with the initialize answer
+                val newSession = if (endpoint == McpEndpoint.JARVIS && req.optString("method") == "initialize") java.util.UUID.randomUUID().toString() else null
+                val result = runMcpRequest(withJarvisSession(req, endpoint, session), endpoint).toString()
+                sendResponse(out, 200, "application/json", result, extraHeaders = newSession?.let { mapOf("Mcp-Session-Id" to it) }.orEmpty())
+            }
         }
     }
 
@@ -370,7 +388,8 @@ class AndroidLocalBridgeServer private constructor() {
         statusCode: Int,
         contentType: String,
         body: String,
-        allow: String? = null
+        allow: String? = null,
+        extraHeaders: Map<String, String> = emptyMap()
     ) {
         val bytes = body.toByteArray(Charsets.UTF_8)
         val statusText = when (statusCode) {
@@ -387,6 +406,7 @@ class AndroidLocalBridgeServer private constructor() {
                 "Content-Type: $contentType; charset=utf-8\r\n" +
                 "Content-Length: ${bytes.size}\r\n" +
                 (allow?.let { "Allow: $it\r\n" } ?: "") +
+                extraHeaders.entries.joinToString("") { "${it.key}: ${it.value}\r\n" } +
                 "Access-Control-Allow-Origin: *\r\n" +
                 "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
                 "Access-Control-Allow-Headers: Content-Type, X-Device-Id\r\n" +

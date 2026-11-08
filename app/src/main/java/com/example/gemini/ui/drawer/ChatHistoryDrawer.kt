@@ -120,6 +120,8 @@ fun ChatHistoryDrawer(
     /** Jarvis (voice mode) is on: the filter row gets a Jarvis chip listing Jarvis' hidden chats. */
     jarvisEnabled: Boolean = false,
     jarvisConversations: List<Conversation> = emptyList(),
+    /** Starts a Jarvis text chat (the command center) with that agent, or Jarvis' own agent for null. */
+    onNewJarvisChat: ((com.example.gemini.domain.model.AgentKind?) -> Unit)? = null,
     enabledAgents: Set<com.example.gemini.domain.model.AgentKind> = emptySet(),
     modifier: Modifier = Modifier
 ) {
@@ -152,6 +154,7 @@ fun ChatHistoryDrawer(
     if (agentFilter != null && agentFilter !in visibleAgents) agentFilter = null
     var jarvisFilter by remember { mutableStateOf(false) }
     if (!jarvisEnabled && jarvisFilter) jarvisFilter = false
+    val jarvisIds = remember(jarvisConversations) { jarvisConversations.map { it.id }.toSet() }
     val filtered = remember(conversations, jarvisConversations, searchQuery, agentFilter, jarvisFilter) {
         val byAgent = if (jarvisFilter) jarvisConversations
         else agentFilter?.let { a -> conversations.filter { it.agent == a } } ?: conversations
@@ -825,20 +828,31 @@ fun ChatHistoryDrawer(
                         )
                     }
                     if (jarvisEnabled) {
-                        val jarvisAccent = com.example.gemini.theme.AppColors.accentTeal
-                        Text(
-                            text = "Jarvis",
-                            fontSize = 11.5.sp,
-                            fontWeight = if (jarvisFilter) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (jarvisFilter) jarvisAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        val jarvisAccent = com.example.gemini.ui.jarvis.Cyan
+                        Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (jarvisFilter) jarvisAccent.copy(alpha = 0.14f) else Color.Transparent)
                                 .clickable { agentFilter = null; jarvisFilter = true }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                                .padding(start = 7.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            com.example.gemini.ui.jarvis.JarvisBotIcon(15.dp, if (jarvisFilter) jarvisAccent else jarvisAccent.copy(alpha = 0.7f))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Jarvis",
+                                fontSize = 11.5.sp,
+                                fontWeight = if (jarvisFilter) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (jarvisFilter) jarvisAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
                     }
                 }
+            }
+
+            // the Jarvis tab: start a Jarvis text chat (a command center that leads teams of agents)
+            if (jarvisEnabled && jarvisFilter && onNewJarvisChat != null) {
+                JarvisNewChatRow(agents = visibleAgents, onNew = onNewJarvisChat)
             }
 
             val isEngineConnecting = agyEnabled && (systemConnectionState.status == com.example.gemini.data.remote.SystemStatus.STARTING ||
@@ -910,7 +924,11 @@ fun ChatHistoryDrawer(
                             contentAlignment = Alignment.TopCenter
                         ) {
                             Text(
-                                text = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\"" else "No recent chats",
+                                text = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\""
+                                    else if (jarvisFilter) "No Jarvis chats yet. Start one above: type a big job and Jarvis plans it, runs it with teams of agents and keeps going until it's done."
+                                    else "No recent chats",
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp),
                                 fontSize = 13.5.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                             )
@@ -941,6 +959,7 @@ fun ChatHistoryDrawer(
 
                                     ChatHistoryItemRow(
                                         conv = conv,
+                                        isJarvis = conv.id in jarvisIds,
                                         isSelected = isSelected,
                                         activeInst = activeInst,
                                         isActivelyRunning = isActivelyRunning,
@@ -1050,6 +1069,7 @@ fun ChatHistoryDrawer(
 
                                         ChatHistoryItemRow(
                                             conv = conv,
+                                            isJarvis = conv.id in jarvisIds,
                                             isSelected = isSelected,
                                             activeInst = activeInst,
                                             isActivelyRunning = isActivelyRunning,
@@ -1416,6 +1436,8 @@ private fun buildVisibleChatTree(
 private fun ChatHistoryItemRow(
     conv: Conversation,
     isSelected: Boolean,
+    /** A Jarvis chat: marked with Jarvis' robot face instead of the chat bubble. */
+    isJarvis: Boolean = false,
     activeInst: com.example.gemini.data.remote.AgyActiveInstance?,
     isActivelyRunning: Boolean,
     isScheduledOrBackground: Boolean,
@@ -1485,7 +1507,9 @@ private fun ChatHistoryItemRow(
                 // Claude chats are marked by an orange chat icon (instead of a "Claude" text badge)
                 val isClaudeChat = conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
                 val isOpenCodeChat = conv.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
-                Icon(
+                if (isJarvis) {
+                    com.example.gemini.ui.jarvis.JarvisBotIcon(19.dp, com.example.gemini.ui.jarvis.Cyan.copy(alpha = if (isSelected) 1f else 0.85f))
+                } else Icon(
                     imageVector = Icons.Outlined.ChatBubbleOutline,
                     contentDescription = if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else null,
                     tint = when {
@@ -2311,3 +2335,38 @@ class ClaudeDrawerActions(
     /** Stops the chat's process (when idle) so its next message starts one with the current provider settings; the callback gets a message. */
     val restart: (String, (String) -> Unit) -> Unit
 )
+
+
+/**
+ * The Jarvis tab's "New Jarvis chat" button. The chat opens like any new chat (pick the agent above the empty chat, the
+ * model in the input bar); it only adds Jarvis' tools, guide and command strip.
+ */
+@Composable
+private fun JarvisNewChatRow(
+    @Suppress("UNUSED_PARAMETER") agents: List<com.example.gemini.domain.model.AgentKind>,
+    onNew: (com.example.gemini.domain.model.AgentKind?) -> Unit
+) {
+    val accent = com.example.gemini.ui.jarvis.Cyan
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(accent.copy(alpha = 0.09f))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .clickable { onNew(null) }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        com.example.gemini.ui.jarvis.JarvisBotIcon(26.dp, accent, animated = true)
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("New Jarvis chat", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                "Any agent and model. Give it a big job: it plans, runs teams of agents and keeps going",
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), maxLines = 2
+            )
+        }
+        Icon(Icons.Filled.Add, contentDescription = "New Jarvis chat", tint = accent)
+    }
+}

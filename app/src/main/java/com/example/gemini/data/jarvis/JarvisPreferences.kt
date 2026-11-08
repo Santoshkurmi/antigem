@@ -123,15 +123,31 @@ object JarvisPreferences {
     val autoSend = pref("auto_send", false)
     /** How the pause is judged when [autoSend] is on: "smart" (longer when the sentence sounds unfinished) or "pause" (fixed). */
     val sendMode = pref("send_mode", "smart")
-    /** Short answers to Jarvis' own questions ("yes", "the second one") send after a pause even with [autoSend] off. */
-    val autoSendAnswers = pref("auto_send_answers", true)
+    /**
+     * Answers to Jarvis' own questions: "same" (sent like everything else, by the send mode) or "auto" (sent after a pause
+     * even when the send mode is manual). Decided once when the microphone opens: it never changes while you talk.
+     */
+    val answerSend = pref("answer_send", "same")
     /** Saying one of [sendPhrases] at the end sends at once (the phrase itself is not sent). */
     val sendPhrasesOn = pref("send_phrases_on", true)
-    /** One phrase per line; see [JarvisPhrases] for when a phrase counts. */
-    val sendPhrases = pref("send_phrases", JarvisPhrases.DEFAULT_SEND.joinToString("\n"))
+    /** One phrase per line, the user's own (empty until they add some); see [JarvisPhrases] for when a phrase counts. */
+    val sendPhrases = pref("send_phrases", "")
     /** Saying one of [cancelPhrases] at the end throws the capture away. */
     val cancelPhrasesOn = pref("cancel_phrases_on", true)
-    val cancelPhrases = pref("cancel_phrases", JarvisPhrases.DEFAULT_CANCEL.joinToString("\n"))
+    val cancelPhrases = pref("cancel_phrases", "")
+
+    // ---- voice shortcuts: said on their own (optionally with "Jarvis"), they act at once without a model turn.
+    // All empty until the user adds phrases, so nothing fires by surprise.
+    val cmdStop = pref("cmd_stop", "")
+    val cmdBye = pref("cmd_bye", "")
+    val cmdRepeat = pref("cmd_repeat", "")
+    val cmdSlower = pref("cmd_slower", "")
+    val cmdFaster = pref("cmd_faster", "")
+    val cmdQuietOn = pref("cmd_quiet_on", "")
+    val cmdQuietOff = pref("cmd_quiet_off", "")
+    val cmdNewSession = pref("cmd_new_session", "")
+    /** Busy behavior "smart": a message that starts with one of these interrupts Jarvis' running turn (empty: it waits). */
+    val interruptPhrases = pref("interrupt_phrases", "")
     /** Longest single capture (seconds); what was heard is sent then. */
     val maxListenSeconds = pref("max_listen_s", 90)
     /**
@@ -141,7 +157,7 @@ object JarvisPreferences {
     val sideTalk = pref("side_talk", "smart")
     /** Short tones when the microphone opens and closes. */
     val earcons = pref("earcons", true)
-    /** You speak while Jarvis is still working: "queue" (wait), "interrupt" (stop it and send), "smart" (corrections interrupt). */
+    /** You speak while Jarvis is still working: "queue" (wait), "interrupt" (stop it and send), "smart" (your interrupt phrases interrupt). */
     val busyBehavior = pref("busy_behavior", "smart")
     /** The headset / Bluetooth button talks (one press) and stops (two presses) while hands-free is on. */
     val headsetButton = pref("headset_button", true)
@@ -171,6 +187,25 @@ object JarvisPreferences {
     val taskApprovals = pref("task_approvals", "policy")
     /** Tell Jarvis when a running task shows no progress for this many minutes (0 = never). */
     val stallMinutes = pref("stall_minutes", 10)
+
+    // ---- command center (Jarvis text chats, missions, teams)
+    /** New Jarvis text chats read their replies out loud. */
+    val managerSpeakDefault = pref("manager_speak_default", false)
+    /**
+     * A Jarvis chat that sleeps or polls while it waits for its tasks: "interrupt" (stop that turn and hand it the news),
+     * "remind" (only a stern reminder in the next message) or "off".
+     */
+    val waitGuard = pref("wait_guard", "interrupt")
+    /** Autopilot: how often an unfinished mission is nudged without progress before autopilot pauses itself. */
+    val autopilotMaxNudges = pref("autopilot_max_nudges", 4)
+    /** News that comes in within this time is sent to Jarvis together, in one message (milliseconds). */
+    val eventBatchMs = pref("event_batch_ms", 2000)
+    /** The agent of the last Jarvis text chat the user opened (the next one starts with it); blank: Jarvis' agent. */
+    val textChatAgent = pref("text_chat_agent", "")
+    /** Jarvis chats in the chat list's other tabs too: "none" (only under Jarvis), "text" (the user's Jarvis chats) or "all". */
+    val jarvisInAll = pref("jarvis_in_all", "none")
+    /** Quick switches shown in the Jarvis panel, in order (ids of [com.example.gemini.ui.jarvis.QuickSwitch]). */
+    val quickPins = pref("quick_pins", "handsfree,voice,send,pause,answers,screen")
 
     // ---- look
     /** "floating" orb or "fullscreen" overlay. */

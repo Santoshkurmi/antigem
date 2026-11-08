@@ -15,6 +15,9 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     data class Summary(val message: ChatMessage) : ChatFeedItem("summary_${message.id}", "SUMMARY")
     @Immutable
     data class User(val message: ChatMessage) : ChatFeedItem("user_${message.id}", "USER")
+    /** News Jarvis' teams sent to a Jarvis chat (shown as a card, not as the user's words). */
+    @Immutable
+    data class JarvisEvent(val message: ChatMessage) : ChatFeedItem("jarvis_event_${message.id}", "JARVIS_EVENT")
     @Immutable
     data class AssistantThinking(val messageId: String, val thoughtText: String, val durationMs: Long?, val isStreaming: Boolean) : ChatFeedItem("thought_$messageId", "THOUGHT")
     @Immutable
@@ -44,9 +47,13 @@ object ChatFeedCache {
                 msgItems.add(ChatFeedItem.Summary(msg))
             }
             MessageRole.USER -> {
-                // Show the slash command the user typed, not the instructions it expanded to
-                val shown = com.example.gemini.data.remote.PromptExpansion.collapse(msg.content)
-                msgItems.add(ChatFeedItem.User(if (shown === msg.content) msg else msg.copy(content = shown)))
+                if (com.example.gemini.data.jarvis.JarvisEvents.isEventMessage(msg.content)) {
+                    msgItems.add(ChatFeedItem.JarvisEvent(msg))
+                } else {
+                    // Show the slash command the user typed, not the instructions it expanded to
+                    val shown = com.example.gemini.data.remote.PromptExpansion.collapse(msg.content)
+                    msgItems.add(ChatFeedItem.User(if (shown === msg.content) msg else msg.copy(content = shown)))
+                }
             }
             MessageRole.ASSISTANT -> {
                 val durTag = if (msg.thoughtDurationMs != null && msg.thoughtDurationMs > 0) ":${msg.thoughtDurationMs}" else ""

@@ -65,6 +65,9 @@ object PromptExpansion {
     /** Instructions for the model that the chat never shows (the block collapses to nothing for display). */
     fun hidden(body: String) = block("", body)
 
+    /** [body] goes to the model, the chat shows only [label] in its place (e.g. a one-line summary of Jarvis' events). */
+    fun labeled(label: String, body: String) = block(label, body.replace("</$TAG>", "</$TAG\u2060>"))
+
     private fun enabledPlugin(id: String): BrowserExtension? =
         BrowserExtensionManager.instance.extensions.firstOrNull { it.isEnabled && it.id.equals(id, ignoreCase = true) }
 

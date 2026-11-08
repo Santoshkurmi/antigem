@@ -182,7 +182,15 @@ fun ChatScreen(
             com.example.gemini.ui.components.AppToastHelper.showToast(it, com.example.gemini.ui.components.ChatToastType.INFO)
         }
     }
+    // a fresh Jarvis text chat has the agent picker too; switching starts it again with that agent, still a Jarvis chat
+    val jarvisManagers by com.example.gemini.data.jarvis.JarvisManagers.managers.collectAsState()
+    val isJarvisTextChat = currentConv?.id?.let { it in jarvisManagers.keys } == true
     val isFreshNewChat = currentConv == null || currentConv?.title == "New Chat"
+    val pickAgent: (com.example.gemini.domain.model.AgentKind) -> Unit = { agent ->
+        val id = currentConv?.id
+        if (isJarvisTextChat && id != null) com.example.gemini.data.jarvis.JarvisController.switchTextChatAgent(id, agent)
+        else viewModel.setNewChatAgent(agent)
+    }
     val claudeBackend = viewModel.claudeBackend
     val claudePending by claudeBackend.pendingPermissions.collectAsState()
     val claudeStatus by viewModel.claudeAccount.status.collectAsState()
@@ -914,10 +922,23 @@ fun ChatScreen(
         mutableStateListOf<String>()
     }
 
+    /** Opens a chat Jarvis points at (a task of its team) and keeps the way back to the Jarvis chat. */
+    val openJarvisLinkedChat: (String) -> Unit = { targetId ->
+        val currentId = currentConv?.id
+        if (!currentId.isNullOrBlank() && !currentId.equals(targetId, ignoreCase = true)) {
+            if (feedItems.isNotEmpty()) {
+                ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+            }
+            conversationBackStack.add(currentId)
+        }
+        viewModel.selectConversation(targetId)
+    }
     val navigateBackConversation: () -> Unit = {
         while (conversationBackStack.isNotEmpty()) {
             val prevId = conversationBackStack.removeAt(conversationBackStack.lastIndex)
-            if (conversations.isEmpty() || conversations.any { it.id.equals(prevId, ignoreCase = true) }) {
+            // Jarvis chats are not in `conversations` (listed apart, under Jarvis) but are valid places to go back to
+            if (conversations.isEmpty() || conversations.any { it.id.equals(prevId, ignoreCase = true) } ||
+                jarvisConversations.any { it.id.equals(prevId, ignoreCase = true) } || prevId in jarvisManagers.keys) {
                 val currentId = currentConv?.id
                 if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
                     ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
@@ -1037,6 +1058,16 @@ fun ChatScreen(
                 conversations = conversations,
                 jarvisEnabled = jarvisEnabled,
                 jarvisConversations = jarvisConversations,
+                onNewJarvisChat = { agent ->
+                    val currentId = currentConv?.id
+                    if (!currentId.isNullOrBlank() && feedItems.isNotEmpty()) {
+                        ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                    }
+                    conversationBackStack.clear()
+                    val problem = com.example.gemini.data.jarvis.JarvisController.startTextChat(agent)
+                    if (problem != null) android.widget.Toast.makeText(context, problem, android.widget.Toast.LENGTH_LONG).show()
+                    else scope.launch { drawerState.close() }
+                },
                 enabledAgents = enabledAgents,
                 currentConversationId = currentConv?.id,
                 activeInstances = activeInstances,
@@ -1644,7 +1675,7 @@ fun ChatScreen(
                                 if (isFreshNewChat) {
                                     com.example.gemini.ui.components.AgentPicker(
                                         selected = currentConv?.agent ?: newChatAgent,
-                                        onSelect = { viewModel.setNewChatAgent(it) },
+                                        onSelect = pickAgent,
                                         modifier = Modifier.padding(bottom = 20.dp),
                                         agents = enabledAgents,
                                         statusColors = agentEntries.associate { it.agent to it.color }
@@ -1672,7 +1703,7 @@ fun ChatScreen(
                                 ) {
                                     com.example.gemini.ui.components.AgentPicker(
                                         selected = currentConv?.agent ?: newChatAgent,
-                                        onSelect = { viewModel.setNewChatAgent(it) },
+                                        onSelect = pickAgent,
                                         modifier = Modifier.padding(bottom = 20.dp),
                                         agents = enabledAgents,
                                         statusColors = agentEntries.associate { it.agent to it.color }
@@ -1754,7 +1785,7 @@ fun ChatScreen(
                                 if (isFreshNewChat) {
                                     com.example.gemini.ui.components.AgentPicker(
                                         selected = currentConv?.agent ?: newChatAgent,
-                                        onSelect = { viewModel.setNewChatAgent(it) },
+                                        onSelect = pickAgent,
                                         modifier = Modifier.padding(bottom = 20.dp),
                                         agents = enabledAgents,
                                         statusColors = agentEntries.associate { it.agent to it.color }
@@ -1806,7 +1837,11 @@ fun ChatScreen(
                                             )
                                         }
                                     }
-                                    else -> {
+                                    else -> if (isJarvisTextChat) {
+                                        com.example.gemini.ui.jarvis.JarvisChatWelcome { example ->
+                                            inputState.setTextAndPlaceCursorAtEnd(example)
+                                        }
+                                    } else {
                                         Text(
                                             text = "How can I help you today?",
                                             fontSize = 22.sp,
@@ -1875,6 +1910,10 @@ fun ChatScreen(
                                             }
                                         }
                                         is ChatFeedItem.Divider -> com.example.gemini.ui.components.WaveDivider(label = feedItem.label)
+                                        is ChatFeedItem.JarvisEvent -> com.example.gemini.ui.jarvis.JarvisEventCard(
+                                            raw = feedItem.message.content,
+                                            onOpenChat = openJarvisLinkedChat
+                                        )
                                         is ChatFeedItem.User -> {
                                             val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
                                             val willDeleteOutput = msgIndex < messages.lastIndex
@@ -2392,6 +2431,15 @@ fun ChatScreen(
                 }
                 if (isOpenCodeChat) {
                     com.example.gemini.ui.opencode.OpenCodeControlsStrip(openCodeBackend)
+                }
+
+                // Jarvis chat: its command strip (mission, teams' tasks, voice replies, autopilot)
+                if (jarvisEnabled && currentConv != null && (isJarvisTextChat || jarvisConversations.any { it.id == currentConv?.id })) {
+                    val jarvisToolsMissing = remember(messages) {
+                        messages.lastOrNull { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }?.content
+                            ?.contains(com.example.gemini.data.jarvis.JarvisSkill.MCP_MISSING) == true
+                    }
+                    com.example.gemini.ui.jarvis.JarvisCommandStrip(chatId = currentConv!!.id, onOpenChat = openJarvisLinkedChat, toolsMissing = jarvisToolsMissing)
                 }
 
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)

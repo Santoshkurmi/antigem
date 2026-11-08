@@ -30,12 +30,28 @@ import java.util.TimeZone
  */
 object JarvisMcp {
 
-    const val INSTRUCTIONS = "Jarvis controls the AntiGem app for a user who is talking hands-free. The first message of a Jarvis chat " +
+    const val INSTRUCTIONS = "Jarvis controls the AntiGem app and leads teams of sub-agents. The first message of a Jarvis chat " +
         "has the full guide and tool list; jarvis_help repeats it. Call these tools directly by name (no searching, no config reading). " +
-        "Everything the user should hear goes through jarvis_speak (short, plain sentences, no markdown); jarvis_ask asks and returns the " +
-        "spoken answer. Big jobs go to jarvis_task_start (its own watched chat); the phone reports back with [Phone event] messages. " +
-        "Before longer steps call jarvis_status with 2-6 words. App help: jarvis_app_guide, jarvis_get_config, jarvis_open_settings. " +
-        "These tools change the app directly; never use tap/scroll tools for what they can do. Ask before deleting anything."
+        "In the voice chat everything the user should hear goes through jarvis_speak; in a Jarvis text chat you write normal replies. " +
+        "Big jobs go to jarvis_task_start (its own watched chat, optionally a team); pass your manager_id. Never wait or poll for tasks: " +
+        "end your turn, the app reports back with a <jarvis_events> message. Keep multi-step work in jarvis_mission_set / jarvis_mission_update. " +
+        "App help: jarvis_app_guide, jarvis_get_config, jarvis_open_settings. Ask before deleting anything."
+
+    private const val POLL_STOP = "Stop polling. The task is still working, and checking again will not make it faster. END YOUR TURN now " +
+        "(start any other independent task first): the app sends you a <jarvis_events> message the moment it finishes, fails or needs you."
+
+    private const val NEED_ID = "Pass manager_id: it is in the [Jarvis] note at the top of your latest message (\"voice\" in the voice chat). " +
+        "Several Jarvis chats are working right now, so I can't tell which one is calling."
+
+    /** Tools that act for one Jarvis chat (start, steer or stop its work): they must know for certain which chat calls. */
+    private val ACTING = setOf(
+        "jarvis_task_start", "jarvis_task_reply", "jarvis_task_answer", "jarvis_task_stop", "jarvis_task_close",
+        "jarvis_mission_set", "jarvis_mission_update", "jarvis_team_create", "jarvis_team_delete", "jarvis_resolve_permission",
+        "jarvis_send_to_chat", "jarvis_new_chat", "jarvis_stop_all", "jarvis_stop_chat", "jarvis_new_session", "jarvis_delete_chat"
+    )
+
+    private const val NO_WAIT_NOTE = "Do not wait, sleep or poll. Start any other independent tasks now, tell the user briefly, then END YOUR TURN: " +
+        "results come back to you as a <jarvis_events> message."
 
     private const val DEFAULT_LIMIT = 15
     private const val MAX_LIMIT = 50
@@ -61,6 +77,7 @@ object JarvisMcp {
     private val taskId = "id" to prop("string", "Task id (from the context note, jarvis_task_list or jarvis_task_start; the first 8 characters are enough)")
     private val limit = "limit" to prop("integer", "Entries per page, 1-$MAX_LIMIT (default $DEFAULT_LIMIT)")
     private val offset = "offset" to prop("integer", "Entries to skip (default 0)")
+    private val managerId = "manager_id" to prop("string", "Your manager id, from the [Jarvis] note at the top of your messages (\"voice\" in the voice chat). The news of your tasks comes back to that chat.")
 
     fun tools(): JSONArray = JSONArray().apply {
         // ---- voice
@@ -68,7 +85,7 @@ object JarvisMcp {
             "Say something to the user out loud (in quiet mode it is shown instead). This is the only way the user hears you. One to three short sentences, " +
                 "no markdown, code or paths. Returns at once; later calls are spoken in order.",
             listOf("text"),
-            "text" to prop("string", "What to say"),
+            "text" to prop("string", "What to say"), managerId,
             "listen_after" to prop("boolean", "true whenever your words invite a reply (a question, an offer like \"Want me to run it?\", a choice, a confirmation): " +
                 "the microphone opens and the answer comes as the user's next message. false for a final statement. Omitted: listens only if the text ends with a question mark."),
             "wait" to prop("boolean", "Return only after it has been said (default false)")))
@@ -77,13 +94,13 @@ object JarvisMcp {
                 "Use it before destructive or ambiguous actions, and whenever you are not sure what the user wants.",
             listOf("question"),
             "question" to prop("string", "The question, short and answerable with a few words"),
-            "timeout_seconds" to prop("integer", "How long to wait, 5-90 (default 45)")))
+            "timeout_seconds" to prop("integer", "How long to wait, 5-90 (default 45)"), managerId))
         put(tool("jarvis_status",
             "Show a short live status on the Jarvis card (2 to 6 words, e.g. \"Checking the build\"). Call it BEFORE every longer step so the user " +
                 "sees progress. Silent unless speak=true. Returns at once.",
             listOf("text"),
             "text" to prop("string", "What you are doing now, present tense, 2-6 words"),
-            "speak" to prop("boolean", "Also say it out loud (only if the user enabled spoken progress)")))
+            "speak" to prop("boolean", "Also say it out loud (only if the user enabled spoken progress)"), managerId))
         put(tool("jarvis_ignore",
             "The words were not meant for you (the user talking to someone else, the TV, background speech): stay silent and stop listening. Call nothing else.",
             emptyList(), "reason" to prop("string", "A few words why (shown to the user)")))
@@ -93,29 +110,66 @@ object JarvisMcp {
         // ---- tasks (Jarvis as a manager)
         put(tool("jarvis_task_start",
             "Start a big, independent job as a TASK in its own new chat that the phone watches for you (a build, a refactor, a bug fix, a long " +
-                "investigation). The phone tells you with a [Phone event] message when it finishes, fails, gets stuck, needs an approval or asks " +
-                "something. Do quick things yourself instead. Returns the task id.",
+                "investigation), optionally done by one of your teams. Start all independent tasks in the same turn. Never wait for it: the app " +
+                "sends you a <jarvis_events> message when it finishes, fails, gets stuck, needs an approval or asks something. Do quick things " +
+                "yourself instead. Returns the task id.",
             listOf("goal"),
-            "goal" to prop("string", "Full instructions for the task's agent, as clear and complete as the user's intent allows"),
+            "goal" to prop("string", "Full instructions for the task's agent: what to do, where, constraints, how to verify and what to report back"),
             "title" to prop("string", "Short name, 2-5 words (e.g. \"Release build\")"),
-            "agent" to prop("string", "claude, agy or opencode (default: the app's new-chat agent). OpenCode runs any provider's models (OpenAI-compatible, NVIDIA, Groq, free models)", listOf("claude", "agy", "opencode")),
-            "model" to prop("string", "Model id or part of its name (default: the agent's default)"),
-            "project" to prop("string", "Project name or path to work in (default: the active project)"),
-            "open" to prop("boolean", "Also show the chat on screen (default false)")))
-        put(tool("jarvis_task_list", "The tasks Jarvis manages: state (starting, running, waiting for approval, asking a question, no progress, done, failed, stopped), age and last note.",
-            emptyList(), "include_finished" to prop("boolean", "Also list finished tasks (default true)"), limit))
-        put(tool("jarvis_task_get", "One task in detail: goal, state, last note, and its latest reply or progress. Use it for \"how is X going?\".",
-            listOf("id"), taskId, "messages" to prop("integer", "Also include this many of its newest messages (default 3, 0-10)")))
+            "team" to prop("string", "One of your teams (jarvis_team_create): its agent, model, project and role are used unless given here"),
+            "agent" to prop("string", "claude, agy or opencode (default: the team's, else the app's new-chat agent). OpenCode runs any provider's models (OpenAI-compatible, NVIDIA, Groq, free models)", listOf("claude", "agy", "opencode")),
+            "model" to prop("string", "Model id or part of its name (default: the team's, else the agent's default)"),
+            "project" to prop("string", "Project name or path to work in (default: the team's, else the active project)"),
+            "open" to prop("boolean", "Also show the chat on screen (default false)"), managerId))
+        put(tool("jarvis_task_list", "Your tasks: state (starting, running, waiting for approval, asking a question, no progress, done, failed, stopped), team, age and last note. Not for polling: the news comes to you by itself.",
+            emptyList(), "include_finished" to prop("boolean", "Also list finished tasks (default true)"),
+            "scope" to prop("string", "mine (default: the tasks of your chat) or all", listOf("mine", "all")), limit, managerId))
+        put(tool("jarvis_task_get", "One task in detail: goal, state, last note, and its latest reply or progress. Use it for \"how is X going?\" or to understand a failure; not to poll a running task.",
+            listOf("id"), taskId, "messages" to prop("integer", "Also include this many of its newest messages (default 3, 0-10)"), managerId))
         put(tool("jarvis_task_reply",
-            "Send the task a follow-up, a correction or a new direction (\"also run the tests\", \"use the other API\"). With interrupt=true a task " +
-                "that is still working is stopped first and then gets this message.",
+            "Send the task a follow-up, a correction or a new direction (\"also run the tests\", \"use the other API\"). The task keeps its context, so " +
+                "fixes and next steps of the same work go here. With interrupt=true a task that is still working is stopped first and then gets this message.",
             listOf("id", "message"), taskId, "message" to prop("string", "What to tell the task's agent"),
-            "interrupt" to prop("boolean", "Stop the running task first (default false)")))
+            "interrupt" to prop("boolean", "Stop the running task first (default false)"), managerId))
         put(tool("jarvis_task_answer", "Answer the multiple-choice question a task is asking (option number, option name, or free text; \"skip\" lets it decide).",
             listOf("id", "answer"), taskId, "answer" to prop("string", "The answer")))
         put(tool("jarvis_task_stop", "Stop what a task is doing right now.", listOf("id"), taskId))
         put(tool("jarvis_task_open", "Show a task's chat on screen.", listOf("id"), taskId))
         put(tool("jarvis_task_close", "Stop watching a task and remove it from the list (the chat itself stays).", listOf("id"), taskId))
+        // ---- missions and teams (the manager's memory, repeated to it with every message)
+        put(tool("jarvis_mission_set",
+            "Start (or replace) your mission for a job with several steps: the goal, how you know it is done, and the steps. The app keeps it and " +
+                "repeats it to you in every message, so you never lose track, and shows it to the user.",
+            listOf("goal"),
+            "goal" to prop("string", "What the whole job must achieve"),
+            "done_when" to prop("string", "Concrete criteria for done (e.g. \"the build passes, all tests green, the feature works on the login screen\")"),
+            "steps" to prop("string", "The plan, one step per line"),
+            "autopilot" to prop("boolean", "Keep going until done: the app nudges you whenever you stop while the mission is unfinished and nothing runs"),
+            managerId))
+        put(tool("jarvis_mission_update",
+            "Update your mission: a step's status (todo, doing, done, blocked) and note, new steps, the mission's status (active, done, paused), autopilot, notes.",
+            emptyList(),
+            "step" to prop("integer", "Step number to change"),
+            "step_status" to prop("string", "New status of that step", listOf("todo", "doing", "done", "blocked")),
+            "note" to prop("string", "Short note on that step (result, blocker)"),
+            "add_steps" to prop("string", "New steps to append, one per line"),
+            "status" to prop("string", "The mission's status: done only when done_when is met", listOf("active", "done", "paused")),
+            "autopilot" to prop("boolean", "Turn autopilot on or off"),
+            "notes" to prop("string", "Notes to keep with the mission (decisions, findings); replaces the earlier notes"),
+            managerId))
+        put(tool("jarvis_mission_get", "Your mission, its steps, your teams and your tasks (the same brief that comes with every message).", emptyList(), managerId))
+        put(tool("jarvis_team_create",
+            "Create or change a team: a named role that tasks can be given to (e.g. builders: claude, implement with tests; reviewers: agy, review " +
+                "the diff and run the tests). jarvis_task_start(team=…) then uses its agent, model, project and role.",
+            listOf("name"),
+            "name" to prop("string", "Team name, one or two words"),
+            "agent" to prop("string", "claude, agy or opencode (default: the app's new-chat agent)", listOf("claude", "agy", "opencode")),
+            "model" to prop("string", "Model id or part of its name (default: the agent's default)"),
+            "role" to prop("string", "What this team does and how it should work and report (sent with each of its tasks)"),
+            "project" to prop("string", "Project name or path the team works in (default: the active project at the time)"),
+            managerId))
+        put(tool("jarvis_team_list", "Your teams with their agent, model, project and role, and how many of their tasks are running.", emptyList(), managerId))
+        put(tool("jarvis_team_delete", "Remove one of your teams (its tasks keep running).", listOf("name"), "name" to prop("string", "Team name"), managerId))
         // ---- everyday
         put(tool("jarvis_set_timer",
             "Set a timer that Jarvis announces out loud when it ends (cooking, laundry, breaks). Give seconds or minutes.",
@@ -196,7 +250,7 @@ object JarvisMcp {
                 "and never for a chat that is running.",
             listOf("id", "message", "reason"),
             chatId, "message" to prop("string", "The message"),
-            "reason" to prop("string", "Why this goes to that chat", listOf("user_named_this_chat", "continues_that_chats_work"))))
+            "reason" to prop("string", "Why this goes to that chat", listOf("user_named_this_chat", "continues_that_chats_work")), managerId))
         put(tool("jarvis_stop_chat", "Stop what a chat is doing right now.", emptyList(), chatId))
         put(tool("jarvis_open_chat", "Show a chat on screen (switches to the chat screen).", listOf("id"), chatId))
         put(tool("jarvis_rename_chat", "Rename a Claude Code chat.", listOf("id", "title"), chatId, "title" to prop("string", "New title")))
@@ -308,12 +362,26 @@ object JarvisMcp {
         if (!JarvisController.isAttached) return error("The app is still starting. Try again in a moment.")
         if (!JarvisPreferences.enabled.value) return error("Jarvis is turned off. The user can turn it on in Settings → Jarvis.")
         JarvisController.onToolCall(name)
-        friendlyStatus(name, args)?.let { JarvisController.postStatus(it, explicit = false) }
+        // which Jarvis chat is calling: the voice chat, or one of the Jarvis text chats (their status shows on their own strip)
+        val session = args.optString("_mcp_session").ifBlank { null }
+        args.remove("_mcp_session")
+        val who = JarvisManagers.resolveCaller(args.optString("manager_id").ifBlank { null }, session)
+        val caller = who.key
+        val textChat = caller != JarvisManagers.VOICE
+        // never act for the wrong Jarvis chat: when it is not certain who calls, ask for the manager_id
+        if (!who.sure && name in ACTING) return error(NEED_ID)
+        friendlyStatus(name, args)?.let { if (textChat) JarvisManagers.setStatus(caller, it) else JarvisController.postStatus(it, explicit = false) }
         return try {
             when (name) {
                 "jarvis_speak" -> {
                     val t = args.optString("text").trim()
                     if (t.isEmpty()) return error("text is empty")
+                    if (textChat) {
+                        if (!JarvisManagers.of(caller).speak) return text("Voice replies are off in this chat, so nothing was said. Write it in your reply instead.")
+                        JarvisEvents.markSpoke(caller)
+                        JarvisController.announce(t)
+                        return text("Said.")
+                    }
                     val listenAfter = if (args.has("listen_after") && !args.isNull("listen_after")) args.optBoolean("listen_after") else null
                     JarvisController.say(t, listenAfter, args.optBoolean("wait"))
                     text("Said.")
@@ -321,30 +389,49 @@ object JarvisMcp {
                 "jarvis_ask" -> {
                     val q = args.optString("question").trim()
                     if (q.isEmpty()) return error("question is empty")
+                    if (textChat && !JarvisManagers.of(caller).speak) {
+                        return error("Voice replies are off in this chat: ask the user in your reply and end your turn. The answer comes as the next message.")
+                    }
                     val secs = args.optInt("timeout_seconds", 45).coerceIn(5, 90)
                     text(JarvisController.ask(q, secs * 1000L) ?: "no answer")
                 }
                 "jarvis_status" -> {
                     val t = args.optString("text").trim()
                     if (t.isEmpty()) return error("text is empty")
-                    JarvisController.postStatus(t, speak = args.optBoolean("speak"), explicit = true)
+                    if (textChat) JarvisManagers.setStatus(caller, t)
+                    else JarvisController.postStatus(t, speak = args.optBoolean("speak"), explicit = true)
                     text("ok")
                 }
                 "jarvis_ignore" -> { JarvisController.onIgnored(args.optString("reason")); text("Ignored. Say nothing.") }
-                "jarvis_help" -> text(JarvisSkill.guide() + "\n\n## jarvis_mcp tools\n" + JarvisSkill.catalog())
-                "jarvis_task_start" -> taskStart(args)
-                "jarvis_task_list" -> taskList(args)
-                "jarvis_task_get" -> taskGet(args)
+                "jarvis_help" -> text((if (textChat) JarvisSkill.commandGuide() else JarvisSkill.guide()) + "\n\n## jarvis_mcp tools\n" + JarvisSkill.catalog())
+                "jarvis_task_start" -> taskStart(args, caller)
+                "jarvis_task_list" -> taskList(args, caller)
+                "jarvis_task_get" -> taskGet(args, caller)
                 "jarvis_task_reply" -> {
-                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id. Use jarvis_task_list.")
-                    text(JarvisTasks.reply(t.id, args.optString("message"), args.optBoolean("interrupt")))
+                    val (t, err) = owned(args.optString("id"), caller)
+                    if (t == null) return err!!
+                    val r = JarvisTasks.reply(t.id, args.optString("message"), args.optBoolean("interrupt"))
+                    if (r.startsWith("Sent")) return text("$r $NO_WAIT_NOTE")
+                    text(r)
+                }
+                "jarvis_mission_set" -> missionSet(args, caller)
+                "jarvis_mission_update" -> missionUpdate(args, caller)
+                "jarvis_mission_get" -> text(JarvisManagers.brief(caller))
+                "jarvis_team_create" -> teamCreate(args, caller)
+                "jarvis_team_list" -> teamList(caller)
+                "jarvis_team_delete" -> {
+                    val n = args.optString("name").trim()
+                    if (n.isEmpty()) return error("name is required")
+                    text(if (JarvisManagers.removeTeam(caller, n)) "Team $n removed." else "No team $n.")
                 }
                 "jarvis_task_answer" -> {
-                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    val (t, err) = owned(args.optString("id"), caller)
+                    if (t == null) return err!!
                     text(JarvisController.answerTaskQuestion(t.id, args.optString("answer")))
                 }
                 "jarvis_task_stop" -> {
-                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    val (t, err) = owned(args.optString("id"), caller)
+                    if (t == null) return err!!
                     text(JarvisTasks.stop(t.id))
                 }
                 "jarvis_task_open" -> {
@@ -354,7 +441,8 @@ object JarvisMcp {
                     text("Showing ${t.title}.")
                 }
                 "jarvis_task_close" -> {
-                    val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id.")
+                    val (t, err) = owned(args.optString("id"), caller)
+                    if (t == null) return err!!
                     JarvisTasks.close(t.id)
                     text("No longer watching ${t.title}.")
                 }
@@ -383,7 +471,12 @@ object JarvisMcp {
                     text("Opened $u.")
                 }
                 "jarvis_ide_search_code" -> ideSearchCode(args)
-                "jarvis_stop_all" -> { JarvisController.stopEverything(); text("Stopped.") }
+                "jarvis_stop_all" -> if (textChat) {
+                    // a Jarvis text chat stops its own work only
+                    val mine = JarvisTasks.ownedBy(caller).filter { it.active }
+                    mine.forEach { JarvisTasks.stop(it.id) }
+                    text(if (mine.isEmpty()) "None of your tasks is running." else "Stopped ${mine.size} task${if (mine.size == 1) "" else "s"} of yours.")
+                } else { JarvisController.stopEverything(); text("Stopped.") }
                 "jarvis_get_state" -> getState()
                 "jarvis_app_guide" -> appGuide(args)
                 "jarvis_get_config" -> getConfig(args)
@@ -393,7 +486,7 @@ object JarvisMcp {
                 "jarvis_get_chat" -> getChat(args)
                 "jarvis_read_chat" -> readChat(args)
                 "jarvis_search_chats" -> searchChats(args)
-                "jarvis_new_chat" -> newChat(args)
+                "jarvis_new_chat" -> newChat(args, caller)
                 "jarvis_send_to_chat" -> {
                     val id = resolveId(args) ?: return error("No chat. Give an id.")
                     val m = args.optString("message").trim()
@@ -401,10 +494,12 @@ object JarvisMcp {
                     if (args.optString("reason") !in listOf("user_named_this_chat", "continues_that_chats_work")) {
                         return error("Do it yourself unless the user named that chat or the request continues its work. Pass reason if one of those is true.")
                     }
-                    text(JarvisController.sendToChat(id, m))
+                    foreign(id, caller)?.let { return error(it) }
+                    text(JarvisController.sendToChat(id, m, caller))
                 }
                 "jarvis_stop_chat" -> {
                     val id = resolveId(args) ?: return error("No chat. Give an id.")
+                    foreign(id, caller)?.let { return error(it) }
                     text(JarvisController.stopChat(id))
                 }
                 "jarvis_open_chat" -> {
@@ -428,12 +523,13 @@ object JarvisMcp {
                     val id = args.optString("id").ifBlank { return error("id is required") }
                     if (!args.optBoolean("confirm")) return error("Ask the user first, then call again with confirm=true.")
                     if (JarvisPreferences.isJarvisChat(id) && id == JarvisPreferences.currentChatId.value) return error("That is the Jarvis chat itself. Use jarvis_new_session instead.")
+                    foreign(id, caller)?.let { return error(it) }
                     JarvisTasks.close(id)
                     JarvisController.vm.deleteConversation(id)
                     text("Deleted.")
                 }
                 "jarvis_list_models" -> listModels(args)
-                "jarvis_set_model" -> setModel(args)
+                "jarvis_set_model" -> setModel(args, caller)
                 "jarvis_set_effort" -> {
                     val b = claudeOnScreen() ?: return error("The chat on screen is not a Claude Code chat.")
                     val level = args.optString("level").lowercase()
@@ -454,10 +550,10 @@ object JarvisMcp {
                 }
                 "jarvis_get_setting" -> getSetting(args)
                 "jarvis_set_setting" -> setSetting(args)
-                "jarvis_list_permissions" -> listPermissions()
+                "jarvis_list_permissions" -> listPermissions(caller)
                 "jarvis_resolve_permission" -> text(
                     JarvisController.resolve(
-                        args.optString("key").ifBlank { null }, args.optBoolean("approve"), args.optBoolean("all"), args.optString("reason").ifBlank { null }
+                        args.optString("key").ifBlank { null }, args.optBoolean("approve"), args.optBoolean("all"), args.optString("reason").ifBlank { null }, caller
                     )
                 )
                 "jarvis_open_screen" -> {
@@ -476,6 +572,7 @@ object JarvisMcp {
                 "jarvis_github_clone" -> githubClone(context, args)
                 "jarvis_github_create_repo" -> githubCreateRepo(context, args)
                 "jarvis_new_session" -> {
+                    if (textChat) return error("Only the voice Jarvis chat starts over by itself. For a fresh start here the user opens a new Jarvis chat.")
                     JarvisController.newSession(args.optBoolean("carry_over", true))
                     text("The next message starts a fresh Jarvis chat.")
                 }
@@ -509,6 +606,9 @@ object JarvisMcp {
         "jarvis_task_stop" -> "Stopping the task"
         "jarvis_task_open" -> "Opening the task"
         "jarvis_task_close" -> "Closing the task"
+        "jarvis_mission_set" -> "Planning the mission"
+        "jarvis_mission_update", "jarvis_mission_get" -> "Updating the mission"
+        "jarvis_team_create", "jarvis_team_list", "jarvis_team_delete" -> "Organizing teams"
         "jarvis_app_guide" -> "Looking it up"
         "jarvis_get_config" -> "Reading your setup"
         "jarvis_open_settings" -> "Opening settings"
@@ -659,26 +759,150 @@ object JarvisMcp {
         else -> vm.newChatAgent.value.takeIf { it in vm.enabledAgents.value } ?: vm.enabledAgents.value.firstOrNull() ?: AgentKind.CLAUDE
     }
 
-    private suspend fun taskStart(args: JSONObject): JSONObject {
+    /** The task [id] if [caller] directs it; otherwise the error to return (each Jarvis chat directs only its own tasks). */
+    private fun owned(id: String, caller: String): Pair<JarvisTasks.Task?, JSONObject?> {
+        val t = JarvisTasks.find(id.trim()) ?: return null to error("No task with that id. Use jarvis_task_list.")
+        val owner = JarvisManagers.ownerOrVoice(t.owner)
+        if (owner != caller) {
+            return null to error("That task belongs to ${JarvisManagers.nameOf(owner)}. Each Jarvis chat directs only its own tasks; start your own with jarvis_task_start if you need this work.")
+        }
+        return t to null
+    }
+
+    /** Why [caller] must leave chat [id] alone: another Jarvis chat, or a task another Jarvis chat directs. Null: it may act. */
+    private fun foreign(id: String, caller: String): String? {
+        JarvisManagers.keyForChat(id)?.let { key ->
+            return "That is ${JarvisManagers.nameOf(key)}. Jarvis chats don't control each other's chats."
+        }
+        val t = JarvisTasks.find(id)?.takeIf { it.id == id } ?: return null
+        val owner = JarvisManagers.ownerOrVoice(t.owner)
+        return if (owner != caller) "That chat is a task of ${JarvisManagers.nameOf(owner)}: only that Jarvis chat directs it." else null
+    }
+
+    private fun agentName(agent: AgentKind) = when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.AGY -> "Antigravity" }
+
+    /** Hidden in front of every task's goal: how a sub-agent of Jarvis works and reports, and its team's role. */
+    private fun subAgentBrief(team: JarvisManagers.Team?): String = buildString {
+        append("You are a sub-agent of Jarvis, the lead agent of the AntiGem app, which delegated this task to you. Work on it on your own until it is ")
+        append("completely done: do not stop halfway to ask for confirmation, and ask a question only when you are truly blocked (it reaches Jarvis). ")
+        append("Verify your work (build, tests, or running it) where that makes sense. Finish with a short report: what you did, the files you changed, ")
+        append("how you verified it, and anything left open, risky or needing a decision. ")
+        append("The jarvis_mcp tools (jarvis_*) belong to Jarvis, not to you: do not call them.")
+        if (team != null) {
+            append("\n\nYour team: ${team.name}.")
+            if (team.role.isNotBlank()) append(" Your role: ${team.role}")
+        }
+    }
+
+    private suspend fun taskStart(args: JSONObject, caller: String): JSONObject {
         val goal = args.optString("goal").trim()
         if (goal.isEmpty()) return error("goal is required")
-        val agent = agentArg(args.optString("agent"))
-        if (agent !in vm.enabledAgents.value) return error("${when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.AGY -> "Antigravity" }} is turned off (Settings → Agents).")
-        val projectArg = args.optString("project").trim()
+        val teamArg = args.optString("team").trim()
+        val team = JarvisManagers.team(caller, teamArg)
+        if (teamArg.isNotEmpty() && team == null) {
+            val have = JarvisManagers.of(caller).teams.joinToString(", ") { it.name }
+            return error("No team \"$teamArg\". " + if (have.isBlank()) "Create it first with jarvis_team_create." else "Your teams: $have.")
+        }
+        val agent = agentArg(args.optString("agent").ifBlank { team?.agent?.name?.lowercase().orEmpty() })
+        if (agent !in vm.enabledAgents.value) return error("${agentName(agent)} is turned off (Settings → Agents).")
+        val projectArg = args.optString("project").trim().ifBlank { team?.project.orEmpty() }
         val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
-        val model = args.optString("model").trim().takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No ${agent.name.lowercase()} model matches \"$it\".") }
-        val t = JarvisTasks.start(agent, goal, args.optString("title").ifBlank { null }, model, project?.path)
+        val modelArg = args.optString("model").trim().ifBlank { if (team != null && team.agent == agent) team.model else "" }
+        val model = modelArg.takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No ${agent.name.lowercase()} model matches \"$it\".") }
+        val t = JarvisTasks.start(
+            agent, goal, args.optString("title").ifBlank { null }, model, project?.path,
+            owner = caller, team = team?.name.orEmpty(), brief = subAgentBrief(team)
+        )
         if (args.optBoolean("open")) {
             delay(2500)
             vm.selectConversation(t.id)
             vm.requestViewMode("CHAT")
         }
         return json(JSONObject().put("task_id", t.id).put("title", t.title).put("agent", agent.name.lowercase()).put("status", "started")
-            .put("note", "The phone will tell you when it finishes or needs something. Tell the user it started, then stop."))
+            .apply { if (team != null) put("team", team.name) }
+            .put("note", NO_WAIT_NOTE))
+    }
+
+    private val polls = java.util.concurrent.ConcurrentHashMap<String, MutableList<Long>>()
+
+    /** Counts a status check; true when it is more than [limit] in [windowMs] (the model is polling). */
+    private fun polling(key: String, limit: Int, windowMs: Long): Boolean {
+        val now = System.currentTimeMillis()
+        val l = polls.getOrPut(key) { java.util.Collections.synchronizedList(ArrayList()) }
+        synchronized(l) {
+            l.removeAll { now - it > windowMs }
+            l += now
+            return l.size > limit
+        }
+    }
+
+    /** "a\nb" or "a; b" or a JSON array → the list of lines (numbering and bullets taken off). */
+    private fun linesArg(args: JSONObject, key: String): List<String> {
+        val v = args.opt(key) ?: return emptyList()
+        val raw = when (v) {
+            is JSONArray -> (0 until v.length()).map { v.optString(it) }
+            else -> v.toString().let { s -> if (s.contains('\n')) s.split('\n') else s.split(';') }
+        }
+        return raw.map { it.trim().removePrefix("-").removePrefix("*").trim().replace(Regex("^\\d+[.)]\\s*"), "") }.filter { it.isNotBlank() }
+    }
+
+    private fun missionSet(args: JSONObject, caller: String): JSONObject {
+        val goal = args.optString("goal").trim()
+        if (goal.isEmpty()) return error("goal is required")
+        val steps = linesArg(args, "steps")
+        val autopilot = if (args.has("autopilot") && !args.isNull("autopilot")) args.optBoolean("autopilot") else null
+        JarvisManagers.setMission(caller, goal, args.optString("done_when"), steps, autopilot)
+        return text("Mission set with ${steps.size} step(s). It is shown to the user and repeated to you with every message.\n\n" + JarvisManagers.brief(caller))
+    }
+
+    private fun missionUpdate(args: JSONObject, caller: String): JSONObject {
+        if (JarvisManagers.of(caller).mission.isEmpty) return error("There is no mission yet. Start one with jarvis_mission_set.")
+        val step = if (args.has("step") && !args.isNull("step")) args.optInt("step") else null
+        val stepStatus = args.optString("step_status").trim().lowercase().takeIf { it in setOf("todo", "doing", "done", "blocked") }
+        val status = args.optString("status").trim().lowercase().ifBlank { null }
+        val autopilot = if (args.has("autopilot") && !args.isNull("autopilot")) args.optBoolean("autopilot") else null
+        val changed = JarvisManagers.updateMission(
+            caller, step, stepStatus, args.optString("note").ifBlank { null }, linesArg(args, "add_steps"),
+            status, autopilot, if (args.has("notes")) args.optString("notes") else null
+        )
+        val m = JarvisManagers.of(caller).mission
+        val tail = if (m.status == "done") " The mission is done: report the result to the user." else ""
+        return text("Updated: $changed. ${m.doneCount}/${m.steps.size} steps done.$tail")
+    }
+
+    private suspend fun teamCreate(args: JSONObject, caller: String): JSONObject {
+        val name = args.optString("name").trim().take(30)
+        if (name.isEmpty()) return error("name is required")
+        val existing = JarvisManagers.team(caller, name)
+        val agent = if (args.optString("agent").isBlank() && existing != null) existing.agent else agentArg(args.optString("agent"))
+        if (agent !in vm.enabledAgents.value) return error("${agentName(agent)} is turned off (Settings → Agents).")
+        val modelArg = args.optString("model").trim()
+        val model = if (modelArg.isEmpty()) existing?.takeIf { it.agent == agent }?.model.orEmpty()
+        else findModel(modelArg, modelsFor(agent))?.id ?: return error("No ${agent.name.lowercase()} model matches \"$modelArg\".")
+        val projectArg = args.optString("project").trim()
+        val project = if (projectArg.isEmpty()) existing?.project.orEmpty()
+        else (findProject(projectArg) ?: return error("No project matches \"$projectArg\".")).path
+        val team = JarvisManagers.Team(name, agent, model, args.optString("role").trim().ifBlank { existing?.role.orEmpty() }.take(800), project)
+        JarvisManagers.upsertTeam(caller, team)
+        return text("${if (existing != null) "Updated" else "Created"} team $name (${agent.name.lowercase()}${if (model.isNotBlank()) ", $model" else ""}). " +
+            "Give it work with jarvis_task_start(team=\"$name\", goal=…).")
+    }
+
+    private fun teamList(caller: String): JSONObject {
+        val m = JarvisManagers.of(caller)
+        val tasks = JarvisTasks.ownedBy(caller)
+        return json(JSONObject().put("teams", JSONArray().apply {
+            m.teams.forEach { t ->
+                put(JSONObject().put("name", t.name).put("agent", t.agent.name.lowercase()).put("model", t.model.ifBlank { "default" })
+                    .put("role", t.role).put("project", t.project.substringAfterLast('/').ifBlank { "active project" })
+                    .put("running_tasks", tasks.count { it.team.equals(t.name, true) && it.active }))
+            }
+        }))
     }
 
     private fun taskJson(t: JarvisTasks.Task) = JSONObject().apply {
         put("id", t.id); put("title", t.title); put("agent", t.agent.name.lowercase()); put("state", t.state.label)
+        if (t.team.isNotBlank()) put("team", t.team)
         put("started", ago(t.createdAt)); put("last_change", ago(t.updatedAt))
         if (t.note.isNotBlank()) put("note", t.note)
         if (t.project.isNotBlank()) put("project", t.project.substringAfterLast('/'))
@@ -686,14 +910,20 @@ object JarvisMcp {
         if (vm.currentConversation.value?.id == t.id) put("on_screen", true)
     }
 
-    private fun taskList(args: JSONObject): JSONObject {
-        val all = JarvisTasks.tasks.value
+    private fun taskList(args: JSONObject, caller: String): JSONObject {
+        val mine = args.optString("scope", "mine") != "all"
+        val all = JarvisTasks.tasks.value.filter { !mine || it.owner == caller }
+        if (all.any { it.active } && polling("list:$caller", 3, 120_000)) return error(POLL_STOP)
         val list = if (args.optBoolean("include_finished", true)) all else all.filter { it.active }
-        return json(pagedJson("tasks", list.map { taskJson(it) }, args) { put("active", all.count { it.active }) })
+        return json(pagedJson("tasks", list.map { taskJson(it) }, args) {
+            put("active", all.count { it.active })
+            if (all.any { it.active }) put("reminder", "Do not poll: end your turn, the news of these tasks comes to you by itself.")
+        })
     }
 
-    private suspend fun taskGet(args: JSONObject): JSONObject {
+    private suspend fun taskGet(args: JSONObject, caller: String): JSONObject {
         val t = JarvisTasks.find(args.optString("id").trim()) ?: return error("No task with that id. Use jarvis_task_list.")
+        if (t.active && !t.state.needsUser && polling("get:$caller:${t.id}", 2, 90_000)) return error(POLL_STOP)
         val n = args.optInt("messages", 3).coerceIn(0, 10)
         val o = taskJson(t).put("goal", t.goal)
         if (t.result.isNotBlank()) o.put("result", t.result)
@@ -929,7 +1159,8 @@ object JarvisMcp {
     private fun roleName(m: ChatMessage) = when (m.role) { MessageRole.USER -> "user"; MessageRole.ASSISTANT -> "assistant"; else -> m.role.name.lowercase() }
 
     private fun cleanText(s: String, max: Int): String {
-        val collapsed = com.example.gemini.data.remote.PromptExpansion.collapse(s).trim()
+        // what was written, without the model's thinking, tool markers, error cards or hidden notes
+        val collapsed = JarvisText.report(s)
         return if (collapsed.length > max) collapsed.take(max) + "…" else collapsed
     }
 
@@ -987,11 +1218,11 @@ object JarvisMcp {
         return json(pagedJson("chats", hits.values.toList(), args))
     }
 
-    private suspend fun newChat(args: JSONObject): JSONObject {
+    private suspend fun newChat(args: JSONObject, caller: String): JSONObject {
         val agent = agentArg(args.optString("agent"))
         val message = args.optString("message").trim()
         if (message.isNotEmpty()) {
-            return taskStart(JSONObject(args.toString()).put("goal", message).put("agent", agent.name.lowercase()))
+            return taskStart(JSONObject(args.toString()).put("goal", message).put("agent", agent.name.lowercase()), caller)
         }
         val projectArg = args.optString("project").trim()
         val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
@@ -1033,10 +1264,18 @@ object JarvisMcp {
         })
     }
 
-    private suspend fun setModel(args: JSONObject): JSONObject {
+    private suspend fun setModel(args: JSONObject, caller: String): JSONObject {
         val wanted = args.optString("model").trim()
         if (wanted.isEmpty()) return error("model is required")
         val chatId = args.optString("id").trim().let { JarvisTasks.find(it)?.id ?: it }
+        if (chatId.isNotEmpty() && chatId != caller) foreign(chatId, caller)?.let { return error(it) }
+        // a Jarvis text chat's "jarvis" model is its own
+        if (caller != JarvisManagers.VOICE && args.optString("scope") == "jarvis" && chatId.isEmpty()) {
+            val kind = JarvisDriver.agentOf(caller)
+            val m = findModel(wanted, modelsFor(kind)) ?: return error("No ${kind.name.lowercase()} model matches \"$wanted\".")
+            if (vm.currentConversation.value?.id == caller) vm.selectModel(m.id) else JarvisController.setChatModel(caller, kind, m.id)
+            return text("This chat now uses ${m.displayName.ifBlank { m.id }} from its next message.")
+        }
         if (chatId.isNotEmpty() && chatId != vm.currentConversation.value?.id) {
             val kind = JarvisController.agentOfChat(chatId)
             val m = findModel(wanted, modelsFor(kind)) ?: return error("No ${kind.name.lowercase()} model matches \"$wanted\".")
@@ -1134,14 +1373,28 @@ object JarvisMcp {
             bool("jarvis_speak_progress", "Say short progress lines during long work", true, { P.speakProgress.value }, { P.speakProgress.set(it) }),
             bool("jarvis_auto_send", "Send by itself when the user pauses (off: only a send phrase, Send or the headset button sends)", true, { P.autoSend.value }, { P.autoSend.set(it) }),
             choice("jarvis_auto_send_style", "With auto send: smart pause (longer when unfinished) or a fixed pause", true, listOf("smart", "pause"), { if (P.sendMode.value == "pause") "pause" else "smart" }, { P.sendMode.set(it) }),
-            num("jarvis_pause_seconds", "Pause that ends a sentence (auto send)", true, 0.8f..3.5f, { P.silenceMs.value / 1000f }, { P.silenceMs.set((it * 1000).toInt()) }),
-            bool("jarvis_auto_send_answers", "Short answers to Jarvis' own questions send by themselves", true, { P.autoSendAnswers.value }, { P.autoSendAnswers.set(it) }),
+            num("jarvis_pause_seconds", "Pause that ends a sentence (auto send)", true, 0.6f..4f, { P.silenceMs.value / 1000f }, { P.silenceMs.set((it * 1000).toInt()) }),
+            choice("jarvis_answer_send", "Answers to Jarvis' own questions: sent like everything else (same) or after a pause even with manual send (auto)", true, listOf("same", "auto"), { P.answerSend.value }, { P.answerSend.set(it) }),
             bool("jarvis_send_phrases_on", "Ending with a send phrase sends at once", true, { P.sendPhrasesOn.value }, { P.sendPhrasesOn.set(it) }),
             textS("jarvis_send_phrases", "Send phrases, separated by | (replaces the whole list; read it first and keep what the user did not ask to remove)", true,
                 { JarvisPhrases.parse(P.sendPhrases.value).joinToString(" | ") }, { P.sendPhrases.set(JarvisPhrases.format(JarvisPhrases.parse(it))) }),
             bool("jarvis_cancel_phrases_on", "Ending with a cancel phrase throws the message away", true, { P.cancelPhrasesOn.value }, { P.cancelPhrasesOn.set(it) }),
             textS("jarvis_cancel_phrases", "Cancel phrases, separated by | (replaces the whole list; read it first and keep what the user did not ask to remove)", true,
                 { JarvisPhrases.parse(P.cancelPhrases.value).joinToString(" | ") }, { P.cancelPhrases.set(JarvisPhrases.format(JarvisPhrases.parse(it))) }),
+            *listOf(
+                Triple("jarvis_shortcut_stop", "Voice shortcut phrases that stop everything", P.cmdStop),
+                Triple("jarvis_shortcut_bye", "Voice shortcut phrases that end the conversation", P.cmdBye),
+                Triple("jarvis_shortcut_repeat", "Voice shortcut phrases that repeat the last answer", P.cmdRepeat),
+                Triple("jarvis_shortcut_slower", "Voice shortcut phrases that make Jarvis speak slower", P.cmdSlower),
+                Triple("jarvis_shortcut_faster", "Voice shortcut phrases that make Jarvis speak faster", P.cmdFaster),
+                Triple("jarvis_shortcut_quiet_on", "Voice shortcut phrases that turn quiet mode on", P.cmdQuietOn),
+                Triple("jarvis_shortcut_quiet_off", "Voice shortcut phrases that turn quiet mode off", P.cmdQuietOff),
+                Triple("jarvis_shortcut_new_session", "Voice shortcut phrases that start a new session", P.cmdNewSession),
+                Triple("jarvis_interrupt_phrases", "Phrases that, at the start of a message, interrupt Jarvis' running work (busy behavior smart)", P.interruptPhrases)
+            ).map { (key, about, pref) ->
+                textS(key, "$about, separated by | (empty = none; replaces the whole list: read it first)", true,
+                    { JarvisPhrases.parse(pref.value).joinToString(" | ") }, { pref.set(JarvisPhrases.format(JarvisPhrases.parse(it))) })
+            }.toTypedArray(),
             choice("jarvis_listen_after", "Open the mic after Jarvis speaks: auto (when it expects an answer), always, or never", true, listOf("auto", "always", "never"), { P.listenAfter.value }, { P.listenAfter.set(it) }),
             int("jarvis_follow_up_seconds", "How long the mic waits for a reply after Jarvis spoke (no word at all closes it)", true, 2..30, { P.followUpSeconds.value }, { P.followUpSeconds.set(it) }),
             Setting("jarvis_persona", "Whom Jarvis speaks as (grammatical gender for itself, e.g. Hindi kar rahi / kar raha hoon)", "female|male|neutral|unset", true,
@@ -1156,7 +1409,7 @@ object JarvisMcp {
             choice("jarvis_wake_match", "Whole phrase, or the name alone wakes Jarvis", true, listOf("phrase", "name"), { P.wakeMatch.value }, { P.wakeMatch.set(it) }),
             bool("jarvis_headset_button", "Headset button talks and stops (hands-free)", true, { P.headsetButton.value }, { P.headsetButton.set(it) }),
             bool("jarvis_hands_free", "Hands-free mode (mic service, works with the screen off)", true, { P.handsFree.value }, { JarvisController.setHandsFree(it) }),
-            choice("jarvis_busy_behavior", "Speaking while Jarvis works: wait, interrupt, or interrupt on corrections", true, listOf("queue", "interrupt", "smart"), { P.busyBehavior.value }, { P.busyBehavior.set(it) }),
+            choice("jarvis_busy_behavior", "Speaking while Jarvis works: wait (queue), interrupt, or only on the user's interrupt phrases (smart)", true, listOf("queue", "interrupt", "smart"), { P.busyBehavior.value }, { P.busyBehavior.set(it) }),
             choice("jarvis_keep_screen_on", "Keep the screen on", true, listOf("off", "active", "always"), { P.keepScreenOn.value }, { P.keepScreenOn.set(it) }),
             choice("jarvis_idle_orb", "Orb size while idle", true, listOf("tiny", "small", "normal", "hidden"), { P.orbSize.value }, { P.orbSize.set(it) }),
             choice("jarvis_orb_style", "Floating card or full screen while active", true, listOf("floating", "fullscreen"), { P.orbStyle.value }, { P.orbStyle.set(it) }),
@@ -1209,8 +1462,8 @@ object JarvisMcp {
         return text("$key set to ${s.get()}.")
     }
 
-    private fun listPermissions(): JSONObject {
-        val list = JarvisController.allPending()
+    private fun listPermissions(caller: String): JSONObject {
+        val list = JarvisController.pendingFor(caller)
         return json(JSONObject().apply {
             put("count", list.size)
             put("items", JSONArray().apply {

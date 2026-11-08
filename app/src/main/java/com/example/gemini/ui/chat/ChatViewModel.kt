@@ -396,7 +396,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         else -> agyBackend.selectModel(modelId)
     }
     /** `/plu:` plugin skills and custom slash commands are expanded here, for both agents. */
-    fun sendMessage(content: String) = PromptExpansion.expand(content).let {
+    fun sendMessage(content: String): Unit = PromptExpansion.expand(content).let { expanded ->
+        // a Jarvis chat on screen: its message carries Jarvis' hidden note (or goes to the voice Jarvis chat as a typed turn)
+        val jarvis = com.example.gemini.data.jarvis.JarvisController
+        val it = (if (jarvis.isAttached) jarvis.interceptScreenMessage(currentConversation.value?.id, expanded) else expanded) ?: return
         when {
             isClaudeActive -> claudeBackend.sendMessage(it)
             isOpenCodeActive -> openCodeBackend.sendMessage(it)
@@ -546,11 +549,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             .sortedByDescending { it.updatedAt }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Sidebar list: Antigravity and Claude Code conversations together, newest first. Jarvis' hidden chats are not in it. */
+    /**
+     * Sidebar list: every agent's conversations together, newest first. Jarvis' chats are listed under Jarvis; they also
+     * show here when the user chose so (Settings → Jarvis: none, their own Jarvis text chats, or all Jarvis chats).
+     */
     val conversations: StateFlow<List<Conversation>> = combine(
-        allConversations, com.example.gemini.data.jarvis.JarvisPreferences.chatIds, com.example.gemini.data.jarvis.JarvisPreferences.enabled.state
-    ) { all, jarvisIds, jarvisOn ->
-        if (!jarvisOn || jarvisIds.isEmpty()) all else all.filter { it.id !in jarvisIds }
+        allConversations, com.example.gemini.data.jarvis.JarvisPreferences.chatIds, com.example.gemini.data.jarvis.JarvisPreferences.enabled.state,
+        com.example.gemini.data.jarvis.JarvisPreferences.jarvisInAll.state, com.example.gemini.data.jarvis.JarvisManagers.managers
+    ) { all, jarvisIds, jarvisOn, inAll, managers ->
+        when {
+            !jarvisOn || jarvisIds.isEmpty() || inAll == "all" -> all
+            inAll == "text" -> all.filter { it.id !in jarvisIds || it.id in managers.keys }
+            else -> all.filter { it.id !in jarvisIds }
+        }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** The Jarvis filter in the sidebar: the chats Jarvis opened. */

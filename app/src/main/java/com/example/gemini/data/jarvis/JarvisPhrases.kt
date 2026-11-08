@@ -2,8 +2,9 @@ package com.example.gemini.data.jarvis
 
 /**
  * Spoken commands that end a capture: send phrases ("send it", "send kar do") send what was said before them at once,
- * cancel phrases ("scratch that", "rehne do") throw it away. Both lists are the user's own (Settings → Jarvis); these
- * are only the defaults.
+ * cancel phrases ("scratch that", "rehne do") throw it away. Both lists are the user's own (Settings → Jarvis) and start
+ * empty; [SUGGESTED_SEND] and [SUGGESTED_CANCEL] are only offered there. The voice shortcuts (stop, repeat…) are the
+ * user's own lists too ([isShortcut]).
  *
  * A phrase only counts at the very end of what was said, and a little sense is applied so it does not fire inside a
  * normal sentence:
@@ -21,16 +22,51 @@ object JarvisPhrases {
     /** [content] is the raw text before the phrase (or the whole text when [whole]). */
     data class Match(val kind: Kind, val phrase: String, val content: String, val whole: Boolean)
 
-    val DEFAULT_SEND = listOf(
+    val SUGGESTED_SEND = listOf(
         "send it", "send it now", "send now", "send this", "send that", "send the message", "go ahead and send",
         "send it jarvis", "jarvis send", "that's it send it", "send", "over", "do it", "that's it",
         "send kar do", "send kardo", "bhej do", "bhejo", "bhej de"
     )
-    val DEFAULT_CANCEL = listOf(
+    val SUGGESTED_CANCEL = listOf(
         "cancel that", "cancel this", "cancel the message", "scratch that", "never mind", "nevermind", "forget it",
         "forget that", "don't send", "don't send it", "do not send", "do not send it",
         "rehne do", "chhod do", "chod do", "mat bhejo", "cancel kar do"
     )
+
+    /** Phrases offered for each voice shortcut in Settings (none is active until the user adds it). */
+    val SUGGESTED_SHORTCUTS = mapOf(
+        "stop" to listOf("stop talking", "jarvis stop", "be quiet"),
+        "bye" to listOf("thanks jarvis", "that's all", "goodbye jarvis"),
+        "repeat" to listOf("repeat that", "say that again", "what did you say"),
+        "slower" to listOf("speak slower", "slow down"),
+        "faster" to listOf("speak faster", "speed up"),
+        "quiet_on" to listOf("quiet mode on", "text only mode"),
+        "quiet_off" to listOf("quiet mode off", "use your voice"),
+        "new_session" to listOf("start over", "new session", "fresh start"),
+        "interrupt" to listOf("wait", "actually", "no stop", "change of plans")
+    )
+
+    /** Leading address and trailing politeness that do not change which shortcut was said. */
+    private val address = Regex("^(hey |ok |okay )?jarvis ")
+    private val politeEnd = Regex(" (please|jarvis|now)$")
+
+    /** [text] (the whole utterance) is one of the phrases in [stored] (one per line), maybe with "Jarvis" or "please" around it. */
+    fun isShortcut(text: String, stored: String): Boolean {
+        val list = parse(stored)
+        if (list.isEmpty()) return false
+        val t = normalize(text)
+        if (t in list) return true
+        val bare = politeEnd.replace(address.replace(t, ""), "").trim()
+        return bare in list
+    }
+
+    /** [text] starts with one of the phrases in [stored] (whole words). */
+    fun startsWithAny(text: String, stored: String): Boolean {
+        val list = parse(stored)
+        if (list.isEmpty()) return false
+        val t = address.replace(normalize(text), "")
+        return list.any { p -> t == p || t.startsWith("$p ") }
+    }
 
     /** Pause before a short phrase that makes it "said on its own". */
     private const val SEPARATE_GAP_MS = 600L

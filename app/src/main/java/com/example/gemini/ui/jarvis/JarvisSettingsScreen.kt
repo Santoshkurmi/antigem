@@ -77,7 +77,12 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke, onOpen: (Jarvi
             com.example.gemini.ui.settings.SettingsRowItem(icon, tint, title, value) { onOpen(page) }
         listOf(
             listOfNotNull(
-                row(JarvisSettingsPage.AGENT, I.SmartToy, c.info, "Agent", if (agentName == AgentKind.AGY.name) "Antigravity" else "Claude Code"),
+                row(JarvisSettingsPage.AGENT, I.SmartToy, c.info, "Voice agent & model", when (agentName) {
+                    AgentKind.AGY.name -> "Antigravity"
+                    AgentKind.CLAUDE.name -> "Claude Code"
+                    AgentKind.OPENCODE.name -> "OpenCode"
+                    else -> "Not set"
+                }),
                 row(JarvisSettingsPage.PERSONALITY, I.Face, c.accentPink, "Personality & you"),
                 // the setup checklist is only for a Jarvis that is turned on
                 if (enabled) row(JarvisSettingsPage.SETUP, I.Checklist, c.success, "Setup") else null
@@ -331,12 +336,14 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                         JChips(listOf("smart" to "Smart pause", "pause" to "Fixed pause"), if (mode == "pause") "pause" else "smart") { P.sendMode.set(it) }
                         JHint(if (mode == "pause") "Sent after a fixed pause. A bar on the card fills while it counts down; tap Wait to keep talking."
                         else "Jarvis waits longer when you sound unfinished (“…and”, “…the”) and less for short answers. Tap Wait to keep talking.")
-                        val silence by P.silenceMs.state.collectAsState()
-                        JSlider("Pause that ends your sentence", silence.toFloat(), 800f..3500f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set(it.toInt()) }
-                    } else {
-                        val answers by P.autoSendAnswers.state.collectAsState()
-                        JSwitch("Answers to Jarvis' questions send by themselves", "“Yes”, “the second one”: sent after a short pause when Jarvis just asked you something.", answers) { P.autoSendAnswers.set(it) }
                     }
+                    val silence by P.silenceMs.state.collectAsState()
+                    JSlider("Pause before sending", silence.toFloat(), 600f..4000f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set(it.toInt()) }
+                    val answers by P.answerSend.state.collectAsState()
+                    Text("Answers to Jarvis' questions", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    JChips(listOf("same" to "Like everything else", "auto" to "Send on pause"), answers) { P.answerSend.set(it) }
+                    JHint(if (answers == "auto") "When Jarvis just asked you something, your answer is sent after the pause above, even with auto send off."
+                    else "Answers are sent exactly like everything else. The send mode is fixed when the microphone opens and never changes while you talk.")
 
                     // send phrases
                     val sendOn by P.sendPhrasesOn.state.collectAsState()
@@ -348,7 +355,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     JSwitch("Send with a phrase", "End with one of these and it is sent at once (the phrase itself is not sent).", sendOn) { P.sendPhrasesOn.set(it) }
                     if (sendOn) {
                         FoldedPhrases("Send phrases", sendList.size) {
-                            PhraseEditor(sendList, cancelList, "cancel", com.example.gemini.data.jarvis.JarvisPhrases.DEFAULT_SEND) {
+                            PhraseEditor(sendList, cancelList, "cancel", com.example.gemini.data.jarvis.JarvisPhrases.SUGGESTED_SEND) {
                                 P.sendPhrases.set(com.example.gemini.data.jarvis.JarvisPhrases.format(it))
                             }
                         }
@@ -356,7 +363,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     JSwitch("Cancel with a phrase", "End with one of these and nothing is sent.", cancelOn) { P.cancelPhrasesOn.set(it) }
                     if (cancelOn) {
                         FoldedPhrases("Cancel phrases", cancelList.size) {
-                            PhraseEditor(cancelList, sendList, "send", com.example.gemini.data.jarvis.JarvisPhrases.DEFAULT_CANCEL) {
+                            PhraseEditor(cancelList, sendList, "send", com.example.gemini.data.jarvis.JarvisPhrases.SUGGESTED_CANCEL) {
                                 P.cancelPhrases.set(com.example.gemini.data.jarvis.JarvisPhrases.format(it))
                             }
                         }
@@ -391,7 +398,8 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     })
                     val busyB by P.busyBehavior.state.collectAsState()
                     Text("Speaking while Jarvis is still working", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    JChips(listOf("smart" to "Corrections interrupt", "queue" to "Wait for it", "interrupt" to "Always interrupt"), busyB) { P.busyBehavior.set(it) }
+                    JChips(listOf("queue" to "Wait for it", "interrupt" to "Always interrupt", "smart" to "My interrupt phrases"), busyB) { P.busyBehavior.set(it) }
+                    if (busyB == "smart") JHint("Only a message that starts with one of your interrupt phrases (Voice shortcuts below) stops Jarvis' work; anything else waits.")
                     val earcons by P.earcons.state.collectAsState()
                     JSwitch("Tones when the microphone opens and closes", null, earcons) { P.earcons.set(it) }
                     val stt by P.sttEngine.state.collectAsState()
@@ -401,11 +409,33 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     val lang by P.sttLanguage.state.collectAsState()
                     JField("Language (e.g. en, hi, es)", lang) { P.sttLanguage.set(it) }
                 }
+                JCard(cardBg, cardBorder, "Voice shortcuts") {
+                    JHint("Your own phrases that act at once, without asking the model, when you say them on their own (optionally with “Jarvis” or “please”). " +
+                        "There are none until you add them, so a plain “okay” or “stop” in a conversation always goes to Jarvis like anything else.")
+                    val J = com.example.gemini.data.jarvis.JarvisPhrases
+                    listOf(
+                        Triple("Stop everything", P.cmdStop, "stop"),
+                        Triple("End the conversation", P.cmdBye, "bye"),
+                        Triple("Repeat the last answer", P.cmdRepeat, "repeat"),
+                        Triple("Speak slower", P.cmdSlower, "slower"),
+                        Triple("Speak faster", P.cmdFaster, "faster"),
+                        Triple("Quiet mode on", P.cmdQuietOn, "quiet_on"),
+                        Triple("Quiet mode off", P.cmdQuietOff, "quiet_off"),
+                        Triple("Start a new session", P.cmdNewSession, "new_session"),
+                        Triple("Interrupt Jarvis' work (starts a message)", P.interruptPhrases, "interrupt")
+                    ).forEach { (title, pref, id) ->
+                        val raw by pref.state.collectAsState()
+                        val list = remember(raw) { J.parse(raw) }
+                        FoldedPhrases(title, list.size) {
+                            PhraseEditor(list, emptyList(), "other", J.SUGGESTED_SHORTCUTS[id].orEmpty()) { pref.set(J.format(it)) }
+                        }
+                    }
+                }
             }
             JarvisSettingsPage.VOICE -> {
                 JCard(cardBg, cardBorder, "") {
                     val quiet by P.quietMode.state.collectAsState()
-                    JSwitch("Quiet mode", "Jarvis shows its answers on the card instead of saying them (meetings, night). Say “quiet mode off” to undo.", quiet) { P.quietMode.set(it) }
+                    JSwitch("Quiet mode", "Jarvis shows its answers on the card instead of saying them (meetings, night). Also in quick settings (tune icon).", quiet) { P.quietMode.set(it) }
                     val engine by P.ttsEngine.state.collectAsState()
                     JChips(listOf("android" to "This device", "google_cloud" to "Google Cloud", "openai" to "OpenAI-compatible"), engine) { P.ttsEngine.set(it) }
                     val voice by P.ttsVoice.state.collectAsState()
@@ -478,6 +508,40 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     JSwitch("Also read the start of the reply", "For announcements without a model turn.", sum) { P.announceSummary.set(it) }
                     val low by P.announceUsageLow.state.collectAsState()
                     JSwitch("Warn when the 5-hour usage is almost gone", "Once per window, at about 15% left (Claude Code).", low) { P.announceUsageLow.set(it) }
+                }
+                JCard(cardBg, cardBorder, "Command center") {
+                    JHint("Open the Jarvis tab in the chat list and tap “New Jarvis chat” to type to Jarvis like in any chat. Give it a big job: it writes a " +
+                        "mission (goal, done-when, steps), creates teams of agents (e.g. builders and reviewers), hands out tasks in parallel, checks what comes " +
+                        "back and keeps going. The strip above the input shows the mission, the teams' tasks and the switches below.")
+                    val speakDefault by P.managerSpeakDefault.state.collectAsState()
+                    JSwitch("Read replies out loud in new Jarvis chats", "Each chat has its own Voice switch on its strip; this is the default for new ones.", speakDefault) {
+                        P.managerSpeakDefault.set(it)
+                    }
+                    val guard by P.waitGuard.state.collectAsState()
+                    Text("When Jarvis sleeps or polls while waiting for its tasks", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    JChips(listOf("interrupt" to "Stop it, hand it the news", "remind" to "Only remind it", "off" to "Leave it"), guard) { P.waitGuard.set(it) }
+                    JHint(when (guard) {
+                        "interrupt" -> "A turn that waits (sleep, wait loops, wake-up timers) is stopped once news is waiting, or after 12 seconds while its tasks run; the news goes in at once."
+                        "remind" -> "The next message tells it not to wait; the news still waits until its turn ends."
+                        else -> "No guard: news waits until Jarvis ends its turn by itself."
+                    })
+                    val batch by P.eventBatchMs.state.collectAsState()
+                    Text("Collect news before sending it", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    JChips(listOf("0" to "At once", "2000" to "2 s", "5000" to "5 s", "15000" to "15 s"), batch.toString()) { P.eventBatchMs.set(it.toInt()) }
+                    JHint("Whatever comes in meanwhile, and everything that finished while Jarvis was busy, goes to it together in one message.")
+                    val nudges by P.autopilotMaxNudges.state.collectAsState()
+                    Text("Autopilot gives up after", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    JChips(listOf("2" to "2 nudges", "4" to "4 nudges", "8" to "8 nudges", "15" to "15 nudges"), nudges.toString()) { P.autopilotMaxNudges.set(it.toInt()) }
+                    JHint("With autopilot on, Jarvis is nudged to continue whenever it stops while the mission is unfinished and nothing runs. Nudges in a row without progress pause it.")
+                    val inAll by P.jarvisInAll.state.collectAsState()
+                    Text("Jarvis chats in the chat list", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    JChips(listOf("none" to "Only under Jarvis", "text" to "My Jarvis chats in All too", "all" to "All Jarvis chats in All too"), inAll) { P.jarvisInAll.set(it) }
+                    JHint(when (inAll) {
+                        "text" -> "The Jarvis chats you opened yourself also show in All and the agent tabs; the voice chats stay under Jarvis."
+                        "all" -> "Every Jarvis chat, the voice ones too, also shows in All and the agent tabs."
+                        else -> "Jarvis chats are listed only under the Jarvis tab."
+                    })
+                    JHint("Several Jarvis chats can work at the same time. Each one runs and hears about only its own tasks; they never steer each other's work.")
                 }
             }
             JarvisSettingsPage.APPROVALS -> {
@@ -644,8 +708,11 @@ private fun PhraseEditor(phrases: List<String>, other: List<String>, otherName: 
         OutlinedButton(onClick = { add() }, enabled = input.isNotBlank()) { Text("Add", fontSize = 12.sp) }
     }
     note?.let { Text(it, fontSize = 12.sp, color = Color(0xFFF59E0B)) }
-    if (phrases != defaults.map { J.normalize(it) }) {
-        TextButton(onClick = { onChange(defaults.filter { J.normalize(it) !in other }); note = null }) { Text("Reset to defaults", fontSize = 12.sp) }
+    // nothing is active until added: suggestions are offered, never applied by themselves
+    val missing = defaults.map { J.normalize(it) }.filter { it !in phrases && it !in other }
+    Row {
+        if (missing.isNotEmpty()) TextButton(onClick = { onChange(phrases + missing); note = null }) { Text("Add suggestions (${missing.size})", fontSize = 12.sp) }
+        if (phrases.isNotEmpty()) TextButton(onClick = { onChange(emptyList()); note = null }) { Text("Remove all", fontSize = 12.sp) }
     }
 }
 

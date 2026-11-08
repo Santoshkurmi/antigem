@@ -66,7 +66,11 @@ object JarvisTasks {
         /** The current state was already reported (no repeat). */
         val reported: Boolean = true,
         /** An existing chat the user named, not one Jarvis started. */
-        val adopted: Boolean = false
+        val adopted: Boolean = false,
+        /** The Jarvis manager that started it and gets its news: [JarvisManagers.VOICE] or a Jarvis text chat's id. */
+        val owner: String = JarvisManagers.VOICE,
+        /** The manager's team that works on it (empty: none). */
+        val team: String = ""
     ) {
         val active: Boolean get() = state.active
     }
@@ -115,6 +119,8 @@ object JarvisTasks {
     }
     fun isTask(id: String?): Boolean = id != null && _tasks.value.any { it.id == id }
     fun activeTasks(): List<Task> = _tasks.value.filter { it.active }
+    /** The tasks of one Jarvis manager (newest first). */
+    fun ownedBy(owner: String): List<Task> = _tasks.value.filter { it.owner == owner }
 
     /** Task backends Jarvis can read approvals and questions from. */
     fun claudeTaskBackends(): List<Pair<Task, ClaudeChatBackend>> =
@@ -146,10 +152,17 @@ object JarvisTasks {
         })
     ).also { it.start() }
 
-    /** Starts [goal] in a new chat of [agent]. [projectPath] null = the active project. Returns the task. */
-    suspend fun start(agent: AgentKind, goal: String, title: String?, modelId: String?, projectPath: String?): Task {
+    /**
+     * Starts [goal] in a new chat of [agent]. [projectPath] null = the active project. [owner] gets the task's news,
+     * [brief] goes hidden in front of the goal (how a sub-agent of Jarvis works, the team's role). Returns the task.
+     */
+    suspend fun start(
+        agent: AgentKind, goal: String, title: String?, modelId: String?, projectPath: String?,
+        owner: String = JarvisManagers.VOICE, team: String = "", brief: String? = null
+    ): Task {
         val text = goal.trim()
         require(text.isNotEmpty()) { "The task needs a goal." }
+        val prompt = (brief?.takeIf { it.isNotBlank() }?.let { PromptExpansion.hidden(it) } ?: "") + PromptExpansion.expand(text)
         val id = when (agent) {
             AgentKind.OPENCODE -> {
                 val b = newOpenCodeBackend()
@@ -160,7 +173,7 @@ object JarvisTasks {
                 val id = b.currentConversation.value?.id ?: run { b.stop(); error("Could not create the chat") }
                 projectPath?.let { b.setWorkspaceOfNewChat(it) }
                 modelId?.takeIf { it.isNotBlank() }?.let { b.selectModel(it) }
-                b.sendMessage(PromptExpansion.expand(text))
+                b.sendMessage(prompt)
                 openCodeBackends[id] = b
                 attachedAt[id] = System.currentTimeMillis()
                 scope.launch {
@@ -180,7 +193,7 @@ object JarvisTasks {
                 val id = b.currentConversation.value?.id ?: error("Could not create the chat")
                 projectPath?.let { b.setWorkspaceOfNewChat(it) }
                 modelId?.takeIf { it.isNotBlank() }?.let { b.selectModel(it) }
-                b.sendMessage(PromptExpansion.expand(text))
+                b.sendMessage(prompt)
                 claudeBackends[id] = b
                 attachedAt[id] = System.currentTimeMillis()
                 scope.launch {
@@ -201,7 +214,7 @@ object JarvisTasks {
                     ?: com.example.gemini.data.local.LocalEnvironmentManager.getHomeDir(app).absolutePath)
                 hub.startCascade(id, enum, if (ws.startsWith("file://")) ws else "file://$ws").getOrThrow()
                 vm.agyBackend.rememberChatModel(id, chosen)
-                hub.sendUserPrompt(id, PromptExpansion.expand(text), enum).getOrThrow()
+                hub.sendUserPrompt(id, prompt, enum).getOrThrow()
                 scope.launch { delay(2500); runCatching { vm.agyBackend.syncAgyConversations(force = true) } }
                 id
             }
@@ -209,14 +222,15 @@ object JarvisTasks {
         val task = Task(
             id = id, agent = agent,
             title = title?.trim()?.takeIf { it.isNotEmpty() }?.take(60) ?: shortTitle(text),
-            goal = text.take(600), project = projectPath.orEmpty(), note = "Started"
+            goal = text.take(600), project = projectPath.orEmpty(), note = "Started",
+            owner = JarvisManagers.ownerOrVoice(owner), team = team.trim()
         )
         put(task)
         return task
     }
 
-    /** Watches an existing chat the user named (a message was just sent to it). */
-    fun adopt(id: String, agent: AgentKind, message: String) {
+    /** Watches an existing chat the user named (a message was just sent to it). Its news goes to [owner]. */
+    fun adopt(id: String, agent: AgentKind, message: String, owner: String = JarvisManagers.VOICE) {
         val now = System.currentTimeMillis()
         val existing = find(id)
         if (existing != null && existing.id == id) {
@@ -228,7 +242,7 @@ object JarvisTasks {
         put(Task(
             id = id, agent = agent, title = conv?.title?.takeIf { it.isNotBlank() && it != "New Chat" }?.take(60) ?: shortTitle(message),
             goal = message.trim().take(600), project = conv?.workspaceUri?.removePrefix("file://").orEmpty(),
-            note = "Message sent", adopted = true
+            note = "Message sent", adopted = true, owner = JarvisManagers.ownerOrVoice(owner)
         ))
     }
 
@@ -321,7 +335,8 @@ object JarvisTasks {
             AgentKind.AGY -> runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
         }
         val text = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content.orEmpty()
-        return PromptExpansion.collapse(text).trim().let { if (it.length > max) "…" + it.takeLast(max) else it }
+        // the sub-agent's report as words: its thinking and tool markers out, an error as one closing line
+        return JarvisText.report(text).let { if (it.length > max) "…" + it.takeLast(max) else it }
     }
 
     // ------------------------------------------------------------------ Antigravity approvals off screen
@@ -473,7 +488,8 @@ object JarvisTasks {
                 State.FAILED -> "Failed: ${error.orEmpty().take(80)}"
                 else -> t.note
             })
-            if (next == State.DONE || next == State.FAILED) t = t.copy(result = lastReply(t, 900))
+            // the manager gets the sub-agent's whole report (cut only when very long)
+            if (next == State.DONE || next == State.FAILED) t = t.copy(result = lastReply(t, 3500))
         }
         put(t)
         if (!t.reported) {
@@ -522,6 +538,7 @@ object JarvisTasks {
                 put("id", t.id); put("agent", t.agent.name); put("title", t.title); put("goal", t.goal); put("project", t.project)
                 put("state", t.state.name); put("created", t.createdAt); put("turn", t.turnAt); put("updated", t.updatedAt)
                 put("seen", t.seenRunning); put("follow", t.followUps); put("note", t.note); put("result", t.result.take(1200)); put("adopted", t.adopted)
+                put("owner", t.owner); put("team", t.team)
             })
         }
         prefs?.edit()?.putString("list", arr.toString())?.apply()
@@ -544,7 +561,8 @@ object JarvisTasks {
                     createdAt = o.optLong("created", now), turnAt = if (state.active) now else o.optLong("turn", now),
                     updatedAt = o.optLong("updated", now), progressAt = now, seenRunning = false,
                     followUps = o.optInt("follow"), note = o.optString("note"), result = o.optString("result"),
-                    reported = true, adopted = o.optBoolean("adopted")
+                    reported = true, adopted = o.optBoolean("adopted"),
+                    owner = o.optString("owner").ifBlank { JarvisManagers.VOICE }, team = o.optString("team")
                 )
             }
         }.getOrDefault(emptyList())

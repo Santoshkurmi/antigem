@@ -98,7 +98,8 @@ private fun QueuedRow(msg: QueuedMessage, onSendNow: (String) -> Unit, onDelete:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        val label = msg.text.ifBlank {
+        // hidden instructions (Jarvis' note, expanded commands) are not part of what the user wrote
+        val label = com.example.gemini.data.remote.PromptExpansion.collapse(msg.text).trim().ifBlank {
             if (msg.attachmentCount == 1) "1 attachment" else "${msg.attachmentCount} attachments"
         }
         Text(

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -144,13 +145,20 @@ fun JarvisOverlay() {
         if (!JarvisController.hasMic()) micLauncher.launch(Manifest.permission.RECORD_AUDIO) else JarvisController.onMicPressed()
     }
     val onNoticeAction: (String) -> Unit = { action ->
-        when (action) {
-            "mic" -> micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            "agent" -> JarvisController.requestSettings("JARVIS_AGENT")
+        when {
+            action == "mic" -> micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            action == "agent" -> JarvisController.requestSettings("JARVIS_AGENT")
+            // a Jarvis chat waits for the user: open it
+            action.startsWith("chat:") -> {
+                JarvisController.panelOpen.value = false
+                JarvisController.vm.selectConversation(action.removePrefix("chat:"))
+                JarvisController.vm.requestViewMode("CHAT")
+            }
             else -> JarvisController.requestSettings("JARVIS")
         }
         JarvisController.clearNotice()
     }
+    val quickOpen by JarvisController.quickSettingsOpen.collectAsState()
 
     val expanded = phase == Phase.LISTENING || phase == Phase.SPEAKING
     val showPill = !expanded && showActivity && (phase == Phase.THINKING || steps.isNotEmpty())
@@ -173,6 +181,7 @@ fun JarvisOverlay() {
         )
     }
     if (panelOpen) JarvisPanel(onTalk = onTap, onNoticeAction = onNoticeAction)
+    if (quickOpen) JarvisQuickSettings(onClose = { JarvisController.quickSettingsOpen.value = false })
 }
 
 // ------------------------------------------------------------------------------------------------ orb + card layer
@@ -428,7 +437,7 @@ internal fun NoticeChip(n: JarvisController.Notice, onAction: (String) -> Unit, 
         n.action?.let { a ->
             Spacer(Modifier.width(8.dp))
             Text(
-                if (a == "mic") "Allow" else "Set up", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                when { a == "mic" -> "Allow"; a.startsWith("chat:") -> "Open"; else -> "Set up" }, color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(color).clickable { onAction(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
             )
         }
@@ -480,6 +489,17 @@ private fun ActionButtons(phase: Phase, holding: Boolean, auto: Boolean, quiet: 
             }
             Phase.THINKING -> PillButton("Stop", Icons.Filled.Stop, Danger, big) { JarvisController.stopEverything() }
             else -> {}
+        }
+        if (phase == Phase.LISTENING || phase == Phase.SPEAKING) {
+            // send mode, pause length, voice… without leaving the card
+            Box(
+                Modifier
+                    .size(if (big) 42.dp else 32.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .clickable { JarvisController.quickSettingsOpen.value = true },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Filled.Tune, "Quick settings", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(if (big) 20.dp else 16.dp)) }
         }
     }
 }
@@ -652,23 +672,19 @@ fun SiriWaves(phase: Phase, level: Float, modifier: Modifier = Modifier) {
     }
 }
 
-/** The idle orb: a small, still arc reactor (glass body, segmented ring, glowing core). Running tasks show as violet arcs. */
+/**
+ * The idle orb: Jarvis' robot face on a small glass disc (still: nothing animates while idle). Running tasks show as violet
+ * arcs around it, something that needs the user as an amber dot.
+ */
 @Composable
 fun IdleOrb(size: Dp, activeTasks: Int, attention: Boolean) {
     Canvas(Modifier.size(size)) {
         val c = Offset(this.size.width / 2, this.size.height / 2)
         val r = this.size.minDimension / 2
         drawCircle(Color.Black.copy(alpha = 0.28f), radius = r, center = c.copy(y = c.y + r * 0.08f))
-        drawCircle(Brush.radialGradient(listOf(Color(0xF0152238), Color(0xF00A0F1C)), c, r), radius = r * 0.96f, center = c)
-        drawCircle(Cyan.copy(alpha = 0.55f), radius = r * 0.92f, center = c, style = Stroke(width = r * 0.06f))
-        val ring = r * 0.68f
-        for (i in 0 until 3) {
-            drawArc(
-                Cyan.copy(alpha = 0.45f), startAngle = i * 120f + 20f, sweepAngle = 80f, useCenter = false,
-                topLeft = Offset(c.x - ring, c.y - ring), size = Size(ring * 2, ring * 2), style = Stroke(width = r * 0.09f, cap = StrokeCap.Round)
-            )
-        }
-        drawCircle(Brush.radialGradient(listOf(Color.White, Cyan.copy(alpha = 0.85f), Cyan.copy(alpha = 0f)), c, r * 0.46f), radius = r * 0.46f, center = c)
+        drawCircle(Brush.radialGradient(listOf(Color(0xF0182640), Color(0xF00A0F1C)), c, r), radius = r * 0.96f, center = c)
+        drawCircle(Cyan.copy(alpha = 0.5f), radius = r * 0.92f, center = c, style = Stroke(width = r * 0.06f))
+        drawJarvisBot(c, r * 1.32f, Cyan)
         if (activeTasks > 0) {
             val sweep = (360f / activeTasks.coerceAtMost(4)) - 14f
             for (i in 0 until activeTasks.coerceAtMost(4)) {
@@ -696,7 +712,10 @@ private fun TaskBadge(orb: Dp, count: Int, attention: Boolean) {
     }
 }
 
-/** The active orb: rings that follow the level, a gradient core, and a spinning arc while thinking. */
+/**
+ * The active orb: halo rings that follow the level around Jarvis' face. Listening: the eyes widen with your voice;
+ * speaking: the mouth moves with Jarvis' voice; thinking: the eyes glance around and an arc spins.
+ */
 @Composable
 fun JarvisOrb(phase: Phase, level: Float, size: Dp) {
     if (phase == Phase.IDLE || phase == Phase.OFF) {
@@ -706,28 +725,32 @@ fun JarvisOrb(phase: Phase, level: Float, size: Dp) {
     val t = rememberInfiniteTransition(label = "orb")
     val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "spin")
     val breathe by t.animateFloat(0.92f, 1.08f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "breathe")
+    val glance by t.animateFloat(-1f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "glance")
     val smooth by animateFloatAsState(level, tween(90), label = "level")
     val color = accentOf(phase)
     Canvas(Modifier.size(size)) {
         val c = Offset(this.size.width / 2, this.size.height / 2)
-        val core = this.size.minDimension / 3.1f
+        val r = this.size.minDimension / 2
         val grow = when (phase) {
-            Phase.LISTENING, Phase.SPEAKING -> 1f + smooth * 0.45f
+            Phase.LISTENING, Phase.SPEAKING -> 1f + smooth * 0.35f
             else -> breathe
         }
-        drawCircle(Color(0xE60A0F1C), radius = this.size.minDimension / 2, center = c)
+        drawCircle(Color(0xE60A0F1C), radius = r, center = c)
         for (i in 1..3) {
-            drawCircle(color.copy(alpha = (0.22f - i * 0.05f).coerceAtLeast(0.03f)), radius = core * (1f + i * 0.22f) * grow, center = c)
+            drawCircle(color.copy(alpha = (0.2f - i * 0.05f).coerceAtLeast(0.03f)), radius = (r * (0.62f + i * 0.12f) * grow).coerceAtMost(r), center = c)
         }
-        drawCircle(
-            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.95f), color, color.copy(alpha = 0.55f)), center = c, radius = core * grow),
-            radius = core * grow, center = c
+        drawCircle(color.copy(alpha = 0.55f), radius = r * 0.93f, center = c, style = Stroke(width = r * 0.05f))
+        drawJarvisBot(
+            c, r * 1.3f, color,
+            lookX = if (phase == Phase.THINKING) glance else 0f,
+            mouth = if (phase == Phase.SPEAKING) smooth else 0f,
+            eyeGrow = if (phase == Phase.LISTENING) 1f + smooth * 0.35f else 1f
         )
         if (phase == Phase.THINKING) {
             drawArc(
                 Color.White.copy(alpha = 0.9f), startAngle = spin, sweepAngle = 110f, useCenter = false,
-                topLeft = Offset(c.x - core * 1.35f, c.y - core * 1.35f), size = Size(core * 2.7f, core * 2.7f),
-                style = Stroke(width = 4f, cap = StrokeCap.Round)
+                topLeft = Offset(c.x - r * 0.86f, c.y - r * 0.86f), size = Size(r * 1.72f, r * 1.72f),
+                style = Stroke(width = r * 0.07f, cap = StrokeCap.Round)
             )
         }
     }
