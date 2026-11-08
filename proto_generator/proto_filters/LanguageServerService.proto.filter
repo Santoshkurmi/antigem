@@ -48,6 +48,7 @@ JetboxSubscribeToSummaries
 GetCascadeTrajectorySteps
 ForkConversation
 DeleteCascadeTrajectory
+UpdateConversationAnnotations
 RevertToCascadeStep
 GetTrajectoryFileDiffs
 GetCodeActionDiff

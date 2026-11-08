@@ -339,6 +339,24 @@ antigem/
 └── version.json           # Version and changelog used by the in-app updater
 ```
 
+### Adding an agy RPC
+
+Do not edit `app/src/main/proto/LanguageServerService.proto` by hand. It is generated from the full daemon proto in
+`proto_generator/protos/`, filtered down to the RPCs the app uses.
+
+1. Add the RPC name (one per line) to `proto_generator/proto_filters/LanguageServerService.proto.filter`.
+2. Run the filter from `proto_generator/`:
+
+   ```bash
+   cd proto_generator
+   python3 filter_proto.py --copy
+   ```
+
+   It keeps the listed RPCs plus every message and enum they need, and copies the result to `app/src/main/proto/`.
+   Without `--copy` it asks before copying.
+3. Rebuild the app. Wire generates the new call (for example `AgyLanguageService.UpdateConversationAnnotations()`)
+   and its request/response classes.
+
 ---
 
 ## Contributing

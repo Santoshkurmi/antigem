@@ -1242,6 +1242,26 @@ class AgyChatBackend(
         }
     }
 
+    /** Renames a chat: the daemon stores the title in its annotations and the summaries stream pushes it back. */
+    fun renameConversation(id: String, title: String) {
+        val clean = title.trim().ifBlank { return }
+        val oldTitle = _conversations.value.find { it.id == id }?.title
+        _conversations.value = _conversations.value.map { if (it.id == id) it.copy(title = clean) else it }
+        _currentConversation.value?.let { if (it.id == id) _currentConversation.value = it.copy(title = clean) }
+        backendScope.launch {
+            agyHubClient.updateConversationTitle(id, clean, AuthPreferences.currentHubUrl).onFailure { e ->
+                Log.w("AgyChatBackend", "rename failed: ${e.message}")
+                if (oldTitle != null) {
+                    _conversations.value = _conversations.value.map { if (it.id == id && it.title == clean) it.copy(title = oldTitle) else it }
+                    _currentConversation.value?.let { if (it.id == id && it.title == clean) _currentConversation.value = it.copy(title = oldTitle) }
+                }
+                com.example.gemini.ui.components.AppToastHelper.showToast(
+                    "Could not rename: ${e.message}", com.example.gemini.ui.components.ChatToastType.ERROR
+                )
+            }
+        }
+    }
+
     override fun forkConversation(id: String) {
         backendScope.launch {
             _isLoadingConversation.value = true

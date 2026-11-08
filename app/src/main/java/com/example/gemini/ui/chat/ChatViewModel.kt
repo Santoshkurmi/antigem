@@ -438,7 +438,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         when (agentOf(id)) {
             AgentKind.CLAUDE -> claudeBackend.renameConversation(id, title)
             AgentKind.OPENCODE -> openCodeBackend.renameConversation(id, title)
-            AgentKind.AGY -> Unit
+            AgentKind.AGY -> agyBackend.renameConversation(id, title)
         }
     }
     fun stopStreaming() = when {

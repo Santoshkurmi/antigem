@@ -1697,7 +1697,7 @@ private fun ChatHistoryItemRow(
                         onForkConversation(conv.id)
                     }
                 )
-                if (isAgentConv && claudeActions != null) {
+                if (claudeActions != null) {  // every agent: AGY renames go to the daemon annotations
                     DropdownMenuItem(
                         text = { Text("Rename", fontSize = 13.5.sp) },
                         leadingIcon = {

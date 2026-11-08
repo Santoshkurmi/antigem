@@ -4,7 +4,7 @@ package exa.language_server_pb;
 
 // Filtered subset for Android app compilation
 
-// Service: LanguageServerService (83 Methods)
+// Service: LanguageServerService (84 Methods)
 service LanguageServerService {
   rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
   rpc GetRemoteControlInfo (GetRemoteControlInfoRequest) returns (GetRemoteControlInfoResponse);
@@ -29,6 +29,7 @@ service LanguageServerService {
   rpc GetUserSettings (GetUserSettingsRequest) returns (GetUserSettingsResponse);
   rpc SetUserSettings (SetUserSettingsRequest) returns (SetUserSettingsResponse);
   rpc GetUserStatus (GetUserStatusRequest) returns (GetUserStatusResponse);
+  rpc UpdateConversationAnnotations (UpdateConversationAnnotationsRequest) returns (UpdateConversationAnnotationsResponse);
   rpc StartCascade (StartCascadeRequest) returns (StartCascadeResponse);
   rpc GetSlashCommands (GetSlashCommandsRequest) returns (GetSlashCommandsResponse);
   rpc ForkConversation (ForkConversationRequest) returns (ForkConversationResponse);
@@ -11519,6 +11520,16 @@ message UnifiedDiff {
 message UnifiedDiffLine {
   string text = 1;
   UnifiedDiffLineType type = 2;
+}
+
+message UpdateConversationAnnotationsRequest {
+  string cascade_id = 1;
+  ConversationAnnotations annotations = 2;
+  bool merge_annotations = 3;
+  repeated string cascade_ids = 4;
+}
+
+message UpdateConversationAnnotationsResponse {
 }
 
 message UpdateProjectRequest {

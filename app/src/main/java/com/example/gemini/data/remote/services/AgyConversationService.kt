@@ -18,6 +18,7 @@ import java.util.*
 import exa.language_server_pb.CascadeConfig
 import exa.language_server_pb.CascadePlannerConfig
 import exa.language_server_pb.CascadeRunStatus
+import exa.language_server_pb.ConversationAnnotations
 import exa.language_server_pb.ClientTrajectoryVerbosity
 import exa.language_server_pb.CortexStepType
 import exa.language_server_pb.DeleteCascadeTrajectoryRequest
@@ -28,6 +29,7 @@ import exa.language_server_pb.Model
 import exa.language_server_pb.ModelOrAlias
 import exa.language_server_pb.RevertToCascadeStepRequest
 import exa.language_server_pb.Step
+import exa.language_server_pb.UpdateConversationAnnotationsRequest
 
 /**
  * Dedicated RPC service for conversation lifecycle: summaries subscription, step counting,
@@ -171,6 +173,23 @@ class AgyConversationService {
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         val req = DeleteCascadeTrajectoryRequest(cascade_id = cascadeId)
         AgyLanguageService.DeleteCascadeTrajectory().executeSafely(req).map { true }
+    }
+
+    /**
+     * Sets a custom conversation title. Stored by the daemon in ConversationAnnotations.title; the summaries stream
+     * pushes it back. merge_annotations keeps the other annotations (pinned, archived, tags, ...).
+     */
+    suspend fun updateConversationTitle(
+        cascadeId: String,
+        title: String,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val req = UpdateConversationAnnotationsRequest(
+            cascade_ids = listOf(cascadeId),
+            annotations = ConversationAnnotations(title = title),
+            merge_annotations = true
+        )
+        AgyLanguageService.UpdateConversationAnnotations().executeSafely(req).map { }
     }
 
     /**
