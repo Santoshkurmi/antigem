@@ -161,11 +161,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val noQueued = MutableStateFlow<List<com.example.gemini.domain.model.QueuedMessage>>(emptyList())
 
-    private fun isoUtc(epochSeconds: Long): String =
-        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-            .format(java.util.Date(epochSeconds * 1000))
-
     private fun agentOf(conversationId: String): AgentKind =
         allConversations.value.find { it.id == conversationId }?.agent
             ?: store.currentConversation.value?.takeIf { it.id == conversationId }?.agent
@@ -203,25 +198,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isRefreshingModels = byAgent(agyBackend.isRefreshingModels, claudeBackend.isRefreshingModels, openCodeBackend.isRefreshingModels)
     val selectedModelId = byAgent(agyBackend.selectedModelId, claudeBackend.selectedModelId, openCodeBackend.selectedModelId)
     val preferredModelName = agyBackend.preferredModelName
-    /** Claude's plan windows as the model pill's quota (remaining share of the 5-hour and weekly limits). */
+    /**
+     * Claude's plan limits as the model pill's quota: the 5-hour limit, or the weekly one (the user's choice in the
+     * model sheet). A model with its own weekly share (Fable) shows the tighter of its share and the all-models limit.
+     */
     private val claudeQuotas: StateFlow<List<ModelQuota>> =
-        combine(claudeBackend.selectedModelId, claudeBackend.rateLimits, claudeAccount.usage) { modelId, live, usage ->
+        combine(
+            claudeBackend.selectedModelId,
+            claudeBackend.rateLimits,
+            claudeAccount.usage,
+            com.example.gemini.domain.model.ModelGroupPrefs.overrides(com.example.gemini.domain.model.QuotaAgent.CLAUDE),
+            com.example.gemini.domain.model.ModelGroupPrefs.pillWindow(com.example.gemini.domain.model.QuotaAgent.CLAUDE)
+        ) { modelId, live, usage, overrides, pill ->
             // plan limits belong to Claude's own models; a custom provider's model has none
             if (com.example.gemini.data.agent.claude.ClaudeChatBackend.providerOf(modelId).isNotEmpty()) return@combine emptyList()
-            // live windows from the chat stream are fresher than the cached usage call (percent there)
-            val five = live["five_hour"]?.let { it.utilization to it.resetsAt?.let(::isoUtc) }
-                ?: usage?.rate_limits?.five_hour?.let { (it.utilization ?: 0.0) / 100.0 to it.resets_at }
-            val week = live["seven_day"]?.let { it.utilization to it.resetsAt?.let(::isoUtc) }
-                ?: usage?.rate_limits?.seven_day?.let { (it.utilization ?: 0.0) / 100.0 to it.resets_at }
-            if (five == null && week == null) emptyList()
-            else listOf(
-                ModelQuota(
-                    modelId = modelId,
-                    remainingFraction = five?.let { (1.0 - it.first).toFloat().coerceIn(0f, 1f) },
-                    resetTime = five?.second,
-                    weeklyRemainingFraction = week?.let { (1.0 - it.first).toFloat().coerceIn(0f, 1f) }
-                )
-            )
+            val groups = com.example.gemini.data.agent.claude.ClaudeQuotaGroups.groups(usage, live)
+            val group = com.example.gemini.data.agent.claude.ClaudeQuotaGroups.groupOf(modelId, claudeBackend.modelLabel(modelId), groups, overrides)
+            listOfNotNull(group?.toModelQuota(modelId, pill))
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val quotas = byAgent(agyBackend.quotas, claudeQuotas, noQuotas)
     val quotaSummary = agyBackend.quotaSummary

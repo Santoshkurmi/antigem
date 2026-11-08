@@ -47,7 +47,8 @@ object JarvisMcp {
     private val ACTING = setOf(
         "jarvis_task_start", "jarvis_task_reply", "jarvis_task_answer", "jarvis_task_stop", "jarvis_task_close",
         "jarvis_mission_set", "jarvis_mission_update", "jarvis_team_create", "jarvis_team_delete", "jarvis_resolve_permission",
-        "jarvis_send_to_chat", "jarvis_new_chat", "jarvis_stop_all", "jarvis_stop_chat", "jarvis_new_session", "jarvis_delete_chat"
+        "jarvis_send_to_chat", "jarvis_new_chat", "jarvis_stop_all", "jarvis_stop_chat", "jarvis_new_session", "jarvis_delete_chat",
+        "jarvis_set_model"
     )
 
     private const val NO_WAIT_NOTE = "Do not wait, sleep or poll. Start any other independent tasks now, tell the user briefly, then END YOUR TURN: " +
@@ -365,11 +366,15 @@ object JarvisMcp {
         // which Jarvis chat is calling: the voice chat, or one of the Jarvis text chats (their status shows on their own strip)
         val session = args.optString("_mcp_session").ifBlank { null }
         args.remove("_mcp_session")
-        val who = JarvisManagers.resolveCaller(args.optString("manager_id").ifBlank { null }, session)
-        val caller = who.key
-        val textChat = caller != JarvisManagers.VOICE
+        var who = JarvisManagers.resolveCaller(args.optString("manager_id").ifBlank { null }, session)
         // never act for the wrong Jarvis chat: when it is not certain who calls, ask for the manager_id
         if (!who.sure && name in ACTING) return error(NEED_ID)
+        if (!who.sure && (name == "jarvis_speak" || name == "jarvis_ask")) {
+            // speaking belongs to the voice chat while it works; otherwise the caller must say who it is
+            if (JarvisController.isVoiceChatBusy()) who = JarvisManagers.Caller(JarvisManagers.VOICE, true) else return error(NEED_ID)
+        }
+        val caller = who.key
+        val textChat = caller != JarvisManagers.VOICE
         friendlyStatus(name, args)?.let { if (textChat) JarvisManagers.setStatus(caller, it) else JarvisController.postStatus(it, explicit = false) }
         return try {
             when (name) {
@@ -520,7 +525,8 @@ object JarvisMcp {
                     text("Forked. The copy is now on screen.")
                 }
                 "jarvis_delete_chat" -> {
-                    val id = args.optString("id").ifBlank { return error("id is required") }
+                    // a task id may be given shortened: resolve it before any check
+                    val id = args.optString("id").trim().ifBlank { return error("id is required") }.let { JarvisTasks.find(it)?.id ?: it }
                     if (!args.optBoolean("confirm")) return error("Ask the user first, then call again with confirm=true.")
                     if (JarvisPreferences.isJarvisChat(id) && id == JarvisPreferences.currentChatId.value) return error("That is the Jarvis chat itself. Use jarvis_new_session instead.")
                     foreign(id, caller)?.let { return error(it) }
@@ -813,6 +819,8 @@ object JarvisMcp {
             agent, goal, args.optString("title").ifBlank { null }, model, project?.path,
             owner = caller, team = team?.name.orEmpty(), brief = subAgentBrief(team)
         )
+        // work started: the autopilot's patience starts over
+        JarvisManagers.resetNudges(caller)
         if (args.optBoolean("open")) {
             delay(2500)
             vm.selectConversation(t.id)
@@ -912,7 +920,7 @@ object JarvisMcp {
 
     private fun taskList(args: JSONObject, caller: String): JSONObject {
         val mine = args.optString("scope", "mine") != "all"
-        val all = JarvisTasks.tasks.value.filter { !mine || it.owner == caller }
+        val all = if (mine) JarvisTasks.ownedBy(caller) else JarvisTasks.tasks.value
         if (all.any { it.active } && polling("list:$caller", 3, 120_000)) return error(POLL_STOP)
         val list = if (args.optBoolean("include_finished", true)) all else all.filter { it.active }
         return json(pagedJson("tasks", list.map { taskJson(it) }, args) {
@@ -1291,6 +1299,8 @@ object JarvisMcp {
             return text("The Jarvis chat now uses ${m.displayName.ifBlank { m.id }}.")
         }
         val conv = vm.currentConversation.value ?: return error("No chat on screen. Pass id to change another chat.")
+        // the chat on screen may be another Jarvis chat or another Jarvis chat's task
+        if (conv.id != caller) foreign(conv.id, caller)?.let { return error(it) }
         val m = findModel(wanted, modelsFor(conv.agent)) ?: return error("No ${conv.agent.name.lowercase()} model matches \"$wanted\".")
         vm.selectModel(m.id)
         return text("Model set to ${m.displayName.ifBlank { m.id }}.")

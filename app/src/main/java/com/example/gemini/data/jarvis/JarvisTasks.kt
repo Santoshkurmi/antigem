@@ -119,8 +119,8 @@ object JarvisTasks {
     }
     fun isTask(id: String?): Boolean = id != null && _tasks.value.any { it.id == id }
     fun activeTasks(): List<Task> = _tasks.value.filter { it.active }
-    /** The tasks of one Jarvis manager (newest first). */
-    fun ownedBy(owner: String): List<Task> = _tasks.value.filter { it.owner == owner }
+    /** The tasks of one Jarvis manager (newest first); a task whose Jarvis chat is gone belongs to the voice chat. */
+    fun ownedBy(owner: String): List<Task> = _tasks.value.filter { JarvisManagers.ownerOrVoice(it.owner) == owner }
 
     /** Task backends Jarvis can read approvals and questions from. */
     fun claudeTaskBackends(): List<Pair<Task, ClaudeChatBackend>> =

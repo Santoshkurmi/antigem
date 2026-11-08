@@ -47,7 +47,9 @@ fun AgentSheetHeader(
     detail: String?,
     modifier: Modifier = Modifier,
     refreshing: Boolean = false,
-    onRefresh: (() -> Unit)? = null
+    onRefresh: (() -> Unit)? = null,
+    /** Extra buttons shown before refresh (e.g. the model picker's "edit groups"). */
+    actions: (@Composable () -> Unit)? = null
 ) {
     Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         AgentMark(agent, size = 36.dp)
@@ -62,6 +64,7 @@ fun AgentSheetHeader(
                 overflow = TextOverflow.Ellipsis
             )
         }
+        actions?.invoke()
         if (onRefresh != null) {
             val angle = if (refreshing) {
                 rememberInfiniteTransition(label = "sheet_refresh")

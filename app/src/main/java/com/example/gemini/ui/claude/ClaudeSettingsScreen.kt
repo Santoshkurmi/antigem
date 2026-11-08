@@ -329,13 +329,10 @@ private fun AccountPage(deps: ClaudeSettingsDeps) {
                 rl.five_hour?.let { UsageBar("5-hour limit", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at)) }
                 Spacer(Modifier.height(8.dp))
                 rl.seven_day?.let { UsageBar("Weekly limit (all models)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at)) }
-                rl.seven_day_opus?.let {
+                // a model's own weekly share (Fable on Max), on top of the all-models limit
+                com.example.gemini.data.agent.claude.ClaudeQuotaGroups.scopedLimits(rl).forEach {
                     Spacer(Modifier.height(8.dp))
-                    UsageBar("Weekly limit (Opus)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at))
-                }
-                rl.seven_day_sonnet?.let {
-                    Spacer(Modifier.height(8.dp))
-                    UsageBar("Weekly limit (Sonnet)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at))
+                    UsageBar("Weekly limit (${it.name})", it.used, formatReset(it.resetsAt))
                 }
             }
         }

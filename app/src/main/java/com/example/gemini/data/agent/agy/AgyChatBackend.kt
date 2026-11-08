@@ -137,6 +137,17 @@ class AgyChatBackend(
     private val _quotaSummary = MutableStateFlow<com.example.gemini.domain.model.QuotaSummaryResponse?>(null)
     val quotaSummary: StateFlow<com.example.gemini.domain.model.QuotaSummaryResponse?> = _quotaSummary.asStateFlow()
 
+    init {
+        // moving a model to another quota group, or switching the pill between 5h and 7d, updates the pill right away
+        com.example.gemini.domain.model.ModelGroupPrefs.init(application)
+        backendScope.launch {
+            combine(
+                com.example.gemini.domain.model.ModelGroupPrefs.overrides(com.example.gemini.domain.model.QuotaAgent.AGY),
+                com.example.gemini.domain.model.ModelGroupPrefs.pillWindow(com.example.gemini.domain.model.QuotaAgent.AGY)
+            ) { _, _ -> }.collect { recomputeQuotas() }
+        }
+    }
+
     private val _isLoadingConversation = MutableStateFlow(true)
     override val isLoadingConversation: StateFlow<Boolean> = _isLoadingConversation.asStateFlow()
 
@@ -2081,34 +2092,21 @@ class AgyChatBackend(
 
     fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) {
         _quotaSummary.value = summary
+        recomputeQuotas()
+    }
 
-        val updatedQuotas = _availableModels.value.map { model ->
-            val mName = model.displayName.ifBlank { model.id }
-            val group = summary.groups.firstOrNull { grp ->
-                val desc = grp.description
-                val gName = grp.groupName
-
-                (desc.isNotBlank() && desc.contains(mName.substringBefore(" ("), ignoreCase = true)) ||
-                (gName.contains("claude", ignoreCase = true) && (mName.contains("claude", ignoreCase = true) || mName.contains("gpt", ignoreCase = true))) ||
-                (gName.contains("argon", ignoreCase = true) && mName.contains("argon", ignoreCase = true)) ||
-                (gName.contains("gemini", ignoreCase = true) && !gName.contains("argon", ignoreCase = true) && !mName.contains("claude", ignoreCase = true) && !mName.contains("gpt", ignoreCase = true))
-            } ?: summary.groups.firstOrNull()
-
-            val fiveHour = group?.fiveHour
-            val weekly = group?.weekly
-
-            com.example.gemini.domain.model.ModelQuota(
-                modelId = model.id,
-                remainingFraction = fiveHour?.remainingFraction ?: weekly?.remainingFraction,
-                resetTime = fiveHour?.resetTime ?: weekly?.resetTime,
-                usedPercentage = fiveHour?.usedPct ?: weekly?.usedPct,
-                resetCountdown = fiveHour?.countdown ?: weekly?.countdown,
-                weeklyRemainingFraction = weekly?.remainingFraction,
-                weeklyUsedPercentage = weekly?.usedPct,
-                weeklyResetCountdown = weekly?.countdown
-            )
+    /**
+     * Each model's quota from its group (the user's choice in the model picker, else the automatic one). A group
+     * without a 5-hour limit (Argon) has none here: the pill falls back to its weekly limit, never a made-up 5h.
+     */
+    private fun recomputeQuotas() {
+        val summary = _quotaSummary.value ?: return
+        val groups = com.example.gemini.domain.model.AgyQuotaGroups.groups(summary)
+        val overrides = com.example.gemini.domain.model.ModelGroupPrefs.overrides(com.example.gemini.domain.model.QuotaAgent.AGY).value
+        val pill = com.example.gemini.domain.model.ModelGroupPrefs.pillWindow(com.example.gemini.domain.model.QuotaAgent.AGY).value
+        _quotas.value = _availableModels.value.mapNotNull { model ->
+            com.example.gemini.domain.model.AgyQuotaGroups.groupOf(model, groups, overrides)?.toModelQuota(model.id, pill)
         }
-        _quotas.value = updatedQuotas
     }
 
     fun refreshQuotas(force: Boolean = true, showToastFeedback: Boolean = false) {

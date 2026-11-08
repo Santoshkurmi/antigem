@@ -71,7 +71,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     // the voice chat's tasks (the Jarvis text chats show theirs on their own strip)
-    val shownTasks = tasks.filter { it.owner == JarvisManagers.VOICE }.take(12)
+    val shownTasks = tasks.filter { JarvisManagers.ownerOrVoice(it.owner) == JarvisManagers.VOICE }.take(12)
     // the list ends with the newest line: open there, and follow new lines
     val itemCount = (if (shownTasks.isNotEmpty()) 1 + shownTasks.size else 0) + 1 + log.size + 1
     LaunchedEffect(log.size) { listState.scrollToItem(itemCount - 1) }

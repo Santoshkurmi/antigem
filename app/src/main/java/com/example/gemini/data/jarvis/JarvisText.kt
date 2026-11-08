@@ -10,10 +10,12 @@ import com.example.gemini.data.remote.PromptExpansion
  */
 object JarvisText {
     private val thought = Regex("<!--\\s*thought[^>]*-->[\\s\\S]*?(<!--\\s*/thought\\s*-->|$)")
-    private val thoughtTag = Regex("<thought>[\\s\\S]*?(</thought>|$)", RegexOption.IGNORE_CASE)
-    private val thinkingTag = Regex("<thinking>[\\s\\S]*?(</thinking>|$)", RegexOption.IGNORE_CASE)
-    private val errorCard = Regex("<!--\\s*error[^>]*-->([\\s\\S]*?)(<!--\\s*/error\\s*-->|$)")
-    private val comment = Regex("<!--[\\s\\S]*?(-->|$)")
+    // only the app's own thinking marker can be open (still streaming); anything else must be closed, so a reply that
+    // merely mentions "<thinking>" or "<!--" keeps the rest of its text
+    private val thoughtTag = Regex("<thought>[\\s\\S]*?</thought>", RegexOption.IGNORE_CASE)
+    private val thinkingTag = Regex("<thinking>[\\s\\S]*?</thinking>", RegexOption.IGNORE_CASE)
+    private val errorCard = Regex("<!--\\s*error[^>]*-->([\\s\\S]*?)<!--\\s*/error\\s*-->")
+    private val comment = Regex("<!--[\\s\\S]*?-->")
     private val field = { name: String -> Regex("\"$name\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"") }
     private val userMessage = field("userMessage")
     private val title = field("title")

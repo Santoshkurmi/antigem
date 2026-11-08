@@ -52,6 +52,11 @@ object JarvisEvents {
     /** jarvis_speak was used in the text manager's current turn (its reply is not read out again). */
     private val spokeInTurn: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
     @Volatile private var voiceFlushPending = false
+    /** News sent to a text manager that is not confirmed yet (its chat must start working or show a new message). */
+    private data class InFlight(val batch: List<Event>, val at: Long, val messagesBefore: Int)
+    private val inFlight = ConcurrentHashMap<String, InFlight>()
+    /** Voice news was dropped because no voice agent is set (told once per streak). */
+    @Volatile private var droppedVoiceNotice = false
     @Volatile var holdVoiceUntil = 0L
     private var started = false
 
@@ -191,8 +196,14 @@ object JarvisEvents {
 
     // ------------------------------------------------------------------ the loop: delivery, guard, autopilot, voice replies
 
-    /** A loop that only waits: watch, or until / while loops around a sleep. */
-    private val waitLoop = Regex("(^|[\\s;&|(`])(watch\\s|until\\b[\\s\\S]*\\bsleep\\b|while\\b[\\s\\S]*\\bsleep\\b)", RegexOption.IGNORE_CASE)
+    /**
+     * A loop that only waits: `watch …` as a command, or a shell while / until loop with a sleep inside its body
+     * (`while …; do …; sleep 5; done`). A Python `while True:` with time.sleep, or a sleep after the loop, is not one.
+     */
+    private val waitLoop = Regex(
+        "((^|[;&|(]\\s*)watch\\s)|(\\b(while|until)\\b[^\\n]*?;\\s*do\\b[\\s\\S]*?\\bsleep\\s+\\d[\\s\\S]*?\\bdone\\b)",
+        RegexOption.IGNORE_CASE
+    )
     private val sleepCmd = Regex("(^|[\\s;&|(`])sleep\\s+(\\d+(?:\\.\\d+)?)([smhd]?)", RegexOption.IGNORE_CASE)
 
     /** A command that waits: a wait loop, or a sleep of 10 seconds or more (a short pause inside real work is fine). */
@@ -226,12 +237,28 @@ object JarvisEvents {
         }
     }
 
-    private fun ownsActive(owner: String) = JarvisTasks.activeTasks().any { it.owner == owner }
+    private fun ownsActive(owner: String) = JarvisTasks.ownedBy(owner).any { it.active }
 
     private suspend fun tick(owner: String) {
         val now = System.currentTimeMillis()
         val voice = owner == JarvisManagers.VOICE
-        if (!voice && !JarvisManagers.isTextManager(owner)) { queues.remove(owner); return }
+        if (!voice && !JarvisManagers.isTextManager(owner)) {
+            // that Jarvis chat is gone: its news (and its tasks) belong to the voice chat now
+            drain(owner).forEach { post(JarvisManagers.VOICE, it) }
+            queues.remove(owner)
+            inFlight.remove(owner)?.batch?.forEach { post(JarvisManagers.VOICE, it) }
+            return
+        }
+        if (voice && JarvisPreferences.agentKind == null && pending(owner) > 0) {
+            // no voice chat can be set up (no voice agent): nobody could receive it
+            val n = drain(owner).size
+            if (!droppedVoiceNotice) {
+                droppedVoiceNotice = true
+                JarvisController.showProblem("$n update${if (n == 1) "" else "s"} for the voice Jarvis could not be delivered: no voice agent is set (Settings → Jarvis → Voice agent).")
+            }
+            return
+        }
+        if (voice) droppedVoiceNotice = false
         val queued = queues[owner]?.toList().orEmpty()
         val oldest = queued.minOfOrNull { it.at }
         val active = ownsActive(owner)
@@ -248,6 +275,21 @@ object JarvisEvents {
         val was = busyBefore.put(owner, busy) ?: false
         if (busy) { idleSince.remove(owner); if (!was) sentAt.remove(owner) }
         else if (was || idleSince[owner] == null) idleSince[owner] = now
+        // news sent to a text chat counts as delivered once the chat works on it (or shows a new message); a send that
+        // silently did nothing (the agent offline, the chat not loaded) puts it back in the queue
+        inFlight[owner]?.let { f ->
+            val grew = (JarvisDriver.liveMessages(owner)?.size ?: -1) > f.messagesBefore && f.messagesBefore >= 0
+            when {
+                busy || grew -> inFlight.remove(owner)
+                now - f.at > 30_000 -> {
+                    inFlight.remove(owner)
+                    Log.w(TAG, "news to $owner was not taken up: queued again")
+                    val q = queues.getOrPut(owner) { java.util.Collections.synchronizedList(ArrayList()) }
+                    synchronized(q) { q.addAll(0, f.batch) }
+                    sentAt[owner] = now
+                }
+            }
+        }
         if (!voice && was && !busy) onTextTurnEnded(owner)
 
         // ---- the guard: waiting for tasks inside a turn
@@ -257,13 +299,17 @@ object JarvisEvents {
         if (queued.isNotEmpty() && oldest != null && now - oldest >= JarvisPreferences.eventBatchMs.value.toLong().coerceIn(0, 30_000)) {
             if (voice) {
                 if (now >= holdVoiceUntil && !voiceFlushPending) { voiceFlushPending = true; JarvisController.requestEventFlush() }
-            } else if (!busy && now - (sentAt[owner] ?: 0L) > 25_000) {
+            } else if (!busy && inFlight[owner] == null && now - (sentAt[owner] ?: 0L) > 25_000) {
                 val batch = drain(owner)
                 if (batch.isNotEmpty()) {
                     sentAt[owner] = now
                     JarvisManagers.markSent(owner)
                     spokeInTurn -= owner
-                    JarvisDriver.send(owner, format(owner, batch, takeGuardNote(owner))).onFailure { e ->
+                    val before = JarvisDriver.liveMessages(owner)?.size ?: -1
+                    JarvisDriver.send(owner, format(owner, batch, takeGuardNote(owner))).onSuccess {
+                        // a chat whose messages can be watched is checked; an off-screen Antigravity send fails loudly instead
+                        if (before >= 0) inFlight[owner] = InFlight(batch, now, before)
+                    }.onFailure { e ->
                         Log.w(TAG, "send to $owner failed: ${e.message}")
                         // put it back and try again later
                         val q = queues.getOrPut(owner) { java.util.Collections.synchronizedList(ArrayList()) }
@@ -281,7 +327,7 @@ object JarvisEvents {
         }
 
         // ---- autopilot
-        if (m.mission.isActive && m.mission.autopilot && !busy && queued.isEmpty() && !active) {
+        if (m.mission.isActive && m.mission.autopilot && !busy && queued.isEmpty() && !active && inFlight[owner] == null) {
             val idleFor = now - (idleSince[owner] ?: now)
             val sinceNudge = now - (lastNudgeAt[owner] ?: 0L)
             val sinceSent = now - (sentAt[owner] ?: 0L)

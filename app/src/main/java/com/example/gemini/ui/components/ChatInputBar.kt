@@ -1159,7 +1159,8 @@ fun ChatInputBar(
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
 
-                                    val pct = quota?.percentage
+                                    // 5h or 7d share left (picked in the model sheet; 7d when the model has no 5h limit)
+                                    val pct = quota?.pillPercent
                                     if (pct != null) {
                                         Spacer(modifier = Modifier.width(4.dp))
                                         val badgeColor = if (pct > 50) QuotaGreen else if (pct > 20) QuotaAmber else QuotaRed
@@ -1170,7 +1171,7 @@ fun ChatInputBar(
                                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
                                             Text(
-                                                text = "$pct%",
+                                                text = if (quota?.pillIsWeekly == true) "7d $pct%" else "$pct%",
                                                 fontSize = 9.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = badgeColor

@@ -113,8 +113,15 @@ object JarvisManagers {
     /** Connections shared by several managers (an agent that uses one connection for all its chats): never used to tell them apart. */
     private val sharedSessions: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
+    /** The agent a manager's chat runs on. */
+    private fun agentOfKey(key: String): AgentKind? =
+        if (key == VOICE) runCatching { AgentKind.valueOf(JarvisPreferences.currentChatAgent.value) }.getOrNull() else of(key).agent
+
     private fun learnSession(session: String?, key: String) {
         if (session.isNullOrBlank() || session in sharedSessions) return
+        // only Claude Code connects once per chat (one process each); OpenCode and Antigravity share one connection
+        // between all their chats, so their connection says nothing about who is calling
+        if (agentOfKey(key) != AgentKind.CLAUDE) return
         val prev = sessionOwner.putIfAbsent(session, key)
         if (prev != null && prev != key) { sessionOwner.remove(session); sharedSessions += session }
     }
@@ -140,15 +147,17 @@ object JarvisManagers {
         if (!session.isNullOrBlank() && session !in sharedSessions) {
             sessionOwner[session]?.takeIf { known(it) }?.let { return Caller(it, true) }
         }
+        // only one Jarvis chat exists: it is the caller
         val texts = textKeys()
+        val voiceExists = JarvisPreferences.currentChatId.value.isNotBlank()
+        val all = texts + listOfNotNull(VOICE.takeIf { voiceExists || texts.isEmpty() })
+        if (all.size == 1) return Caller(all[0], true)
+        // several: a guess only (busy states can lag behind, e.g. Antigravity's), never certain
         val busyText = texts.filter { runCatching { JarvisDriver.isBusy(it) }.getOrDefault(false) }
         val voiceBusy = runCatching { JarvisController.isVoiceChatBusy() }.getOrDefault(false)
         val busy = busyText + listOfNotNull(VOICE.takeIf { voiceBusy })
-        // only an explicit manager_id teaches a connection its owner; a guess never does
-        if (busy.size == 1) return Caller(busy[0], true)
-        if (texts.isEmpty()) return Caller(VOICE, busy.isEmpty() || busy == listOf(VOICE))
-        // several at work (or none seen yet): the one written to last, but only as a guess
-        val pool = busy.ifEmpty { texts + VOICE }
+        if (busy.size == 1) return Caller(busy[0], false)
+        val pool = busy.ifEmpty { all }
         val recent = pool.maxByOrNull { if (it == VOICE) JarvisPreferences.lastActivityAt.value else of(it).lastSentAt } ?: VOICE
         return Caller(recent, false)
     }
@@ -212,9 +221,13 @@ object JarvisManagers {
         val changes = ArrayList<String>()
         update(key) { m ->
             var mi = m.mission
+            // real progress (a step started or done, the mission finished) gives the autopilot its patience back;
+            // notes, a blocked step or nothing at all do not
+            var progress = false
             if (step != null) {
                 val s = mi.steps.firstOrNull { it.n == step }
                 if (s != null) {
+                    if ((stepStatus == "done" && s.status != "done") || (stepStatus == "doing" && s.status == "todo")) progress = true
                     mi = mi.copy(steps = mi.steps.map {
                         if (it.n == step) it.copy(status = stepStatus ?: it.status, note = note?.trim()?.take(200) ?: it.note) else it
                     })
@@ -227,13 +240,13 @@ object JarvisManagers {
                 changes += "${addSteps.size} step(s) added"
             }
             if (status != null && status in setOf("active", "done", "paused")) {
+                if (status != mi.status) progress = true
                 mi = mi.copy(status = status, autopilot = if (status != "active") false else mi.autopilot)
                 changes += "mission $status"
             }
-            if (autopilot != null) { mi = mi.copy(autopilot = autopilot); changes += "autopilot ${if (autopilot) "on" else "off"}" }
+            if (autopilot != null) { if (autopilot != mi.autopilot) progress = true; mi = mi.copy(autopilot = autopilot); changes += "autopilot ${if (autopilot) "on" else "off"}" }
             if (notes != null) { mi = mi.copy(notes = notes.trim().take(1500)); changes += "notes saved" }
-            // the manager moved the mission on: the autopilot's patience starts over
-            m.copy(mission = mi.copy(updatedAt = System.currentTimeMillis(), nudges = 0))
+            m.copy(mission = mi.copy(updatedAt = System.currentTimeMillis(), nudges = if (progress) 0 else mi.nudges))
         }
         return changes.joinToString(", ").ifBlank { "nothing changed" }
     }
@@ -287,7 +300,7 @@ object JarvisManagers {
      */
     fun brief(key: String): String {
         val m = of(key)
-        val mine = JarvisTasks.tasks.value.filter { it.owner == key && (it.active || System.currentTimeMillis() - it.updatedAt < 30 * 60_000L) }
+        val mine = JarvisTasks.ownedBy(key).filter { it.active || System.currentTimeMillis() - it.updatedAt < 30 * 60_000L }
         return buildString {
             append("<mission_brief manager_id=\"$key\">\n")
             val mi = m.mission

@@ -1341,6 +1341,9 @@ object JarvisController {
     // ------------------------------------------------------------------ the Jarvis chat
 
 
+    /** Failed tries in a row to hand the voice chat its news (the next try waits longer). */
+    @Volatile private var eventFailures = 0
+
     private suspend fun sendLoop() {
         for (m in outbox) {
             try {
@@ -1356,9 +1359,15 @@ object JarvisController {
                     if (batch.isEmpty()) continue
                     try {
                         sendToJarvis(m.copy(text = JarvisEvents.format(JarvisManagers.VOICE, batch, JarvisEvents.takeGuardNote(JarvisManagers.VOICE))))
+                        eventFailures = 0
                     } catch (e: Exception) {
+                        // keep the news and try again later, waiting longer each time; one notice, never spoken
                         batch.forEach { JarvisEvents.post(JarvisManagers.VOICE, it) }
-                        throw e
+                        eventFailures++
+                        val wait = (15_000L shl (eventFailures - 1).coerceAtMost(5)).coerceAtMost(300_000L)
+                        JarvisEvents.holdVoiceUntil = System.currentTimeMillis() + wait
+                        Log.w(TAG, "news for the voice chat not sent (${e.message}); next try in ${wait / 1000}s")
+                        if (eventFailures == 1) showNotice("Jarvis could not take its task news: ${e.message?.take(120)}. It tries again in a moment.", if (e is JarvisSetupException) "agent" else null)
                     }
                     continue
                 }

@@ -81,7 +81,7 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
     val key = remember(chatId, managers) { JarvisManagers.keyForChat(chatId) } ?: return
     val m = managers[key] ?: JarvisManagers.Manager(key)
     val voice = key == JarvisManagers.VOICE
-    val mine = tasks.filter { it.owner == key }
+    val mine = tasks.filter { JarvisManagers.ownerOrVoice(it.owner) == key }
     val active = mine.filter { it.active }
     val mission = m.mission
     val status = statuses[key]

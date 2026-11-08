@@ -6,7 +6,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,20 +58,26 @@ import com.example.gemini.data.agent.claude.ClaudeChatBackend
 import com.example.gemini.data.agent.claude.contextLabel
 import com.example.gemini.data.agent.claude.thinkingLabel
 import com.example.gemini.data.agent.claude.ClaudePreferences
+import com.example.gemini.data.agent.claude.ClaudeQuotaGroups
 import com.example.gemini.theme.QuotaAmber
 import com.example.gemini.theme.QuotaGreen
 import com.example.gemini.theme.QuotaRed
 import com.example.gemini.domain.model.AgentKind
+import com.example.gemini.domain.model.ModelGroupPrefs
+import com.example.gemini.domain.model.QuotaAgent
 import com.example.gemini.ui.agents.AgentSheetHeader
 import com.example.gemini.ui.agents.SegmentedSelector
 import com.example.gemini.ui.agents.SheetSectionLabel
 import com.example.gemini.ui.components.ClaudeAccent
 import kotlinx.coroutines.delay
 
-private fun isoUtcSeconds(epochSeconds: Long): String =
-    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-        .format(java.util.Date(epochSeconds * 1000))
+/** Accent of the model sheet's n-th plan group: Claude's own for "All models", then one hue per model limit. */
+private fun claudeGroupColor(index: Int): Color = when (index) {
+    0 -> ClaudeAccent
+    1 -> Color(0xFF8E6CEF)
+    2 -> Color(0xFF14B8A6)
+    else -> Color(0xFFE0A100)
+}
 
 private fun compactTokens(n: Long): String = when {
     n >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", n / 1_000_000.0)
@@ -259,6 +264,13 @@ fun ClaudeModelSheet(
     val providers by backend.providers.collectAsState()
     val accountState by account.state.collectAsState()
     val cardColor = claudeCardColor()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    remember { ModelGroupPrefs.init(context) }
+    val groupOverrides by ModelGroupPrefs.overrides(QuotaAgent.CLAUDE).collectAsState()
+    val pillWindow by ModelGroupPrefs.pillWindow(QuotaAgent.CLAUDE).collectAsState()
+    var editingGroups by remember { mutableStateOf(false) }
+    // plan limits as groups: "All models" (5h + 7d) and one per model with its own weekly share (Fable)
+    val quotaGroups = remember(usage, liveLimits) { ClaudeQuotaGroups.groups(usage, liveLimits) }
 
     LaunchedEffect(Unit) {
         // the bridge's cached usage is fine when it was loaded a moment ago; after that, ask for fresh numbers
@@ -296,10 +308,13 @@ fun ClaudeModelSheet(
                 },
                 refreshing = refreshingModels || refreshingUsage,
                 onRefresh = {
-                    // models and the plan limits shown under them (5h / 7d)
+                    // models and the plan limits shown above them (5h / 7d)
                     backend.refreshInfo(force = true)
                     account.refreshUsage(force = true)
-                }
+                },
+                actions = if (quotaGroups.size > 1 && rows.isNotEmpty()) {
+                    { com.example.gemini.ui.models.EditGroupsAction(editingGroups, ClaudeAccent) { editingGroups = !editingGroups } }
+                } else null
             )
             active?.let {
                 Text(
@@ -310,72 +325,62 @@ fun ClaudeModelSheet(
                 )
             }
 
-            // plan limits, shown like Antigravity's quota chips (remaining share · time to reset)
-            val five = liveLimits["five_hour"]?.let { it.utilization to it.resetsAt?.let(::isoUtcSeconds) }
-                ?: usage?.rate_limits?.five_hour?.let { (it.utilization ?: 0.0) / 100.0 to it.resets_at }
-            val week = liveLimits["seven_day"]?.let { it.utilization to it.resetsAt?.let(::isoUtcSeconds) }
-                ?: usage?.rate_limits?.seven_day?.let { (it.utilization ?: 0.0) / 100.0 to it.resets_at }
-            if ((five != null || week != null) && ClaudeChatBackend.providerOf(selected).isEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(start = 48.dp)
-                ) {
-                    five?.let { (used, reset) ->
-                        val left = (1.0 - used).toFloat().coerceIn(0f, 1f)
-                        com.example.gemini.ui.models.buildQuotaSummaryLine("5h", left, reset, null)?.let {
-                            com.example.gemini.ui.models.QuotaBadgeChip(text = it, fraction = left)
-                        }
-                    }
-                    week?.let { (used, reset) ->
-                        val left = (1.0 - used).toFloat().coerceIn(0f, 1f)
-                        com.example.gemini.ui.models.buildQuotaSummaryLine("7d", left, reset, null)?.let {
-                            com.example.gemini.ui.models.QuotaBadgeChip(text = it, fraction = left)
-                        }
-                    }
-                }
+            // plan limits sit on each group's header below; here: which one the chat's model pill shows
+            val planGroups = quotaGroups.takeIf { rows.isNotEmpty() }.orEmpty()
+            when {
+                editingGroups -> com.example.gemini.ui.models.EditGroupsBanner(ClaudeAccent) { editingGroups = false }
+                planGroups.any { it.fiveHour != null } ->
+                    com.example.gemini.ui.models.PillWindowRow(pillWindow, ClaudeAccent) { ModelGroupPrefs.setPillWindow(QuotaAgent.CLAUDE, it) }
             }
 
             @Composable
-            fun ModelRow(value: String, name: String, desc: String, warnDesc: Boolean = false) {
+            fun ModelRow(
+                value: String,
+                name: String,
+                desc: String,
+                warnDesc: Boolean = false,
+                accent: Color = ClaudeAccent,
+                groupControl: (@Composable () -> Unit)? = null
+            ) {
                 val isSel = value == selected
                 Surface(
                     onClick = {
                         backend.selectModel(value)
                         onDismiss()
                     },
+                    enabled = groupControl == null,
                     shape = RoundedCornerShape(14.dp),
                     color = cardColor,
-                    border = BorderStroke(if (isSel) 1.5.dp else 1.dp, if (isSel) ClaudeAccent.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)),
+                    border = BorderStroke(if (isSel) 1.5.dp else 1.dp, if (isSel) accent.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(name, fontWeight = if (isSel) FontWeight.Bold else FontWeight.SemiBold, fontSize = 14.sp)
-                            if (desc.isNotBlank()) {
-                                Text(
-                                    desc, fontSize = 12.sp, lineHeight = 16.sp,
-                                    color = if (warnDesc) com.example.gemini.theme.QuotaAmber else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(name, fontWeight = if (isSel) FontWeight.Bold else FontWeight.SemiBold, fontSize = 14.sp)
+                                if (desc.isNotBlank()) {
+                                    Text(
+                                        desc, fontSize = 12.sp, lineHeight = 16.sp,
+                                        color = if (warnDesc) com.example.gemini.theme.QuotaAmber else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                            if (isSel && groupControl == null) {
+                                Spacer(Modifier.width(8.dp))
+                                com.example.gemini.ui.models.ActiveModelBadge(accent)
                             }
                         }
-                        if (isSel) {
-                            Spacer(Modifier.width(8.dp))
-                            Row(
-                                Modifier.clip(RoundedCornerShape(6.dp)).background(ClaudeAccent.copy(alpha = 0.15f)).padding(horizontal = 7.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Check, null, tint = ClaudeAccent, modifier = Modifier.size(12.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text("Active", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = ClaudeAccent)
-                            }
+                        if (groupControl != null) {
+                            Spacer(Modifier.height(10.dp))
+                            groupControl()
                         }
                     }
                 }
             }
 
-            SheetSectionLabel(if (customSections.isEmpty()) "Model" else "Claude", trailing = if (customSections.isEmpty()) null else "your Claude plan")
+            if (planGroups.isEmpty() || signedOut) {
+                SheetSectionLabel(if (customSections.isEmpty()) "Model" else "Claude", trailing = if (customSections.isEmpty()) null else "your Claude plan")
+            }
             if (signedOut) {
                 Text(
                     "Sign in to Claude Code (Settings → Claude Code → Account) to use Claude's models.",
@@ -404,8 +409,39 @@ fun ClaudeModelSheet(
                     }
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                rows.forEach { (value, name, desc) -> ModelRow(value, name, desc) }
+            if (planGroups.isEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    rows.forEach { (value, name, desc) -> ModelRow(value, name, desc) }
+                }
+            } else {
+                // one section per plan limit: its 5h / 7d share left on top, then the models that count against it
+                val byGroup = rows.groupBy { (value, name, _) -> ClaudeQuotaGroups.groupOf(value, name, planGroups, groupOverrides)?.id }
+                planGroups.forEachIndexed { i, g ->
+                    val groupRows = byGroup[g.id].orEmpty()
+                    if (groupRows.isEmpty()) return@forEachIndexed
+                    val accent = claudeGroupColor(i)
+                    com.example.gemini.ui.models.QuotaGroupHeader(g.title, accent, groupRows.size, g.headerWindows)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        groupRows.forEach { (value, name, desc) ->
+                            ModelRow(
+                                value, name, desc,
+                                accent = accent,
+                                groupControl = if (editingGroups) {
+                                    {
+                                        com.example.gemini.ui.models.GroupMoveButton(
+                                            current = g,
+                                            automatic = ClaudeQuotaGroups.autoGroup(value, name, planGroups),
+                                            isMoved = groupOverrides[value]?.let { id -> planGroups.any { it.id == id } } == true,
+                                            groups = planGroups,
+                                            accent = accent,
+                                            onPick = { ModelGroupPrefs.setGroup(QuotaAgent.CLAUDE, value, it) }
+                                        )
+                                    }
+                                } else null
+                            )
+                        }
+                    }
+                }
             }
 
             // one section per custom provider (Settings → Claude Code → Custom providers)
@@ -557,8 +593,8 @@ fun ClaudeUsageDialog(account: ClaudeAccountManager, backend: ClaudeChatBackend,
                     five != null || week != null -> {
                         five?.let { UsageBar("Current session (5-hour)", it.first, it.second) }
                         week?.let { UsageBar("This week (all models)", it.first, it.second) }
-                        rl?.seven_day_opus?.let { UsageBar("This week (Opus)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at)) }
-                        rl?.seven_day_sonnet?.let { UsageBar("This week (Sonnet)", (it.utilization ?: 0.0) / 100.0, formatReset(it.resets_at)) }
+                        // a model's own weekly share (Fable on Max), on top of the all-models limit
+                        ClaudeQuotaGroups.scopedLimits(rl).forEach { UsageBar("This week (${it.name})", it.used, formatReset(it.resetsAt)) }
                     }
                     loading -> Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ClaudeAccent)

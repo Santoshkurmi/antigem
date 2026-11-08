@@ -103,8 +103,8 @@ unless the user says to interrupt it.
 - Bigger jobs with several steps: `jarvis_mission_set` (goal, done_when, steps) and keep it current with `jarvis_mission_update`;
   the mission and your tasks come back in a `<mission_brief>` with the news. Roles you reuse ("builders", "reviewers") are teams:
   `jarvis_team_create`, then `jarvis_task_start(team=…)`. "Keep going until it's done" → autopilot=true on the mission.
-- Pass `manager_id="voice"` to the jarvis_task_*, jarvis_mission_* and jarvis_team_* tools. The user may also have Jarvis text chats
-  running their own tasks at the same time: you direct only yours.
+- Pass `manager_id="voice"` to EVERY jarvis_mcp tool call. The user may also have Jarvis text chats running their own tasks at
+  the same time: you direct only yours, and without the id the app cannot tell you apart (tools that act refuse).
 
 ## App help and settings
 "How do I…", "where is…", "what does … do": `jarvis_app_guide` (topic or words), then explain in a sentence or two and offer to
@@ -195,8 +195,8 @@ Your app tools are the MCP server `jarvis_mcp` (list below). Call them directly 
 Claude Code names them `mcp__jarvis_mcp__<tool>` (if deferred, load the ones you need in ONE ToolSearch select); Antigravity
 lists them under the MCP server `jarvis_mcp`; OpenCode names them `jarvis_mcp_<tool>`. If you do NOT have them at all, reply
 exactly `$MCP_MISSING` and nothing else.
-Always pass `manager_id` (it is in the [Jarvis] note at the top of every message) to every jarvis_task_*, jarvis_mission_*
-and jarvis_team_* call: other Jarvis chats may be working at the same time, and without it the app cannot tell who is calling.
+Always pass `manager_id` (it is in the [Jarvis] note at the top of every message) to EVERY jarvis_mcp tool call: other
+Jarvis chats may be working at the same time, and without it the app cannot tell who is calling (tools that act refuse).
 You direct only your own tasks: other Jarvis chats' tasks (and those chats themselves) are theirs, and the tools refuse them.
 """.trim()
 
@@ -237,7 +237,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
 
     /** The short note in front of every later message. */
     fun preamble(context: String): String = buildString {
-        append("[Jarvis] Voice turn · manager_id=voice. Rules and the full jarvis_mcp tool list are in this chat's first message (jarvis_help repeats them). ")
+        append("[Jarvis] Voice turn · manager_id=voice (pass it to every jarvis_mcp tool). Rules and the full jarvis_mcp tool list are in this chat's first message (jarvis_help repeats them). ")
         append("Call the jarvis_mcp tools directly: no tool search beyond one ToolSearch select, no config or skill reading. ")
         append("Speak only via jarvis_speak / jarvis_ask; listen_after=true whenever you expect an answer. ")
         append("No jarvis_mcp tools at all → reply exactly $MCP_MISSING.\n")
@@ -266,7 +266,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
         val m = JarvisManagers.of(key)
         append("[Jarvis] command center · manager_id=$key · text chat · voice replies ${if (m.speak) "ON (your reply is read out loud: lead with one short spoken-friendly sentence)" else "off"}.\n")
         if (!boot) {
-            append("Rules (always): do small things yourself; delegate big or parallel work with jarvis_task_start (pass manager_id; use your teams). ")
+            append("Rules (always): pass manager_id=$key to every jarvis_mcp tool; do small things yourself; delegate big or parallel work with jarvis_task_start (use your teams). ")
             append(NO_WAIT_RULE).append(" Verify results before you accept them. Keep the mission current. Full guide: this chat's first message, or jarvis_help.\n")
         }
         personaLine()?.let { append(it).append('\n') }
