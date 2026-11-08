@@ -191,7 +191,9 @@ class MainActivity : ComponentActivity() {
                     } else {
                         val bgArgb =
                             if (useDarkTheme) com.example.gemini.theme.ClaudeDarkBg.toArgb() else com.example.gemini.theme.ClaudeCream.toArgb()
-                        window.statusBarColor = bgArgb
+                        // Transparent like Theme.kt: screens draw their own background behind it, and the
+                        // sidebar + scrim can extend over it.
+                        window.statusBarColor = android.graphics.Color.TRANSPARENT
                         window.navigationBarColor = bgArgb
                         insetsController.isAppearanceLightStatusBars = !useDarkTheme
                         insetsController.isAppearanceLightNavigationBars = !useDarkTheme

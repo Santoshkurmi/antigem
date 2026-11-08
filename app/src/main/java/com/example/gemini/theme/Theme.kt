@@ -102,7 +102,10 @@ fun GeminiTheme(
         if (activity != null && activity !is com.example.gemini.ui.bubble.FloatingChatActivity) {
             SideEffect {
                 val window = activity.window
-                window.statusBarColor = colorScheme.background.toArgb()
+                // Transparent, not the theme colour: the app paints its own background behind the status bar
+                // (edge-to-edge), so the drawer and its scrim can extend over it. On targetSdk 28 an opaque colour
+                // is drawn on top of the app and hid the top of the drawer.
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
                 window.navigationBarColor = colorScheme.background.toArgb()
                 // what shows behind the app during transitions: the theme, not the white splash layer
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(colorScheme.background.toArgb()))

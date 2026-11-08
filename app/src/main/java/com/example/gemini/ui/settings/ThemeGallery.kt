@@ -139,13 +139,24 @@ internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: 
                     Box(Modifier.padding(end = 3.dp).size(7.dp).clip(CircleShape).background(col(k)))
                 }
             }
+            // the default theme of its side: a small star in the preview's corner (no text badge, so every card
+            // keeps the same height)
+            if (BuiltInThemes.recommendedRank(t) == 0) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp).size(18.dp)
+                        .clip(CircleShape).background(accent)
+                        .border(1.5.dp, col("background"), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Star, "Default theme", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(11.dp))
+                }
+            }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(t.name, fontSize = 12.5.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface)
                 if (!t.builtIn) Text("Custom", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-                BuiltInThemes.recommendedRank(t)?.let { rank -> RecommendedBadge(rank) }
             }
             if (onDelete != null) {
                 Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
@@ -154,28 +165,5 @@ internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: 
             }
             if (selected) Icon(Icons.Filled.CheckCircle, "In use", tint = accent, modifier = Modifier.size(18.dp))
         }
-    }
-}
-
-/** Marks the top built-in themes of a side: the default (rank 0) as a solid pill, the next recommended ones as a soft one. */
-@Composable
-private fun RecommendedBadge(rank: Int) {
-    val accent = MaterialTheme.colorScheme.primary
-    val isDefault = rank == 0
-    val fg = if (isDefault) MaterialTheme.colorScheme.onPrimary else accent
-    Row(
-        Modifier
-            .padding(top = 3.dp)
-            .clip(RoundedCornerShape(50))
-            .background(if (isDefault) accent else accent.copy(alpha = 0.14f))
-            .padding(horizontal = 6.dp, vertical = 1.5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Filled.Star, null, tint = fg, modifier = Modifier.size(10.dp))
-        Spacer(Modifier.width(3.dp))
-        Text(
-            if (isDefault) "Default · Top pick" else "Recommended",
-            fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis
-        )
     }
 }
