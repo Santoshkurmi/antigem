@@ -212,16 +212,13 @@ class TrajectoryEngine {
         val executorMeta = update.main_trajectory_update?.executor_metadatas_update?.executor_metadatas?.lastOrNull()
         val liveTerminationReason = executorMeta?.termination_reason
         val executionError = executorMeta?.execution_error
-        val isTerminated = liveTerminationReason != null &&
-                liveTerminationReason != ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_UNSPECIFIED
 
-        // Same rule as the hub web UI: the executor loop's own status says whether the model is working; `status`
-        // is the whole conversation's and stays RUNNING while subagents / background work are alive after the
-        // reply has finished (which left the chat "outputting" forever). It is only the fallback.
-        val loopStatus = update.executor_loop_status.takeIf { it != CascadeRunStatus.CASCADE_RUN_STATUS_UNSPECIFIED } ?: status
-        val loopActive = loopStatus == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING || loopStatus == CascadeRunStatus.CASCADE_RUN_STATUS_CANCELING
-        val daemonRunning = loopActive && !isTerminated
-        val daemonIdle = loopStatus == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle || isTerminated
+        // Hub rule (main.js `kg`): a conversation is running iff its own `status` is RUNNING.
+        // `executorLoopStatus` is not used by the hub for the running indicator, and a mid-run rehydration snapshot
+        // only carries historical `executor_metadatas` (e.g. terminationReason=NO_TOOL_CALL from the previous turn)
+        // while the current executor is still running and absent from the snapshot.
+        val daemonRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
+        val daemonIdle = status == CascadeRunStatus.CASCADE_RUN_STATUS_IDLE || update.fully_idle
         fullyIdle = update.fully_idle
 
         update.pending_agent_messages_update?.let { applyPendingMessagesUpdate(it) }
@@ -229,7 +226,7 @@ class TrajectoryEngine {
         val stepsUpdate = update.main_trajectory_update?.steps_update
 
         val effectiveSteps = stepsUpdate?.steps ?: emptyList()
-        val effectiveIndices = stepsUpdate?.indices ?: effectiveSteps.indices.toList()
+        val effectiveIndices = stepsUpdate?.indices?.takeIf { it.isNotEmpty() } ?: effectiveSteps.indices.toList()
         val totalLength = stepsUpdate?.total_length ?: effectiveSteps.size
         if (stepsUpdate != null) totalStepsLength = totalLength
         for (s in effectiveSteps) {
@@ -249,7 +246,7 @@ class TrajectoryEngine {
 
         val frameLastStepError = update.main_trajectory_update?.last_step_error
 
-        val terminationErrorMsg = when (liveTerminationReason) {
+        val terminationErrorMsg = if (daemonRunning) null else when (liveTerminationReason) {
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_ERROR -> {
                 executionError?.takeIf { it.isNotBlank() } ?: "Execution encountered an error"
             }
@@ -382,6 +379,7 @@ class TrajectoryEngine {
         val savedPending = pendingUserTurn
         completedTurns.clear()
         activeStepsMap.clear()
+        activeTurnStartStep = 0
         pendingUserTurn = null
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()

@@ -118,7 +118,7 @@ fun <Req : Any, Resp : Any> GrpcStreamingCall<Req, Resp>.asFlowSafely(
         requestChannel.close()
 
         for (message in responseChannel) {
-            trySend(message)
+            send(message)
         }
         channel.close()
     } catch (e: CancellationException) {

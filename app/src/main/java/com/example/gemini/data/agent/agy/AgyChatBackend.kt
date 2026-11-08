@@ -445,14 +445,9 @@ class AgyChatBackend(
         instances.isNotEmpty() || convs.any { it.isRunning || it.notFullyIdle || it.hasActivity }
     }.stateIn(backendScope, SharingStarted.WhileSubscribed(5000), false)
 
-    // Authoritative conversation running & background states derived from the sidebar summary stream (_conversations).
-    // Note: We use the daemon's sidebar summaries (JetboxSubscribeToSummaries) as the single source of truth rather than
-    // per-frame stream updates from StreamAgentStateUpdates because the fine-grained gRPC stream in AGY can be buggier
-    // (e.g. continuing to report RUNNING state even when the turn has ended, particularly in long chats with multiple subagents/tools).
-    //
-    // The OPEN chat is decided by its live stream when it has one: the stream carries the executor loop's own status
-    // (the rule the hub web UI uses, see TrajectoryEngine), the summaries only the conversation's `status`, which stays
-    // RUNNING while subagents / background work are alive. Without a stream frame yet, the summary decides.
+    // Conversation running & background states derived from the sidebar summary stream (_conversations) and the
+    // open chat's live stream (StreamAgentStateUpdates). Both use the hub rule (`status == RUNNING`) for running,
+    // and `!fullyIdle` / `hasActivity` for background work. Without a stream frame yet, the summary decides.
     private data class StreamRunState(val conversationId: String, val loopRunning: Boolean, val fullyIdle: Boolean)
     private val _streamRun = MutableStateFlow<StreamRunState?>(null)
 
@@ -989,6 +984,8 @@ class AgyChatBackend(
         persistentStreamJob = backendScope.launch(Dispatchers.IO) {
             val hubUrl = AuthPreferences.currentHubUrl
             var isFirstChunk = true
+            val lastFrameAtMs = java.util.concurrent.atomic.AtomicLong(android.os.SystemClock.elapsedRealtime())
+            var lastRehydrateAtMs = 0L
 
             if (trajectoryEngine.conversationId != conversationId || _messages.value.isEmpty()) {
                 trajectoryEngine.reset(conversationId)
@@ -997,59 +994,107 @@ class AgyChatBackend(
             Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] Starting loop for $conversationId on $hubUrl")
 
             while (activeStreamConversationId == conversationId) {
+                var rehydrateRequested = false
+                var streamFailure: Exception? = null
                 try {
-                    agyHubClient.streamAgentStateUpdates(conversationId, hubUrl).collect { resp ->
-                        if (activeStreamConversationId != conversationId) {
-                            Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel Stream] Dropping frame for inactive conversation (active=$activeStreamConversationId vs frame=$conversationId)")
-                            return@collect
+                    kotlinx.coroutines.coroutineScope {
+                        val collectJob = launch {
+                            try {
+                                agyHubClient.streamAgentStateUpdates(conversationId, hubUrl).collect { resp ->
+                                    if (activeStreamConversationId != conversationId) {
+                                        Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel Stream] Dropping frame for inactive conversation (active=$activeStreamConversationId vs frame=$conversationId)")
+                                        return@collect
+                                    }
+
+                                    lastFrameAtMs.set(android.os.SystemClock.elapsedRealtime())
+
+                                    val update = resp.update
+                                    val statusStr = update?.status?.name ?: ""
+                                    val stepsCount = update?.main_trajectory_update?.steps_update?.steps?.size ?: 0
+                                    Log.d("CHAT_OPEN_DEBUG", "📥 [ChatViewModel Stream Frame] convId=$conversationId, isFirstChunk=$isFirstChunk, status=$statusStr, stepsCount=$stepsCount")
+                                    isFirstChunk = false
+                                    val turns = if (update != null) trajectoryEngine.ingestAgentStateUpdate(update) else emptyList()
+                                    val msgs = trajectoryEngine.toChatMessages(conversationId)
+
+
+                                    withContext(Dispatchers.Main) {
+                                        if (activeStreamConversationId != conversationId) return@withContext
+                                        _isServerOnline.value = true
+                                        _conversationError.value = null
+                                        _isLoadingConversation.value = false
+                                        _isReconnecting.value = false
+
+                                        val isRunning = trajectoryEngine.isRunning
+                                        val isWaiting = trajectoryEngine.isWaitingInteraction
+                                        _isStreaming.value = isRunning && !isWaiting
+                                        _streamRun.value = StreamRunState(conversationId, isRunning, trajectoryEngine.fullyIdle)
+                                        _optimisticSend.value?.let { o ->
+                                            // the sent message started (loop running) or already finished (its step is there)
+                                            if (o.conversationId == conversationId && (isRunning || trajectoryEngine.hasSeenClientTag(o.tag))) {
+                                                clearOptimisticSend()
+                                            }
+                                        }
+                                        refreshQueuedMessages(conversationId)
+
+                                        Log.d("CHAT_OPEN_DEBUG", "✨ [ChatViewModel State Update] convId=$conversationId, turnsCount=${turns.size}, msgsCount=${msgs.size}, isRunning=$isRunning, isWaiting=$isWaiting")
+
+                                        _messages.value = msgs
+                                        if (msgs.isNotEmpty()) {
+                                            com.example.gemini.ui.chat.ChatFeedCache.prewarm(msgs)
+
+                                            msgs.flatMap { it.toolCalls }.filter {
+                                                it.toolType == com.example.gemini.domain.model.ToolType.GENERATE_IMAGE && it.output.isNotBlank()
+                                            }.forEach { tc ->
+                                                com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(application, tc.output, agyHubClient, hubUrl)
+                                            }
+                                            msgs.flatMap { it.attachments }.filter { it.isImage && it.path.isNotBlank() }.forEach { att ->
+                                                val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
+                                                com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(application, rawUri, agyHubClient, hubUrl)
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                streamFailure = e
+                            }
                         }
 
-                        val update = resp.update
-                        val statusStr = update?.status?.name ?: ""
-                        val stepsCount = update?.main_trajectory_update?.steps_update?.steps?.size ?: 0
-                        Log.d("CHAT_OPEN_DEBUG", "📥 [ChatViewModel Stream Frame] convId=$conversationId, isFirstChunk=$isFirstChunk, status=$statusStr, stepsCount=$stepsCount")
-                        isFirstChunk = false
-                        val turns = if (update != null) trajectoryEngine.ingestAgentStateUpdate(update) else emptyList()
-                        val msgs = trajectoryEngine.toChatMessages(conversationId)
-
-
-                        withContext(Dispatchers.Main) {
-                            if (activeStreamConversationId != conversationId) return@withContext
-                            _isServerOnline.value = true
-                            _conversationError.value = null
-                            _isLoadingConversation.value = false
-                            _isReconnecting.value = false
-
-                            val isRunning = trajectoryEngine.isRunning
-                            val isWaiting = trajectoryEngine.isWaitingInteraction
-                            _isStreaming.value = isRunning && !isWaiting
-                            _streamRun.value = StreamRunState(conversationId, isRunning, trajectoryEngine.fullyIdle)
-                            _optimisticSend.value?.let { o ->
-                                // the sent message started (loop running) or already finished (its step is there)
-                                if (o.conversationId == conversationId && (isRunning || trajectoryEngine.hasSeenClientTag(o.tag))) {
-                                    clearOptimisticSend()
-                                }
-                            }
-                            refreshQueuedMessages(conversationId)
-
-                            Log.d("CHAT_OPEN_DEBUG", "✨ [ChatViewModel State Update] convId=$conversationId, turnsCount=${turns.size}, msgsCount=${msgs.size}, isRunning=$isRunning, isWaiting=$isWaiting")
-
-                            _messages.value = msgs
-                            if (msgs.isNotEmpty()) {
-                                com.example.gemini.ui.chat.ChatFeedCache.prewarm(msgs)
-
-                                msgs.flatMap { it.toolCalls }.filter {
-                                    it.toolType == com.example.gemini.domain.model.ToolType.GENERATE_IMAGE && it.output.isNotBlank()
-                                }.forEach { tc ->
-                                    com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(application, tc.output, agyHubClient, hubUrl)
-                                }
-                                msgs.flatMap { it.attachments }.filter { it.isImage && it.path.isNotBlank() }.forEach { att ->
-                                    val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
-                                    com.example.gemini.data.remote.HubMediaResolver.resolveMediaUri(application, rawUri, agyHubClient, hubUrl)
+                        val watchdogJob = launch {
+                            var mismatchSinceMs = 0L
+                            while (isActive && collectJob.isActive && activeStreamConversationId == conversationId) {
+                                delay(1_000L)
+                                val now = android.os.SystemClock.elapsedRealtime()
+                                val streamRunning = _streamRun.value?.let { it.conversationId == conversationId && it.loopRunning } == true
+                                val optimisticActive = _optimisticSend.value?.conversationId == conversationId
+                                val summaryConv = _conversations.value.find { it.id == conversationId }
+                                val summaryIdle = summaryConv != null && !summaryConv.isRunning
+                                val silentMs = now - lastFrameAtMs.get()
+                                if (streamRunning && !optimisticActive && summaryIdle && silentMs >= 5_000L) {
+                                    if (mismatchSinceMs == 0L) mismatchSinceMs = now
+                                    if (now - mismatchSinceMs >= 4_000L && now - lastRehydrateAtMs >= 10_000L) {
+                                        Log.w("CHAT_OPEN_DEBUG", "🔄 [ChatViewModel Stream Watchdog] Stream RUNNING while summary IDLE and silent for ${silentMs}ms (convId=$conversationId); rehydrating")
+                                        lastRehydrateAtMs = now
+                                        rehydrateRequested = true
+                                        collectJob.cancel()
+                                        break
+                                    }
+                                } else {
+                                    mismatchSinceMs = 0L
                                 }
                             }
                         }
+
+                        collectJob.join()
+                        watchdogJob.cancel()
                     }
+
+                    if (rehydrateRequested && activeStreamConversationId == conversationId) {
+                        isFirstChunk = true
+                        continue
+                    }
+                    streamFailure?.let { throw it }
 
                     if (isFirstChunk) {
                         if (activeStreamConversationId != conversationId) break

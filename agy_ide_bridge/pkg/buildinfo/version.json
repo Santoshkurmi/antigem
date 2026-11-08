@@ -3,7 +3,7 @@
   "version_name": "1.1.2",
   "min_supported_version_code": 1,
   "changelog": [
-   "Fix that bug that show all agents name in sidebar"
+   "Fix the bug that show all agents name in sidebar"
   ],
   "is_critical": false
 }
