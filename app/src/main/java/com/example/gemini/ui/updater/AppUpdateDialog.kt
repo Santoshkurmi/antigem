@@ -17,7 +17,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -182,13 +188,48 @@ fun AppUpdateDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
+                // Compose has no scrollbar of its own: when the list is longer than the card, draw a thumb on the right and
+                // fade out the bottom edge while there is more below, so it's clear the changelog scrolls
+                val changelogScroll = rememberScrollState()
+                val changelogBg = surfaceVariantColor.copy(alpha = 0.35f)
+                val changelogFade = changelogBg.compositeOver(surfaceColor)
+                val thumbColor = onSurfaceColor.copy(alpha = 0.35f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 160.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(surfaceVariantColor.copy(alpha = 0.35f))
+                        .background(changelogBg)
                         .border(1.dp, onSurfaceColor.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                        .drawWithContent {
+                            drawContent()
+                            val max = changelogScroll.maxValue
+                            if (max <= 0 || max == Int.MAX_VALUE) return@drawWithContent
+                            val inset = 10.dp.toPx()
+                            if (changelogScroll.canScrollForward) {
+                                val fadeH = 28.dp.toPx()
+                                drawRect(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(changelogFade.copy(alpha = 0f), changelogFade),
+                                        startY = size.height - fadeH,
+                                        endY = size.height
+                                    ),
+                                    topLeft = Offset(0f, size.height - fadeH),
+                                    size = Size(size.width, fadeH)
+                                )
+                            }
+                            val viewport = size.height - 2 * inset
+                            val track = size.height - 2 * 6.dp.toPx()
+                            val thumbH = (track * viewport / (viewport + max)).coerceAtLeast(18.dp.toPx())
+                            val thumbY = 6.dp.toPx() + (track - thumbH) * changelogScroll.value / max
+                            val thumbW = 3.dp.toPx()
+                            drawRoundRect(
+                                color = thumbColor,
+                                topLeft = Offset(size.width - thumbW - 4.dp.toPx(), thumbY),
+                                size = Size(thumbW, thumbH),
+                                cornerRadius = CornerRadius(thumbW / 2)
+                            )
+                        }
                         .padding(10.dp)
                 ) {
                     // One numbered row per version.json changelog entry
@@ -196,7 +237,8 @@ fun AppUpdateDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
+                            .verticalScroll(changelogScroll)
+                            .padding(end = if (changelogScroll.maxValue > 0) 8.dp else 0.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         changelogItems.forEachIndexed { index, item ->
