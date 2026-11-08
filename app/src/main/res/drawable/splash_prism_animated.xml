@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ splash icon: the Prism mark (same shapes as ic_launcher_foreground.xml), animated.
+     The whole gem is visible from the first frame, so it looks complete whenever the app is ready.
+     0-450 ms   the crown lifts off: it starts with a smaller gap and rises into its hover position
+     0-400 ms   the seam of light brightens from dim to full
+     0-420 ms   a soft glow fades in and opens around the seam
+     0 ms+      the spectrum flows left to right along the seam
+     700 ms+    the crown hovers and the glow breathes until the app is ready -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="108dp"
+            android:height="108dp"
+            android:viewportWidth="108"
+            android:viewportHeight="108">
+
+            <!-- Glow around the seam: a circle squashed into an ellipse -->
+            <group
+                android:name="glow"
+                android:pivotX="54"
+                android:pivotY="47.5"
+                android:scaleX="0.4"
+                android:scaleY="0.4">
+                <group
+                    android:pivotX="54"
+                    android:pivotY="47.5"
+                    android:scaleY="0.25">
+                    <path
+                        android:name="glow_path"
+                        android:fillAlpha="0"
+                        android:pathData="M26,47.5a28,28 0,1 0,56 0a28,28 0,1 0,-56 0Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient
+                                android:type="radial"
+                                android:centerX="54"
+                                android:centerY="47.5"
+                                android:gradientRadius="28"
+                                android:startColor="#809FD8FF"
+                                android:endColor="#009FD8FF" />
+                        </aapt:attr>
+                    </path>
+                </group>
+            </group>
+
+            <!-- Crown: starts lowered (smaller gap), lifts into place, then hovers -->
+            <group
+                android:name="crown_lift"
+                android:translateY="2">
+                <group android:name="crown_hover">
+                    <path android:fillColor="#FFC9D1DC" android:pathData="M41,33L67,33L77,45L31,45Z" />
+                    <path android:fillColor="#FFD3DAE4" android:pathData="M41,33L31,45L47.5,45Z" />
+                    <path android:fillColor="#FFFFFFFF" android:pathData="M41,33L54,33L47.5,45Z" />
+                    <path android:fillColor="#FFE8EDF3" android:pathData="M54,33L47.5,45L60.5,45Z" />
+                    <path android:fillColor="#FFAFB9C8" android:pathData="M54,33L67,33L60.5,45Z" />
+                    <path android:fillColor="#FF808C9E" android:pathData="M67,33L60.5,45L77,45Z" />
+                    <path android:pathData="M41,33L67,33L77,45L31,45Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient android:type="linear" android:startX="0" android:startY="33" android:endX="0" android:endY="42"
+                                android:startColor="#2EFFFFFF" android:endColor="#00FFFFFF" />
+                        </aapt:attr>
+                    </path>
+                    <path android:pathData="M41,33L67,33L77,45L31,45Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient android:type="linear" android:startX="0" android:startY="38" android:endX="0" android:endY="45"
+                                android:startColor="#009FD8FF" android:endColor="#619FD8FF" />
+                        </aapt:attr>
+                    </path>
+                    <path
+                        android:pathData="M41,33L67,33"
+                        android:strokeColor="#FFFFFFFF"
+                        android:strokeAlpha="0.65"
+                        android:strokeWidth="0.8"
+                        android:strokeLineCap="round" />
+                </group>
+            </group>
+
+            <!-- Pavilion (the base) -->
+            <group>
+                <path android:fillColor="#FF8893A5" android:pathData="M31,50L77,50L54,75Z" />
+                <path android:fillColor="#FF9AA5B6" android:pathData="M31,50L47.5,50L54,75Z" />
+                <path android:fillColor="#FFDCE2EA" android:pathData="M47.5,50L54,50L54,75Z" />
+                <path android:fillColor="#FF69748A" android:pathData="M54,50L60.5,50L54,75Z" />
+                <path android:fillColor="#FF3E4757" android:pathData="M60.5,50L77,50L54,75Z" />
+                <path android:pathData="M31,50L77,50L54,75Z">
+                    <aapt:attr name="android:fillColor">
+                        <gradient android:type="linear" android:startX="0" android:startY="50" android:endX="0" android:endY="75"
+                            android:startColor="#00000000" android:endColor="#47000000" />
+                    </aapt:attr>
+                </path>
+                <path android:pathData="M31,50L77,50L54,75Z">
+                    <aapt:attr name="android:fillColor">
+                        <gradient android:type="linear" android:startX="0" android:startY="50" android:endX="0" android:endY="58"
+                            android:startColor="#619FD8FF" android:endColor="#009FD8FF" />
+                    </aapt:attr>
+                </path>
+            </group>
+
+            <!-- The seam of light in the gap: the spectrum flows left to right inside the seam shape.
+                 The flow path repeats its gradient every 50 units and slides by exactly one period, so the loop is seamless.
+                 The end fades are drawn in the splash color (splash_colors.xml splash_bg) so the seam still tapers off. -->
+            <group>
+                <clip-path android:pathData="M29.6,46.9H78.4A0.6,0.6 0,0 1,78.4 48.1H29.6A0.6,0.6 0,0 1,29.6 46.9Z" />
+                <group android:name="seam_flow">
+                    <path
+                        android:name="seam_path"
+                        android:fillAlpha="0.3"
+                        android:pathData="M-21,46.9H79V48.1H-21Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient
+                                android:type="linear"
+                                android:startX="29"
+                                android:startY="47.5"
+                                android:endX="79"
+                                android:endY="47.5"
+                                android:tileMode="repeat">
+                                <item android:offset="0" android:color="#FF5EE7FF" />
+                                <item android:offset="0.3" android:color="#FFFFFFFF" />
+                                <item android:offset="0.55" android:color="#FFC79BFF" />
+                                <item android:offset="0.8" android:color="#FFFFB86B" />
+                                <item android:offset="1" android:color="#FF5EE7FF" />
+                            </gradient>
+                        </aapt:attr>
+                    </path>
+                </group>
+                <path android:pathData="M29,46.5H39V48.5H29Z">
+                    <aapt:attr name="android:fillColor">
+                        <gradient android:type="linear" android:startX="29" android:startY="47.5" android:endX="39" android:endY="47.5"
+                            android:startColor="#FF111217" android:endColor="#00111217" />
+                    </aapt:attr>
+                </path>
+                <path android:pathData="M69,46.5H79V48.5H69Z">
+                    <aapt:attr name="android:fillColor">
+                        <gradient android:type="linear" android:startX="69" android:startY="47.5" android:endX="79" android:endY="47.5"
+                            android:startColor="#00111217" android:endColor="#FF111217" />
+                    </aapt:attr>
+                </path>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <!-- 0-400 ms: the seam brightens -->
+    <target android:name="seam_path">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="fillAlpha"
+                android:valueFrom="0.3"
+                android:valueTo="1"
+                android:valueType="floatType"
+                android:duration="400"
+                android:interpolator="@interpolator/splash_soft" />
+        </aapt:attr>
+    </target>
+
+    <!-- 0-420 ms: glow blooms past full size and settles -->
+    <target android:name="glow">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="420"
+                android:interpolator="@android:interpolator/linear">
+                <propertyValuesHolder android:propertyName="scaleX" android:valueType="floatType">
+                    <keyframe android:fraction="0" android:value="0.4" />
+                    <keyframe android:fraction="0.6" android:value="1.15" android:interpolator="@interpolator/splash_soft" />
+                    <keyframe android:fraction="1" android:value="1" android:interpolator="@interpolator/splash_ease" />
+                </propertyValuesHolder>
+                <propertyValuesHolder android:propertyName="scaleY" android:valueType="floatType">
+                    <keyframe android:fraction="0" android:value="0.4" />
+                    <keyframe android:fraction="0.6" android:value="1.15" android:interpolator="@interpolator/splash_soft" />
+                    <keyframe android:fraction="1" android:value="1" android:interpolator="@interpolator/splash_ease" />
+                </propertyValuesHolder>
+            </objectAnimator>
+        </aapt:attr>
+    </target>
+
+    <!-- 0-250 ms: glow fades in; from 700 ms it breathes -->
+    <target android:name="glow_path">
+        <aapt:attr name="android:animation">
+            <set android:ordering="together">
+                <objectAnimator
+                    android:propertyName="fillAlpha"
+                    android:valueFrom="0"
+                    android:valueTo="1"
+                    android:valueType="floatType"
+                    android:duration="250"
+                    android:interpolator="@interpolator/splash_soft" />
+                <objectAnimator
+                    android:propertyName="fillAlpha"
+                    android:valueFrom="1"
+                    android:valueTo="0.6"
+                    android:valueType="floatType"
+                    android:duration="1300"
+                    android:startOffset="700"
+                    android:repeatCount="infinite"
+                    android:repeatMode="reverse"
+                    android:interpolator="@interpolator/splash_ease" />
+            </set>
+        </aapt:attr>
+    </target>
+
+    <!-- 0-450 ms: the crown lifts into its hover position -->
+    <target android:name="crown_lift">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="translateY"
+                android:valueFrom="2"
+                android:valueTo="0"
+                android:valueType="floatType"
+                android:duration="450"
+                android:interpolator="@interpolator/splash_soft" />
+        </aapt:attr>
+    </target>
+
+    <!-- 700 ms+: the crown hovers -->
+    <target android:name="crown_hover">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="translateY"
+                android:valueFrom="0"
+                android:valueTo="-0.9"
+                android:valueType="floatType"
+                android:duration="1300"
+                android:startOffset="700"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@interpolator/splash_ease" />
+        </aapt:attr>
+    </target>
+
+    <!-- 0 ms+: the spectrum flows along the seam, one period every 1.2 s -->
+    <target android:name="seam_flow">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="translateX"
+                android:valueFrom="0"
+                android:valueTo="50"
+                android:valueType="floatType"
+                android:duration="1200"
+                android:repeatCount="infinite"
+                android:repeatMode="restart"
+                android:interpolator="@android:interpolator/linear" />
+        </aapt:attr>
+    </target>
+</animated-vector>

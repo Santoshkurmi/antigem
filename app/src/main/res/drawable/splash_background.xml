@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Splash background: always white (splash_colors.xml) -->
+    <!-- Splash background: graphite, matching the icon (splash_colors.xml) -->
     <item android:drawable="@color/splash_bg" />
 
-    <!-- Centered AntiGem Logo -->
+    <!-- Centered Prism mark, the same size as the Android 12+ splash icon -->
     <item
         android:gravity="center"
-        android:width="160dp"
-        android:height="160dp">
-        <bitmap
-            android:src="@drawable/splash_logo"
-            android:filter="true"
-            android:antialias="true"
-            android:dither="true"
-            android:gravity="center" />
-    </item>
-</layer-list>
+        android:width="288dp"
+        android:height="288dp"
+        android:drawable="@drawable/ic_launcher_foreground" />
 
+    <!-- "ANTIGEM" wordmark at the bottom, like the Android 12+ splash branding image -->
+    <item
+        android:gravity="bottom|center_horizontal"
+        android:width="200dp"
+        android:height="80dp"
+        android:bottom="60dp"
+        android:drawable="@drawable/splash_wordmark" />
+</layer-list>

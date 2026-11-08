@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Startup splash and window background before the app's theme loads: always white (in light and dark mode),
-         to match the logo's white app-icon background -->
-    <color name="splash_bg">#FFFFFFFF</color>
-    <bool name="splash_light_bars">true</bool>
+    <!-- Startup splash and window background before the app's theme loads: always graphite (in light and dark mode),
+         to match the Prism app-icon background, so the tap-to-open zoom flows straight into the splash -->
+    <color name="splash_bg">#FF111217</color>
+    <bool name="splash_light_bars">false</bool>
 </resources>

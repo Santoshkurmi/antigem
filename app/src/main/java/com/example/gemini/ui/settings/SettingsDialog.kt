@@ -1912,15 +1912,12 @@ private fun AppearanceSubScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White)
-                                        .padding(3.dp),
+                                        .clip(RoundedCornerShape(8.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    androidx.compose.foundation.Image(
-                                        painter = androidx.compose.ui.res.painterResource(id = com.example.gemini.R.drawable.splash_logo),
+                                    com.example.gemini.ui.components.AppIconImage(
                                         contentDescription = "AntiTerm",
-                                        modifier = Modifier.size(26.dp)
+                                        modifier = Modifier.matchParentSize()
                                     )
                                 }
 

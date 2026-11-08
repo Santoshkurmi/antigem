@@ -132,15 +132,12 @@ fun TerminalLauncherOnboardingDialog(
                                     modifier = Modifier
                                         .size(54.dp)
                                         .shadow(4.dp, RoundedCornerShape(14.dp))
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(Color.White)
-                                        .padding(6.dp),
+                                        .clip(RoundedCornerShape(14.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.splash_logo),
+                                    com.example.gemini.ui.components.AppIconImage(
                                         contentDescription = "AntiGem",
-                                        modifier = Modifier.size(42.dp)
+                                        modifier = Modifier.matchParentSize()
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -181,10 +178,10 @@ fun TerminalLauncherOnboardingDialog(
                                             if (selectedStyle == TerminalLauncherManager.STYLE_TERMUX) {
                                                 Color.Black
                                             } else {
-                                                Color.White
+                                                Color.Transparent
                                             }
                                         )
-                                        .padding(6.dp),
+                                        .padding(if (selectedStyle == TerminalLauncherManager.STYLE_TERMUX) 6.dp else 0.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (selectedStyle == TerminalLauncherManager.STYLE_TERMUX) {
@@ -194,10 +191,9 @@ fun TerminalLauncherOnboardingDialog(
                                             modifier = Modifier.size(38.dp)
                                         )
                                     } else {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.splash_logo),
+                                        com.example.gemini.ui.components.AppIconImage(
                                             contentDescription = "AntiTerm",
-                                            modifier = Modifier.size(42.dp)
+                                            modifier = Modifier.matchParentSize()
                                         )
                                     }
                                 }
@@ -303,15 +299,12 @@ fun TerminalLauncherOnboardingDialog(
                                 Box(
                                     modifier = Modifier
                                         .size(38.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color.White)
-                                        .padding(4.dp),
+                                        .clip(RoundedCornerShape(10.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.splash_logo),
+                                    com.example.gemini.ui.components.AppIconImage(
                                         contentDescription = "AntiTerm",
-                                        modifier = Modifier.size(30.dp)
+                                        modifier = Modifier.matchParentSize()
                                     )
                                 }
 
