@@ -124,6 +124,9 @@ class AgyChatBackend(
     private val _selectedModelId = MutableStateFlow("")
     val selectedModelId: StateFlow<String> = _selectedModelId.asStateFlow()
 
+    /** The model the user last picked (the saved default); new chats start on it. */
+    @Volatile private var pickedModelId = ""
+
     val preferredModelName: StateFlow<String> = authPrefs.preferredModelName
         .map { it ?: "" }
         .stateIn(backendScope, SharingStarted.Eagerly, "")
@@ -604,6 +607,7 @@ class AgyChatBackend(
             if (initial.isNotBlank() && _selectedModelId.value.isBlank()) {
                 _selectedModelId.value = initial
             }
+            if (initial.isNotBlank() && pickedModelId.isBlank()) pickedModelId = initial
             // the start-up chat: only when nothing is open yet or it is still an empty Antigravity chat (a Claude
             // chat opened meanwhile must not be replaced)
             val cur = _currentConversation.value
@@ -885,6 +889,9 @@ class AgyChatBackend(
         clearOptimisticSend()
         _streamRun.value = null
         _queuedMessages.value = emptyList()
+        // a new chat starts on the model the user last picked, not on the one an opened chat showed
+        _availableModels.value.firstOrNull { it.id == pickedModelId || it.key == pickedModelId }
+            ?.let { _selectedModelId.value = it.id }
 
         val modelToUse = if (_selectedModelId.value.isNotBlank()) {
             com.example.gemini.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
@@ -1019,6 +1026,7 @@ class AgyChatBackend(
                                     val statusStr = update?.status?.name ?: ""
                                     val stepsCount = update?.main_trajectory_update?.steps_update?.steps?.size ?: 0
                                     Log.d("CHAT_OPEN_DEBUG", "📥 [ChatViewModel Stream Frame] convId=$conversationId, isFirstChunk=$isFirstChunk, status=$statusStr, stepsCount=$stepsCount")
+                                    val historyChunk = isFirstChunk
                                     isFirstChunk = false
                                     val turns = if (update != null) trajectoryEngine.ingestAgentStateUpdate(update) else emptyList()
                                     val msgs = trajectoryEngine.toChatMessages(conversationId)
@@ -1046,6 +1054,7 @@ class AgyChatBackend(
                                         Log.d("CHAT_OPEN_DEBUG", "✨ [ChatViewModel State Update] convId=$conversationId, turnsCount=${turns.size}, msgsCount=${msgs.size}, isRunning=$isRunning, isWaiting=$isWaiting")
 
                                         _messages.value = msgs
+                                        if (historyChunk) adoptChatModelFromHistory(conversationId, msgs)
                                         if (msgs.isNotEmpty()) {
                                             com.example.gemini.ui.chat.ChatFeedCache.prewarm(msgs)
 
@@ -1302,12 +1311,24 @@ class AgyChatBackend(
         if (_currentConversation.value?.id == chatId) _selectedModelId.value = modelId
     }
 
+    /**
+     * On opening a chat whose model was not picked in this session, the picker shows the model of its last reply
+     * (as Claude / OpenCode chats do). Only for this chat: the saved default model is left as it is.
+     */
+    private fun adoptChatModelFromHistory(chatId: String, msgs: List<ChatMessage>) {
+        if (chatModels.containsKey(chatId)) return
+        val lastModel = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && !it.modelId.isNullOrBlank() }?.modelId ?: return
+        val model = _availableModels.value.firstOrNull { it.id == lastModel || it.key == lastModel } ?: return
+        rememberChatModel(chatId, model.id)
+    }
+
     /** The model a message to [chatId] should use: the one set for that chat, else the picker's. */
     fun modelOfChat(chatId: String): String = chatModels[chatId] ?: _selectedModelId.value
 
     fun selectModel(modelId: String) {
         _currentConversation.value?.takeIf { it.agent == AgentKind.AGY }?.let { chatModels[it.id] = modelId }
         _selectedModelId.value = modelId
+        pickedModelId = modelId
         _bridgeStatusMessage.value = null
         val conv = _currentConversation.value
         if (conv != null && conv.agent == AgentKind.AGY) {
