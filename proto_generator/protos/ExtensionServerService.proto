@@ -888,6 +888,7 @@ enum ExecutorTerminationReason {
   EXECUTOR_TERMINATION_REASON_TERMINAL_CUSTOM_HOOK = 9;
   EXECUTOR_TERMINATION_REASON_INJECTED_RESPONSE = 10;
   EXECUTOR_TERMINATION_REASON_MAX_TOKEN_BUDGET_EXCEEDED = 11;
+  EXECUTOR_TERMINATION_REASON_CHAINED = 12;
 }
 
 // origin: .exa.codeium_common_pb.ExperimentKey
@@ -7246,6 +7247,7 @@ message DeclarativeComponentConfig {
   ComponentResolutionPolicy resolution_policy = 9;
   bool force_disable_fundamental_components = 10;
   repeated NamedItem tool_decorators = 11;
+  ResolvedCustomizations resolved_customizations = 12;
 }
 
 // origin: .exa.cortex_pb.DefaultAgentConfig
@@ -9729,6 +9731,85 @@ message RequestedInteraction {
   PermissionInteractionSpec permission = 21;
   AskQuestionInteractionSpec ask_question = 22;
   ApprovalInteractionSpec approval_interaction = 23;
+}
+
+// origin: .exa.cortex_pb.ResolvedCommandHook
+message ResolvedCommandHook {
+  string command = 1;
+  string working_dir = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedCustomizations
+message ResolvedCustomizations {
+  repeated ResolvedSkill skills = 1;
+  repeated ResolvedRule rules = 2;
+  repeated ResolvedHookAction session_start_hooks = 3;
+  repeated ResolvedHookAction pre_invocation_hooks = 4;
+  repeated ResolvedHookAction post_invocation_hooks = 5;
+  repeated ResolvedToolHook pre_tool_hooks = 6;
+  repeated ResolvedToolHook post_tool_hooks = 7;
+  repeated ResolvedHookAction stop_hooks = 8;
+  repeated McpServerSpec mcp_servers = 9;
+  repeated ResolvedSubagent subagents = 10;
+}
+
+// origin: .exa.cortex_pb.ResolvedEmbeddedSkill
+message ResolvedEmbeddedSkill {
+  string content = 1;
+  repeated ResolvedSkillResource resources = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedFileSkill
+message ResolvedFileSkill {
+  string path = 1;
+}
+
+// origin: .exa.cortex_pb.ResolvedHookAction
+message ResolvedHookAction {
+  string name = 1;
+  int32 timeout_seconds = 2;
+  ResolvedCommandHook command = 3;
+  ResolvedPromptHook prompt = 4;
+}
+
+// origin: .exa.cortex_pb.ResolvedPromptHook
+message ResolvedPromptHook {
+  string prompt = 1;
+  Model model = 2;
+  ModelInfo custom_model_info_override = 3;
+}
+
+// origin: .exa.cortex_pb.ResolvedRule
+message ResolvedRule {
+  string path = 1;
+  string content = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedSkill
+message ResolvedSkill {
+  string name = 1;
+  string description = 2;
+  ResolvedFileSkill file = 3;
+  ResolvedEmbeddedSkill embedded = 4;
+}
+
+// origin: .exa.cortex_pb.ResolvedSkillResource
+message ResolvedSkillResource {
+  string relative_path = 1;
+  bytes content = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedSubagent
+message ResolvedSubagent {
+  string name = 1;
+  string description = 2;
+  AgentConfig config = 3;
+}
+
+// origin: .exa.cortex_pb.ResolvedToolHook
+message ResolvedToolHook {
+  string tool_matcher = 1;
+  repeated ResolvedHookAction actions = 2;
 }
 
 // origin: .exa.extension_server_pb.RestartUserStatusUpdaterRequest

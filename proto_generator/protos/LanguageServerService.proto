@@ -78,7 +78,6 @@ service LanguageServerService {
   rpc GetGoogleChatLinkInfo (GetGoogleChatLinkInfoRequest) returns (GetGoogleChatLinkInfoResponse);
   rpc GetWorkspaceChangelists (GetWorkspaceChangelistsRequest) returns (GetWorkspaceChangelistsResponse);
   rpc GetGitHubPullRequests (GetGitHubPullRequestsRequest) returns (GetGitHubPullRequestsResponse);
-  rpc GetWorkspaceGitHubPullRequests (GetWorkspaceGitHubPullRequestsRequest) returns (GetWorkspaceGitHubPullRequestsResponse);
   rpc CreateWorktree (CreateWorktreeRequest) returns (CreateWorktreeResponse);
   rpc DeleteWorktree (DeleteWorktreeRequest) returns (DeleteWorktreeResponse);
   rpc CheckoutWorktree (CheckoutWorktreeRequest) returns (CheckoutWorktreeResponse);
@@ -142,6 +141,7 @@ service LanguageServerService {
   rpc ListLicenses (ListLicensesRequest) returns (ListLicensesResponse);
   rpc SelectLicense (SelectLicenseRequest) returns (SelectLicenseResponse);
   rpc SelfAssignLicense (SelfAssignLicenseRequest) returns (SelfAssignLicenseResponse);
+  rpc SearchGcpProjects (SearchGcpProjectsRequest) returns (SearchGcpProjectsResponse);
   rpc GetUserTrajectoryDebug (GetUserTrajectoryDebugRequest) returns (GetUserTrajectoryDebugResponse);
   rpc GetUserTrajectoryDescriptions (GetUserTrajectoryDescriptionsRequest) returns (GetUserTrajectoryDescriptionsResponse);
   rpc StreamUserTrajectoryReactiveUpdates (StreamReactiveUpdatesRequest) returns (stream StreamReactiveUpdatesResponse);
@@ -1559,6 +1559,7 @@ enum ExecutorTerminationReason {
   EXECUTOR_TERMINATION_REASON_TERMINAL_CUSTOM_HOOK = 9;
   EXECUTOR_TERMINATION_REASON_INJECTED_RESPONSE = 10;
   EXECUTOR_TERMINATION_REASON_MAX_TOKEN_BUDGET_EXCEEDED = 11;
+  EXECUTOR_TERMINATION_REASON_CHAINED = 12;
 }
 
 // origin: .exa.codeium_common_pb.ExperimentKey
@@ -2187,6 +2188,13 @@ enum MarkdownNodeType {
   MARKDOWN_NODE_TYPE_HEADER_4 = 4;
   MARKDOWN_NODE_TYPE_HEADER_5 = 5;
   MARKDOWN_NODE_TYPE_HEADER_6 = 6;
+}
+
+// origin: .exa.language_server_pb.MarketplaceSort
+enum MarketplaceSort {
+  MARKETPLACE_SORT_UNSPECIFIED = 0;
+  MARKETPLACE_SORT_MOST_INSTALLED = 1;
+  MARKETPLACE_SORT_NAME = 2;
 }
 
 // origin: .exa.language_server_pb.MatchSource
@@ -9472,6 +9480,7 @@ message DeclarativeComponentConfig {
   ComponentResolutionPolicy resolution_policy = 9;
   bool force_disable_fundamental_components = 10;
   repeated NamedItem tool_decorators = 11;
+  ResolvedCustomizations resolved_customizations = 12;
 }
 
 // origin: .exa.cortex_pb.DefaultAgentConfig
@@ -10640,6 +10649,12 @@ message GcertStatus {
   bool valid = 1;
   string error = 2;
   Timestamp expires_at = 3;
+}
+
+// origin: .exa.language_server_pb.GcpProject
+message GcpProject {
+  string project_id = 1;
+  string display_name = 2;
 }
 
 // origin: .genai.EditFileResultStep.DiffBlock
@@ -11927,16 +11942,6 @@ message GetWorkspaceEditStateResponse {
   repeated WorkspaceEditState workspace_edits = 1;
 }
 
-// origin: .exa.language_server_pb.GetWorkspaceGitHubPullRequestsRequest
-message GetWorkspaceGitHubPullRequestsRequest {
-  repeated string workspace_uris = 1;
-}
-
-// origin: .exa.language_server_pb.GetWorkspaceGitHubPullRequestsResponse
-message GetWorkspaceGitHubPullRequestsResponse {
-  repeated WorkspaceGitHubPullRequests workspaces = 1;
-}
-
 // origin: .exa.language_server_pb.GetWorkspaceInfosRequest
 message GetWorkspaceInfosRequest {
 }
@@ -11995,14 +12000,6 @@ message GitFolder {
   string folder_uri = 1;
   string default_branch = 2;
   bool allow_write = 3;
-}
-
-// origin: .exa.language_server_pb.GitHubBranchRef
-message GitHubBranchRef {
-  string host = 1;
-  string owner = 2;
-  string repo = 3;
-  string branch = 4;
 }
 
 // origin: .exa.language_server_pb.GitHubPullRequestError
@@ -13493,6 +13490,8 @@ message MarketplaceCustomization {
   PluginAuthor author = 10;
   string homepage = 11;
   string repository = 12;
+  int64 install_count = 13;
+  Timestamp first_seen_time = 14;
 }
 
 // origin: .exa.cortex_pb.MarketplaceInstall
@@ -15599,6 +15598,85 @@ message ResolveWorkspaceUrlPreviewResponse {
   WorkspaceResourceType resource_type = 2;
 }
 
+// origin: .exa.cortex_pb.ResolvedCommandHook
+message ResolvedCommandHook {
+  string command = 1;
+  string working_dir = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedCustomizations
+message ResolvedCustomizations {
+  repeated ResolvedSkill skills = 1;
+  repeated ResolvedRule rules = 2;
+  repeated ResolvedHookAction session_start_hooks = 3;
+  repeated ResolvedHookAction pre_invocation_hooks = 4;
+  repeated ResolvedHookAction post_invocation_hooks = 5;
+  repeated ResolvedToolHook pre_tool_hooks = 6;
+  repeated ResolvedToolHook post_tool_hooks = 7;
+  repeated ResolvedHookAction stop_hooks = 8;
+  repeated McpServerSpec mcp_servers = 9;
+  repeated ResolvedSubagent subagents = 10;
+}
+
+// origin: .exa.cortex_pb.ResolvedEmbeddedSkill
+message ResolvedEmbeddedSkill {
+  string content = 1;
+  repeated ResolvedSkillResource resources = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedFileSkill
+message ResolvedFileSkill {
+  string path = 1;
+}
+
+// origin: .exa.cortex_pb.ResolvedHookAction
+message ResolvedHookAction {
+  string name = 1;
+  int32 timeout_seconds = 2;
+  ResolvedCommandHook command = 3;
+  ResolvedPromptHook prompt = 4;
+}
+
+// origin: .exa.cortex_pb.ResolvedPromptHook
+message ResolvedPromptHook {
+  string prompt = 1;
+  Model model = 2;
+  ModelInfo custom_model_info_override = 3;
+}
+
+// origin: .exa.cortex_pb.ResolvedRule
+message ResolvedRule {
+  string path = 1;
+  string content = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedSkill
+message ResolvedSkill {
+  string name = 1;
+  string description = 2;
+  ResolvedFileSkill file = 3;
+  ResolvedEmbeddedSkill embedded = 4;
+}
+
+// origin: .exa.cortex_pb.ResolvedSkillResource
+message ResolvedSkillResource {
+  string relative_path = 1;
+  bytes content = 2;
+}
+
+// origin: .exa.cortex_pb.ResolvedSubagent
+message ResolvedSubagent {
+  string name = 1;
+  string description = 2;
+  AgentConfig config = 3;
+}
+
+// origin: .exa.cortex_pb.ResolvedToolHook
+message ResolvedToolHook {
+  string tool_matcher = 1;
+  repeated ResolvedHookAction actions = 2;
+}
+
 // origin: .exa.project_pb.Resource
 message Resource {
   string folder_uri = 1;
@@ -15974,6 +16052,20 @@ message SearchFilesResponse {
   repeated PathScopeItem results = 1;
 }
 
+// origin: .exa.language_server_pb.SearchGcpProjectsRequest
+message SearchGcpProjectsRequest {
+  string query = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+  bool force_refresh = 4;
+}
+
+// origin: .exa.language_server_pb.SearchGcpProjectsResponse
+message SearchGcpProjectsResponse {
+  repeated GcpProject projects = 1;
+  string next_page_token = 2;
+}
+
 // origin: .exa.language_server_pb.SearchMarketplaceCustomizationsRequest
 message SearchMarketplaceCustomizationsRequest {
   string query = 1;
@@ -15992,6 +16084,7 @@ message SearchMarketplaceRequest {
   string query = 1;
   string group_id = 2;
   string page_token = 3;
+  MarketplaceSort sort = 4;
 }
 
 // origin: .exa.language_server_pb.SearchMarketplaceResponse
@@ -18795,14 +18888,6 @@ message WorkspaceEditState {
   uint64 num_additions = 2;
   uint64 num_deletions = 3;
   repeated ActionResultEdit edits = 4;
-}
-
-// origin: .exa.language_server_pb.WorkspaceGitHubPullRequests
-message WorkspaceGitHubPullRequests {
-  string workspace_uri = 1;
-  repeated GitHubPullRequestStatus pull_requests = 2;
-  GitHubPullRequestError error = 3;
-  GitHubBranchRef target = 4;
 }
 
 // origin: .exa.language_server_pb.WorkspaceInfo
