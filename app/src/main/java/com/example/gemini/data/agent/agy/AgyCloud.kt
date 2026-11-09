@@ -41,7 +41,6 @@ import okio.ByteString.Companion.toByteString
  */
 object AgyCloud {
     private val BACKEND = BackendType.BACKEND_TYPE_REMOTE_AICODE
-    const val GITHUB_CONNECT_URL = "https://antigravity.google.com/remote/customizations/plugins/github"
     const val WEB_URL = "https://antigravity.google.com/remote"
 
     data class CloudProject(val id: String, val name: String, val repos: List<RemoteResource>, val raw: Project)
@@ -53,8 +52,7 @@ object AgyCloud {
         val logoUrl: String,
         val connected: Boolean,
         val expired: Boolean,
-        val account: String,
-        val connectUrl: String
+        val account: String
     )
 
     /** GitHub is not connected to the account's cloud agents yet (the repo list needs it). */
@@ -169,20 +167,21 @@ object AgyCloud {
     private fun repos(p: Project): List<RemoteResource> =
         p.project_resources?.resources.orEmpty().mapNotNull { it.remote_resource }
 
-    /** Creates a cloud project with [repos]; returns its id (the hub picks it). */
+    /**
+     * Creates a cloud project with [repos]; returns its id. The id is made here: the hub refuses a project without one
+     * ("project id "" is not a canonical lowercase UUID").
+     */
     suspend fun createProject(name: String, repos: List<RemoteResource>): Result<String> = withContext(Dispatchers.IO) {
-        val before = AgyLanguageService.ListProjects().executeSafely(ListProjectsRequest(backend = BACKEND)).getOrNull()?.project_ids.orEmpty().toSet()
         val project = Project(
+            id = java.util.UUID.randomUUID().toString().lowercase(),
             name = name.trim().ifBlank { "Cloud project" },
             backend_type = BACKEND,
             project_resources = Resources(resources = repos.map { Resource(remote_resource = it) })
         )
         AgyLanguageService.CreateProject().executeSafely(CreateProjectRequest(project = project, backend = BACKEND))
             .getOrElse { return@withContext Result.failure(Exception(friendlyError(it.message))) }
-        val after = refreshProjects().getOrNull().orEmpty()
-        val created = after.firstOrNull { it.id !in before } ?: after.firstOrNull { it.name == project.name }
-            ?: return@withContext Result.failure(Exception("The project was created but did not show up yet; refresh the list."))
-        Result.success(created.id)
+        refreshProjects()
+        Result.success(project.id)
     }
 
     /** Replaces the project's repos (other resources, like Drive files, stay). */
@@ -237,9 +236,35 @@ object AgyCloud {
                         logoUrl = p.logo_uri,
                         connected = live != null,
                         expired = live == null && p.connections.any { it.state == RemoteAgentProxyPluginconnection_State.EXPIRED },
-                        account = (live ?: p.connections.firstOrNull())?.account.orEmpty(),
-                        connectUrl = p.connect_uri.ifBlank { "https://antigravity.google.com/remote/customizations/plugins/${p.plugin_id}" }
+                        account = (live ?: p.connections.firstOrNull())?.account.orEmpty()
                     )
+                }
+            }
+            .recoverCatching { throw Exception(friendlyError(it.message)) }
+    }
+
+    /**
+     * Where to connect [pluginId] (e.g. "github"), as the Antigravity app opens it: the plugin's page on
+     * antigravity.google.com (the hub's `connect_uri`) through Google's account chooser with the email agy is signed in
+     * with, so the browser shows the page as that account (another account gets the site's Remote Control setup
+     * instead). Without a page, the service's own sign-in (`authorize_uri`), as the app falls back to.
+     */
+    suspend fun connectUrl(pluginId: String): Result<String> = withContext(Dispatchers.IO) {
+        AgyLanguageService.ListRemotePlugins().executeSafely(ListRemotePluginsRequest(backend = BACKEND))
+            .map { r ->
+                val p = r.plugins.firstOrNull { it.plugin_id == pluginId } ?: error("The hub doesn't list $pluginId for cloud agents.")
+                val page = p.connect_uri.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                if (page == null) {
+                    p.authorize_uri.ifBlank { error("The hub gave no link to connect ${p.display_name.ifBlank { pluginId }}.") }
+                } else {
+                    val email = AgyLanguageService.GetUserStatus()
+                        .executeSafely(exa.language_server_pb.GetUserStatusRequest(metadata = exa.language_server_pb.Metadata()))
+                        .getOrNull()?.user_status?.email?.takeIf { it.isNotBlank() && it != "null" }
+                    if (email == null) page
+                    else android.net.Uri.parse("https://accounts.google.com/AccountChooser").buildUpon()
+                        .appendQueryParameter("Email", email)
+                        .appendQueryParameter("continue", page)
+                        .build().toString()
                 }
             }
             .recoverCatching { throw Exception(friendlyError(it.message)) }

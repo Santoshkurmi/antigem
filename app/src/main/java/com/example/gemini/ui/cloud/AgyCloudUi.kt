@@ -25,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.OpenInBrowser
@@ -75,8 +77,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.data.agent.agy.AgyCloud
 import com.example.gemini.theme.GeminiBlue
-import com.example.gemini.ui.components.AppToastHelper
-import com.example.gemini.ui.components.ChatToastType
 import exa.language_server_pb.RemoteResource
 import kotlinx.coroutines.launch
 
@@ -85,36 +85,146 @@ private val subtleAlpha = 0.6f
 @Composable
 private fun subtle() = MaterialTheme.colorScheme.onSurface.copy(alpha = subtleAlpha)
 
-/** Settings → Antigravity → Cloud agents: the on/off switch (off by default) and what turning it on does. */
+/** Opens the page that connects [pluginId] to the cloud agents, as the Antigravity app does (see [AgyCloud.connectUrl]). */
+private fun openConnect(
+    scope: kotlinx.coroutines.CoroutineScope,
+    uri: androidx.compose.ui.platform.UriHandler,
+    pluginId: String,
+    // shown in the dialog itself: the app's toasts are drawn under these full-screen dialogs
+    onError: (String) -> Unit,
+    onOpened: () -> Unit = {}
+) {
+    scope.launch {
+        AgyCloud.connectUrl(pluginId)
+            .onSuccess { url ->
+                runCatching { uri.openUri(url) }
+                    .onSuccess { onOpened() }
+                    .onFailure { onError("Couldn't open the browser: ${it.message}") }
+            }
+            .onFailure { onError(it.message ?: "Couldn't get the link to connect") }
+    }
+}
+
+/** Runs [onResume] when the app comes back to the front (e.g. from the browser after connecting a service). */
+@Composable
+private fun OnAppResume(onResume: () -> Unit) {
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val latest = androidx.compose.runtime.rememberUpdatedState(onResume)
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) latest.value()
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+}
+
+/**
+ * Settings → Antigravity → Cloud agents: the on/off switch (off by default), and while on the cloud projects (repos)
+ * and the connections the cloud agent may use (GitHub, Drive, …).
+ */
 @Composable
 fun AgyCloudSettingsCard(modifier: Modifier = Modifier) {
     val enabled by AgyCloud.enabled.collectAsState()
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Cloud agents", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                Switch(checked = enabled, onCheckedChange = { AgyCloud.setEnabled(it) })
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Antigravity chats can run on a Google cloud machine with your GitHub repos (Antigravity's Remote " +
-                    "Agents) and keep working while the phone is off. Needs Google AI Pro or Ultra on a personal account.",
-                fontSize = 12.5.sp, color = subtle()
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (enabled) "On: cloud projects show in the project picker of Antigravity chats, and cloud chats in the " +
-                    "chat list. They are ready about a minute after the Antigravity server starts."
-                else "Off: the app does not ask the Antigravity server for cloud projects or cloud chats.",
-                fontSize = 12.5.sp, color = subtle()
-            )
+    val projects by AgyCloud.projects.collectAsState()
+    val loading by AgyCloud.loading.collectAsState()
+    val cloudError by AgyCloud.error.collectAsState()
+    var github by remember { mutableStateOf<AgyCloud.CloudPlugin?>(null) }
+    var githubChecked by remember { mutableStateOf(false) }
+    /** The projects dialog on screen: its tab (0 projects, 1 connections), or null. */
+    var dialogTab by remember { mutableStateOf<Int?>(null) }
+    // on open, after switching on, and after the dialog closes (something may have changed there)
+    LaunchedEffect(enabled, dialogTab) {
+        if (enabled && dialogTab == null) {
+            AgyCloud.refreshProjects()
+            github = AgyCloud.plugins().getOrNull()?.firstOrNull { it.id == "github" }
+            githubChecked = true
         }
+    }
+    dialogTab?.let { CloudProjectsDialog(initialTab = it, onStartChatIn = null, onDismiss = { dialogTab = null }) }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Cloud agents", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = enabled, onCheckedChange = { AgyCloud.setEnabled(it) })
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Antigravity chats can run on a Google cloud machine with your GitHub repos (Antigravity's Remote " +
+                        "Agents) and keep working while the phone is off. Needs Google AI Pro or Ultra on a personal account.",
+                    fontSize = 12.5.sp, color = subtle()
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    if (enabled) "On: cloud projects show in the project picker of Antigravity chats, and cloud chats in the " +
+                        "chat list. They are ready about a minute after the Antigravity server starts."
+                    else "Off: the app does not ask the Antigravity server for cloud projects or cloud chats.",
+                    fontSize = 12.5.sp, color = subtle()
+                )
+            }
+        }
+        if (enabled) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    CloudSettingsRow(
+                        icon = Icons.Outlined.Cloud,
+                        title = "Cloud projects & repos",
+                        value = when {
+                            loading && projects.isEmpty() -> "Loading…"
+                            cloudError != null && projects.isEmpty() -> "Not ready"
+                            projects.size == 1 -> "1 project"
+                            else -> "${projects.size} projects"
+                        },
+                        onClick = { dialogTab = 0 }
+                    )
+                    HorizontalDivider(Modifier.padding(start = 48.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
+                    CloudSettingsRow(
+                        icon = Icons.Outlined.Link,
+                        title = "Connections (GitHub, Drive…)",
+                        value = when {
+                            !githubChecked -> "…"
+                            github == null -> ""
+                            github!!.connected -> "GitHub connected"
+                            github!!.expired -> "GitHub expired"
+                            else -> "GitHub not connected"
+                        },
+                        onClick = { dialogTab = 1 }
+                    )
+                }
+            }
+            cloudError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+@Composable
+private fun CloudSettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = GeminiBlue, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(14.dp))
+        Text(title, fontSize = 14.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (value.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
+            Text(value, fontSize = 12.5.sp, color = subtle(), maxLines = 1)
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+            modifier = Modifier.padding(start = 2.dp).size(20.dp)
+        )
     }
 }
 
@@ -199,7 +309,10 @@ fun LazyListScope.cloudProjectsSection(
 @Composable
 fun CloudProjectsDialog(
     startWithCreate: Boolean = false,
-    onStartChatIn: (String) -> Unit,
+    /** 0 = Projects, 1 = Connections. */
+    initialTab: Int = 0,
+    /** Starts a chat in a project; null (from Settings): manage only, no chat buttons. */
+    onStartChatIn: ((String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -207,10 +320,12 @@ fun CloudProjectsDialog(
     val projects by AgyCloud.projects.collectAsState()
     val loading by AgyCloud.loading.collectAsState()
     val error by AgyCloud.error.collectAsState()
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by remember { mutableIntStateOf(initialTab) }
     var editor by remember { mutableStateOf<EditorTarget?>(if (startWithCreate) EditorTarget.New else null) }
     var renaming by remember { mutableStateOf<AgyCloud.CloudProject?>(null) }
     var deleting by remember { mutableStateOf<AgyCloud.CloudProject?>(null) }
+    /** A rename or delete that failed (shown here: the app's toasts are drawn under this dialog). */
+    var actionError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { AgyCloud.refreshProjects() }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -228,6 +343,9 @@ fun CloudProjectsDialog(
                 TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
                     Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Projects") })
                     Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Connections") })
+                }
+                actionError?.let {
+                    Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp).clickable { actionError = null })
                 }
                 Spacer(Modifier.height(10.dp))
                 if (tab == 0) {
@@ -255,7 +373,7 @@ fun CloudProjectsDialog(
                         items(projects, key = { it.id }) { p ->
                             ProjectCard(
                                 p,
-                                onNewChat = { onStartChatIn(p.id) },
+                                onNewChat = onStartChatIn?.let { start -> { start(p.id) } },
                                 onRepos = { editor = EditorTarget.Repos(p) },
                                 onRename = { renaming = p },
                                 onDelete = { deleting = p }
@@ -277,7 +395,7 @@ fun CloudProjectsDialog(
             askName = true,
             confirm = "Create",
             onSave = { name, repos ->
-                AgyCloud.createProject(name, repos).map { id -> editor = null; onStartChatIn(id) }
+                AgyCloud.createProject(name, repos).map { id -> editor = null; onStartChatIn?.invoke(id) }
             },
             onDismiss = { editor = null }
         )
@@ -302,7 +420,8 @@ fun CloudProjectsDialog(
             confirmButton = {
                 TextButton(enabled = name.isNotBlank(), onClick = {
                     scope.launch {
-                        AgyCloud.rename(p.id, name).onFailure { AppToastHelper.showToast(it.message ?: "Rename failed", ChatToastType.ERROR) }
+                        actionError = null
+                        AgyCloud.rename(p.id, name).onFailure { actionError = "Rename failed: ${it.message ?: "unknown error"}" }
                         renaming = null
                     }
                 }) { Text("Rename") }
@@ -319,7 +438,8 @@ fun CloudProjectsDialog(
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        AgyCloud.deleteProject(p.id).onFailure { AppToastHelper.showToast(it.message ?: "Delete failed", ChatToastType.ERROR) }
+                        actionError = null
+                        AgyCloud.deleteProject(p.id).onFailure { actionError = "Delete failed: ${it.message ?: "unknown error"}" }
                         deleting = null
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
@@ -337,7 +457,7 @@ private sealed class EditorTarget {
 @Composable
 private fun ProjectCard(
     p: AgyCloud.CloudProject,
-    onNewChat: () -> Unit,
+    onNewChat: (() -> Unit)?,
     onRepos: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit
@@ -368,7 +488,7 @@ private fun ProjectCard(
             }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onNewChat, colors = ButtonDefaults.buttonColors(containerColor = GeminiBlue), shape = RoundedCornerShape(12.dp)) {
+                if (onNewChat != null) Button(onClick = onNewChat, colors = ButtonDefaults.buttonColors(containerColor = GeminiBlue), shape = RoundedCornerShape(12.dp)) {
                     Text("New chat here", fontSize = 13.sp)
                 }
                 OutlinedButton(onClick = onRepos, shape = RoundedCornerShape(12.dp)) { Text("Repos", fontSize = 13.sp) }
@@ -397,6 +517,13 @@ private fun CloudProjectEditor(
     var picked by remember { mutableStateOf(initialRepos.map { it.resource_id }.toSet()) }
     var saving by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
+    /** Why saving (or connecting GitHub) failed: shown in the dialog, the app's toasts are drawn under it. */
+    var saveError by remember { mutableStateOf<String?>(null) }
+
+    // back from GitHub's sign-in in the browser: load the repos again
+    var connecting by remember { mutableStateOf(false) }
+    val connectScope = rememberCoroutineScope()
+    OnAppResume { if (connecting) { connecting = false; reload++ } }
 
     LaunchedEffect(reload) {
         available = null; notConnected = false; loadError = null
@@ -425,12 +552,12 @@ private fun CloudProjectEditor(
                 when {
                     notConnected -> {
                         Text(
-                            "GitHub is not connected to your cloud agents yet. Connect it on antigravity.google.com " +
-                                "(same Google account as Antigravity) and choose the repos it may use, then come back and reload.",
+                            "GitHub is not connected to your cloud agents yet. Connect opens Antigravity's GitHub page in your " +
+                                "browser, as your Antigravity Google account: connect GitHub there and choose the repos it may use, then come back here.",
                             fontSize = 12.5.sp, lineHeight = 17.sp, color = subtle()
                         )
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = { uri.openUri(AgyCloud.GITHUB_CONNECT_URL) }) { Text("Connect GitHub") }
+                        OutlinedButton(onClick = { saveError = null; openConnect(connectScope, uri, "github", onError = { saveError = it }) { connecting = true } }) { Text("Connect GitHub") }
                     }
                     loadError != null -> Text(loadError!!, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
                     available == null -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -457,6 +584,7 @@ private fun CloudProjectEditor(
                     }
                     Text("Private repos in one project must have the same owner.", fontSize = 11.sp, color = subtle(), modifier = Modifier.padding(top = 4.dp))
                 }
+                saveError?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
             }
         },
         confirmButton = {
@@ -464,9 +592,10 @@ private fun CloudProjectEditor(
                 enabled = !saving && (!askName || name.isNotBlank()),
                 onClick = {
                     saving = true
+                    saveError = null
                     scope.launch {
                         val repos = all.filter { it.resource_id in picked }
-                        onSave(name, repos).onFailure { AppToastHelper.showToast(it.message ?: "Failed", ChatToastType.ERROR) }
+                        onSave(name, repos).onFailure { saveError = "Couldn't save: ${it.message ?: "unknown error"}" }
                         saving = false
                     }
                 }
@@ -485,6 +614,9 @@ private fun ConnectionsTab(modifier: Modifier) {
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     var disconnecting by remember { mutableStateOf<AgyCloud.CloudPlugin?>(null) }
+    // back from a sign-in in the browser: show the new state
+    var connecting by remember { mutableStateOf(false) }
+    OnAppResume { if (connecting) { connecting = false; reload++ } }
     LaunchedEffect(reload) {
         error = null
         AgyCloud.plugins().onSuccess { plugins = it }.onFailure { error = it.message }
@@ -492,7 +624,7 @@ private fun ConnectionsTab(modifier: Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Connecting opens antigravity.google.com in your browser: sign in with the same Google account as Antigravity, then come back and refresh.",
+                "Connect opens Antigravity's page for it in your browser, as your Antigravity Google account. Connect it there, then come back here.",
                 fontSize = 12.sp, color = subtle(), lineHeight = 16.sp, modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { reload++ }) { Icon(Icons.Outlined.Refresh, "Refresh") }
@@ -516,7 +648,7 @@ private fun ConnectionsTab(modifier: Modifier) {
                             )
                         }
                         if (p.connected) TextButton(onClick = { disconnecting = p }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
-                        else OutlinedButton(onClick = { uri.openUri(p.connectUrl) }) { Text(if (p.expired) "Reconnect" else "Connect") }
+                        else OutlinedButton(onClick = { error = null; openConnect(scope, uri, p.id, onError = { error = it }) { connecting = true } }) { Text(if (p.expired) "Reconnect" else "Connect") }
                     }
                 }
             }
@@ -530,7 +662,7 @@ private fun ConnectionsTab(modifier: Modifier) {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        AgyCloud.disconnectPlugin(p).onFailure { AppToastHelper.showToast(it.message ?: "Failed", ChatToastType.ERROR) }
+                        AgyCloud.disconnectPlugin(p).onFailure { error = "Disconnect failed: ${it.message ?: "unknown error"}" }
                         disconnecting = null
                         reload++
                     }

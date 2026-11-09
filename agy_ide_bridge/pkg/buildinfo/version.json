@@ -1,10 +1,11 @@
 {
-  "version_code": 125,
-  "version_name": "1.1.5",
+  "version_code": 126,
+  "version_name": "1.1.6",
   "min_supported_version_code": 1,
   "changelog": [
-    "Antigravity live call feature added(with all different voice etc same like in gemini app voice call)",
-    "Added 32 bit .so for at least install the app for 32 bit phone(to run in server mode only)"
+    "Fixed file upload: files from your phone are now streamed to the agent's machine with progress (big files no longer have to fit in memory), big photos are shrunk first, and the new \"From Files\" option attaches any file of any size without copying it",
+    "Added Antigravity cloud agents: run Antigravity chats on a Google cloud machine with your GitHub repos, and preview the apps they serve (off by default, enable it in Settings → Antigravity → Cloud agents) (and wont work with free pro account may be)",
+    "Added an error log for Antigravity voice calls: when a call fails, tap Details to see the full error and what the Antigravity server logged, then copy it or send a screenshot"
   ],
   "is_critical": false
 }
