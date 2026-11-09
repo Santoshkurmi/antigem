@@ -62,7 +62,14 @@ type HubManager struct {
 	processDone chan struct{}
 	monitorStop chan struct{}
 	recentLogs  []string
-	mu          sync.Mutex
+	// for the app's diagnostics after a failed call: when this hub process started, how the last one ended, and
+	// what a crash printed (kept apart from recentLogs, whose 50 lines a long goroutine dump would fill)
+	startedAt    time.Time
+	lastExitAt   time.Time
+	lastExitErr  string
+	crashLines   []string
+	crashCapture int
+	mu           sync.Mutex
 	// agyBinShadow mirrors AgyBinPath so the status endpoints never wait for mu
 	agyBinShadow atomic.Value
 }
@@ -536,6 +543,7 @@ func (m *HubManager) Start() error {
 	m.cmd = cmd
 	m.isRunning = true
 	m.isExternal = false
+	m.startedAt = time.Now()
 	m.processDone = make(chan struct{})
 	doneChan := m.processDone
 	m.mu.Unlock()
@@ -571,6 +579,12 @@ func (m *HubManager) Start() error {
 		streamWg.Wait() // Ensure all remaining output is drained and processed
 		m.mu.Lock()
 		m.isRunning = false
+		m.lastExitAt = time.Now()
+		if err != nil {
+			m.lastExitErr = err.Error()
+		} else {
+			m.lastExitErr = "exited normally"
+		}
 		if err != nil {
 			m.setStatusLocked(HubStatusError, err.Error())
 		} else {
@@ -716,6 +730,19 @@ func (m *HubManager) handleHubLine(line string) {
 		m.recentLogs = m.recentLogs[1:]
 	}
 	m.recentLogs = append(m.recentLogs, line)
+	// a Go crash: its first lines say what happened (the goroutine dump after them can be thousands of lines)
+	if strings.HasPrefix(trimmed, "panic:") || strings.HasPrefix(trimmed, "fatal error:") ||
+		strings.HasPrefix(trimmed, "SIGSEGV") || strings.HasPrefix(trimmed, "SIGBUS") || strings.HasPrefix(trimmed, "SIGABRT") {
+		m.crashCapture = 30
+		m.crashLines = append(m.crashLines, "--- "+time.Now().Format("2006-01-02 15:04:05"))
+	}
+	if m.crashCapture > 0 {
+		m.crashCapture--
+		m.crashLines = append(m.crashLines, line)
+		if len(m.crashLines) > 120 {
+			m.crashLines = m.crashLines[len(m.crashLines)-120:]
+		}
+	}
 	m.mu.Unlock()
 
 	fmt.Printf("\r\033[K\033[90m[agy-hub]\033[0m %s\n", line)
@@ -729,6 +756,44 @@ func (m *HubManager) handleHubLine(line string) {
 			}
 		}
 	}
+}
+
+// Diagnostics is the hub process's state for the app's diagnostics (a failed voice call shows it): whether it runs,
+// when it started, how the previous process ended, what a crash printed and its last output lines.
+type Diagnostics struct {
+	Running      bool     `json:"running"`
+	External     bool     `json:"external"`
+	Status       string   `json:"status"`
+	LastError    string   `json:"last_error"`
+	StartedAtMs  int64    `json:"started_at_ms"`
+	LastExitAtMs int64    `json:"last_exit_at_ms"`
+	LastExitErr  string   `json:"last_exit_error"`
+	CrashLines   []string `json:"crash_lines"`
+	RecentOutput []string `json:"recent_output"`
+}
+
+func (m *HubManager) Diagnostics() Diagnostics {
+	m.mu.Lock()
+	d := Diagnostics{
+		Running:      m.isRunning,
+		External:     m.isExternal,
+		Status:       m.status,
+		LastError:    m.lastError,
+		LastExitErr:  m.lastExitErr,
+		CrashLines:   append([]string(nil), m.crashLines...),
+		RecentOutput: append([]string(nil), m.recentLogs...),
+	}
+	if !m.startedAt.IsZero() {
+		d.StartedAtMs = m.startedAt.UnixMilli()
+	}
+	if !m.lastExitAt.IsZero() {
+		d.LastExitAtMs = m.lastExitAt.UnixMilli()
+	}
+	m.mu.Unlock()
+	if !d.Running {
+		d.Running = m.isHubReady()
+	}
+	return d
 }
 
 func (m *HubManager) dumpRecentLogs() {

@@ -98,6 +98,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
     ANTIGRAVITY("Antigravity", "CLI, MCP servers, skills & plugins, commands & permissions"),
     AGY_CLI("Antigravity CLI", "agy version and install, on this device or the server"),
+    AGY_CLOUD("Cloud agents", "Antigravity chats on a Google cloud machine (Remote Agents)"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     /** One Claude Code page (which one: the dialog's claudePage); not a page of its own for Jarvis. */
     CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
@@ -151,7 +152,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
 
     /** Where Back goes from this section. */
     val parent: SettingsSection get() = when (this) {
-        AGY_CLI, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
+        AGY_CLI, AGY_CLOUD, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
         OPENCODE_PAGE -> OPENCODE
         CODEX_PAGE -> CODEX
@@ -655,6 +656,11 @@ fun SettingsDialog(
                     ) {
                         com.example.gemini.ui.agents.AgyCliCard()
                     }
+                    SettingsSection.AGY_CLOUD -> Column(
+                        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)
+                    ) {
+                        com.example.gemini.ui.cloud.AgyCloudSettingsCard()
+                    }
                     SettingsSection.CLAUDE -> if (claude != null) {
                         com.example.gemini.ui.claude.ClaudeSettingsGroup(claude, cardBg) { page ->
                             claudePage = page
@@ -924,11 +930,14 @@ private fun AntigravitySettingsMenu(
         cli!!.installed -> cli!!.version.ifBlank { "Installed" } to QuotaGreen
         else -> "Not installed" to c.warning
     }
+    val cloudOn by com.example.gemini.data.agent.agy.AgyCloud.enabled.collectAsState()
     SettingsRowList(
         cardBg = cardBg,
         groups = listOf(
             listOf(
-                SettingsRowItem(Icons.Outlined.Terminal, GeminiBlue, SettingsSection.AGY_CLI.title, cliValue, cliColor) { onNavigate(SettingsSection.AGY_CLI) }
+                SettingsRowItem(Icons.Outlined.Terminal, GeminiBlue, SettingsSection.AGY_CLI.title, cliValue, cliColor) { onNavigate(SettingsSection.AGY_CLI) },
+                SettingsRowItem(Icons.Outlined.Cloud, GeminiBlue, SettingsSection.AGY_CLOUD.title,
+                    if (cloudOn) "On" else "Off", if (cloudOn) QuotaGreen else null) { onNavigate(SettingsSection.AGY_CLOUD) }
             ),
             listOf(
                 SettingsRowItem(Icons.Outlined.Hub, GeminiBlue, SettingsSection.MCP.title, mcpValue, mcpColor) { onNavigate(SettingsSection.MCP) },

@@ -47,6 +47,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -83,6 +84,39 @@ private val subtleAlpha = 0.6f
 
 @Composable
 private fun subtle() = MaterialTheme.colorScheme.onSurface.copy(alpha = subtleAlpha)
+
+/** Settings → Antigravity → Cloud agents: the on/off switch (off by default) and what turning it on does. */
+@Composable
+fun AgyCloudSettingsCard(modifier: Modifier = Modifier) {
+    val enabled by AgyCloud.enabled.collectAsState()
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Cloud agents", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Switch(checked = enabled, onCheckedChange = { AgyCloud.setEnabled(it) })
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Antigravity chats can run on a Google cloud machine with your GitHub repos (Antigravity's Remote " +
+                    "Agents) and keep working while the phone is off. Needs Google AI Pro or Ultra on a personal account.",
+                fontSize = 12.5.sp, color = subtle()
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (enabled) "On: cloud projects show in the project picker of Antigravity chats, and cloud chats in the " +
+                    "chat list. They are ready about a minute after the Antigravity server starts."
+                else "Off: the app does not ask the Antigravity server for cloud projects or cloud chats.",
+                fontSize = 12.5.sp, color = subtle()
+            )
+        }
+    }
+}
 
 private fun repoSummary(p: AgyCloud.CloudProject): String = when (p.repos.size) {
     0 -> "No repos"

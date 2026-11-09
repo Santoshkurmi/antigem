@@ -739,6 +739,22 @@ class AgyChatBackend(
     private fun syncCloudConversations(force: Boolean) {
         // the cloud project list loaded (the hub is ready for cloud calls): restart a cloud list that never got going
         AgyCloud.onAvailable = { if (!cloudSyncHealthy) syncCloudConversations(force = true) }
+        // Settings → Antigravity → Cloud agents switched on or off
+        AgyCloud.onEnabledChanged = { syncCloudConversations(force = true) }
+        if (!AgyCloud.enabled.value) {
+            // off: no cloud calls to the hub, and no cloud chats in the list (the open one stays until left)
+            cloudSyncJob?.cancel()
+            cloudSyncJob = null
+            cloudSyncHealthy = false
+            val activeId = _currentConversation.value?.id
+            synchronized(summariesLock) {
+                val all = _conversations.value
+                if (all.any { it.isCloud && it.id != activeId }) {
+                    _conversations.value = all.filter { !it.isCloud || it.id == activeId }
+                }
+            }
+            return
+        }
         if (!force && cloudSyncJob?.isActive == true) return
         cloudSyncJob?.cancel()
         cloudSyncHealthy = false
@@ -824,6 +840,8 @@ class AgyChatBackend(
 
                             // Add or update valid conversations
                             for (conv in update.updated) {
+                                // a cloud chat the hub lists itself, while cloud agents are off in Settings
+                                if (conv.isCloud && !AgyCloud.enabled.value && conv.id != activeId) continue
                                 currentMap[conv.id] = conv
                                 knownDaemonCascadeIds.add(conv.id)
                             }
@@ -1018,7 +1036,7 @@ class AgyChatBackend(
             if (defaultProjPath.startsWith("file://")) defaultProjPath else "file://$defaultProjPath"
         } else ""
         // a cloud project picked in the project chooser: the chat runs in Google's cloud (Remote Agents)
-        val cloudProject = AgyCloud.selectedProjectId.value
+        val cloudProject = AgyCloud.selectedProjectId.value?.takeIf { AgyCloud.enabled.value }
         val newConv = Conversation(
             id = UUID.randomUUID().toString(),
             title = "New Chat",
@@ -1089,7 +1107,13 @@ class AgyChatBackend(
     fun setNewChatCloudProject(projectId: String?) {
         AgyCloud.select(projectId)
         val conv = _currentConversation.value ?: return
-        if (conv.agent != AgentKind.AGY || _messages.value.isNotEmpty() || knownDaemonCascadeIds.contains(conv.id)) return
+        if (conv.agent != AgentKind.AGY || _messages.value.isNotEmpty() || conv.cloudProjectId == projectId) return
+        if (knownDaemonCascadeIds.contains(conv.id)) {
+            // nothing sent yet, but the chat already exists on the hub (e.g. a voice call started it) and a hub chat
+            // can't move between the cloud and the hub's machine: a fresh chat starts in the picked place instead
+            startNewChat()
+            return
+        }
         _currentConversation.value = conv.copy(cloudProjectId = projectId, workspaceUri = if (projectId != null) "" else conv.workspaceUri)
     }
 
@@ -1108,6 +1132,7 @@ class AgyChatBackend(
             withContext(Dispatchers.Main) { startNewChat() }
             _currentConversation.value ?: error("no chat")
         }
+        if (conv.cloudProjectId != null) throw com.example.gemini.data.voice.AgyVoiceCall.CallRefused(com.example.gemini.data.voice.AgyVoiceCall.CLOUD_CHAT_NO_VOICE)
         val id = conv.id
         val onDaemon = knownDaemonCascadeIds.contains(id) || _conversations.value.any { it.id == id } || _messages.value.isNotEmpty()
         if (!onDaemon) {

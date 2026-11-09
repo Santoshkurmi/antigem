@@ -386,6 +386,7 @@ func main() {
 	mux.HandleFunc("/api/agy/cli", h.AgyCliHandler)
 	mux.HandleFunc("/api/agy/cli/install", h.AgyCliInstallHandler)
 	mux.HandleFunc("/api/agy/cli/update", h.AgyCliUpdateHandler)
+	mux.HandleFunc("/api/agy/hub/diag", h.AgyHubDiagHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
 	mux.HandleFunc("/api/models/refresh", h.ModelsHandler)
 	mux.HandleFunc("/api/quotas", h.QuotasHandler)

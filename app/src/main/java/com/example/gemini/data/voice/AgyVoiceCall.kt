@@ -72,6 +72,8 @@ object AgyVoiceCall {
     private const val PLAY_SLICE_BYTES = 960 // 20 ms: talking over the voice cuts it within a slice
     private const val PROTOCOL = "jetski-voice-proto"
     private const val MAX_LINK_RETRIES = 3
+    /** Lines kept in the call log (a failure adds its details: stack trace, the hub's own voice log). */
+    private const val LOG_MAX = 600
 
     enum class Phase { IDLE, CONNECTING, LIVE, RECONNECTING, ENDING, FAILED }
     enum class Role { USER, AGENT }
@@ -131,6 +133,8 @@ object AgyVoiceCall {
 
     @Volatile private var session: Session? = null
     private var lastStart: Pair<String, suspend () -> Pair<String, Int>>? = null
+    /** "Try again" keeps the failed attempt's log (its details) above the new attempt's. */
+    private var carryLog: List<String> = emptyList()
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -143,6 +147,14 @@ object AgyVoiceCall {
     private val healthClient: OkHttpClient by lazy { client.newBuilder().callTimeout(6, TimeUnit.SECONDS).build() }
 
     // ------------------------------------------------------------------------------------------------ public API
+
+    /** [start]'s prepare step: this chat can't have a voice call ([message] says why). */
+    class CallRefused(message: String) : Exception(message)
+
+    /** agy 1.5.3 has no voice calls for cloud chats: its `/voice/ws` answers 404 for them (tested). */
+    const val CLOUD_CHAT_NO_VOICE =
+        "Voice calls don't work in cloud chats: agy only allows them in chats that run on the Antigravity server. " +
+            "Pick a local project for this chat (before sending), or call from a local chat."
 
     /**
      * Starts a call. [prepare] makes sure the chat exists on the hub and returns its id and the model the agent plans
@@ -172,13 +184,19 @@ object AgyVoiceCall {
             language = language,
             speaker = AgyVoicePreferences.speaker.value && !AudioRoute.hasHeadset(app),
             statusText = "Getting the chat ready…",
-            startedAtWall = System.currentTimeMillis()
+            startedAtWall = System.currentTimeMillis(),
+            log = carryLog
         )
+        carryLog = emptyList()
         runCatching { AgyVoiceCallService.start(app) }.onFailure { Log.w(TAG, "foreground service: ${it.message}") }
         s.job = scope.launch {
             val (cid, model) = try {
                 prepare()
+            } catch (e: CallRefused) {
+                fail(s, e.message.orEmpty())
+                return@launch
             } catch (e: Exception) {
+                s.lastFailure = e
                 fail(s, "Couldn't start the chat: ${e.message ?: e.javaClass.simpleName}")
                 return@launch
             }
@@ -218,6 +236,7 @@ object AgyVoiceCall {
     /** Starts the last call again (after it failed). */
     fun retry(context: Context) {
         val (title, prepare) = lastStart ?: return
+        carryLog = (_state.value.log + "──── Try again ────").takeLast(LOG_MAX)
         _state.value = State()
         start(context, title, prepare)
     }
@@ -291,7 +310,7 @@ object AgyVoiceCall {
         val sec = (SystemClock.elapsedRealtime() - s.startedAt) / 1000
         val line = "%02d:%02d  %s".format(sec / 60, sec % 60, text)
         Log.i(TAG, text)
-        _state.update { it.copy(log = (it.log + line).takeLast(150)) }
+        _state.update { it.copy(log = (it.log + line).takeLast(LOG_MAX)) }
     }
 
     fun toggleSpeaker() {
@@ -373,6 +392,7 @@ object AgyVoiceCall {
             if (!current(webSocket)) return
             s.linkRetries = 0
             s.socketOpen = true
+            s.openedAt = SystemClock.elapsedRealtime()
             note(s, "Connected to the hub (voice ${s.voice}, language ${AgyVoicePreferences.acceptLanguage(s.language)})")
             val speed = AgyVoicePreferences.speed.value
             if (speed != 1.0) s.send(VoiceClientMessage(settings_update = VoiceClientMessage.SettingsUpdate(playback_speed = speed)))
@@ -387,6 +407,8 @@ object AgyVoiceCall {
                 Log.w(TAG, "bad frame: ${e.message}")
                 return
             }
+            s.framesIn++
+            s.lastFrame = frameKind(m)
             onServerMessage(s, m)
         }
 
@@ -398,6 +420,7 @@ object AgyVoiceCall {
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (!current(webSocket)) return
             s.socketOpen = false
+            s.closeCode = code
             note(s, "The hub closed the call ($code${(s.closeReason ?: reason).takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""})")
             socketEnded(s, s.closeReason ?: reason.takeIf { code != 1000 && it.isNotBlank() }, network = false)
         }
@@ -405,11 +428,18 @@ object AgyVoiceCall {
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             if (!current(webSocket)) return
             s.socketOpen = false
-            note(s, "Link to the hub failed: ${response?.code?.let { "HTTP $it, " } ?: ""}${t.message ?: t.javaClass.simpleName}")
+            Log.w(TAG, "voice link failed", t)
+            note(s, "Link to the hub failed: ${response?.code?.let { "HTTP $it, " } ?: ""}${t.javaClass.name}${t.message?.let { ": $it" } ?: ""}")
             val code = response?.code
             val body = runCatching { response?.body?.string()?.trim()?.take(200) }.getOrNull().orEmpty()
+            s.lastFailure = t
+            s.handshake = response?.let { r ->
+                "HTTP ${r.code} ${r.message}".trim() + (if (body.isNotBlank()) ", body: $body" else "") +
+                    ", headers: " + r.headers.joinToString("; ") { (n, v) -> "$n=${v.take(80)}" }
+            }
+            // (a 404 here is not an old agy: /voice/health answered before the call; agy answers 404 for a chat it
+            // has no voice for, e.g. a cloud chat)
             when {
-                code == 404 -> fail(s, "Voice calls need agy 1.5 or newer. Update agy in Settings → Antigravity CLI → Check for updates (the server restarts by itself).", Problem.UPDATE_AGY)
                 code != null && code in 400..599 && code != 101 ->
                     fail(s, "The hub refused the call (HTTP $code${if (body.isNotBlank()) ": $body" else ""}).")
                 else -> socketEnded(s, t.message ?: t.javaClass.simpleName, network = true)
@@ -524,6 +554,19 @@ object AgyVoiceCall {
         }
     }
 
+    /** A short name of a hub message, for the failure details. */
+    private fun frameKind(m: VoiceServerMessage): String = when {
+        m.voice_audio != null -> "voice audio"
+        m.clear_audio != null -> "stop audio"
+        m.user_speech != null -> "your words"
+        m.voice_transcript != null -> "voice words"
+        m.status != null -> "status ${m.status.state.name.lowercase()}" +
+            (m.status.failure_reason.takeIf { it.value != 0 }?.let { " (${it.name.lowercase()})" } ?: "") +
+            (m.status.message.takeIf { it.isNotBlank() }?.let { ": ${it.take(120)}" } ?: "")
+        m.event != null -> "event ${m.event.event_name}"
+        else -> "other"
+    }
+
     private fun failureText(reason: FailureReason, message: String): String {
         val base = when (reason) {
             FailureReason.SERVER_UNAVAILABLE -> "The voice service is unavailable right now."
@@ -577,7 +620,33 @@ object AgyVoiceCall {
     private fun fail(s: Session, message: String, problem: Problem = Problem.NONE) {
         if (session !== s) return
         note(s, "Call failed: $message")
-        _state.update { it.copy(phase = Phase.FAILED, error = message, problem = problem, agentSpeaking = false, userSpeaking = false, statusText = "") }
+        val st = _state.value
+        val now = SystemClock.elapsedRealtime()
+        val details = AgyVoiceDiagnostics.immediate(
+            AgyVoiceDiagnostics.Facts(
+                error = message, cause = s.lastFailure, startedAtWall = st.startedAtWall, failedAtWall = System.currentTimeMillis(),
+                sinceStartMs = now - s.startedAt, openForMs = s.openedAt.takeIf { it > 0 }?.let { now - it },
+                framesIn = s.framesIn, lastFrame = s.lastFrame, listened = st.connectedAt > 0, handshake = s.handshake,
+                closeCode = s.closeCode, closeReason = s.closeReason, conversationId = s.conversationId, voice = s.voice,
+                language = s.language, planModel = s.planModel, linkRetries = s.linkRetries
+            )
+        )
+        Log.e(TAG, "voice call failed: $message\n" + details.joinToString("\n"))
+        _state.update {
+            it.copy(
+                phase = Phase.FAILED, error = message, problem = problem, agentSpeaking = false, userSpeaking = false, statusText = "",
+                log = (it.log + details).takeLast(LOG_MAX)
+            )
+        }
+        // then what the hub says (still answering? its own voice log, a crash): a moment later, through the bridge
+        val hubBase = AuthPreferences.currentHubUrl.trimEnd('/')
+        val startedAtWall = st.startedAtWall
+        scope.launch {
+            val more = runCatching { AgyVoiceDiagnostics.fromHub(hubBase, startedAtWall, healthClient) }
+                .getOrElse { listOf("Hub diagnostics failed: ${it.javaClass.simpleName}: ${it.message}") }
+            Log.e(TAG, "voice call failure, hub side:\n" + more.joinToString("\n"))
+            _state.update { it.copy(log = (it.log + more).takeLast(LOG_MAX)) }
+        }
         s.endRequested = true
         runCatching { s.ws?.close(1000, null) }
         s.release()
@@ -621,6 +690,13 @@ object AgyVoiceCall {
         @Volatile var micRunning = false
         @Volatile var closeReason: String? = null
         @Volatile var lastAgentChunkAt = 0L
+        // for the failure details (AgyVoiceDiagnostics)
+        @Volatile var lastFailure: Throwable? = null
+        @Volatile var handshake: String? = null
+        @Volatile var openedAt = 0L
+        @Volatile var framesIn = 0
+        @Volatile var lastFrame = ""
+        @Volatile var closeCode = 0
         var micStarted = false
         var linkRetries = 0
         private var pulseJob: Job? = null
@@ -670,6 +746,7 @@ object AgyVoiceCall {
                     AudioFormat.ENCODING_PCM_16BIT, max(minBuf, MIC_CHUNK_SAMPLES * 2 * 4)
                 )
             } catch (e: Exception) {
+                lastFailure = e
                 fail(this, "The microphone is not available: ${e.message}", Problem.MIC)
                 return
             }
@@ -717,7 +794,10 @@ object AgyVoiceCall {
                     send(VoiceClientMessage(mic_audio = bytes.toByteString()))
                 }
             } catch (e: Exception) {
-                if (micRunning && !endRequested) fail(this, "The microphone stopped: ${e.message}", Problem.MIC)
+                if (micRunning && !endRequested) {
+                    lastFailure = e
+                    fail(this, "The microphone stopped: ${e.message}", Problem.MIC)
+                }
             } finally {
                 runCatching { rec.stop() }
                 rec.release()

@@ -76,11 +76,36 @@ object AgyCloud {
     private val _selectedProjectId = MutableStateFlow<String?>(null)
     val selectedProjectId: StateFlow<String?> = _selectedProjectId.asStateFlow()
 
+    /**
+     * Settings → Antigravity → Cloud agents. Off (the default): the app never asks the hub for cloud projects or
+     * cloud chats, and new chats run on the hub's machine.
+     */
+    private val _enabled = MutableStateFlow(false)
+    val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
+
+    /** Called when cloud agents are switched on or off: the chat list adds or drops its cloud part. */
+    @Volatile var onEnabledChanged: ((Boolean) -> Unit)? = null
+
     fun init(context: Context) {
         if (sp != null) return
         val p = context.applicationContext.getSharedPreferences("agy_cloud", Context.MODE_PRIVATE)
         sp = p
-        _selectedProjectId.value = p.getString("selected_project", null)
+        _enabled.value = p.getBoolean("enabled", false)
+        // a cloud project picked earlier counts only while cloud agents are on
+        _selectedProjectId.value = if (_enabled.value) p.getString("selected_project", null) else null
+    }
+
+    fun setEnabled(on: Boolean) {
+        if (_enabled.value == on) return
+        _enabled.value = on
+        sp?.edit()?.putBoolean("enabled", on)?.apply()
+        if (!on) {
+            // new chats run on the hub's machine again; nothing cloud is shown
+            select(null)
+            _projects.value = emptyList()
+            _error.value = null
+        }
+        onEnabledChanged?.invoke(on)
     }
 
     fun select(projectId: String?) {
@@ -93,8 +118,9 @@ object AgyCloud {
     // ------------------------------------------------------------------------------------------------ projects
 
     /**
-     * Right after the hub starts it has not loaded the account's feature switches yet and refuses cloud calls with
-     * FAILED_PRECONDITION ("cloud conversations are not enabled"); a few seconds later they work.
+     * The hub refuses cloud calls with FAILED_PRECONDITION ("cloud conversations are not enabled") for about a minute
+     * after it starts: its account feature switch for cloud agents (`enable-remote-ai`) only turns on with its first
+     * feature-flag poll, ~60 s after start (tested with agy 1.5.3; the hub's own web UI waits the same way).
      */
     fun isWarmingUp(message: String?): Boolean {
         val m = message.orEmpty()
@@ -105,16 +131,18 @@ object AgyCloud {
     @Volatile var onAvailable: (() -> Unit)? = null
 
     suspend fun refreshProjects(): Result<List<CloudProject>> = withContext(Dispatchers.IO) {
+        if (!_enabled.value) return@withContext Result.success(emptyList())
         _loading.value = true
         try {
-            // while the hub warms up, try again quietly (about 40 s) before showing an error
-            var wait = 2_000L
+            // while the hub warms up (about a minute after it starts), try again quietly before showing an error
+            var tries = 0
             var res = AgyLanguageService.ListProjects().executeSafely(ListProjectsRequest(backend = BACKEND))
-            while (res.isFailure && isWarmingUp(res.exceptionOrNull()?.message) && wait <= 16_000L) {
-                kotlinx.coroutines.delay(wait)
-                wait *= 2
+            while (res.isFailure && isWarmingUp(res.exceptionOrNull()?.message) && tries < 30 && _enabled.value) {
+                kotlinx.coroutines.delay(3_000L)
+                tries++
                 res = AgyLanguageService.ListProjects().executeSafely(ListProjectsRequest(backend = BACKEND))
             }
+            if (!_enabled.value) return@withContext Result.success(emptyList())
             val ids = res
                 .getOrElse { e -> _error.value = friendlyError(e.message); return@withContext Result.failure(e) }
                 .project_ids
@@ -253,7 +281,8 @@ object AgyCloud {
     fun friendlyError(raw: String?): String {
         val m = raw.orEmpty()
         return when {
-            isWarmingUp(m) && m.contains("not enabled", true) -> "Antigravity is still starting up. Try again in a moment."
+            isWarmingUp(m) && m.contains("not enabled", true) ->
+                "Cloud agents start about a minute after the Antigravity server starts. Try again in a moment."
             m.contains("REMOTE_AGENT_AT_CAPACITY") -> "Cloud agents are busy right now. Try again in a few minutes."
             m.contains("REMOTE_AGENT_ENVIRONMENT_TIME_EXHAUSTED") -> "Today's cloud VM time is used up. It resets tomorrow."
             m.contains("REMOTE_AGENT_ENVIRONMENT_LIMIT") -> "Too many cloud environments are running. Let one finish, then try again."

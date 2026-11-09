@@ -374,8 +374,10 @@ fun ChatScreen(
     // Antigravity cloud agents (Remote Agents): cloud projects, through the hub
     LaunchedEffect(Unit) { com.example.gemini.data.agent.agy.AgyCloud.init(context) }
     val cloudProjects by com.example.gemini.data.agent.agy.AgyCloud.projects.collectAsState()
-    LaunchedEffect(systemConnectionState.canSend) {
-        if (systemConnectionState.canSend) com.example.gemini.data.agent.agy.AgyCloud.refreshProjects()
+    // off by default (Settings → Antigravity → Cloud agents): then nothing cloud is asked for or shown
+    val cloudEnabled by com.example.gemini.data.agent.agy.AgyCloud.enabled.collectAsState()
+    LaunchedEffect(systemConnectionState.canSend, cloudEnabled) {
+        if (systemConnectionState.canSend && cloudEnabled) com.example.gemini.data.agent.agy.AgyCloud.refreshProjects()
     }
     var showCloudProjects by remember { mutableStateOf(false) }
     var showCloudCreate by remember { mutableStateOf(false) }
@@ -411,6 +413,10 @@ fun ChatScreen(
             voiceCall.active -> com.example.gemini.data.voice.AgyVoiceCall.setMinimized(false)
             !systemConnectionState.canSend -> com.example.gemini.ui.components.AppToastHelper.showToast(
                 "Start the server to call Antigravity.", com.example.gemini.ui.components.ChatToastType.ERROR
+            )
+            // agy refuses voice calls for cloud chats (its /voice/ws answers 404 for them)
+            currentConv?.cloudProjectId != null -> com.example.gemini.ui.components.AppToastHelper.showToast(
+                com.example.gemini.data.voice.AgyVoiceCall.CLOUD_CHAT_NO_VOICE, com.example.gemini.ui.components.ChatToastType.INFO
             )
             !com.example.gemini.data.voice.AgyVoicePreferences.picked.value -> showVoicePicker = true
             else -> callWithMicPermission()
@@ -3549,7 +3555,7 @@ fun ChatScreen(
         val cloudSelectedId by com.example.gemini.data.agent.agy.AgyCloud.selectedProjectId.collectAsState()
         val cloudError by com.example.gemini.data.agent.agy.AgyCloud.error.collectAsState()
         val chatCloudId = if (isAgyChat) currentConv?.cloudProjectId ?: cloudSelectedId else null
-        val cloudPickerSection: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = if (!isAgyChat) null else fun androidx.compose.foundation.lazy.LazyListScope.() {
+        val cloudPickerSection: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = if (!isAgyChat || !cloudEnabled) null else fun androidx.compose.foundation.lazy.LazyListScope.() {
             cloudProjectsSection(
                 projects = cloudProjects,
                 selectedId = chatCloudId,

@@ -244,6 +244,7 @@ private fun CallContent(st: AgyVoiceCall.State, agentWorking: Boolean, onOpenAgy
                     st,
                     onRetry = { AgyVoiceCall.retry(context) },
                     onUpdate = { AgyVoiceCall.end(); onOpenAgySettings() },
+                    onDetails = { showLog = true },
                     onClose = { AgyVoiceCall.end() }
                 )
             } else if (captionsOn) {
@@ -512,7 +513,7 @@ private fun Captions(st: AgyVoiceCall.State, voice: AgyVoice, modifier: Modifier
 }
 
 @Composable
-private fun FailureCard(st: AgyVoiceCall.State, onRetry: () -> Unit, onUpdate: () -> Unit, onClose: () -> Unit) {
+private fun FailureCard(st: AgyVoiceCall.State, onRetry: () -> Unit, onUpdate: () -> Unit, onDetails: () -> Unit, onClose: () -> Unit) {
     Surface(shape = RoundedCornerShape(18.dp), color = Color.White.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("The call couldn't continue", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
@@ -528,6 +529,10 @@ private fun FailureCard(st: AgyVoiceCall.State, onRetry: () -> Unit, onUpdate: (
                     Surface(onClick = onRetry, shape = RoundedCornerShape(50), color = Color.White) {
                         Text("Try again", color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp))
                     }
+                }
+                // the full error, how far the call got and what the hub logged: to copy or screenshot
+                Surface(onClick = onDetails, shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.12f)) {
+                    Text("Details", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp))
                 }
                 Surface(onClick = onClose, shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.12f)) {
                     Text("Close", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp))
@@ -713,7 +718,7 @@ private fun CallLogPanel(log: List<String>, onClose: () -> Unit) {
                     "Copy", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
                     modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
                         val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Voice call log", log.joinToString("\n")))
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Voice call log", "AntiGem voice call log\n" + log.joinToString("\n")))
                         com.example.gemini.ui.components.AppToastHelper.showToast("Call log copied", com.example.gemini.ui.components.ChatToastType.SUCCESS)
                     }.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
@@ -724,7 +729,7 @@ private fun CallLogPanel(log: List<String>, onClose: () -> Unit) {
                 color = Color.White.copy(alpha = 0.5f), fontSize = 11.5.sp, lineHeight = 15.sp
             )
             Spacer(Modifier.height(10.dp))
-            LazyColumn(state = list, modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+            LazyColumn(state = list, modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
                 items(log) { line ->
                     Text(
                         line, color = Color.White.copy(alpha = 0.85f), fontSize = 11.5.sp, lineHeight = 16.sp,
