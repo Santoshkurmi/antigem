@@ -392,13 +392,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun sendMessage(content: String): Unit = PromptExpansion.expand(content).let { expanded ->
         // a Jarvis chat on screen: its message carries Jarvis' hidden note (or goes to the voice Jarvis chat as a typed turn)
         val jarvis = com.example.gemini.data.jarvis.JarvisController
-        val it = (if (jarvis.isAttached) jarvis.interceptScreenMessage(currentConversation.value?.id, expanded) else expanded) ?: return
+        val chatId = currentConversation.value?.id
+        val intercepted = (if (jarvis.isAttached) jarvis.interceptScreenMessage(chatId, expanded) else expanded) ?: return
+        // a normal chat (a Jarvis chat carries its own guide instead): the app's global context goes in front
+        val it = if (intercepted === expanded) withGlobalContext(chatId, expanded) else intercepted
         when {
             isClaudeActive -> claudeBackend.sendMessage(it)
             isOpenCodeActive -> openCodeBackend.sendMessage(it)
             else -> agyBackend.sendMessage(it)
         }
     }
+    /** Settings → Agents → Global context, hidden in front of the message; a new chat is remembered once it has its id. */
+    private fun withGlobalContext(chatId: String?, text: String): String {
+        val hasEarlier = messages.value.any { m -> m.role == MessageRole.USER }
+        val (prompt, fingerprint) = com.example.gemini.data.context.GlobalContext.wrap(chatId, hasEarlier, text)
+        if (fingerprint != null && chatId.isNullOrBlank()) {
+            viewModelScope.launch {
+                kotlinx.coroutines.withTimeoutOrNull(120_000) { currentConversation.first { !it?.id.isNullOrBlank() } }
+                    ?.id?.let { com.example.gemini.data.context.GlobalContext.markSent(it, fingerprint) }
+            }
+        }
+        return prompt
+    }
+
+    /** Editing the first message drops the hidden context with it: send it again with the next message. */
+    private fun forgetContextIfFirst(targetId: String) {
+        val firstUser = messages.value.firstOrNull { it.role == MessageRole.USER } ?: return
+        if (firstUser.id == targetId) com.example.gemini.data.context.GlobalContext.forget(currentConversation.value?.id)
+    }
+
     val isTranscribingAudio = agyBackend.isTranscribingAudio
     fun transcribeAudioFile(file: java.io.File, onDone: (String) -> Unit, onError: (String) -> Unit) = agyBackend.transcribeAudioFile(file, onDone, onError)
     fun retryMessage(messageId: String) = when {
@@ -417,7 +439,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         return agyBackend.prepareEditMessage(messageId)?.let(PromptExpansion::collapse)
     }
-    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) = if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false) { onRestored(PromptExpansion.collapse(it)) } else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false) { onRestored(PromptExpansion.collapse(it)) } else agyBackend.revertAndEditLastUserMessage(targetMsg) { onRestored(PromptExpansion.collapse(it)) }
+    fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) {
+        forgetContextIfFirst(targetMsg.id)
+        if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false) { onRestored(PromptExpansion.collapse(it)) }
+        else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false) { onRestored(PromptExpansion.collapse(it)) }
+        else agyBackend.revertAndEditLastUserMessage(targetMsg) { onRestored(PromptExpansion.collapse(it)) }
+    }
 
     /** Claude: edit a sent prompt in a copy of the chat that ends before it; optionally restore the files changed since. */
     fun editClaudeMessage(targetMsg: ChatMessage, restoreCode: Boolean, onRestored: (String) -> Unit) =

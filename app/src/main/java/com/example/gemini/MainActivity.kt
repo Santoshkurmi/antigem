@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         instanceRef = java.lang.ref.WeakReference(this)
         com.example.gemini.data.jarvis.JarvisPreferences.init(this)
+        com.example.gemini.data.context.GlobalContext.init(this)
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled =
             chatViewModel.authPreferences.getNetworkInspectorEnabledSync()
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled =
@@ -74,6 +75,8 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
         com.example.gemini.data.notes.NotesRepository.init(this)
         com.example.gemini.data.files.ExplorerPrefs.init(this)
+        // temporary video / attachment / share copies left from earlier runs
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { com.example.gemini.data.files.CacheJanitor.trimAll(applicationContext, force = true) }
         resetTerminalLauncherOnce()
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
         com.example.gemini.data.jarvis.JarvisController.attach(application, chatViewModel)
@@ -540,6 +543,9 @@ class MainActivity : ComponentActivity() {
                                         onDismiss = { showSwitcherToolsInstall = false }
                                     )
                                 }
+
+                                // the built-in video player, full screen (from chat videos, tapped paths and Files)
+                                com.example.gemini.ui.components.FullscreenVideoHost()
 
                                 // Files shared or opened from other apps: ask what to do (open in the editor, save to a folder)
                                 val incomingFiles by com.example.gemini.data.files.IncomingShare.pending.collectAsState()

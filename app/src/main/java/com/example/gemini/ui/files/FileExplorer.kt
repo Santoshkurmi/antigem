@@ -319,7 +319,9 @@ fun FileExplorer(
     }
 
     fun preview(e: ExplorerEntry) {
-        if (e.kind == FileKind.MARKDOWN) {
+        if (e.kind == FileKind.VIDEO) {
+            com.example.gemini.ui.components.FullscreenVideo.play(context, e.path, e.name)
+        } else if (e.kind == FileKind.MARKDOWN) {
             scope.launch {
                 busy = "Opening ${e.name}…"
                 val content = IdeApiClient.readFile(e.path)

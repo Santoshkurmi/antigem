@@ -294,6 +294,14 @@ func (h *Handler) FsStatHandler(w http.ResponseWriter, r *http.Request) {
 		"mime":          mime.TypeByExtension(strings.ToLower(filepath.Ext(p))),
 	}
 	if f, err := os.OpenFile(p, os.O_RDONLY, 0); err == nil {
+		// files: peek at the first bytes so callers know text from media/binary whatever the extension
+		if !info.IsDir() {
+			head := make([]byte, 4097) // one past the sample size, so the check knows the file goes on
+			n, _ := io.ReadFull(f, head)
+			category, sniffed := detectFileCategoryAndMime(head[:n])
+			res["category"] = category
+			res["sniffedMime"] = sniffed
+		}
 		f.Close()
 		res["readable"] = true
 	} else {

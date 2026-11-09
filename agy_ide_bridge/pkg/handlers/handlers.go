@@ -1377,13 +1377,31 @@ func (h *Handler) FileReadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(content)
 }
 
+// trimPartialRune drops a multi-byte character cut in half at the end of a sample taken from a longer file,
+// so text full of emoji or non-Latin script is not mistaken for binary.
+func trimPartialRune(s []byte, truncated bool) []byte {
+	if !truncated {
+		return s
+	}
+	for i := len(s) - 1; i >= 0 && i >= len(s)-utf8.UTFMax; i-- {
+		if utf8.RuneStart(s[i]) {
+			if !utf8.FullRune(s[i:]) {
+				return s[:i]
+			}
+			break
+		}
+	}
+	return s
+}
+
 func detectFileCategoryAndMime(data []byte) (category string, mime string) {
 	if len(data) == 0 {
 		return "text", "text/plain; charset=utf-8"
 	}
 
 	sample := data
-	if len(sample) > 4096 {
+	truncated := len(sample) > 4096
+	if truncated {
 		sample = sample[:4096]
 	}
 
@@ -1395,7 +1413,7 @@ func detectFileCategoryAndMime(data []byte) (category string, mime string) {
 	}
 
 	// 2. Check for text: zero null bytes and valid UTF-8
-	if bytes.IndexByte(sample, 0) == -1 && utf8.Valid(sample) {
+	if bytes.IndexByte(sample, 0) == -1 && utf8.Valid(trimPartialRune(sample, truncated)) {
 		return "text", detectedMime
 	}
 

@@ -105,10 +105,14 @@ fun FileDetailsDialog(
     filePath: String,
     onDismiss: () -> Unit,
     onOpenInIde: (path: String) -> Unit,
-    onOpenMarkdownViewer: (path: String) -> Unit
+    onOpenMarkdownViewer: (path: String) -> Unit,
+    onOpenWith: (path: String) -> Unit = onOpenInIde
 ) {
     val context = LocalContext.current
     val details = remember(filePath) { extractFileDetails(filePath) }
+    val kind = remember(details.name) { com.example.gemini.data.files.FileKinds.of(details.name) }
+    // only text belongs in the editor; videos, PDFs, archives… get the app chooser
+    val opensInIde = kind.isTextual
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -121,7 +125,7 @@ fun FileDetailsDialog(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (details.isMarkdown) Icons.Outlined.Description else Icons.Outlined.Code,
+                            imageVector = com.example.gemini.data.files.FileKinds.icon(kind, details.name),
                             contentDescription = null,
                             tint = ClaudeTerracotta,
                             modifier = Modifier.size(20.dp)
@@ -221,21 +225,31 @@ fun FileDetailsDialog(
                 Button(
                     onClick = {
                         onDismiss()
-                        if (details.isMarkdown) {
-                            onOpenMarkdownViewer(details.fullPath)
-                        } else {
-                            onOpenInIde(details.fullPath)
+                        when {
+                            details.isMarkdown -> onOpenMarkdownViewer(details.fullPath)
+                            opensInIde -> onOpenInIde(details.fullPath)
+                            else -> onOpenWith(details.fullPath)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
                     Icon(
-                        imageVector = if (details.isMarkdown) Icons.Outlined.Visibility else Icons.Outlined.Code,
+                        imageVector = when {
+                            details.isMarkdown -> Icons.Outlined.Visibility
+                            opensInIde -> Icons.Outlined.Code
+                            else -> Icons.Outlined.Apps
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (details.isMarkdown) "Read Markdown" else "Open in IDE")
+                    Text(
+                        when {
+                            details.isMarkdown -> "Read Markdown"
+                            opensInIde -> "Open in IDE"
+                            else -> "Open with…"
+                        }
+                    )
                 }
             }
         },

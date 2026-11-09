@@ -17,6 +17,7 @@ If you are new, start with the [front page](README.md), then [Getting Started](0
 | Find one specific setting | [13 — Complete Settings Reference](13-settings-reference.md) |
 | Know what a word means | [15 — FAQ & Glossary](15-faq-and-glossary.md) |
 | Let agents analyze apps (APK, Flutter, React Native) | [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md) |
+| Build Android apps on the phone (Compose, Flutter, React Native) | [17 — Building Android Apps on the Phone](17-android-development.md) |
 | Check that everything is documented | [00 — Feature Coverage & Verification Proof](00-feature-coverage.md) |
 
 ---
@@ -179,7 +180,8 @@ Every settings page in the app, in order, with the exact labels and options you 
 
 - 🧭 The Settings Map (38 Sections)
 - 1. Settings & Preferences (`MAIN`)
-- 2. Appearance & Theme (`APPEARANCE`)
+- 2a. Themes (`THEMES`)
+- 2b. Appearance (`APPEARANCE`)
 - 3. Servers & Connectivity (`SERVERS`)
 - 4. Custom AntiGem Plugins (`WEBVIEW_EXTENSIONS`)
 - 5. Slash Commands (`SLASH_COMMANDS`)
@@ -242,4 +244,16 @@ Set up REA in an Ubuntu container part by part, choose its tool groups, connect 
 - 📱 8. Phone access (optional)
 - ⌨️ 9. Setting up in the terminal
 - 🗑️ 10. Removing REA
+- 🛠️ Troubleshooting
+
+### [17 — Building Android Apps on the Phone](17-android-development.md)
+Install Kotlin / Java (Jetpack Compose), Flutter and React Native tooling in the Ubuntu container, build test apps, use `adev` / `adev-new`, and the Android Development skill.
+
+- 🚀 Quick start
+- 🧭 1. Where it lives
+- 🧩 2. What gets installed
+- ⌨️ 3. The commands
+- 🎓 4. The Android Development skill (recommended)
+- 📱 5. Installing on this phone
+- 🗑️ 6. Freeing space and removing
 - 🛠️ Troubleshooting

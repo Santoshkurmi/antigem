@@ -21,7 +21,7 @@ import java.util.UUID
  * and which in dark mode, and the colors of the theme on screen right now ([colors], read by [AppColors] and the old
  * palette names in Color.kt, so every screen follows a theme change at once).
  *
- * Light / Dark / Auto is still the app's theme mode setting (Settings → Appearance); this decides which light theme
+ * Light / Dark / Auto is still the app's theme mode setting (Settings → Themes); this decides which light theme
  * and which dark theme those mean. Everything here is Compose snapshot state: reading it in the UI recomposes on change.
  */
 object ThemeManager {
@@ -175,7 +175,7 @@ object ThemeManager {
         return null
     }
 
-    /** The app's theme mode: "SYSTEM", "LIGHT" or "DARK" (the same setting as Settings → Appearance). */
+    /** The app's theme mode: "SYSTEM", "LIGHT" or "DARK" (the same setting as Settings → Themes). */
     fun setMode(mode: String) {
         val ctx = appContext ?: return
         io.launch { runCatching { com.example.gemini.data.preferences.AuthPreferences(ctx).saveThemeMode(mode) } }

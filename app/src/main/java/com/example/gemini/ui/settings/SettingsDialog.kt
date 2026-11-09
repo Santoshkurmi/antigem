@@ -85,7 +85,8 @@ import com.example.gemini.data.daemon.IdeApiClient
 
 enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
-    APPEARANCE("Appearance & Theme", "Theme, dark mode, and chat font scaling"),
+    THEMES("Themes", "Light and dark mode, and the theme gallery"),
+    APPEARANCE("Appearance", "Chat text size, chat list, header icons and the app switcher"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     WEBVIEW_EXTENSIONS("Custom AntiGem Plugins", "Install and manage plugins: MCP tools and skills"),
     SLASH_COMMANDS("Slash Commands", "Your own / commands and what they expand to"),
@@ -104,6 +105,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     /** One OpenCode page (which one: the dialog's openCodePage). */
     OPENCODE_PAGE("OpenCode", "Server, providers, endpoints, MCP & approvals"),
     AGENTS("Agents", "Run Antigravity, Claude Code, OpenCode or several"),
+    GLOBAL_CONTEXT("Global context", "What every chat is told about this app, and your own instructions"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     JARVIS_AGENT("Jarvis · Agent", "Which agent and model Jarvis talks to"),
     JARVIS_PERSONALITY("Jarvis · Personality & you", "How Jarvis speaks, and what it should know about you"),
@@ -122,6 +124,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     ANDROID_AUTOMATION("Android Automation", "Let AI agents see and control this phone"),
     REA("REA · Reverse Engineering", "Let agents analyze APKs, Flutter, React Native and native code"),
     REA_GROUPS("REA Tool Groups", "Which REA tools each REA MCP server shows"),
+    ANDROID_DEV("Android Development", "Build Kotlin / Compose, Flutter and React Native apps on this phone"),
     TERMUX_SUPPORT("Termux Support", "Termux:API and the X11 desktop"),
     TERMUX_API("Termux:API", "How termux-api commands are handled"),
     X11_DESKTOP("X11 Desktop", "Linux desktop apps with Termux:X11"),
@@ -150,6 +153,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         OPENCODE_PAGE -> OPENCODE
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
         REA_GROUPS -> REA
+        GLOBAL_CONTEXT -> AGENTS
         CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
@@ -433,8 +437,14 @@ fun SettingsDialog(
                         onNavigate = { currentSection = it }
                     )
 
-                    SettingsSection.APPEARANCE -> AppearanceSubScreen(
+                    SettingsSection.THEMES -> ThemesSubScreen(
                         themeMode = themeMode,
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onSetThemeMode = onSetThemeMode
+                    )
+
+                    SettingsSection.APPEARANCE -> AppearanceSubScreen(
                         chatFontScale = chatFontScale,
                         groupChatsByWorkspace = groupChatsByWorkspace,
                         floatingSwitcherOrientation = floatingSwitcherOrientation,
@@ -442,7 +452,6 @@ fun SettingsDialog(
                         floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
-                        onSetThemeMode = onSetThemeMode,
                         onSetChatFontScale = onSetChatFontScale,
                         onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace,
                         onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
@@ -598,8 +607,10 @@ fun SettingsDialog(
                     SettingsSection.AGENTS -> com.example.gemini.ui.agents.AgentsSettingsPage(
                         enabled = enabledAgents,
                         isApplying = isApplyingAgents,
-                        onApply = onApplyAgents
+                        onApply = onApplyAgents,
+                        onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT }
                     )
+                    SettingsSection.GLOBAL_CONTEXT -> GlobalContextScreen()
                     SettingsSection.JARVIS -> com.example.gemini.ui.jarvis.JarvisSettingsScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
@@ -693,6 +704,12 @@ fun SettingsDialog(
                         onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT },
                         onOpenPlugins = { currentSection = SettingsSection.WEBVIEW_EXTENSIONS }
                     )
+                    SettingsSection.ANDROID_DEV -> AndroidDevScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT },
+                        onOpenPlugins = { currentSection = SettingsSection.WEBVIEW_EXTENSIONS }
+                    )
                     SettingsSection.REA_GROUPS -> ReaGroupsScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
@@ -752,6 +769,7 @@ private fun MainSettingsMenu(
     val deviceTools = rememberDeviceToolRows(onNavigate)
     val githubRow = rememberGitHubRow(onNavigate)
     val reaRow = rememberReaRow(onNavigate)
+    val androidDevRow = rememberAndroidDevRow(onNavigate)
 
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
@@ -774,7 +792,8 @@ private fun MainSettingsMenu(
         cardBg = cardBg,
         groups = listOf(
             listOf(
-                row(SettingsSection.APPEARANCE, Icons.Outlined.Palette, c.accentPink, com.example.gemini.theme.ThemeManager.current.name),
+                row(SettingsSection.THEMES, Icons.Outlined.Palette, c.accentPink, com.example.gemini.theme.ThemeManager.current.name),
+                row(SettingsSection.APPEARANCE, Icons.Outlined.Tune, c.accentAlt),
                 row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info, serverValue, serverColor)
             ),
             listOfNotNull(
@@ -805,6 +824,7 @@ private fun MainSettingsMenu(
                 deviceTools.adb,
                 deviceTools.automation,
                 reaRow,
+                androidDevRow,
                 // Termux:API and X11 need the com.termux package; shown on both of its builds (and before the terminal is
                 // installed) so standalone users learn these exist: each page explains the Shared UID build they need
                 if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(LocalContext.current))
@@ -961,6 +981,33 @@ private fun rememberReaRow(onNavigate: (SettingsSection) -> Unit): SettingsRowIt
     }
     return SettingsRowItem(Icons.Outlined.BugReport, c.accentPink, SettingsSection.REA.title, value, color) {
         onNavigate(SettingsSection.REA)
+    }
+}
+
+/** The Android Development row of the main settings page (com.termux builds only), with the setup state; null elsewhere. */
+@Composable
+private fun rememberAndroidDevRow(onNavigate: (SettingsSection) -> Unit): SettingsRowItem? {
+    val context = LocalContext.current
+    if (!com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) return null
+    LaunchedEffect(Unit) {
+        com.example.gemini.data.androiddev.AndroidDevManager.init(context)
+        com.example.gemini.data.androiddev.AndroidDevManager.refresh()
+    }
+    val dev by com.example.gemini.data.androiddev.AndroidDevManager.state.collectAsState()
+    val c = com.example.gemini.theme.AppColors
+    val (value, color) = when {
+        dev.busy -> "Working…" to c.info
+        dev.anyReady -> com.example.gemini.data.androiddev.AndroidDevManager.Framework.entries.filter { dev.ready(it) }
+            .joinToString(" · ") { when (it) {
+                com.example.gemini.data.androiddev.AndroidDevManager.Framework.KOTLIN -> "Kotlin"
+                com.example.gemini.data.androiddev.AndroidDevManager.Framework.FLUTTER -> "Flutter"
+                com.example.gemini.data.androiddev.AndroidDevManager.Framework.REACT_NATIVE -> "RN"
+            } } to QuotaGreen
+        dev.installed.any { it == com.example.gemini.data.androiddev.AndroidDevManager.Component.SDK || it == com.example.gemini.data.androiddev.AndroidDevManager.Component.LAUNCHER } -> "Partly set up" to c.warning
+        else -> null to null
+    }
+    return SettingsRowItem(Icons.Outlined.Android, c.success, SettingsSection.ANDROID_DEV.title, value, color) {
+        onNavigate(SettingsSection.ANDROID_DEV)
     }
 }
 
@@ -1280,27 +1327,14 @@ private fun TermuxApiSubScreen(cardBg: Color, cardBorder: BorderStroke) {
 }
 
 // ==========================================
-// SUB-SCREEN 1: APPEARANCE & THEME
+// SUB-SCREEN: THEMES (light / dark mode, theme gallery)
 // ==========================================
 @Composable
-private fun AppearanceSubScreen(
+private fun ThemesSubScreen(
     themeMode: String,
-    chatFontScale: Float,
-    groupChatsByWorkspace: Boolean,
-    floatingSwitcherOrientation: String,
-    floatingSwitcherItems: List<String>,
-    floatingSwitcherAutoCollapseSec: Int,
     cardBg: Color,
     cardBorder: BorderStroke,
-    onSetThemeMode: (String) -> Unit,
-    onSetChatFontScale: (Float) -> Unit,
-    onToggleGroupChatsByWorkspace: (Boolean) -> Unit,
-    onSetFloatingSwitcherOrientation: (String) -> Unit,
-    onSetFloatingSwitcherItems: (List<String>) -> Unit,
-    onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
-    onResetFloatingSwitcherPosition: () -> Unit,
-    chatHeaderItems: List<String>,
-    onSetChatHeaderItems: (List<String>) -> Unit
+    onSetThemeMode: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1309,23 +1343,6 @@ private fun AppearanceSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        val vibrateOnDone by com.example.gemini.data.agent.ChatCompletionMonitor.vibrate.collectAsState()
-        Surface(
-            shape = RoundedCornerShape(12.dp), color = cardBg,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-        ) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Vibrate when a chat finishes", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    Text(
-                        "One light buzz when a chat stops running (its dot in the chat list goes away).",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                Switch(checked = vibrateOnDone, onCheckedChange = { com.example.gemini.data.agent.ChatCompletionMonitor.setVibrate(it) })
-            }
-        }
-
         // Theme Selector Header
         Text(
             text = "Color Theme",
@@ -1384,9 +1401,37 @@ private fun AppearanceSubScreen(
 
         // Which light theme and which dark theme (built-in and custom ones)
         ThemeGallery(cardBg = cardBg, themeMode = themeMode, onSetThemeMode = onSetThemeMode)
+    }
+}
 
-        Spacer(modifier = Modifier.height(6.dp))
-
+// ==========================================
+// SUB-SCREEN 1: APPEARANCE
+// ==========================================
+@Composable
+private fun AppearanceSubScreen(
+    chatFontScale: Float,
+    groupChatsByWorkspace: Boolean,
+    floatingSwitcherOrientation: String,
+    floatingSwitcherItems: List<String>,
+    floatingSwitcherAutoCollapseSec: Int,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    onSetChatFontScale: (Float) -> Unit,
+    onToggleGroupChatsByWorkspace: (Boolean) -> Unit,
+    onSetFloatingSwitcherOrientation: (String) -> Unit,
+    onSetFloatingSwitcherItems: (List<String>) -> Unit,
+    onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
+    onResetFloatingSwitcherPosition: () -> Unit,
+    chatHeaderItems: List<String>,
+    onSetChatHeaderItems: (List<String>) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .bouncyVerticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         // Font Scaling Section
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -8358,21 +8403,12 @@ private fun AboutSubScreen(
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.15f),
-                    border = BorderStroke(1.5.dp, com.example.gemini.theme.AppColors.accentAlt.copy(alpha = 0.4f)),
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = null,
-                            tint = com.example.gemini.theme.AppColors.accentAlt,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
+                com.example.gemini.ui.components.AppIconImage(
+                    contentDescription = "AntiGem",
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "AntiGem",

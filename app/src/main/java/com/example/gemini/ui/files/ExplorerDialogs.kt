@@ -215,10 +215,12 @@ internal fun EntryActionsSheet(
 
 internal data class OpenOption(val choice: OpenChoice, val icon: ImageVector, val title: String, val subtitle: String, val recommended: Boolean, val warn: Boolean = false)
 
-internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean): List<OpenOption> {
+/** [contentIsText]: what the file's bytes say, when known; otherwise the extension decides. */
+internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean, contentIsText: Boolean? = null, allowPreview: Boolean = true): List<OpenOption> {
     val k = entry.kind
+    val textual = contentIsText ?: k.isTextual
     val ide = if (!ideAvailable) null else when {
-        k.isTextual -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "Code editor", "Edit in the IDE", recommended = true)
+        textual -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "Code editor", "Edit in the IDE", recommended = true)
         k == FileKind.IMAGE -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "View in IDE", "Image viewer with zoom", recommended = false)
         else -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "Code editor", "Not a text file: it may not display or save correctly", recommended = false, warn = true)
     }
@@ -242,10 +244,12 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean): List<O
             else -> "Open in another app"
         },
         "Pick any app installed on this phone",
-        recommended = !k.isTextual
+        recommended = !textual
     )
     val preview = when {
+        !allowPreview -> null
         k == FileKind.MARKDOWN -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Visibility, "Preview", "Rendered Markdown", recommended = false)
+        k == FileKind.VIDEO -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.SmartDisplay, "Play in AntiGem", "Built-in player: full screen, seek, speed", recommended = true)
         FileKinds.isBrowsableArchive(entry.name) -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Inventory2, "View contents", "See what is inside, then extract", recommended = k == FileKind.ARCHIVE)
         else -> null
     }
@@ -257,8 +261,15 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean): List<O
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun OpenWithSheet(entry: ExplorerEntry, ideAvailable: Boolean, onChoose: (OpenChoice, Boolean) -> Unit, onDismiss: () -> Unit) {
-    val options = remember(entry, ideAvailable) { openOptionsFor(entry, ideAvailable) }
+internal fun OpenWithSheet(
+    entry: ExplorerEntry,
+    ideAvailable: Boolean,
+    onChoose: (OpenChoice, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    contentIsText: Boolean? = null,
+    allowPreview: Boolean = true
+) {
+    val options = remember(entry, ideAvailable, contentIsText, allowPreview) { openOptionsFor(entry, ideAvailable, contentIsText, allowPreview) }
     val ext = FileKinds.extOf(entry.name)
     var remember by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {

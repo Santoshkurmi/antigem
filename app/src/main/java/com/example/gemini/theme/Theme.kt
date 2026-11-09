@@ -89,7 +89,7 @@ fun GeminiTheme(
     darkTheme: Boolean = isSystemInDarkThemeRobust(),
     content: @Composable () -> Unit
 ) {
-    // the light or dark theme the user picked (Settings → Appearance, or theme_mcp); see ThemeManager
+    // the light or dark theme the user picked (Settings → Themes, or theme_mcp); see ThemeManager
     ThemeManager.setEffectiveDark(darkTheme)
     val colorScheme = ThemeManager.schemeOf(ThemeManager.themeFor(darkTheme))
     // the terminal emulator takes its colors from the theme too

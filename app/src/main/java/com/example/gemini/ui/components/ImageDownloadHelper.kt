@@ -75,6 +75,7 @@ object ImageDownloadHelper {
             return
         }
         coroutineScope.launch {
+            Toast.makeText(context, "Saving video…", Toast.LENGTH_SHORT).show()
             val saved = withContext(Dispatchers.IO) { saveVideoToDownloads(context, videoSource, title) }
             if (saved != null) {
                 Toast.makeText(context, "Video saved to Downloads/AntiGem", Toast.LENGTH_SHORT).show()
@@ -85,7 +86,7 @@ object ImageDownloadHelper {
     }
 
     private fun saveVideoToDownloads(context: Context, source: String, title: String): Uri? = try {
-        val clean = source.trim().removePrefix("file://")
+        val clean = com.example.gemini.data.remote.HubMediaResolver.displayNameOf(source)
         val extension = clean.substringBefore('?').substringAfterLast('.', "mp4").lowercase().takeIf { it.length in 2..4 } ?: "mp4"
         val mimeType = when (extension) {
             "webm" -> "video/webm"
@@ -97,23 +98,18 @@ object ImageDownloadHelper {
         val safeTitle = title.replace(Regex("[^A-Za-z0-9_-]"), "_").take(30).trimEnd('_')
         val fileName = if (safeTitle.isNotBlank()) "VID_${safeTitle}_$timestamp.$extension" else "VID_$timestamp.$extension"
 
-        // in Server mode a plain path is a file on the server: read it through the bridge
-        val serverUrl = if (source.startsWith("http://") || source.startsWith("https://")) null
-        else com.example.gemini.data.remote.HubMediaResolver.bridgeUrlFor(source)
+        // a file only the bridge sees (Server mode, a Linux distro) is streamed from it, never loaded whole into memory
+        val media = com.example.gemini.data.remote.HubMediaResolver.mediaStreamFor(source)
         val input: java.io.InputStream? = when {
-            serverUrl != null -> {
-                val resp = com.example.gemini.data.remote.AgyBridgeService.instance.client.newCall(Request.Builder().url(serverUrl).get().build()).execute()
+            media.viaBridge -> {
+                val resp = com.example.gemini.data.files.FileExplorerApi.transferClient.newCall(Request.Builder().url(media.uri.toString()).get().build()).execute()
                 if (resp.isSuccessful) resp.body?.byteStream() else { resp.close(); null }
             }
-            source.startsWith("content://") -> context.contentResolver.openInputStream(Uri.parse(source))
-            source.startsWith("http://") || source.startsWith("https://") -> {
-                val fixedSource = com.example.gemini.data.preferences.AuthPreferences.rebaseBridgeUrl(source)
-                val http = if (com.example.gemini.data.preferences.AuthPreferences.isBridgeUrl(fixedSource))
-                    com.example.gemini.data.remote.AgyBridgeService.instance.client else OkHttpClient()
-                val resp = http.newCall(Request.Builder().url(fixedSource).get().build()).execute()
+            media.uri.scheme == "http" || media.uri.scheme == "https" -> {
+                val resp = OkHttpClient().newCall(Request.Builder().url(media.uri.toString()).get().build()).execute()
                 if (resp.isSuccessful) resp.body?.byteStream() else { resp.close(); null }
             }
-            else -> File(clean).takeIf { it.canRead() && it.length() > 0 }?.inputStream()
+            else -> context.contentResolver.openInputStream(media.uri)
         }
         input?.use { stream ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

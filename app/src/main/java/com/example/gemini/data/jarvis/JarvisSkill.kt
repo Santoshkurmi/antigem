@@ -23,11 +23,17 @@ object JarvisSkill {
     /** The model answers exactly this when it has no jarvis_mcp tools; the app then tells the user how to fix it. */
     const val MCP_MISSING = "JARVIS_MCP_MISSING"
 
-    /** Changes whenever the guide or the tools change, so an open Jarvis chat gets the new guide once. */
-    val version: String by lazy { Integer.toHexString((guide() + catalog()).hashCode()) }
+    private val guideVersion: String by lazy { Integer.toHexString((guide() + catalog()).hashCode()) }
+    private val commandGuideVersion: String by lazy { Integer.toHexString((commandGuide() + catalog()).hashCode()) }
+
+    /**
+     * Changes whenever the guide, the tools or the app's global context for Jarvis change (Settings → Agents → Global
+     * context), so an open Jarvis chat gets the new guide once.
+     */
+    val version: String get() = guideVersion + "-" + com.example.gemini.data.context.GlobalContext.jarvisFingerprint()
 
     /** The same for the Jarvis text chats (command centers). */
-    val managerVersion: String by lazy { Integer.toHexString((commandGuide() + catalog()).hashCode()) }
+    val managerVersion: String get() = commandGuideVersion + "-" + com.example.gemini.data.context.GlobalContext.jarvisFingerprint()
 
     /** The rule every message repeats: the one models forget most after a long chat. */
     const val NO_WAIT_RULE = "Never wait for delegated work inside a turn: no sleep / timeout / watch / wait loops, no ScheduleWakeup or Monitor, " +
@@ -233,6 +239,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
         append("## jarvis_mcp tools: name(params; * = required) — what it does\n").append(catalog()).append("\n\n")
         append("## Approval policy\n").append(policyText()).append("\n\n")
         profileSection()?.let { append(it).append("\n\n") }
+        com.example.gemini.data.context.GlobalContext.jarvisGuideSection()?.let { append(it).append("\n\n") }
         val mem = JarvisPreferences.memory.value.trim()
         if (mem.isNotBlank()) append("## Jarvis memory (from earlier chats)\n").append(mem.take(3000)).append("\n\n")
         append("## Live context now\n").append(context).append("\n\n")
@@ -247,6 +254,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
         append("No jarvis_mcp tools at all → reply exactly $MCP_MISSING.\n")
         append(NO_WAIT_RULE).append('\n')
         personaLine()?.let { append(it).append('\n') }
+        com.example.gemini.data.context.GlobalContext.jarvisEveryMessage()?.let { append(it).append('\n') }
         append(context)
         val m = JarvisManagers.of(JarvisManagers.VOICE)
         if (!m.mission.isEmpty || m.teams.isNotEmpty()) append("\n").append(JarvisManagers.brief(JarvisManagers.VOICE))
@@ -259,6 +267,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
         append("## jarvis_mcp tools: name(params; * = required) — what it does\n").append(catalog()).append("\n\n")
         append("## Approval policy\n").append(policyText()).append(" Inside your tasks, approvals that are not automatic come to you as events: decide them as the event says.\n\n")
         profileSection()?.let { append(it).append("\n\n") }
+        com.example.gemini.data.context.GlobalContext.jarvisGuideSection()?.let { append(it).append("\n\n") }
         val mem = JarvisPreferences.memory.value.trim()
         if (mem.isNotBlank()) append("## Jarvis memory (from earlier chats)\n").append(mem.take(3000)).append("\n\n")
         append(managerPreamble(key, context, boot = true)).append("\n\n")
@@ -274,6 +283,7 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
             append(NO_WAIT_RULE).append(" Verify results before you accept them. Keep the mission current. Full guide: this chat's first message, or jarvis_help.\n")
         }
         personaLine()?.let { append(it).append('\n') }
+        com.example.gemini.data.context.GlobalContext.jarvisEveryMessage()?.let { append(it).append('\n') }
         if (context.isNotBlank()) append("<live_context>\n").append(context).append("\n</live_context>\n")
         append(JarvisManagers.brief(key))
     }

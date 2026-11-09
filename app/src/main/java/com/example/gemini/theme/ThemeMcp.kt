@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 /**
  * theme_mcp: lets a model see, switch, create and edit the app's color themes (served by AndroidLocalBridgeServer at
- * /theme). Everything goes through [ThemeManager], the same place Settings → Appearance uses.
+ * /theme). Everything goes through [ThemeManager], the same place Settings → Themes uses.
  */
 object ThemeMcp {
 

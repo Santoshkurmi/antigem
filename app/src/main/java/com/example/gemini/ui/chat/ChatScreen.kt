@@ -960,6 +960,28 @@ fun ChatScreen(
 
     val currentUriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
+    // tapped paths that are not Markdown: text opens in the IDE, anything else (video, PDF, archive…) asks which app
+    val fileLinkOpener = com.example.gemini.ui.files.rememberFileLinkOpener(
+        onOpenedInIde = onNavigateToIde,
+        onPreviewMarkdown = { mdPath ->
+            scope.launch {
+                val content = try {
+                    val f = File(mdPath)
+                    if (f.exists()) f.readText() else (IdeApiClient.readFile(mdPath) ?: "")
+                } catch (e: Exception) {
+                    IdeApiClient.readFile(mdPath) ?: ""
+                }
+                activeMarkdownDoc = mdPath to content
+            }
+        },
+        onShowFolder = onNavigateToFiles?.let { showFiles ->
+            { folder: String ->
+                com.example.gemini.data.files.ExplorerNav.open("screen", folder)
+                showFiles()
+            }
+        }
+    )
+
     val fileLinkHandler = remember(scope, conversations, currentConv?.id, listState, feedItems.size, isAtBottom) {
         FileLinkHandler(
             onOpenFile = { rawUrl ->
@@ -978,17 +1000,7 @@ fun ChatScreen(
                             activeMarkdownDoc = cleanPath to content
                         }
                     } else {
-                        scope.launch {
-                            val content = try {
-                                val f = File(cleanPath)
-                                if (f.exists()) f.readText() else (IdeApiClient.readFile(cleanPath) ?: "")
-                            } catch (e: Exception) {
-                                IdeApiClient.readFile(cleanPath) ?: ""
-                            }
-                            val fileName = File(cleanPath).name.ifBlank { "file" }
-                            TermuxDaemonManager.openOrSelectTab(cleanPath, fileName, content)
-                            onNavigateToIde()
-                        }
+                        fileLinkOpener.open(cleanPath)
                     }
                 } catch (e: Exception) {
                     Log.e("ChatScreen", "Error opening file link $rawUrl", e)
@@ -3162,6 +3174,9 @@ fun ChatScreen(
         )
     }
 
+    // "Open with" sheet, archive contents and progress for tapped file paths
+    com.example.gemini.ui.files.FileLinkOpenerHost(fileLinkOpener)
+
     // File Details & Quick Action Dialog (Long press / metadata)
     activeFileDetailsPath?.let { path ->
         FileDetailsDialog(
@@ -3169,11 +3184,11 @@ fun ChatScreen(
             onDismiss = { activeFileDetailsPath = null },
             onOpenInIde = { filePath ->
                 activeFileDetailsPath = null
-                scope.launch {
-                    val content = try { File(filePath).readText() } catch (e: Exception) { IdeApiClient.readFile(filePath) ?: "" }
-                    TermuxDaemonManager.openOrSelectTab(filePath, File(filePath).name, content)
-                    onNavigateToIde()
-                }
+                fileLinkOpener.open(filePath)
+            },
+            onOpenWith = { filePath ->
+                activeFileDetailsPath = null
+                fileLinkOpener.openWith(filePath)
             },
             onOpenMarkdownViewer = { filePath ->
                 activeFileDetailsPath = null

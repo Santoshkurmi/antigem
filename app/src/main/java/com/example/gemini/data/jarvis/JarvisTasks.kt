@@ -166,7 +166,9 @@ object JarvisTasks {
     ): Task {
         val text = goal.trim()
         require(text.isNotEmpty()) { "The task needs a goal." }
-        val prompt = (brief?.takeIf { it.isNotBlank() }?.let { PromptExpansion.hidden(it) } ?: "") + PromptExpansion.expand(text)
+        // the task chat gets Jarvis' brief and the app's global context (with the user's entries allowed for Jarvis)
+        val hiddenNote = listOfNotNull(brief?.takeIf { it.isNotBlank() }, com.example.gemini.data.context.GlobalContext.taskBody()).joinToString("\n\n")
+        val prompt = (if (hiddenNote.isNotBlank()) PromptExpansion.hidden(hiddenNote) else "") + PromptExpansion.expand(text)
         val id = when (agent) {
             AgentKind.OPENCODE -> {
                 val b = newOpenCodeBackend()
@@ -261,28 +263,30 @@ object JarvisTasks {
             var w = 0
             while (isRunningNow(t) && w < 24) { delay(500); w++ }
         }
+        // the user's every-message entries allowed for Jarvis go along with each follow-up
+        val outgoing = com.example.gemini.data.context.GlobalContext.taskFollowUp(PromptExpansion.expand(text))
         when (t.agent) {
             AgentKind.CLAUDE -> {
                 val onScreen = vm.currentConversation.value?.id == t.id
                 if (onScreen) {
-                    vm.claudeBackend.sendMessage(PromptExpansion.expand(text))
+                    vm.claudeBackend.sendMessage(outgoing)
                 } else {
                     val b = ensureBackend(t.id)
                     if (b.currentConversation.value?.id != t.id) { b.selectConversation(t.id); delay(900) }
-                    b.sendMessage(PromptExpansion.expand(text))
+                    b.sendMessage(outgoing)
                 }
             }
             AgentKind.AGY -> {
                 val enum = AgyHubClient.resolveModelEnum(vm.agyBackend.modelOfChat(t.id))
-                hub.sendUserPrompt(t.id, PromptExpansion.expand(text), enum).getOrElse { return "Could not send: ${it.message}" }
+                hub.sendUserPrompt(t.id, outgoing, enum).getOrElse { return "Could not send: ${it.message}" }
             }
             AgentKind.OPENCODE -> {
                 if (vm.currentConversation.value?.id == t.id) {
-                    vm.openCodeBackend.sendMessage(PromptExpansion.expand(text))
+                    vm.openCodeBackend.sendMessage(outgoing)
                 } else {
                     val b = ensureOpenCodeBackend(t.id)
                     if (b.currentConversation.value?.id != t.id) { b.selectConversation(t.id); delay(900) }
-                    b.sendMessage(PromptExpansion.expand(text))
+                    b.sendMessage(outgoing)
                 }
             }
         }

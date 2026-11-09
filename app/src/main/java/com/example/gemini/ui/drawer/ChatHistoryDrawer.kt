@@ -682,7 +682,7 @@ fun ChatHistoryDrawer(
                     Icon(
                         imageVector = Icons.Default.PowerSettingsNew,
                         contentDescription = "Exit App",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
                         modifier = Modifier.size(19.dp)
                     )
                 }

@@ -29,9 +29,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -160,7 +162,8 @@ fun AgentsSettingsPage(
     enabled: Set<AgentKind>,
     isApplying: Boolean,
     onApply: (Set<AgentKind>) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenGlobalContext: (() -> Unit)? = null
 ) {
     var selected by remember(enabled) { mutableStateOf(enabled) }
     var confirm by remember { mutableStateOf(false) }
@@ -187,6 +190,30 @@ fun AgentsSettingsPage(
                 Text("Restarting…")
             } else {
                 Text(if (selected == enabled) "No changes" else "Apply and restart app", fontWeight = FontWeight.SemiBold)
+            }
+        }
+        if (onOpenGlobalContext != null) {
+            Spacer(Modifier.height(24.dp))
+            com.example.gemini.ui.settings.GlobalContextEntryRow(onClick = onOpenGlobalContext)
+        }
+        Spacer(Modifier.height(12.dp))
+        val vibrateOnDone by com.example.gemini.data.agent.ChatCompletionMonitor.vibrate.collectAsState()
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Vibrate when a chat finishes", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "One light buzz when a chat stops running (its dot in the chat list goes away).",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(checked = vibrateOnDone, onCheckedChange = { com.example.gemini.data.agent.ChatCompletionMonitor.setVibrate(it) })
             }
         }
     }

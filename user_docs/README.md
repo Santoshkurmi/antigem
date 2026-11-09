@@ -46,10 +46,11 @@ Explore the guides below to learn how each part of AntiGem works:
 | **10** | [Skills & Plugins](10-plugins-and-skills.md) | Expanding what your AI agents can do with custom skills (`SKILL.md`), plugin repositories, and custom slash commands. |
 | **11** | [Jarvis Voice Assistant](11-jarvis-voice-assistant.md) | Hands-free voice control: floating orb & panel, wake phrase, speaking, listening, voice output engines, task manager, and voice approvals. |
 | **12** | [Server Mode & Remote Access](12-server-mode-and-remote-access.md) | Running AntiGem on your phone while letting a powerful desktop or cloud server handle heavy computing and conserve battery. |
-| **13** | [Complete Settings Reference](13-settings-reference.md) | An exhaustive walkthrough of active settings pages: Appearance & real themes, Servers, Backups, Protection, ADB Connect, Automation, Termux:API, X11 Desktop, Changelog, and About. |
+| **13** | [Complete Settings Reference](13-settings-reference.md) | An exhaustive walkthrough of active settings pages: Themes, Appearance, Servers, Backups, Protection, ADB Connect, Automation, Termux:API, X11 Desktop, Changelog, and About. |
 | **14** | [Troubleshooting & Diagnostics](14-troubleshooting-and-diagnostics.md) | Plain-language self-help for connection errors, audio/mic issues, terminal freezes, floating diagnostics HUD, and network inspector. |
 | **15** | [FAQ & Glossary](15-faq-and-glossary.md) | Answers to common questions and plain-English definitions of technical terms used throughout the app. |
 | **16** | [Reverse Engineering with REA](16-reverse-engineering-rea.md) | Letting agents analyze APKs, installed apps, Flutter, React Native and native code with REA: modular install in an Ubuntu container, tool groups, MCP setup and the REA skill. |
+| **17** | [Building Android Apps on the Phone](17-android-development.md) | Building Kotlin / Compose, Flutter and React Native apps on the phone: per-framework install in the Ubuntu container, test builds, the `adev` commands and the Android Development skill. |
 
 ---
 

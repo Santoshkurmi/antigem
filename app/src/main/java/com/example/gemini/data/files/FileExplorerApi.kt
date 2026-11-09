@@ -59,7 +59,11 @@ data class ExplorerStat(
     val executable: Boolean,
     val files: Int,
     val dirs: Int,
-    val partial: Boolean
+    val partial: Boolean,
+    /** Files: "text", "image" or "binary", judged from the first bytes by the bridge. Blank from older bridges. */
+    val category: String = "",
+    /** Files: the type read from the content, not the name. Blank from older bridges. */
+    val sniffedMime: String = ""
 )
 
 data class ArchiveEntry(val name: String, val size: Long, val isDir: Boolean)
@@ -185,7 +189,8 @@ object FileExplorerApi {
                 modTime = o.optLong("modTime"), mode = o.optString("mode"), modeOctal = o.optString("modeOctal"),
                 symlinkTarget = o.optString("symlinkTarget"), mime = o.optString("mime"), readable = o.optBoolean("readable"),
                 writable = o.optBoolean("writable"), executable = o.optBoolean("executable"), files = o.optInt("files"),
-                dirs = o.optInt("dirs"), partial = o.optBoolean("partial")
+                dirs = o.optInt("dirs"), partial = o.optBoolean("partial"),
+                category = o.optString("category"), sniffedMime = o.optString("sniffedMime")
             )
         )
     }

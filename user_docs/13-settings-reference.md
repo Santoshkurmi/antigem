@@ -12,7 +12,8 @@ The settings hierarchy is organized into 38 authoritative `SettingsSection` dest
 
 ```
 Settings & Preferences (MAIN)
-├── Appearance & Theme (APPEARANCE)
+├── Themes (THEMES)
+├── Appearance (APPEARANCE)
 ├── Servers & Connectivity (SERVERS)
 ├── Custom AntiGem Plugins (WEBVIEW_EXTENSIONS)
 ├── Slash Commands (SLASH_COMMANDS)
@@ -60,8 +61,8 @@ The root settings menu. Displays clean, rounded groups of rows for quick navigat
 
 ---
 
-## 2. Appearance & Theme (`APPEARANCE`)
-*Subtitle: "Theme, dark mode, and chat font scaling"*
+## 2a. Themes (`THEMES`)
+*Subtitle: "Light and dark mode, and the theme gallery"*
 - **Color Theme**:
   - `Auto (System)`: Automatically tracks your Android system-wide light/dark mode.
   - `Light`: Crisp light theme for daytime use.
@@ -69,13 +70,21 @@ The root settings menu. Displays clean, rounded groups of rows for quick navigat
 - **Built-in Color Themes** (`BuiltInThemes.all` — 25 palettes):
   - *Light Themes (8)*: **Porcelain** (Default light with amber accent), **Lavender** (Soft lilac with violet accent), **Sky** (Crisp airy light blue), **Sakura** (Soft cherry blossom pink), **Mint** (Fresh light green), **Linen** (Warm minimal off-white), **Paper** (Warm sepia paper), and **Solarized Light** (Classic low-glare cream).
   - *Dark Themes (17)*: **Midnight Aurora** (Default dark with ink-blue, violet and aurora teal), **Obsidian** (Deep black with periwinkle glow), **Graphite** (Warm charcoal with glowing amber), **Midnight** (Pure OLED black with electric cyan), **High Contrast** (Maximum readability: white on black with bold yellow), **Amber Night** (Original AntiGem dark look), **Mocha** (Pastel cocoa-blue with lavender and pink), **Neon City** (Nighttime blues with electric violet), **Aurora** (Teal and violet over night sky), **Nord** (Calm arctic blue-grey), **Dracula** (Dark purple with vivid pink, green and cyan), **Velvet** (Dusky rose and soft violet on deep plum), **Deep Ocean** (Deep navy with sky-blue accent), **Ember** (Retro warm dark with toasted browns and orange), **Forest** (Dark pine green with leaf accent), **Sunset** (Warm plum dusk with orange glow), and **Solarized Dark** (Classic teal-black).
+
+---
+
+## 2b. Appearance (`APPEARANCE`)
+*Subtitle: "Chat text size, chat list, header icons and the app switcher"*
 - **Chat Text Scaling (…%)**:
   - Subtitle: *"Scales messages, markdown, and code blocks"* (scales messages, markdown, and code blocks together).
   - Slider: Adjusts font size continuously from 75% to 160% (range `0.75f..1.60f`, 16 steps).
   - Presets: Quick one-tap buttons for **Small** (85%), **Normal** (100%), **Medium** (115%), **Large** (130%), and **Huge** (150%).
   - **Reset (1.0x)**: Appears when scaling is modified to quickly restore default text size.
 - **Live Preview**: An interactive preview card simulating a chat bubble so you can verify readability before returning to your conversations.
-- **Vibrate when a chat finishes**: Toggle switch with explanation: *"One light buzz when a chat stops running (its dot in the chat list goes away)."*
+- **Group Chats by Workspace**: Groups the chat list in the drawer under workspace folders.
+- **Chat Header Icons**: Shortcut buttons in the chat's top bar.
+- **Floating App Switcher**: Layout (vertical or horizontal), auto-collapse timeout, which items it shows and their order, and **Reset Screen Position to Right-Center**.
+- **Separate Terminal App Icon**: A dedicated terminal icon on the home screen, in the **AntiTerm** or **Termux** style.
 
 ---
 
@@ -336,6 +345,8 @@ Configure the official Anthropic Claude Code CLI engine:
 ## 16. Agents (`AGENTS`)
 *Subtitle: "Run Antigravity, Claude Code, OpenCode or several"*
 Enable or disable individual agent engines. If only one agent is selected, the top picker bar automatically hides to save screen space.
+- **Global context**: What every chat is told about this app, and your own instructions.
+- **Vibrate when a chat finishes**: Toggle switch with explanation: *"One light buzz when a chat stops running (its dot in the chat list goes away)."*
 
 ---
 
@@ -503,6 +514,21 @@ Sets up **REA**, an MCP server for static reverse engineering, in a proot-distro
 - **Phone access**: link to **Set up ADB Connect**.
 - **Set up in the terminal**: the same steps as copyable commands.
 - **Remove**: **Remove REA** (keeps the container) and **Delete container**.
+
+## 28. Android Development (`ANDROID_DEV`)
+*Subtitle: "Build Kotlin / Compose, Flutter and React Native apps on this phone"*
+### What it is:
+Installs Gradle, the Android SDK, Flutter and Node.js in the proot-distro Ubuntu container of the terminal (the one REA uses), so agents and you can build Android apps on the phone with the `adev` command. Agent-neutral: nothing is added to any agent's MCP settings. Shown on com.termux builds only; the main-page row shows *Partly set up*, *Working…* or what is ready (*Kotlin · Flutter · RN*). Full guide: [17 — Building Android Apps on the Phone](17-android-development.md).
+### Steps on the page:
+1. **Setup files**: **Get setup files**, **Update to vX**, **Change** (source repository).
+2. **Install**: tick *Kotlin / Java · Jetpack Compose*, *Flutter*, *React Native* and *Extras* (adb, CMake & Ninja), then **Install selected (N)**; **All parts** lists every part with its own **Install** / **Reinstall** / **Update**. **Stop** ends a running part. The screen stays on while installing.
+3. **Build a test app**: **Build** / **Rebuild** a hello world per framework in `~/AndroidProjects`; **Install** opens Android's installer for the APK.
+4. **Use it**: copyable `adev-new` / `adev` commands and example prompts.
+- **Android Development skill for agents**: **Install skill** / **Update skill**, **Plugins**.
+- **Install on this phone**: link to **Set up ADB Connect**.
+- **Check the tools**: **Check** prints every tool's version.
+- **Set up in the terminal**: the same steps as copyable commands.
+- **Free space / remove**: **Clean Gradle cache**, **Remove Flutter**, **Remove all** (keeps the container, Java, Node.js and projects).
 
 ## 🛠️ Troubleshooting Settings Issues
 

@@ -1083,7 +1083,8 @@ object JarvisMcp {
             ?: all.firstOrNull { it.title.lowercase().contains(want.replace('_', ' ')) }
             ?: all.firstOrNull { it.name.lowercase().contains(want) || want.contains(it.name.lowercase()) }
             ?: when (want) {
-                "theme", "dark_mode", "font" -> com.example.gemini.ui.settings.SettingsSection.APPEARANCE
+                "theme", "dark_mode" -> com.example.gemini.ui.settings.SettingsSection.THEMES
+                "font" -> com.example.gemini.ui.settings.SettingsSection.APPEARANCE
                 "voice", "hands_free" -> com.example.gemini.ui.settings.SettingsSection.JARVIS
                 "plugins" -> com.example.gemini.ui.settings.SettingsSection.WEBVIEW_EXTENSIONS
                 "permissions", "approvals" -> com.example.gemini.ui.settings.SettingsSection.COMMANDS
@@ -1485,7 +1486,7 @@ object JarvisMcp {
         val setter = s.set
         if (s.readOnly || setter == null) return error("$key can only be changed by the user in Settings → Jarvis. Offer to open it (jarvis_open_settings section=jarvis).")
         if (!s.own && !JarvisPreferences.allowSettingChanges.value) {
-            return error("The user has not allowed Jarvis to change app settings. They can allow it in Settings → Jarvis → Approvals (\"Let Jarvis change app settings\"), or change it themselves in Settings → Appearance & Theme.")
+            return error("The user has not allowed Jarvis to change app settings. They can allow it in Settings → Jarvis → Approvals (\"Let Jarvis change app settings\"), or change it themselves in Settings → Themes.")
         }
         setter(v)?.let { return error("$key: $it") }
         return text("$key set to ${s.get()}.")

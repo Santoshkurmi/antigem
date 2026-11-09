@@ -1393,7 +1393,11 @@ class ClaudeChatBackend(
                                 _startupStatus.value = "Compacting the conversation…"
                             } else endCompactingNotice()
                         }
-                        "compact_boundary" -> endCompactingNotice()
+                        "compact_boundary" -> {
+                            endCompactingNotice()
+                            // the chat's first message (with the app's global context) was summarized away: resend it next time
+                            com.example.gemini.data.context.GlobalContext.forget(attachedId ?: store.currentConversation.value?.id)
+                        }
                     }
                 }
                 if (type == "stream_event") scheduleEmit() else emitNow()

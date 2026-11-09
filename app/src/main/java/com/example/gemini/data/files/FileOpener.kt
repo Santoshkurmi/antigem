@@ -20,10 +20,7 @@ object FileOpener {
     private fun cacheDir(context: Context) = File(context.cacheDir, "explorer_open").apply { mkdirs() }
 
     /** Old downloads are cleared so the cache does not grow forever. */
-    fun trimCache(context: Context) {
-        val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
-        cacheDir(context).listFiles()?.forEach { f -> if (f.lastModified() < cutoff) f.deleteRecursively() }
-    }
+    fun trimCache(context: Context) = CacheJanitor.trim(cacheDir(context))
 
     /** A content:// URI for [path], downloading it first if needed. */
     suspend fun uriFor(context: Context, path: String, size: Long = -1, onProgress: (Float) -> Unit = {}): Result<Uri> {
@@ -34,7 +31,7 @@ object FileOpener {
             trimCache(context)
             val dir = File(cacheDir(context), Integer.toHexString(path.hashCode())).apply { mkdirs() }
             val dest = File(dir, local.name.ifBlank { "file" })
-            if (!(dest.exists() && size >= 0 && dest.length() == size)) {
+            if (dest.exists() && size >= 0 && dest.length() == size) CacheJanitor.touch(dest) else {
                 val res = FileExplorerApi.download(path, dest) { done, total ->
                     val t = if (total > 0) total else size
                     if (t > 0) onProgress((done.toFloat() / t).coerceIn(0f, 1f))
@@ -46,9 +43,12 @@ object FileOpener {
         return runCatching { FileProvider.getUriForFile(context, authority(context), file) }
     }
 
-    /** Opens in another app chosen by the system. Returns an error message, or null when an app was started. */
-    fun view(context: Context, uri: Uri, name: String, forceChooser: Boolean = false): String? {
-        val mime = FileKinds.mimeOf(name)
+    /**
+     * Opens in another app chosen by the system. Returns an error message, or null when an app was started.
+     * [contentMime] (read from the file's bytes) is used when the name alone does not tell the type.
+     */
+    fun view(context: Context, uri: Uri, name: String, forceChooser: Boolean = false, contentMime: String? = null): String? {
+        val mime = FileKinds.mimeOf(name).let { if (it == "*/*" && !contentMime.isNullOrBlank()) contentMime else it }
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)

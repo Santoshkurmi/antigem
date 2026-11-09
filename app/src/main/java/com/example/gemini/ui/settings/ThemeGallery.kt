@@ -29,7 +29,7 @@ import com.example.gemini.theme.BuiltInThemes
 import com.example.gemini.theme.ThemeManager
 
 /**
- * Settings → Appearance: pick the light theme and the dark theme from previews of every built-in and custom theme.
+ * Settings → Themes: pick the light theme and the dark theme from previews of every built-in and custom theme.
  * Light / Dark / Auto (the mode cards above) decides which of the two shows.
  */
 @Composable
