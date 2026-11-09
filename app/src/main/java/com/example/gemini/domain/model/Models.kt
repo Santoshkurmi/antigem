@@ -86,7 +86,11 @@ data class ChatMessage(
     val attachments: List<ChatAttachment> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     /** The model that wrote this reply, as the agent reports it (null when unknown). */
-    val modelId: String? = null
+    val modelId: String? = null,
+    /** A request an Antigravity voice call sent: [content] is what was said (the full prompt is in [rawContent]). */
+    val viaVoice: Boolean = false,
+    /** What the voice said while handing that request to the agent. */
+    val voiceLine: String? = null
 )
 
 @Serializable

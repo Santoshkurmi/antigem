@@ -294,10 +294,13 @@ func main() {
 
 	resolvedAgyBin, err := hub.ResolveAgyBinaryInteractive(customAgyBin, forceStart || skipHub)
 	if customAgyBin != "" && err != nil {
-		fmt.Printf(" \033[1;31m✗ Fatal Error:\033[0m %v\n", err)
-		os.Exit(1)
-	}
-	if err != nil && !skipHub {
+		// the app always names the agy to use, also before it is installed (Settings → Antigravity CLI → Install):
+		// keep that path and run without the hub until agy is there
+		resolvedAgyBin = hub.ExpandAgyPath(customAgyBin)
+		if !skipHub {
+			fmt.Printf(" \033[33m[!] agy is not installed at %s yet: the AGY Hub starts once it is installed.\033[0m\n", resolvedAgyBin)
+		}
+	} else if err != nil && !skipHub {
 		fmt.Printf(" \033[31m[!] AGY Discovery Warning:\033[0m %v\n", err)
 	}
 
@@ -382,6 +385,7 @@ func main() {
 	mux.HandleFunc("/api/server/info", h.ServerInfoHandler)
 	mux.HandleFunc("/api/agy/cli", h.AgyCliHandler)
 	mux.HandleFunc("/api/agy/cli/install", h.AgyCliInstallHandler)
+	mux.HandleFunc("/api/agy/cli/update", h.AgyCliUpdateHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
 	mux.HandleFunc("/api/models/refresh", h.ModelsHandler)
 	mux.HandleFunc("/api/quotas", h.QuotasHandler)

@@ -51,6 +51,8 @@ import kotlinx.coroutines.launch
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
 import com.example.gemini.theme.ClaudeTerracotta
+import com.example.gemini.theme.GeminiBlue
+import androidx.compose.material.icons.rounded.HeadsetMic
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
@@ -436,6 +438,20 @@ fun UserMessageBubble(
                     }
                 }
 
+                // a request said in an Antigravity voice call (the bubble shows what was said, not the call's prompt)
+                if (message.viaVoice) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.HeadsetMic,
+                            contentDescription = null,
+                            tint = GeminiBlue,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Voice", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = GeminiBlue)
+                    }
+                }
+
                 // 4. Text content (if not just placeholder "Voice note")
                 val displayContent = remember(message.content) { formatUserDisplayContent(message.content) }
                 val lineCount = remember(displayContent) { displayContent.lines().size }
@@ -494,6 +510,16 @@ fun UserMessageBubble(
                             }
                         }
                     }
+                }
+                // what the voice said while handing the request to the agent
+                if (message.viaVoice && !message.voiceLine.isNullOrBlank()) {
+                    Text(
+                        text = "“${message.voiceLine}…”",
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
                 }
             }
         }

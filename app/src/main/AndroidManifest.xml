@@ -278,6 +278,12 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- Antigravity voice call: keeps the microphone available while a call runs in the background -->
+        <service
+            android:name="com.example.gemini.data.voice.AgyVoiceCallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <!-- Jarvis Quick Settings tile: tap to talk from anywhere -->
         <service
             android:name="com.example.gemini.data.jarvis.JarvisTileService"

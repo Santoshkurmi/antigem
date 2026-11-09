@@ -1002,6 +1002,38 @@ class AgyChatBackend(
         }
     }
 
+    /** The `Model` number of the model picked for the chat on screen (0 = not known), for voice calls. */
+    fun planModelNumber(): Int = runCatching {
+        exa.language_server_pb.Model.valueOf(AgyHubClient.resolveModelEnum(_selectedModelId.value)).value
+    }.getOrDefault(0)
+
+    /**
+     * Voice call: makes sure the AGY chat on screen exists on the hub (a new chat is started there first) and is
+     * streaming, so what the voice agent does in it shows up live. Returns the chat id and [planModelNumber].
+     */
+    suspend fun prepareVoiceCall(): Pair<String, Int> {
+        val onScreen = _currentConversation.value?.takeIf { it.agent == AgentKind.AGY }
+        val conv: Conversation = onScreen ?: run {
+            withContext(Dispatchers.Main) { startNewChat() }
+            _currentConversation.value ?: error("no chat")
+        }
+        val id = conv.id
+        val onDaemon = knownDaemonCascadeIds.contains(id) || _conversations.value.any { it.id == id } || _messages.value.isNotEmpty()
+        if (!onDaemon) {
+            val modelEnum = AgyHubClient.resolveModelEnum(_selectedModelId.value)
+            val ws = conv.workspaceUri.takeIf { it.isNotBlank() }?.let { if (it.startsWith("file://")) it else "file://$it" } ?: ""
+            agyHubClient.startCascade(cascadeId = id, modelEnum = modelEnum, workspaceUri = ws).getOrThrow()
+            knownDaemonCascadeIds.add(id)
+            // no longer an unsaved "New Chat": the live stream may start (the hub names the chat later)
+            val named = conv.copy(title = if (conv.title == "New Chat") "Voice chat" else conv.title, workspaceUri = ws)
+            withContext(Dispatchers.Main) {
+                if (_currentConversation.value?.id == id) _currentConversation.value = named
+            }
+        }
+        withContext(Dispatchers.Main) { startPersistentStream(id) }
+        return id to planModelNumber()
+    }
+
     fun startPersistentStream(conversationId: String) {
         Log.d("CHAT_OPEN_DEBUG", "🌊 [ChatViewModel.startPersistentStream] convId=$conversationId, current activeId=$activeStreamConversationId, jobActive=${persistentStreamJob?.isActive}")
         if (conversationId.isBlank()) return

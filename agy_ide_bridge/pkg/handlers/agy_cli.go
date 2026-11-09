@@ -3,9 +3,11 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,10 @@ import (
 //
 //	GET  /api/agy/cli          -> {installed, path, version, job}
 //	POST /api/agy/cli/install  -> starts the official installer (curl -fsSL https://antigravity.google/cli/install.sh | bash)
+//	POST /api/agy/cli/update   -> runs `agy update` (agy's own updater: Google's release manifest for this platform)
+//
+// A running hub keeps the agy it started with until the server restarts; the app restarts the server after an update
+// that installed a newer agy (the log's "Updated agy <old> -> <new>." line).
 
 const agyInstallCommand = "curl -fsSL https://antigravity.google/cli/install.sh | bash"
 
@@ -62,19 +68,20 @@ var (
 	agyVerValue string
 )
 
-// currentAgyBinary is the agy the hub uses, or the first one found on this machine ("" = none).
-func (h *Handler) currentAgyBinary() string {
+// agyPath is the agy the hub runs: the one the app named with --bin (installed or not yet), or, for a bridge started
+// by hand without --bin, the one it found at startup. With neither, where Google's installer puts it.
+func (h *Handler) agyPath() string {
 	if h.HubManager != nil {
 		if p := h.HubManager.GetAgyBin(); p != "" {
-			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-				return p
-			}
+			return p
 		}
 	}
-	if bins := hub.FindAllAgyBinaries(); len(bins) > 0 {
-		return bins[0]
-	}
-	return ""
+	return hub.InstallerAgyPath()
+}
+
+func agyInstalled(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && !fi.IsDir()
 }
 
 // agyVersion runs `agy --version` (cached until the file changes).
@@ -92,12 +99,26 @@ func agyVersion(bin string) string {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, "--version")
 	cmd.Stdin = nil
-	out, _ := cmd.CombinedOutput()
-	v := firstLine(string(out))
+	// stdout only: agy logs to stderr before it is set up (on Android "ERROR: logging before google.Init: I… Initialized
+	// Android local timezone…"), which is not an error and not the version
+	out, _ := cmd.Output()
+	v := versionLine(string(out))
 	if v != "" {
 		agyVerPath, agyVerStamp, agyVerValue = bin, fi.ModTime(), v
 	}
 	return v
+}
+
+var agyVersionRe = regexp.MustCompile(`^v?\d+(\.\d+)+\S*$`)
+
+// versionLine is the first line that looks like a version ("1.5.3"), else the first line.
+func versionLine(s string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if l = strings.TrimSpace(l); agyVersionRe.MatchString(l) {
+			return l
+		}
+	}
+	return firstLine(s)
 }
 
 func firstLine(s string) string {
@@ -110,9 +131,10 @@ func firstLine(s string) string {
 }
 
 func (h *Handler) AgyCliHandler(w http.ResponseWriter, r *http.Request) {
-	bin := h.currentAgyBinary()
-	resp := map[string]interface{}{"success": true, "installed": bin != "", "path": bin, "version": ""}
-	if bin != "" {
+	bin := h.agyPath()
+	installed := agyInstalled(bin)
+	resp := map[string]interface{}{"success": true, "installed": installed, "path": bin, "version": ""}
+	if installed {
 		resp["version"] = agyVersion(bin)
 	}
 	agyJobMu.Lock()
@@ -129,23 +151,77 @@ func (h *Handler) AgyCliInstallHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "POST only"})
 		return
 	}
+	cmd := exec.Command("bash", "-lc", agyInstallCommand)
+	h.runAgyJob(w, "install", cmd, func(job *agyCliJob, code int) {
+		if code != 0 {
+			return
+		}
+		target := h.agyPath()
+		if !agyInstalled(target) {
+			// the installer always uses ~/.local/bin/agy; the app is set to another path
+			fmt.Fprintf(job, "\nagy was installed to %s, but the app is set to use %s. Change the agy path in the app's settings, then restart the server.\n", hub.InstallerAgyPath(), target)
+			return
+		}
+		// installed: let the hub use it right away (it could not start without agy). Start waits for the hub,
+		// so it runs on its own and the install shows as finished meanwhile.
+		if h.HubManager != nil && !h.HubManager.Disabled && !h.HubManager.IsRunning() {
+			go func() {
+				h.HubManager.SetAgyBin(target)
+				_ = h.HubManager.Start()
+			}()
+		}
+	})
+}
+
+// AgyCliUpdateHandler runs `agy update` on the agy the hub uses. agy downloads the newest release for this platform
+// (Termux gets the Android build) and replaces itself; the hub patches the new binary when it next starts.
+func (h *Handler) AgyCliUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "POST only"})
+		return
+	}
+	bin := h.agyPath()
+	if !agyInstalled(bin) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "agy is not installed at " + bin})
+		return
+	}
+	before := agyVersion(bin)
+	cmd := exec.Command(bin, "update")
+	h.runAgyJob(w, "update", cmd, func(job *agyCliJob, code int) {
+		if code != 0 {
+			return
+		}
+		after := agyVersion(bin)
+		switch {
+		case after != "" && before != "" && after != before:
+			// the app restarts the server when it sees this line (keep the format)
+			fmt.Fprintf(job, "\nUpdated agy %s -> %s.\nThe running hub keeps using %s until the server restarts.\n", before, after, before)
+		case after != "":
+			fmt.Fprintf(job, "\nagy %s is the latest version.\n", after)
+		}
+	})
+}
+
+// runAgyJob runs [cmd] as the (single) agy CLI job, streaming its output into the job log, and answers the request
+// with the job. [done] runs after the command exits, before the job is marked finished.
+func (h *Handler) runAgyJob(w http.ResponseWriter, kind string, cmd *exec.Cmd, done func(job *agyCliJob, code int)) {
 	agyJobMu.Lock()
 	if agyJob != nil {
 		agyJob.mu.Lock()
 		running := agyJob.Running
+		runningKind := agyJob.Kind
 		agyJob.mu.Unlock()
 		if running {
 			agyJobMu.Unlock()
-			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "an install is already running"})
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "an agy " + runningKind + " is already running"})
 			return
 		}
 	}
-	job := &agyCliJob{Kind: "install", Running: true}
+	job := &agyCliJob{Kind: kind, Running: true}
 	agyJob = job
 	agyJobMu.Unlock()
 
 	home, _ := os.UserHomeDir()
-	cmd := exec.Command("bash", "-lc", agyInstallCommand)
 	cmd.Dir = home
 	cmd.Env = os.Environ()
 	cmd.Stdout = job
@@ -165,17 +241,13 @@ func (h *Handler) AgyCliInstallHandler(w http.ResponseWriter, r *http.Request) {
 		if cmd.ProcessState != nil {
 			code = cmd.ProcessState.ExitCode()
 		}
+		if done != nil {
+			done(job, code)
+		}
 		job.mu.Lock()
 		job.Running = false
 		job.ExitCode = &code
 		job.mu.Unlock()
-		// installed: let the hub use it right away (it could not start without agy)
-		if code == 0 && h.HubManager != nil && !h.HubManager.Disabled && !h.HubManager.IsRunning() {
-			if bins := hub.FindAllAgyBinaries(); len(bins) > 0 {
-				h.HubManager.SetAgyBin(bins[0])
-				_ = h.HubManager.Start()
-			}
-		}
 	}()
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "job": job.snapshot()})
 }

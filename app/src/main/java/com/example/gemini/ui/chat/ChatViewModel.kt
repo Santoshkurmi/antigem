@@ -278,8 +278,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun loginToAgyHub(force: Boolean = false) = agyBackend.loginToAgyHub(force)
     fun logoutFromAgyHub() = agyBackend.logoutFromAgyHub()
     val activeInstances = agyBackend.activeInstances
+    /** An Antigravity voice call is on (it keeps the screen on, minimized too). */
+    private val voiceCallActive = com.example.gemini.data.voice.AgyVoiceCall.state.map { it.active }.distinctUntilChanged()
     /**
-     * Keeps the screen on: an Antigravity chat or task is working, a Claude Code chat is working (the one on screen, or
+     * Keeps the screen on: an Antigravity voice call is on, an Antigravity chat or task is working, a Claude Code chat is working (the one on screen, or
      * any other the session list shows as running), a Jarvis task runs, or Jarvis' keep-screen-on setting asks for it.
      */
     val isAnyGenerationOrTaskActive: StateFlow<Boolean> = combine(
@@ -295,7 +297,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         com.example.gemini.data.jarvis.JarvisTasks.anyActive
     ) { agy, claudeTurn, claudeChats, jarvisOrOpenCode, tasks ->
         agy || claudeTurn || claudeChats.any { it.isRunning } || jarvisOrOpenCode || tasks
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    }.combine(voiceCallActive) { work, call -> work || call }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
      * Why the screen is kept on, one line per cause (same conditions as [isAnyGenerationOrTaskActive]); shown when
@@ -339,7 +342,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.combine(voiceCallActive) { reasons, call -> if (call) listOf("A voice call with Antigravity is on") + reasons else reasons }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val isCurrentChatActivelyRunning = byAgent(agyBackend.isCurrentChatActivelyRunning, claudeBackend.isCurrentChatActivelyRunning, openCodeBackend.isCurrentChatActivelyRunning, codexBackend.isCurrentChatActivelyRunning)
     val isCurrentChatBackgroundActive = byAgent(agyBackend.isCurrentChatBackgroundActive, alwaysFalse, alwaysFalse, alwaysFalse)
     val connectionState = agyBackend.connectionState

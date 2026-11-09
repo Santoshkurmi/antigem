@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.HeadsetMic
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -185,6 +186,10 @@ fun ChatInputBar(
     queuedMessages: List<com.example.gemini.domain.model.QueuedMessage> = emptyList(),
     onSendQueuedNow: (String) -> Unit = {},
     onDeleteQueued: (String) -> Unit = {},
+    /** Antigravity chats: start a live voice call with the agent (null = no call button). */
+    onStartVoiceCall: (() -> Unit)? = null,
+    /** A voice call is running (the call button lights up and opens it). */
+    voiceCallActive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1190,6 +1195,30 @@ fun ChatInputBar(
                                     )
                                 }
                             }
+                        }
+
+                        // Live voice call with the agent (Antigravity voice mode); also while the agent works
+                        if (onStartVoiceCall != null && !isRecordingAudio && !isLiveDictating) {
+                            Surface(
+                                onClick = onStartVoiceCall,
+                                shape = CircleShape,
+                                color = if (voiceCallActive) GeminiBlue else MaterialTheme.colorScheme.background,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (voiceCallActive) GeminiBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                ),
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.HeadsetMic,
+                                        contentDescription = if (voiceCallActive) "Open voice call" else "Start voice call",
+                                        tint = if (voiceCallActive) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
                         }
 
                         // Dedicated Speech-to-Text Live Dictation Button (AGY Hub)

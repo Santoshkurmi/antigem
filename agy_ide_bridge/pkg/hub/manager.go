@@ -159,6 +159,22 @@ func ResolveAgyBinaryInteractive(customPath string, forceAuto bool) (string, err
 	return bins[choice-1], nil
 }
 
+// ExpandAgyPath turns a configured agy path (`~/...`, relative) into the absolute path the hub uses, whether or not
+// the file exists yet.
+func ExpandAgyPath(p string) string {
+	expanded := config.ExpandHome(strings.TrimSpace(p))
+	if abs, err := filepath.Abs(expanded); err == nil {
+		expanded = abs
+	}
+	return filepath.Clean(expanded)
+}
+
+// InstallerAgyPath is where Google's installer (antigravity.google/cli/install.sh) puts agy: ~/.local/bin/agy.
+func InstallerAgyPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "bin", "agy")
+}
+
 // ResolveAgyBinary is the default non-interactive fallback.
 func ResolveAgyBinary() string {
 	bins := FindAllAgyBinaries()
@@ -424,6 +440,14 @@ func (m *HubManager) Start() error {
 	if m.AgyBinPath == "" {
 		err := fmt.Errorf("AGY executable binary not specified or found")
 		m.setStatusLocked(HubStatusError, err.Error())
+		m.mu.Unlock()
+		return err
+	}
+	// the app names the agy to use even before it is installed (Settings → Antigravity CLI → Install)
+	if fi, statErr := os.Stat(m.AgyBinPath); statErr != nil || fi.IsDir() {
+		err := fmt.Errorf("agy is not installed at %s (install it in the app: Settings → Antigravity CLI)", m.AgyBinPath)
+		m.setStatusLocked(HubStatusError, err.Error())
+		m.mu.Unlock()
 		return err
 	}
 
@@ -433,6 +457,7 @@ func (m *HubManager) Start() error {
 		if patchTarget == "" {
 			err := fmt.Errorf("AGY executable binary not found for security header patching")
 			m.setStatusLocked(HubStatusError, err.Error())
+			m.mu.Unlock()
 			return err
 		}
 		patchedHeader, elapsed, err := security.PatchAgyHeader(patchTarget, m.SecurityToken)
@@ -440,6 +465,7 @@ func (m *HubManager) Start() error {
 			errMsg := fmt.Sprintf("Security Error: Failed to patch AGY binary (%s): %v", patchTarget, err)
 			log.Printf("\033[1;31m[Security Fatal]\033[0m %s", errMsg)
 			m.setStatusLocked(HubStatusError, errMsg)
+			m.mu.Unlock()
 			return errors.New(errMsg)
 		}
 		log.Printf("\033[1;32m[Security]\033[0m In-place patched AGY binary (%s) in %v -> Active Header: %s", patchTarget, elapsed, patchedHeader)

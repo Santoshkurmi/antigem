@@ -99,7 +99,9 @@ class TrajectoryEngine {
         val step = runCatching { Step.ADAPTER.decode(m.step_payload) }.getOrNull()
         val input = step?.user_input ?: return@mapNotNull null
         val text = input.items.mapNotNull { it.text.takeIf { t -> t.isNotBlank() } }.joinToString("\n").ifBlank { input.query }
-        QueuedEntry(m.id, text, input.media, m.delivery_strategy, input.tags)
+        // a queued voice-call request: what was said, not the call's prompt
+        val shown = VoiceTurn.displayText(text, input.tags)
+        QueuedEntry(m.id, shown, if (shown != text) input.media.filterNot { it.mime_type.startsWith("audio/") } else input.media, m.delivery_strategy, input.tags)
     }
 
     /** A message sent with this `client_msg:` tag reached the trajectory (as a user-input step). */
@@ -405,9 +407,7 @@ class TrajectoryEngine {
                     currentTurnSteps = mutableListOf()
                 }
 
-                val userText = extractUserText(step.user_input)
-                val attachments = extractUserAttachments(step.user_input, stepIndex)
-                completedTurns.add(ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 }))
+                completedTurns.add(userTurnOf(step, stepIndex))
                 lastUserStepArrayIndex = i
                 activeTurnStartStep = stepIndex + 1
             } else {
@@ -454,9 +454,7 @@ class TrajectoryEngine {
                 finalizeActiveTurn()
                 pendingUserTurn = null
 
-                val userText = extractUserText(step.user_input)
-                val attachments = extractUserAttachments(step.user_input, stepIndex)
-                val userTurn = ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 })
+                val userTurn = userTurnOf(step, stepIndex)
                 val existingIdx = completedTurns.indexOfFirst { it is ChatTurn.User && it.stepIndex == stepIndex }
                 if (existingIdx >= 0) {
                     completedTurns[existingIdx] = userTurn
@@ -665,7 +663,10 @@ class TrajectoryEngine {
                             content = turn.text,
                             attachments = turn.attachments,
                             stepIndex = turn.stepIndex,
-                            createdAt = turn.createdAt ?: System.currentTimeMillis()
+                            createdAt = turn.createdAt ?: System.currentTimeMillis(),
+                            rawContent = turn.rawText,
+                            viaVoice = turn.viaVoice,
+                            voiceLine = turn.voiceLine
                         )
                     )
                 }
@@ -1241,6 +1242,28 @@ class TrajectoryEngine {
             trajectoryId = trajectoryId,
             interactionType = "permission",
             questionnaire = questionnaire
+        )
+    }
+
+    /**
+     * The chat turn of a user-input step. A request sent by a voice call shows what was said (and the voice's line),
+     * without the call's prompt scaffolding or the speech clips; the full prompt stays in [ChatTurn.User.rawText].
+     */
+    private fun userTurnOf(step: Step, stepIndex: Int): ChatTurn.User {
+        val userText = extractUserText(step.user_input)
+        val tags = step.user_input?.tags.orEmpty()
+        val createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 }
+        val voice = VoiceTurn.parse(userText, tags)
+        val attachments = extractUserAttachments(step.user_input, stepIndex)
+        if (voice == null) return ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = createdAt)
+        return ChatTurn.User(
+            stepIndex = stepIndex,
+            text = voice.spoken.ifBlank { "Voice request" },
+            attachments = attachments.filterNot { it.isAudio },
+            createdAt = createdAt,
+            viaVoice = true,
+            voiceLine = voice.voiceLine,
+            rawText = userText
         )
     }
 

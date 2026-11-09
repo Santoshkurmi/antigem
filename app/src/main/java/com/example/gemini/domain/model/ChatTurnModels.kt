@@ -14,7 +14,12 @@ sealed interface ChatTurn {
         val text: String,
         val attachments: List<ChatAttachment> = emptyList(),
         /** When the prompt was sent (the step's created_at); null when unknown. */
-        val createdAt: Long? = null
+        val createdAt: Long? = null,
+        /** Sent by an Antigravity voice call: [text] is what was said, [rawText] the prompt the agent got. */
+        val viaVoice: Boolean = false,
+        /** What the voice said while handing the request to the agent (voice calls only). */
+        val voiceLine: String? = null,
+        val rawText: String? = null
     ) : ChatTurn {
         override val key: String get() = "user_turn_$stepIndex"
     }

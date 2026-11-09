@@ -71,8 +71,23 @@ object BridgeInfo {
     }
 
     private fun parseJob(o: JSONObject?): Job? = o?.let {
-        Job(it.optString("kind"), it.optBoolean("running"), if (it.has("exit_code")) it.optInt("exit_code") else null, it.optString("log"))
+        Job(it.optString("kind"), it.optBoolean("running"), if (it.has("exit_code")) it.optInt("exit_code") else null, cleanAgyLog(it.optString("log")))
     }
+
+    /**
+     * agy writes a startup log line before it is set up, on Android "ERROR: logging before google.Init: I… Initialized
+     * Android local timezone…". It is not an error; it is left out of what the app shows.
+     */
+    private fun isAgyStartupLog(line: String) = line.trimStart().startsWith("ERROR: logging before google.Init")
+
+    private fun cleanAgyLog(log: String): String =
+        if (!log.contains("logging before google.Init")) log else log.lines().filterNot(::isAgyStartupLog).joinToString("\n")
+
+    private val versionRe = Regex("""^v?\d+(\.\d+)+\S*$""")
+
+    /** The version from `agy --version` (an older bridge may hand over the startup log line instead: "" then). */
+    private fun agyVersionOf(raw: String): String =
+        raw.lines().map { it.trim() }.firstOrNull { versionRe.matches(it) } ?: ""
 
     /** Asks the bridge where `agy` is and which version it is (`agy --version`). */
     fun refreshAgyCli() {
@@ -90,7 +105,7 @@ object BridgeInfo {
                     }
                 }
                 res.onSuccess { o ->
-                    _agyCli.value = AgyCli(o.optBoolean("installed"), o.optString("path"), o.optString("version"))
+                    _agyCli.value = AgyCli(o.optBoolean("installed"), o.optString("path"), agyVersionOf(o.optString("version")))
                     _agyError.value = null
                     parseJob(o.optJSONObject("job"))?.let { if (_job.value?.running != true) _job.value = it }
                 }.onFailure {
@@ -103,18 +118,49 @@ object BridgeInfo {
     }
 
     /** Runs the official installer on the bridge's machine and follows its output. */
-    fun installAgy(onFinished: (Boolean) -> Unit = {}) {
+    fun installAgy(onFinished: (Boolean) -> Unit = {}) = runAgyJob("install", onFinished)
+
+    private val _agyUpdatedTo = MutableStateFlow<String?>(null)
+    /** The agy version the last Check for updates installed (the server was restarted for it), or null. */
+    val agyUpdatedTo: StateFlow<String?> = _agyUpdatedTo.asStateFlow()
+
+    /**
+     * Runs `agy update` on the bridge's machine (agy's own updater: Google's newest release for that platform, the
+     * Android build on Termux) and follows its output. A running hub keeps the agy it started with, so when a newer
+     * agy was installed the server restarts right away (chats running a reply are stopped); already up to date:
+     * nothing restarts.
+     */
+    fun updateAgy(context: Context) {
+        val app = context.applicationContext
+        runAgyJob("update") { ok ->
+            // the bridge writes "Updated agy <old> -> <new>." only when the version changed
+            val to = _job.value?.log?.let { log ->
+                Regex("""^Updated agy (\S+) -> (\S+)\.$""", RegexOption.MULTILINE).findAll(log).lastOrNull()?.groupValues?.get(2)
+            }
+            if (!ok || to == null) return@runAgyJob
+            _agyUpdatedTo.value = to
+            com.example.gemini.ui.components.AppToastHelper.showToast(
+                "agy updated to $to. Restarting the server to use it…",
+                com.example.gemini.ui.components.ChatToastType.SUCCESS
+            )
+            com.example.gemini.data.local.LocalServerManager.restartServer(app)
+        }
+    }
+
+    private fun runAgyJob(action: String, onFinished: (Boolean) -> Unit) {
+        val label = action.replaceFirstChar { it.uppercase() }
+        if (action == "update") _agyUpdatedTo.value = null
         scope.launch {
             val started = runCatching {
-                val req = Request.Builder().url("${base()}/api/agy/cli/install").post("{}".toRequestBody(null)).build()
+                val req = Request.Builder().url("${base()}/api/agy/cli/$action").post("{}".toRequestBody(null)).build()
                 AgyBridgeService.instance.client.newCall(req).execute().use { r ->
-                    if (r.code == 404) error("The bridge is older than the app (no agy install). Update the bridge.")
+                    if (r.code == 404) error("The bridge is older than the app (no agy $action). Update the bridge.")
                     JSONObject(r.body?.string().orEmpty())
                 }
             }
-            val o = started.getOrElse { _agyError.value = "Install failed to start: ${it.message}"; return@launch }
+            val o = started.getOrElse { _agyError.value = "$label failed to start: ${it.message}"; return@launch }
             if (!o.optBoolean("success")) {
-                _agyError.value = o.optString("error").ifBlank { "Install failed to start" }
+                _agyError.value = o.optString("error").ifBlank { "$label failed to start" }
                 return@launch
             }
             _agyError.value = null
@@ -128,7 +174,7 @@ object BridgeInfo {
                 val j = parseJob(snap.optJSONObject("job")) ?: continue
                 _job.value = j
                 if (!j.running) {
-                    _agyCli.value = AgyCli(snap.optBoolean("installed"), snap.optString("path"), snap.optString("version"))
+                    _agyCli.value = AgyCli(snap.optBoolean("installed"), snap.optString("path"), agyVersionOf(snap.optString("version")))
                     onFinished(j.exitCode == 0)
                     break
                 }

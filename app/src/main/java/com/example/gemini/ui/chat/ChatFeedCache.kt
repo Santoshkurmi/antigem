@@ -31,6 +31,18 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
     /** A wavy-line divider with a label: a new day, or a model switch. */
     @Immutable
     data class Divider(val id: String, val label: String) : ChatFeedItem("divider_$id", "DIVIDER")
+    /**
+     * An Antigravity voice call in the chat, as a wavy-line divider ("Voice call · 2:11 PM · 3m 01s"): a saved call
+     * opens its transcript ([record]); a [live] one opens the call.
+     */
+    @Immutable
+    data class VoiceCall(
+        val id: String,
+        val startedAt: Long,
+        val durationMs: Long?,
+        val live: Boolean,
+        val record: com.example.gemini.data.voice.VoiceChatRecord?
+    ) : ChatFeedItem("voicecall_$id", "VOICE_CALL")
 }
 
 object ChatFeedCache {
@@ -136,7 +148,9 @@ object ChatFeedCache {
         messages: List<ChatMessage>,
         selectedModelId: String,
         dividers: Boolean = false,
-        modelName: (String) -> String = { it }
+        modelName: (String) -> String = { it },
+        /** Antigravity voice calls of the chat, oldest first: each goes before the first prompt sent after it started. */
+        voiceCalls: List<ChatFeedItem.VoiceCall> = emptyList()
     ): List<ChatFeedItem> {
         val result = ArrayList<ChatFeedItem>(messages.size * 3)
         val seenKeys = HashSet<String>()
@@ -152,7 +166,21 @@ object ChatFeedCache {
         var lastModel: String? = null
         // where the latest prompt's items start: a model divider goes right before that prompt
         var promptStart = -1
+        var nextCall = 0
+        fun addCall(call: ChatFeedItem.VoiceCall) {
+            if (dividers) {
+                val day = dayKey(call.startedAt)
+                if (day != lastDay) {
+                    addItem(ChatFeedItem.Divider("day_$day", dayLabel(call.startedAt)))
+                    lastDay = day
+                }
+            }
+            addItem(call)
+        }
         for (msg in messages) {
+            if (msg.role == MessageRole.USER) {
+                while (nextCall < voiceCalls.size && voiceCalls[nextCall].startedAt <= msg.createdAt) addCall(voiceCalls[nextCall++])
+            }
             if (dividers && msg.role == MessageRole.USER) {
                 val day = dayKey(msg.createdAt)
                 if (day != lastDay) {
@@ -210,6 +238,8 @@ object ChatFeedCache {
                 }
             }
         }
+        // calls after the last prompt (or a call going on now) close the chat
+        while (nextCall < voiceCalls.size) addCall(voiceCalls[nextCall++])
         return result
     }
 

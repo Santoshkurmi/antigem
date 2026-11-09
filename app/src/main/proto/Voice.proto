@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package exa.remote_agent_proxy_pb;
+
+import "LanguageServerService.proto";
+
+// Antigravity voice mode (a live spoken call with the agent), as the agy hub serves it:
+//
+//   ws(s)://<hub>/voice/ws?conversation_id=<cascade id>&plan_model=<Model number>&sample_rate=<mic Hz>[&voice=<name>]
+//   Sec-WebSocket-Protocol: jetski-voice-proto
+//   GET /voice/health -> {"addr":"rap","ready":true,"state":"ready"} (503 while warming up, 404 on agy < 1.5)
+//
+// Every WebSocket frame is one binary message: VoiceClientMessage from the app, VoiceServerMessage from the hub.
+// Microphone audio is 16-bit little-endian mono PCM at sample_rate; the voice is 16-bit mono PCM at 24 kHz.
+// The hub relays the call to Google's voice agent (JetskiRemoteAgentProxyService.StreamVoice), which drives the
+// conversation itself (it sends the user's requests as cascade messages); LanguageServerCall/Reply stay inside the hub.
+//
+// Decompiled from third_party/jetski/remote_agent_proxy_pb/voice.proto in agy 1.5.3 (same as Antigravity 2.29).
+// Fields of types the app has no copy of are left out (setup, language_server_reply, ask_question_progress,
+// language_server_call, voice_chat, snapshot); they are skipped when they arrive.
+
+message VoiceClientMessage {
+  message SettingsUpdate {
+    exa.language_server_pb.Model plan_model = 1;
+    double playback_speed = 2;
+  }
+  message UserTranscript {
+    string text = 1;
+    bool is_final = 2;
+  }
+  oneof kind {
+    bytes mic_audio = 2;
+    SettingsUpdate settings_update = 3;
+    UserTranscript user_transcript = 5;
+  }
+}
+
+message VoiceServerMessage {
+  message SessionStatus {
+    enum State {
+      STATE_UNSPECIFIED = 0;
+      STARTING = 1;
+      LISTENING = 2;
+      RETRYING = 3;
+      STOPPING = 4;
+      FAILED = 5;
+    }
+    enum FailureReason {
+      FAILURE_REASON_UNSPECIFIED = 0;
+      SERVER_UNAVAILABLE = 1;
+      THROTTLED = 2;
+      SETUP_STALLED = 3;
+      CONNECTION_FAILED = 4;
+      ACCESS_DENIED = 5;
+      TIMEOUT = 6;
+      OTHER = 7;
+      VOICE_STALLED = 8;
+      CONVERSATION_GONE = 9;
+    }
+    State state = 1;
+    FailureReason failure_reason = 2;
+    string message = 3;
+    int32 attempt = 4;
+    int32 max_attempts = 5;
+    string cascade_id = 6;
+  }
+  message VoiceTranscript {
+    string text = 1;
+    int32 seq = 2;
+    int32 audio_ms = 3;
+  }
+  message AudioTiming {
+    int32 seq = 1;
+    int32 audio_ms = 2;
+    double playback_speed = 3;
+  }
+  message UserSpeech {
+    string text = 1;
+    int32 seq = 2;
+    bool interim = 3;
+  }
+  message ClearAudio {
+  }
+  oneof kind {
+    bytes voice_audio = 1;
+    SessionStatus status = 2;
+    VoiceEvent event = 4;
+    VoiceTranscript voice_transcript = 7;
+    UserSpeech user_speech = 8;
+    ClearAudio clear_audio = 9;
+    AudioTiming audio_timing = 10;
+  }
+}
+
+message VoiceEvent {
+  string event_name = 1;
+  map<string, string> attributes = 2;
+}

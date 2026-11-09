@@ -1,14 +1,15 @@
 {
-  "version_code": 123,
-  "version_name": "1.1.3",
+  "version_code": 124,
+  "version_name": "1.1.4",
   "min_supported_version_code": 1,
   "changelog": [
-    "New app icon and animated splash screen",
-    "Jarvis: update and fix more to work without voice for performing complex long term coding tasks",
-    "Fix Claude quota groups and antigravity fable usage limits  in the model selector",
-    "Rename AGY conversations; the selected AGY model is now remembered",
-    "Bug fixes in agy chat if model is running and coming from other chat it show not running for few seconds",
-    "Rename of conversation list support in all three models",
+    "New agent: Codex — chat, settings, MCP servers, accounts, and works with Jarvis",
+    "REA (Reverse Engineering Anything): reverse engineer APKs, Flutter, React Native and native code with any agent",
+    "Android Development: build Kotlin/Compose, Flutter and React Native apps on the phone itself (com.termux build)",
+    "Global context: tell every agent about the app and add your own notes, for the first message or every message",
+    "Rewritten video player and better opening of file links in chat",
+    "Archive support for chats",
+    "Settings: Themes and Appearance are now separate sections",
     "Some bugs fixes that you never noticed."
   ],
   "is_critical": false

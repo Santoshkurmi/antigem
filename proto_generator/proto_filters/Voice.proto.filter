@@ -1,0 +1,1 @@
+# Voice.proto has no RPCs (it is the agy hub's /voice/ws WebSocket protocol): an empty filter copies it whole.

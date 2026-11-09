@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -131,10 +132,13 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
                     Text(cli!!.version.ifBlank { "Installed (version unknown)" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(cli!!.path, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = subtle)
                 }
-                else -> Text(
-                    "agy was not found on ${if (remote) "the server" else "this device"}.",
-                    fontSize = 12.5.sp, color = Warn
-                )
+                else -> {
+                    Text(
+                        "agy is not installed on ${if (remote) "the server" else "this device"}.",
+                        fontSize = 12.5.sp, color = Warn
+                    )
+                    if (cli!!.path.isNotBlank()) Text(cli!!.path, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = subtle)
+                }
             }
             if (cli?.installed == false && error == null) {
                 Spacer(Modifier.height(8.dp))
@@ -144,6 +148,25 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
                         Spacer(Modifier.width(10.dp))
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     }
+                }
+            }
+            if (cli?.installed == true) {
+                val context = LocalContext.current
+                val updatedTo by BridgeInfo.agyUpdatedTo.collectAsState()
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { BridgeInfo.updateAgy(context) }, enabled = !running) {
+                        Text(if (running && job?.kind == "update") "Checking…" else "Check for updates")
+                    }
+                    if (running) {
+                        Spacer(Modifier.width(10.dp))
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+                // a newer agy was installed: the server was restarted so the hub runs it
+                updatedTo?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text("Updated to agy $it. The server restarted to use it.", fontSize = 12.sp, color = Ok)
                 }
             }
             job?.let { j ->
@@ -164,7 +187,9 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
             Spacer(Modifier.height(6.dp))
             Text(
                 "Installed with Google's official installer (antigravity.google/cli/install.sh) into ~/.local/bin on " +
-                    (if (remote) "the server" else "this device") + ". agy updates itself when you run it in a terminal.",
+                    (if (remote) "the server" else "this device") + ". agy updates itself when you run it in a terminal; " +
+                    "Check for updates runs `agy update` and, when a newer agy was installed, restarts the server so it is used " +
+                    "(voice calls need agy 1.5 or newer).",
                 fontSize = 11.sp, color = subtle
             )
         }
