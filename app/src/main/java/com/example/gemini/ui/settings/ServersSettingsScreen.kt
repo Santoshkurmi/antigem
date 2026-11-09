@@ -191,6 +191,7 @@ internal fun ServersSubScreen(
     var agyBinPath by remember { mutableStateOf(authPrefs.getAgyBinaryPathSync()) }
     var claudeBinPath by remember { mutableStateOf(authPrefs.getClaudeBinaryPathSync()) }
     var openCodeBinPath by remember { mutableStateOf(authPrefs.getOpenCodeBinaryPathSync()) }
+    var codexBinPath by remember { mutableStateOf(authPrefs.getCodexBinaryPathSync()) }
 
     // SSH (loaded from the saved settings)
     var sshHost by remember { mutableStateOf("") }
@@ -206,10 +207,12 @@ internal fun ServersSubScreen(
     fun storedAgyBin() = authPrefs.getRemoteAgyBinSync().ifBlank { RemoteServerManager.DEFAULT_AGY_BIN }
     fun storedClaudeBin() = authPrefs.getRemoteClaudeBinSync().ifBlank { RemoteServerManager.DEFAULT_CLAUDE_BIN }
     fun storedOpenCodeBin() = authPrefs.getRemoteOpenCodeBinSync().ifBlank { RemoteServerManager.DEFAULT_OPENCODE_BIN }
+    fun storedCodexBin() = authPrefs.getRemoteCodexBinSync().ifBlank { RemoteServerManager.DEFAULT_CODEX_BIN }
     var remoteBridgeBin by remember { mutableStateOf(storedBridgeBin()) }
     var remoteAgyBin by remember { mutableStateOf(storedAgyBin()) }
     var remoteClaudeBin by remember { mutableStateOf(storedClaudeBin()) }
     var remoteOpenCodeBin by remember { mutableStateOf(storedOpenCodeBin()) }
+    var remoteCodexBin by remember { mutableStateOf(storedCodexBin()) }
     var remoteInstallDir by remember { mutableStateOf(authPrefs.getRemoteInstallDirSync()) }
     val (initListenBridge, initListenHub, initListenBind) = remember { authPrefs.getRemoteListenSync() }
     var listenBridge by remember { mutableStateOf(initListenBridge) }
@@ -245,9 +248,9 @@ internal fun ServersSubScreen(
     var profileTick by remember { mutableIntStateOf(0) }
 
     fun snapshot() = listOf(
-        remote, tunnel, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(), openCodeBinPath.trim(),
+        remote, tunnel, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(), openCodeBinPath.trim(), codexBinPath.trim(),
         securityToken.trim(), sshHost.trim(), sshPort.trim(), sshUser.trim(), sshPass, sshKey.trim(), sshPassphrase,
-        remoteBridgeBin.trim(), remoteAgyBin.trim(), remoteClaudeBin.trim(), remoteOpenCodeBin.trim(), remoteInstallDir.trim(),
+        remoteBridgeBin.trim(), remoteAgyBin.trim(), remoteClaudeBin.trim(), remoteOpenCodeBin.trim(), remoteCodexBin.trim(), remoteInstallDir.trim(),
         listenBridge.trim(), listenHub.trim(), listenBind.trim(), edgeName.trim(), edgeValue.trim()
     ).joinToString("\u0001")
 
@@ -261,11 +264,13 @@ internal fun ServersSubScreen(
             if (withSecrets) { put("sshPass", sshPass); put("sshKey", sshKey.trim()); put("sshPassphrase", sshPassphrase); put("edgeValue", edgeValue.trim()) }
             put("bridgeBin", remoteBridgeBin.trim()); put("agyBin", remoteAgyBin.trim()); put("claudeBin", remoteClaudeBin.trim())
             put("openCodeBin", remoteOpenCodeBin.trim())
+            put("codexBin", remoteCodexBin.trim())
             put("installDir", remoteInstallDir.trim())
             put("listenBridge", listenBridge.trim()); put("listenHub", listenHub.trim()); put("listenBind", listenBind.trim())
         } else {
             put("bridgeBin", bridgeBinPath.trim()); put("agyBin", agyBinPath.trim()); put("claudeBin", claudeBinPath.trim())
             put("openCodeBin", openCodeBinPath.trim())
+            put("codexBin", codexBinPath.trim())
         }
     }
 
@@ -283,11 +288,13 @@ internal fun ServersSubScreen(
             remoteAgyBin = o.optString("agyBin").ifBlank { RemoteServerManager.DEFAULT_AGY_BIN }
             remoteClaudeBin = o.optString("claudeBin").ifBlank { RemoteServerManager.DEFAULT_CLAUDE_BIN }
             remoteOpenCodeBin = o.optString("openCodeBin").ifBlank { RemoteServerManager.DEFAULT_OPENCODE_BIN }
+            remoteCodexBin = o.optString("codexBin").ifBlank { RemoteServerManager.DEFAULT_CODEX_BIN }
             listenBridge = o.optString("listenBridge"); listenHub = o.optString("listenHub"); listenBind = o.optString("listenBind")
         } else {
             bridgeBinPath = o.optString("bridgeBin", bridgeBinPath); agyBinPath = o.optString("agyBin", agyBinPath)
             claudeBinPath = o.optString("claudeBin", claudeBinPath)
             openCodeBinPath = o.optString("openCodeBin", openCodeBinPath)
+            codexBinPath = o.optString("codexBin", codexBinPath)
         }
     }
 
@@ -369,12 +376,14 @@ internal fun ServersSubScreen(
                     agyBinPath = authPrefs.getAgyBinaryPathSync()
                     claudeBinPath = authPrefs.getClaudeBinaryPathSync()
                     openCodeBinPath = authPrefs.getOpenCodeBinaryPathSync()
+                    codexBinPath = authPrefs.getCodexBinaryPathSync()
                     sshKey = AuthPreferences.currentSshPrivateKey
                     sshPassphrase = AuthPreferences.currentSshKeyPassphrase
                     remoteBridgeBin = storedBridgeBin()
                     remoteAgyBin = storedAgyBin()
                     remoteClaudeBin = storedClaudeBin()
                     remoteOpenCodeBin = storedOpenCodeBin()
+                    remoteCodexBin = storedCodexBin()
                     remoteInstallDir = authPrefs.getRemoteInstallDirSync()
                     listenBridge = initListenBridge; listenHub = initListenHub; listenBind = initListenBind
                     edgeName = initEdgeName; edgeValue = initEdgeValue
@@ -943,6 +952,9 @@ internal fun ServersSubScreen(
                         OutlinedTextField(remoteOpenCodeBin, { remoteOpenCodeBin = it; saveFeedback = null }, label = { Text("opencode binary on the server") },
                             modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(remoteCodexBin, { remoteCodexBin = it; saveFeedback = null }, label = { Text("codex binary on the server") },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                        Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteInstallDir, {
                             // while the bridge path is still the default of the old folder, it follows the folder
                             if (remoteBridgeBin == RemoteServerManager.defaultBridgeBin(remoteInstallDir)) remoteBridgeBin = RemoteServerManager.defaultBridgeBin(it)
@@ -993,9 +1005,12 @@ internal fun ServersSubScreen(
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(openCodeBinPath, { openCodeBinPath = it; saveFeedback = null }, label = { Text("OpenCode Binary Path") },
                         placeholder = { Text(authPrefs.getDefaultOpenCodeBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(codexBinPath, { codexBinPath = it; saveFeedback = null }, label = { Text("Codex Binary Path") },
+                        placeholder = { Text(authPrefs.getDefaultCodexBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "• Passed to the bridge on launch (--bin for AGY, --claude-bin for Claude Code, --opencode-bin for OpenCode) so auto-start executes the designated binary directly without interactive prompts.",
+                        "• Passed to the bridge on launch (--bin for AGY, --claude-bin for Claude Code, --opencode-bin for OpenCode, --codex-bin for Codex) so auto-start executes the designated binary directly without interactive prompts.",
                         fontSize = 11.sp, color = subtle
                     )
                     if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) {
@@ -1005,6 +1020,10 @@ internal fun ServersSubScreen(
                         )
                         Text(
                             "• OpenCode: the default is where its installer (and Settings → OpenCode → Install) puts it. The bridge starts it through the bundled glibc, and finds it in the usual folders when this path is wrong.",
+                            fontSize = 11.sp, color = subtle
+                        )
+                        Text(
+                            "• Codex: the default is the Termux package (pkg install codex, also Settings → Codex → Install). The bridge finds it in the usual folders when this path is wrong.",
                             fontSize = 11.sp, color = subtle
                         )
                     }
@@ -1017,6 +1036,7 @@ internal fun ServersSubScreen(
                             agyBinPath = authPrefs.getDefaultAgyBinaryPath()
                             claudeBinPath = authPrefs.getDefaultClaudeBinaryPath()
                             openCodeBinPath = authPrefs.getDefaultOpenCodeBinaryPath()
+                            codexBinPath = authPrefs.getDefaultCodexBinaryPath()
                             saveFeedback = "Settings reset to defaults (click Save to apply)."
                             saveIsError = false
                         },
@@ -1136,7 +1156,7 @@ internal fun ServersSubScreen(
                     if (remote) {
                         authPrefs.saveSshSettings(sshHost.trim(), sshPort.toIntOrNull() ?: 22, sshUser.trim(), sshPass)
                         authPrefs.saveSshKeySync(sshKey, sshPassphrase)
-                        authPrefs.saveRemoteBinariesSync(remoteBridgeBin, remoteAgyBin, remoteClaudeBin, remoteOpenCodeBin)
+                        authPrefs.saveRemoteBinariesSync(remoteBridgeBin, remoteAgyBin, remoteClaudeBin, remoteOpenCodeBin, remoteCodexBin)
                         authPrefs.saveRemoteInstallDirSync(remoteInstallDir)
                         authPrefs.saveRemoteListenSync(listenBridge, listenHub, listenBind)
                         authPrefs.saveEdgeHeaderSync(edgeName, edgeValue)
@@ -1145,6 +1165,7 @@ internal fun ServersSubScreen(
                         authPrefs.saveAgyBinaryPath(agyBinPath.trim().ifBlank { authPrefs.getDefaultAgyBinaryPath() })
                         authPrefs.saveClaudeBinaryPath(claudeBinPath.trim().ifBlank { authPrefs.getDefaultClaudeBinaryPath() })
                         authPrefs.saveOpenCodeBinaryPath(openCodeBinPath.trim().ifBlank { authPrefs.getDefaultOpenCodeBinaryPath() })
+                        authPrefs.saveCodexBinaryPath(codexBinPath.trim().ifBlank { authPrefs.getDefaultCodexBinaryPath() })
                     }
                 }
                 savedSnapshot = snapshot()

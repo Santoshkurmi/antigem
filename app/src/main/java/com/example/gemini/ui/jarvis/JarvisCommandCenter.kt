@@ -59,6 +59,7 @@ import kotlinx.coroutines.launch
 private fun agentLabel(name: String) = when (name.uppercase()) {
     "AGY" -> "Antigravity"
     "OPENCODE" -> "OpenCode"
+    "CODEX" -> "Codex"
     "CLAUDE" -> "Claude"
     else -> name
 }

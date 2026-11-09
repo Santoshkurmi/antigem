@@ -105,6 +105,7 @@ fun JarvisSettingsScreen(cardBg: Color, cardBorder: BorderStroke, onOpen: (Jarvi
                     AgentKind.AGY.name -> "Antigravity"
                     AgentKind.CLAUDE.name -> "Claude Code"
                     AgentKind.OPENCODE.name -> "OpenCode"
+                    AgentKind.CODEX.name -> "Codex"
                     else -> "Not set"
                 }),
                 row(JarvisSettingsPage.PERSONALITY, I.Face, c.accentPink, "Personality & you"),
@@ -151,6 +152,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
         AgentKind.CLAUDE -> "Claude Code"
         AgentKind.AGY -> "Antigravity"
         AgentKind.OPENCODE -> "OpenCode"
+        AgentKind.CODEX -> "Codex"
         null -> "the agent"
     }
 
@@ -168,7 +170,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                 JCard(cardBg, cardBorder, "") {
                     val enabledAgents by vm.enabledAgents.collectAsState()
                     JChips(
-                        listOf(AgentKind.CLAUDE.name to "Claude Code", AgentKind.AGY.name to "Antigravity", AgentKind.OPENCODE.name to "OpenCode"),
+                        listOf(AgentKind.CLAUDE.name to "Claude Code", AgentKind.AGY.name to "Antigravity", AgentKind.OPENCODE.name to "OpenCode", AgentKind.CODEX.name to "Codex"),
                         agentName
                     ) { P.agent.set(it); P.modelId.set("") }
                     if (agent == null) {
@@ -179,6 +181,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     val models by (when (agent) {
                         AgentKind.CLAUDE -> vm.claudeBackend.availableModels
                         AgentKind.OPENCODE -> vm.openCodeBackend.availableModels
+                        AgentKind.CODEX -> vm.codexBackend.availableModels
                         else -> vm.agyBackend.enabledModels
                     }).collectAsState()
                     val modelId by P.modelId.state.collectAsState()
@@ -244,21 +247,26 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                         // OpenCode keeps the servers the app adds in the bridge's OpenCode config
                         var openCodeServers by remember { mutableStateOf<Set<String>>(emptySet()) }
                         val reloadOpenCodeMcp: () -> Unit = { scope.launch { vm.openCodeBackend.client.mcpServers().onSuccess { openCodeServers = it } } }
+                        // Codex keeps them in its own config.toml
+                        var codexServers by remember { mutableStateOf<Set<String>>(emptySet()) }
+                        val reloadCodexMcp: () -> Unit = { scope.launch { vm.codexBackend.mcpServerNames().onSuccess { codexServers = it } } }
                         LaunchedEffect(agent) {
                             when (agent) {
                                 AgentKind.CLAUDE -> vm.claudeConfig.loadMcp(null)
                                 AgentKind.OPENCODE -> reloadOpenCodeMcp()
+                                AgentKind.CODEX -> reloadCodexMcp()
                                 else -> vm.loadMcpServers()
                             }
                         }
                         val mcpState = when (agent) {
                             AgentKind.CLAUDE -> claudeServers.firstOrNull { it.name == name }?.status
-                            AgentKind.OPENCODE -> null
+                            AgentKind.OPENCODE, AgentKind.CODEX -> null
                             else -> agyServers.firstOrNull { it.name == name }?.status
                         }
                         val mcpAdded = when (agent) {
                             AgentKind.CLAUDE -> claudeServers.any { it.name == name }
                             AgentKind.OPENCODE -> name in openCodeServers
+                            AgentKind.CODEX -> name in codexServers
                             else -> agyServers.any { it.name == name }
                         }
                         JStep(
@@ -266,7 +274,14 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                             if (mcpAdded) "Added" + (mcpState?.let { " · $it" } ?: "") else "Required: these are the tools Jarvis controls the app with.",
                             mcpAdded, if (mcpAdded) "Refresh" else "Add"
                         ) {
-                            if (agent == AgentKind.OPENCODE) {
+                            if (agent == AgentKind.CODEX) {
+                                if (mcpAdded) reloadCodexMcp()
+                                else scope.launch {
+                                    vm.codexBackend.addRemoteMcp(name, url, headers)
+                                        .onSuccess { reloadCodexMcp(); Toast.makeText(context, "Added to Codex", Toast.LENGTH_SHORT).show() }
+                                        .onFailure { Toast.makeText(context, it.message ?: "Could not add it", Toast.LENGTH_LONG).show() }
+                                }
+                            } else if (agent == AgentKind.OPENCODE) {
                                 if (mcpAdded) reloadOpenCodeMcp()
                                 else scope.launch {
                                     vm.openCodeBackend.client.addRemoteMcp(name, url, headers)

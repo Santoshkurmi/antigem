@@ -168,6 +168,16 @@ object JarvisController {
         ).also { it.start() }
     }
 
+    /** Backend of the Jarvis chat (Codex). It never changes the user's Codex defaults; Codex's questions are answered empty. */
+    val jarvisCodex: com.example.gemini.data.agent.codex.CodexChatBackend by lazy {
+        com.example.gemini.data.agent.codex.CodexChatBackend(
+            app, scope, ChatSessionStore(), vm.codexPrefs, com.example.gemini.data.agent.codex.CodexBridgeClient(),
+            rememberChoices = false,
+            // Jarvis asks through jarvis_ask: Codex's own question would wait in a chat nobody looks at
+            skipQuestions = true
+        ).also { it.start() }
+    }
+
     /** Jarvis cannot work as set up (no agent picked, the agent is off, the model is gone): said and shown as is. */
     class JarvisSetupException(message: String) : Exception(message)
 
@@ -253,7 +263,7 @@ object JarvisController {
     fun setEnabled(on: Boolean) {
         JarvisPreferences.enabled.set(on)
         if (on && JarvisPreferences.voiceAssistant.value && JarvisPreferences.agentKind == null) {
-            showNotice("Pick the agent Jarvis talks to (Claude Code, Antigravity or OpenCode): tap here.", "agent")
+            showNotice("Pick the agent Jarvis talks to (Claude Code, Antigravity, OpenCode or Codex): tap here.", "agent")
         }
         if (!on) {
             setHandsFree(false)
@@ -270,7 +280,7 @@ object JarvisController {
         JarvisPreferences.voiceAssistant.set(on)
         if (on) {
             if (JarvisPreferences.enabled.value && JarvisPreferences.agentKind == null) {
-                showNotice("Pick the agent the voice Jarvis talks to (Claude Code, Antigravity or OpenCode): tap here.", "agent")
+                showNotice("Pick the agent the voice Jarvis talks to (Claude Code, Antigravity, OpenCode or Codex): tap here.", "agent")
             }
             return
         }
@@ -416,6 +426,8 @@ object JarvisController {
             jarvisClaude.isCurrentChatActivelyRunning.value
         } else if (JarvisPreferences.currentChatAgent.value == AgentKind.OPENCODE.name) {
             jarvisOpenCode.isCurrentChatActivelyRunning.value
+        } else if (JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name) {
+            jarvisCodex.isCurrentChatActivelyRunning.value
         } else {
             System.currentTimeMillis() < agyBusyUntil ||
                 vm.agyBackend.conversations.value.any { it.id == id && it.isRunning }
@@ -452,6 +464,7 @@ object JarvisController {
         val msgs = when (JarvisPreferences.currentChatAgent.value) {
             AgentKind.CLAUDE.name -> jarvisClaude.messages.value
             AgentKind.OPENCODE.name -> jarvisOpenCode.messages.value
+            AgentKind.CODEX.name -> jarvisCodex.messages.value
             else -> return null
         }
         val call = msgs.lastOrNull { it.role == MessageRole.ASSISTANT }
@@ -490,6 +503,8 @@ object JarvisController {
             jarvisClaude.messages.value.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content
         } else if (JarvisPreferences.currentChatAgent.value == AgentKind.OPENCODE.name) {
             jarvisOpenCode.messages.value.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content
+        } else if (JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name) {
+            jarvisCodex.messages.value.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content
         } else {
             runCatching { readChat(id).lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content }.getOrNull()
         }
@@ -542,6 +557,7 @@ object JarvisController {
         AgentKind.CLAUDE -> "Claude Code"
         AgentKind.AGY -> "Antigravity"
         AgentKind.OPENCODE -> "OpenCode"
+        AgentKind.CODEX -> "Codex"
         null -> "the agent"
     }
 
@@ -1351,6 +1367,7 @@ object JarvisController {
         val msgs = when (JarvisPreferences.currentChatAgent.value) {
             AgentKind.CLAUDE.name -> jarvisClaude.messages.value
             AgentKind.OPENCODE.name -> jarvisOpenCode.messages.value
+            AgentKind.CODEX.name -> jarvisCodex.messages.value
             else -> runCatching { readChat(id) }.getOrNull() ?: return null
         }
         return msgs.lastOrNull { it.role == MessageRole.ASSISTANT }?.toolCalls?.lastOrNull { it.status == "RUNNING" }
@@ -1540,6 +1557,7 @@ object JarvisController {
                 AgentKind.CLAUDE -> sendClaude(prompt)
                 AgentKind.AGY -> sendAgy(prompt)
                 AgentKind.OPENCODE -> sendOpenCode(prompt)
+                AgentKind.CODEX -> sendCodex(prompt)
             }
         } catch (e: Exception) {
             // the saved Jarvis chat was deleted: start a new one and send this message there (once)
@@ -1634,6 +1652,37 @@ object JarvisController {
         b.sendMessage(prompt)
     }
 
+    private suspend fun sendCodex(prompt: String) {
+        val b = jarvisCodex
+        if (b.state.value.isBlocking) b.refreshStatus()
+        if (b.state.value.isBlocking) throw JarvisSetupException("Codex is not available: ${b.state.value.label}. Check Settings, Codex.")
+        if (b.availableModels.value.isEmpty()) { b.refreshModels(); var w = 0; while (b.availableModels.value.isEmpty() && w < 20) { delay(250); w++ } }
+        val wanted = JarvisPreferences.modelId.value
+        if (wanted.isNotBlank() && b.availableModels.value.isNotEmpty() && b.availableModels.value.none { it.id == wanted }) {
+            throw JarvisSetupException("The model I'm set to, $wanted, is not available in Codex anymore. Pick another one in Settings, Jarvis, Agent.")
+        }
+        var id = JarvisPreferences.currentChatId.value
+        // a Jarvis chat deleted on the server is replaced by a fresh one
+        val gone = id.isNotBlank() && JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name &&
+            b.client.rpc("thread/read", kotlinx.serialization.json.buildJsonObject { put("threadId", JsonPrimitive(id)) }).isFailure
+        if (id.isBlank() || JarvisPreferences.currentChatAgent.value != AgentKind.CODEX.name || gone) {
+            // Codex gives the chat its id when it is created: create it now so Jarvis knows it
+            id = b.createChatNow(defaultWorkspace().removePrefix("file://"), wanted.ifBlank { null })
+            JarvisPreferences.currentChatId.set(id)
+            JarvisPreferences.currentChatAgent.set(AgentKind.CODEX.name)
+            JarvisPreferences.addChatId(id)
+            scope.launch {
+                delay(6000)
+                b.renameConversation(id, "Jarvis · " + java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()).format(java.util.Date()))
+                runCatching { vm.codexBackend.refreshThreads() }
+            }
+        } else if (b.currentConversation.value?.id != id) {
+            b.selectConversation(id)
+            delay(700)
+        }
+        b.sendMessage(prompt)
+    }
+
     private suspend fun sendAgy(prompt: String) {
         var id = JarvisPreferences.currentChatId.value
         val model = JarvisPreferences.modelId.value.ifBlank { vm.agyBackend.selectedModelId.value }
@@ -1703,6 +1752,12 @@ object JarvisController {
                 JarvisTasks.openCodeBackendOf(id) != null -> JarvisTasks.openCodeBackendOf(id)!!.selectModel(modelId)
                 else -> vm.openCodeBackend.switchModelOf(id, modelId).getOrThrow()
             }
+            AgentKind.CODEX -> when {
+                id == JarvisPreferences.currentChatId.value && JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name -> jarvisCodex.selectModel(modelId)
+                vm.currentConversation.value?.id == id -> vm.codexBackend.selectModel(modelId)
+                JarvisTasks.codexBackendOf(id) != null -> JarvisTasks.codexBackendOf(id)!!.selectModel(modelId)
+                else -> vm.codexBackend.switchModelOf(id, modelId).getOrThrow()
+            }
         }
     }
 
@@ -1724,6 +1779,7 @@ object JarvisController {
             }
             AgentKind.AGY -> hub.cancelCascadeInvocation(id).fold({ "Stopped." }, { "Could not stop: ${it.message}" })
             AgentKind.OPENCODE -> vm.openCodeBackend.interrupt(id).fold({ "Stopped." }, { "Could not stop: ${it.message}" })
+            AgentKind.CODEX -> vm.codexBackend.interrupt(id).fold({ "Stopped." }, { "Could not stop: ${it.message}" })
         }
     }
 
@@ -1739,6 +1795,7 @@ object JarvisController {
             when (agent) {
                 AgentKind.CLAUDE -> vm.claudeBackend.loadMessages(id)
                 AgentKind.OPENCODE -> vm.openCodeBackend.loadMessages(id)
+                AgentKind.CODEX -> vm.codexBackend.loadMessages(id)
                 AgentKind.AGY -> {
                     val steps = hub.getCascadeTrajectorySteps(id).getOrNull().orEmpty()
                     com.example.gemini.domain.chat.TrajectoryEngine().ingestStepsDirect(steps, id)
@@ -1747,7 +1804,7 @@ object JarvisController {
         }.getOrDefault(emptyList())
         knownAgentOf(id)?.let { return load(it) }
         // in no list yet (just created, list not refreshed): try every agent instead of guessing one
-        for (a in listOf(AgentKind.CLAUDE, AgentKind.OPENCODE, AgentKind.AGY)) load(a).takeIf { it.isNotEmpty() }?.let { return it }
+        for (a in listOf(AgentKind.CLAUDE, AgentKind.OPENCODE, AgentKind.CODEX, AgentKind.AGY)) load(a).takeIf { it.isNotEmpty() }?.let { return it }
         return emptyList()
     }
 
@@ -1756,8 +1813,10 @@ object JarvisController {
         sequenceOf(
             JarvisTasks.backendOf(id)?.messages?.value,
             JarvisTasks.openCodeBackendOf(id)?.messages?.value,
+            JarvisTasks.codexBackendOf(id)?.messages?.value,
             JarvisDriver.claudeOf(id)?.messages?.value,
-            JarvisDriver.openCodeOf(id)?.messages?.value
+            JarvisDriver.openCodeOf(id)?.messages?.value,
+            JarvisDriver.codexOf(id)?.messages?.value
         ).firstOrNull { !it.isNullOrEmpty() }
 
     /** The agent chat [id] runs on, when the app knows it for sure. */
@@ -2001,6 +2060,30 @@ object JarvisController {
             )
         }
 
+    /** Codex's approval requests (commands, file changes, more access) as voice approvals. */
+    private fun codexPerms(b: com.example.gemini.data.agent.codex.CodexChatBackend, source: String): List<Perm> =
+        b.pendingApprovals.value.map { p ->
+            val cmd = (p.params["command"] as? JsonPrimitive)?.contentOrNull?.let { com.example.gemini.data.agent.codex.CodexTranscript.unwrapShell(it) }
+            val summary = when (p.method) {
+                "item/commandExecution/requestApproval", "execCommandApproval" ->
+                    if (p.params["networkApprovalContext"] != null) "use the network" else "run the command: ${(cmd ?: "").take(140)}"
+                "item/fileChange/requestApproval", "applyPatchApproval" -> "change files"
+                "item/permissions/requestApproval" -> "get more access"
+                "mcpServer/elicitation/request" -> "continue with ${jstr(p.params, "serverName") ?: "an MCP server"}"
+                else -> "do ${p.method.substringAfterLast('/')}"
+            }
+            val risk = when (p.method) {
+                "item/commandExecution/requestApproval", "execCommandApproval" -> bashRisk(cmd)
+                else -> Risk.NORMAL
+            }
+            Perm(
+                key = "cx:${p.key}", source = source, chatId = p.threadId.orEmpty(), tool = p.method.substringAfter('/').substringBefore('/'),
+                summary = summary, risk = risk,
+                approve = { b.approve(p.key) },
+                reject = { why -> b.deny(p.key, why) }
+            )
+        }
+
     private fun claudePerms(b: ClaudeChatBackend, source: String, chatId: String = b.currentConversation.value?.id.orEmpty()): List<Perm> =
         b.pendingPermissions.value.map { p ->
             val cmd = jstr(p.input, "command")
@@ -2075,10 +2158,12 @@ object JarvisController {
         // tasks first: their entry wins when the same chat is also on screen
         JarvisTasks.claudeTaskBackends().forEach { (t, b) -> if (t.active) add(claudePerms(b, "task", t.id)) }
         JarvisTasks.openCodeTaskBackends().forEach { (t, b) -> if (t.active && vm.currentConversation.value?.id != t.id) add(openCodePerms(b, "task")) }
+        JarvisTasks.codexTaskBackends().forEach { (t, b) -> if (t.active && vm.currentConversation.value?.id != t.id) add(codexPerms(b, "task")) }
         JarvisTasks.activeTasks().filter { it.agent == AgentKind.AGY && vm.currentConversation.value?.id != it.id }.forEach { add(agyOffscreenPerms(it.id, "task")) }
         val jarvisId = JarvisPreferences.currentChatId.value
         when {
             JarvisPreferences.currentChatAgent.value == AgentKind.OPENCODE.name && jarvisId.isNotBlank() -> add(openCodePerms(jarvisOpenCode, "jarvis"))
+            JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name && jarvisId.isNotBlank() -> add(codexPerms(jarvisCodex, "jarvis"))
             JarvisPreferences.currentChatAgent.value == AgentKind.CLAUDE.name || jarvisId.isBlank() -> add(claudePerms(jarvisClaude, "jarvis"))
             else -> add(agyOffscreenPerms(jarvisId, "jarvis"))
         }
@@ -2089,11 +2174,13 @@ object JarvisController {
             if (onScreen?.id == id) continue
             JarvisDriver.claudeOf(id)?.let { add(claudePerms(it, "manager", id)) }
             JarvisDriver.openCodeOf(id)?.let { add(openCodePerms(it, "manager")) }
+            JarvisDriver.codexOf(id)?.let { add(codexPerms(it, "manager")) }
             if (JarvisDriver.agentOf(id) == AgentKind.AGY) add(agyOffscreenPerms(id, "manager"))
         }
         val screenList = when (onScreen?.agent) {
             AgentKind.CLAUDE -> claudePerms(vm.claudeBackend, "screen")
             AgentKind.OPENCODE -> openCodePerms(vm.openCodeBackend, "screen")
+            AgentKind.CODEX -> codexPerms(vm.codexBackend, "screen")
             else -> agyPerms()
         }
         // the chat on screen counts as a task's (or a Jarvis text chat's) when it is one

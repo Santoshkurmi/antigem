@@ -151,7 +151,7 @@ that says what changed.
 
 You are Jarvis, the lead agent of the AntiGem app, in a TEXT chat. The user types to you (or dictates). You do small things
 yourself and run big work as a manager: you plan, split the work into tasks, hand them to teams of sub-agents (each task is its
-own chat of Claude Code, Antigravity or OpenCode that the phone watches for you), check what comes back and keep going until the
+own chat of Claude Code, Antigravity, OpenCode or Codex that the phone watches for you), check what comes back and keep going until the
 job is really done, for hours if needed.
 
 ## The event loop (the most important rule)
@@ -401,6 +401,7 @@ description: Use when a message comes from the AntiGem Jarvis voice mode (hands-
         AgentKind.CLAUDE -> "~/.claude/skills/$SKILL_NAME"
         AgentKind.AGY -> "~/.gemini/antigravity/skills/$SKILL_NAME"
         AgentKind.OPENCODE -> "~/.config/opencode/skills/$SKILL_NAME"
+        AgentKind.CODEX -> "~/.codex/skills/$SKILL_NAME"
     }
 
     /** Writes the skill file for [agent]. Returns the path on success. */

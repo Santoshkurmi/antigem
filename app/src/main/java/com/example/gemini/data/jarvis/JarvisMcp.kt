@@ -118,7 +118,7 @@ object JarvisMcp {
             "goal" to prop("string", "Full instructions for the task's agent: what to do, where, constraints, how to verify and what to report back"),
             "title" to prop("string", "Short name, 2-5 words (e.g. \"Release build\")"),
             "team" to prop("string", "One of your teams (jarvis_team_create): its agent, model, project and role are used unless given here"),
-            "agent" to prop("string", "claude, agy or opencode (default: the team's, else the app's new-chat agent). OpenCode runs any provider's models (OpenAI-compatible, NVIDIA, Groq, free models)", listOf("claude", "agy", "opencode")),
+            "agent" to prop("string", "claude, agy, opencode or codex (default: the team's, else the app's new-chat agent). OpenCode runs any provider's models (OpenAI-compatible, NVIDIA, Groq, free models); Codex is OpenAI's agent on the user's ChatGPT plan", listOf("claude", "agy", "opencode", "codex")),
             "model" to prop("string", "Model id or part of its name (default: the team's, else the agent's default)"),
             "project" to prop("string", "Project name or path to work in (default: the team's, else the active project)"),
             "open" to prop("boolean", "Also show the chat on screen (default false)"), managerId))
@@ -166,7 +166,7 @@ object JarvisMcp {
                 "the diff and run the tests). jarvis_task_start(team=…) then uses its agent, model, project and role.",
             listOf("name"),
             "name" to prop("string", "Team name, one or two words"),
-            "agent" to prop("string", "claude, agy or opencode (default: the app's new-chat agent)", listOf("claude", "agy", "opencode")),
+            "agent" to prop("string", "claude, agy, opencode or codex (default: the app's new-chat agent)", listOf("claude", "agy", "opencode", "codex")),
             "model" to prop("string", "Model id or part of its name (default: the agent's default)"),
             "role" to prop("string", "What this team does and how it should work and report (sent with each of its tasks)"),
             "project" to prop("string", "Project name or path the team works in (default: the active project at the time)"),
@@ -206,15 +206,15 @@ object JarvisMcp {
             listOf("section"), "section" to prop("string", "Settings page name (jarvis_app_guide topic settings lists them)")))
         put(tool("jarvis_get_usage",
             "Plan usage: the 5-hour window and the 7-day window with percent used, percent left and when each resets (Claude Code and Antigravity), " +
-                "plus context use and cost of the Claude chat on screen. Always name both windows when answering.",
+                "Codex's plan limits (primary and secondary windows), plus context use and cost of the Claude chat on screen. Always name both windows when answering.",
             emptyList(),
-            "agent" to prop("string", "Which agent (default both)", listOf("all", "claude", "agy")),
+            "agent" to prop("string", "Which agent (default all)", listOf("all", "claude", "agy", "codex")),
             "refresh" to prop("boolean", "Fetch fresh numbers first (default true)")))
         // ---- chats
         put(tool("jarvis_list_chats",
-            "List chats of Claude Code and Antigravity, newest first, with paging. Jarvis' own hidden chats are left out unless asked for.",
+            "List chats of Claude Code, Antigravity, OpenCode and Codex, newest first, with paging. Jarvis' own hidden chats are left out unless asked for.",
             emptyList(),
-            "agent" to prop("string", "Only this agent", listOf("all", "claude", "agy")),
+            "agent" to prop("string", "Only this agent", listOf("all", "claude", "agy", "opencode", "codex")),
             "running" to prop("boolean", "Only chats that are working right now"),
             "project" to prop("string", "Only chats of a project (part of its name or path)"),
             "query" to prop("string", "Words in the title"),
@@ -244,7 +244,7 @@ object JarvisMcp {
             "Start a new chat. With a message it runs as a watched task (same as jarvis_task_start); without one an empty chat opens on screen. " +
                 "Use it only when the user asked for a new chat; prefer jarvis_task_start for delegated work.",
             emptyList(),
-            "agent" to prop("string", "claude, agy or opencode (default: the app's current new-chat agent)", listOf("claude", "agy", "opencode")),
+            "agent" to prop("string", "claude, agy, opencode or codex (default: the app's current new-chat agent)", listOf("claude", "agy", "opencode", "codex")),
             "message" to prop("string", "The first message / task"),
             "model" to prop("string", "Model id or name (default: the agent's default)"),
             "project" to prop("string", "Project name or path to work in (default: the active project)"),
@@ -266,7 +266,7 @@ object JarvisMcp {
         // ---- models and chat settings
         put(tool("jarvis_list_models",
             "Models available to each agent, marking the selected one.",
-            emptyList(), "agent" to prop("string", "Which agent (default the chat on screen, or both)", listOf("all", "claude", "agy"))))
+            emptyList(), "agent" to prop("string", "Which agent (default the chat on screen, or all)", listOf("all", "claude", "agy", "opencode", "codex"))))
         put(tool("jarvis_set_model",
             "Change the model. With id it changes that chat or task (also one that is not on screen); without id scope=screen changes the chat on screen, " +
                 "scope=jarvis the model of the Jarvis chat itself. The model can be a part of its name. Applies to the chat's next message.",
@@ -771,6 +771,7 @@ object JarvisMcp {
         "claude" -> AgentKind.CLAUDE
         "agy", "antigravity" -> AgentKind.AGY
         "opencode" -> AgentKind.OPENCODE
+        "codex" -> AgentKind.CODEX
         else -> vm.newChatAgent.value.takeIf { it in vm.enabledAgents.value } ?: vm.enabledAgents.value.firstOrNull() ?: AgentKind.CLAUDE
     }
 
@@ -794,7 +795,7 @@ object JarvisMcp {
         return if (owner != caller) "That chat is a task of ${JarvisManagers.nameOf(owner)}: only that Jarvis chat directs it." else null
     }
 
-    private fun agentName(agent: AgentKind) = when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.AGY -> "Antigravity" }
+    private fun agentName(agent: AgentKind) = when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.CODEX -> "Codex"; AgentKind.AGY -> "Antigravity" }
 
     /** Hidden in front of every task's goal: how a sub-agent of Jarvis works and reports, and its team's role. */
     private fun subAgentBrief(team: JarvisManagers.Team?): String = buildString {
@@ -1151,6 +1152,26 @@ object JarvisMcp {
                 if (groups.isEmpty()) put("note", "No quota information yet. Is Antigravity signed in and running?")
             })
         }
+        if ((which == "all" || which == "codex") && AgentKind.CODEX in vm.enabledAgents.value) {
+            if (refresh) vm.codexBackend.refreshRateLimits()
+            val limits = vm.codexBackend.rateLimits.value
+            fun win(w: com.example.gemini.data.agent.codex.CodexLimitWindow?): Any = w?.let {
+                val mins = it.windowMinutes
+                val label = when {
+                    mins == null -> "limit"
+                    mins >= 60 * 24 -> "${mins / (60 * 24)}-day"
+                    mins >= 60 -> "${mins / 60}-hour"
+                    else -> "$mins-minute"
+                }
+                windowJson(it.usedPercent / 100.0, it.resetsAt?.times(1000), label)
+            } ?: JSONObject.NULL
+            out.put("codex", JSONObject().apply {
+                (limits?.plan ?: vm.codexBackend.account.value?.plan)?.let { put("plan", it) }
+                put("primary", win(limits?.primary))
+                put("secondary", win(limits?.secondary))
+                if (limits == null) put("note", "No usage information yet. Is Codex signed in?")
+            })
+        }
         return json(out)
     }
 
@@ -1267,6 +1288,7 @@ object JarvisMcp {
     private fun modelsFor(agent: AgentKind): List<AiModel> = when (agent) {
         AgentKind.CLAUDE -> vm.claudeBackend.availableModels.value
         AgentKind.OPENCODE -> vm.openCodeBackend.availableModels.value
+        AgentKind.CODEX -> vm.codexBackend.availableModels.value
         AgentKind.AGY -> vm.agyBackend.enabledModels.value
     }
 
@@ -1288,6 +1310,7 @@ object JarvisMcp {
             if (which == "all" || which == "claude") section("claude", AgentKind.CLAUDE, vm.claudeBackend.selectedModelId.value)
             if (which == "all" || which == "agy") section("antigravity", AgentKind.AGY, vm.agyBackend.selectedModelId.value)
             if ((which == "all" || which == "opencode") && AgentKind.OPENCODE in vm.enabledAgents.value) section("opencode", AgentKind.OPENCODE, vm.openCodeBackend.selectedModelId.value)
+            if ((which == "all" || which == "codex") && AgentKind.CODEX in vm.enabledAgents.value) section("codex", AgentKind.CODEX, vm.codexBackend.selectedModelId.value)
             put("jarvis_chat_model", JarvisPreferences.modelId.value.ifBlank { "default" })
         })
     }
@@ -1316,6 +1339,7 @@ object JarvisMcp {
             JarvisPreferences.modelId.set(m.id)
             if (kind == AgentKind.CLAUDE && JarvisPreferences.currentChatId.value.isNotBlank()) JarvisController.jarvisClaude.selectModel(m.id)
             if (kind == AgentKind.OPENCODE && JarvisPreferences.currentChatAgent.value == AgentKind.OPENCODE.name) JarvisController.jarvisOpenCode.selectModel(m.id)
+            if (kind == AgentKind.CODEX && JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name) JarvisController.jarvisCodex.selectModel(m.id)
             return text("The Jarvis chat now uses ${m.displayName.ifBlank { m.id }}.")
         }
         val conv = vm.currentConversation.value ?: return error("No chat on screen. Pass id to change another chat.")
@@ -1387,10 +1411,10 @@ object JarvisMcp {
             bool("group_chats_by_workspace", "Group the chat list by project", false, { vm.groupChatsByWorkspace.value }, { vm.setGroupChatsByWorkspace(it) }),
             bool("floating_bubble", "Floating chat bubble over other apps", false, { vm.isFloatingBubbleEnabled.value }, { vm.setFloatingBubbleEnabled(it) }),
             bool("vibrate_when_chat_done", "A light buzz when a chat finishes", false, { ChatCompletionMonitor.vibrate.value }, { ChatCompletionMonitor.setVibrate(it) }),
-            Setting("new_chat_agent", "Agent of new chats", "claude|agy|opencode", false, get = { vm.newChatAgent.value.name.lowercase() }, set = { v ->
-                val a = when (v.trim().lowercase()) { "claude" -> AgentKind.CLAUDE; "agy", "antigravity" -> AgentKind.AGY; "opencode" -> AgentKind.OPENCODE; else -> null }
+            Setting("new_chat_agent", "Agent of new chats", "claude|agy|opencode|codex", false, get = { vm.newChatAgent.value.name.lowercase() }, set = { v ->
+                val a = when (v.trim().lowercase()) { "claude" -> AgentKind.CLAUDE; "agy", "antigravity" -> AgentKind.AGY; "opencode" -> AgentKind.OPENCODE; "codex" -> AgentKind.CODEX; else -> null }
                 when {
-                    a == null -> "Use claude, agy or opencode."
+                    a == null -> "Use claude, agy, opencode or codex."
                     a !in vm.enabledAgents.value -> "That agent is turned off (Settings → Agents)."
                     else -> { vm.setNewChatAgent(a); null }
                 }

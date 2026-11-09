@@ -58,7 +58,7 @@ object JarvisPreferences {
      * "chat only": Jarvis works only in the Jarvis chats the user opens from the chat list, silently.
      */
     val voiceAssistant = pref("voice_assistant", true)
-    /** "CLAUDE", "AGY" or "OPENCODE": which agent runs the hidden Jarvis chat; blank until the user picks one. */
+    /** "CLAUDE", "AGY", "OPENCODE" or "CODEX": which agent runs the hidden Jarvis chat; blank until the user picks one. */
     val agent = pref("agent", "")
     /** Model of the Jarvis chat; blank = the agent's default. */
     val modelId = pref("model_id", "")

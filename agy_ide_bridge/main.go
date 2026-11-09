@@ -21,6 +21,7 @@ import (
 	// DNS for Android (no /etc/resolv.conf there); a package so `go build main.go` includes it too
 	_ "gemini-server/pkg/androiddns"
 	"gemini-server/pkg/claude"
+	"gemini-server/pkg/codex"
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
@@ -42,6 +43,7 @@ Flags:
   --bin <path>              Custom path to AGY binary (for --unpatch or custom setups)
   --claude-bin <path>       Custom path to the Claude Code CLI (default: claude on PATH)
   --opencode-bin <path>     Custom path to the OpenCode CLI (default: opencode on PATH or ~/.opencode/bin)
+  --codex-bin <path>        Custom path to the Codex CLI (default: codex on PATH or ~/.local/bin)
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
@@ -52,6 +54,7 @@ Flags:
   --no-hub                  Skip launching AGY Hub (run IDE server only)
   --no-claude               Disable Claude Code (no /api/claude endpoints, never runs the claude CLI)
   --no-opencode             Disable OpenCode (no /api/opencode endpoints, never runs the opencode CLI)
+  --no-codex                Disable Codex (no /api/codex endpoints, never runs the codex CLI)
   -d, --dir <path>          Custom workspace directory
   -h, --help                Show help documentation`)
 }
@@ -136,6 +139,8 @@ func main() {
 	var noClaude bool
 	var customOpenCodeBin string
 	var noOpenCode bool
+	var customCodexBin string
+	var noCodex bool
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
@@ -185,6 +190,15 @@ func main() {
 			}
 		case arg == "--no-opencode":
 			noOpenCode = true
+		case strings.HasPrefix(arg, "--codex-bin="):
+			customCodexBin = strings.TrimPrefix(arg, "--codex-bin=")
+		case arg == "--codex-bin":
+			if i+1 < len(os.Args) {
+				customCodexBin = os.Args[i+1]
+				i++
+			}
+		case arg == "--no-codex":
+			noCodex = true
 		case strings.HasPrefix(arg, "--port="):
 			cfg.Port = strings.TrimPrefix(arg, "--port=")
 		case arg == "-p" || arg == "--port":
@@ -340,6 +354,19 @@ func main() {
 	} else {
 		openCodeMgr = opencode.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customOpenCodeBin)
 		mux.Handle("/api/opencode/", openCodeMgr)
+	}
+
+	// Codex: one `codex app-server` (JSON-RPC over stdio, no port) for all its chats; off with --no-codex
+	var codexMgr *codex.Manager
+	if noCodex {
+		mux.HandleFunc("/api/codex/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"success":false,"disabled":true,"error":"Codex is turned off in the app"}`))
+		})
+	} else {
+		codexMgr = codex.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customCodexBin)
+		mux.Handle("/api/codex/", codexMgr)
 	}
 
 	// Custom AntiGem plugins on disk: list, install (ZIP or GitHub repository), update, remove, export
@@ -666,6 +693,9 @@ func main() {
 	}
 	if openCodeMgr != nil {
 		openCodeMgr.StopAll()
+	}
+	if codexMgr != nil {
+		codexMgr.StopAll()
 	}
 	if hubMgr != nil {
 		hubMgr.Stop()

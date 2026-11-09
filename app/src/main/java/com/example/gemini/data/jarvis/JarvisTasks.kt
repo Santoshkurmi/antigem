@@ -94,6 +94,7 @@ object JarvisTasks {
     private val claudeBackends = ConcurrentHashMap<String, ClaudeChatBackend>()
     /** OpenCode task chats → their own backend (follows that chat's events), like the Claude ones. */
     private val openCodeBackends = ConcurrentHashMap<String, com.example.gemini.data.agent.opencode.OpenCodeChatBackend>()
+    private val codexBackends = ConcurrentHashMap<String, com.example.gemini.data.agent.codex.CodexChatBackend>()
     private val attachedAt = ConcurrentHashMap<String, Long>()
     private val progressSig = ConcurrentHashMap<String, String>()
     /** Approvals waiting in Antigravity chats that are not on screen (tasks and the Jarvis chat), from the hub. */
@@ -138,6 +139,11 @@ object JarvisTasks {
 
     fun openCodeBackendOf(id: String): com.example.gemini.data.agent.opencode.OpenCodeChatBackend? = openCodeBackends[id]
 
+    fun codexTaskBackends(): List<Pair<Task, com.example.gemini.data.agent.codex.CodexChatBackend>> =
+        _tasks.value.filter { it.agent == AgentKind.CODEX }.mapNotNull { t -> codexBackends[t.id]?.let { t to it } }
+
+    fun codexBackendOf(id: String): com.example.gemini.data.agent.codex.CodexChatBackend? = codexBackends[id]
+
     // ------------------------------------------------------------------ starting and steering
 
     private fun newClaudeBackend() = ClaudeChatBackend(app, scope, ChatSessionStore(), vm.claudePrefs, ClaudeBridgeClient())
@@ -170,6 +176,25 @@ object JarvisTasks {
         val hiddenNote = listOfNotNull(brief?.takeIf { it.isNotBlank() }, com.example.gemini.data.context.GlobalContext.taskBody()).joinToString("\n\n")
         val prompt = (if (hiddenNote.isNotBlank()) PromptExpansion.hidden(hiddenNote) else "") + PromptExpansion.expand(text)
         val id = when (agent) {
+            AgentKind.CODEX -> {
+                val b = newCodexBackend()
+                if (b.state.value.isBlocking) b.refreshStatus()
+                if (b.state.value.isBlocking) { b.stop(); error("Codex is not available: ${b.state.value.label}.") }
+                // Codex gives the chat its id when it is created: create it now so the task knows it
+                val id = runCatching { b.createChatNow(projectPath, modelId) }.getOrElse { b.stop(); throw it }
+                b.sendMessage(prompt)
+                codexBackends[id] = b
+                attachedAt[id] = System.currentTimeMillis()
+                scope.launch {
+                    delay(4000)
+                    runCatching { vm.codexBackend.refreshThreads() }
+                    if (!title.isNullOrBlank()) {
+                        delay(4000)
+                        runCatching { b.renameConversation(id, title.trim().take(60)) }
+                    }
+                }
+                id
+            }
             AgentKind.OPENCODE -> {
                 val b = newOpenCodeBackend()
                 if (b.state.value.isBlocking) b.refreshStatus()
@@ -289,6 +314,15 @@ object JarvisTasks {
                     b.sendMessage(outgoing)
                 }
             }
+            AgentKind.CODEX -> {
+                if (vm.currentConversation.value?.id == t.id) {
+                    vm.codexBackend.sendMessage(outgoing)
+                } else {
+                    val b = ensureCodexBackend(t.id)
+                    if (b.currentConversation.value?.id != t.id) { b.selectConversation(t.id); delay(900) }
+                    b.sendMessage(outgoing)
+                }
+            }
         }
         val now = System.currentTimeMillis()
         put(t.copy(state = State.STARTING, turnAt = now, updatedAt = now, progressAt = now, seenRunning = false,
@@ -306,6 +340,7 @@ object JarvisTasks {
             }
             AgentKind.AGY -> hub.cancelCascadeInvocation(t.id).onFailure { return "Could not stop: ${it.message}" }
             AgentKind.OPENCODE -> (openCodeBackends[t.id] ?: vm.openCodeBackend).interrupt(t.id).onFailure { return "Could not stop: ${it.message}" }
+            AgentKind.CODEX -> (codexBackends[t.id] ?: vm.codexBackend).interrupt(t.id).onFailure { return "Could not stop: ${it.message}" }
         }
         if (!quiet) put(t.copy(state = State.STOPPED, updatedAt = System.currentTimeMillis(), note = "Stopped", reported = true))
         return "Stopped."
@@ -340,6 +375,7 @@ object JarvisTasks {
         val msgs = when (t.agent) {
             AgentKind.CLAUDE -> claudeBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
             AgentKind.OPENCODE -> openCodeBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
+            AgentKind.CODEX -> codexBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
             AgentKind.AGY -> runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
         }
         val text = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content.orEmpty()
@@ -387,6 +423,20 @@ object JarvisTasks {
 
     // ------------------------------------------------------------------ watching
 
+    /**
+     * A backend for one Codex task chat. It never changes the user's Codex defaults, and Codex's questions are answered
+     * empty: nobody sees a task's chat, so the agent asks in its reply instead (Jarvis reads that out).
+     */
+    private fun newCodexBackend() = com.example.gemini.data.agent.codex.CodexChatBackend(
+        app, scope, ChatSessionStore(), vm.codexPrefs, com.example.gemini.data.agent.codex.CodexBridgeClient(),
+        rememberChoices = false, skipQuestions = true
+    ).also { it.start() }
+
+    private fun ensureCodexBackend(id: String): com.example.gemini.data.agent.codex.CodexChatBackend = codexBackends.getOrPut(id) {
+        attachedAt[id] = System.currentTimeMillis()
+        newCodexBackend().also { it.selectConversation(id) }
+    }
+
     private fun ensureBackend(id: String): ClaudeChatBackend = claudeBackends.getOrPut(id) {
         attachedAt[id] = System.currentTimeMillis()
         newClaudeBackend().also { it.selectConversation(id) }
@@ -400,6 +450,7 @@ object JarvisTasks {
     private fun release(id: String) {
         claudeBackends.remove(id)?.let { runCatching { it.detach() } }
         openCodeBackends.remove(id)?.let { runCatching { it.stop() } }
+        codexBackends.remove(id)?.let { runCatching { it.stop() } }
         attachedAt.remove(id)
         progressSig.remove(id)
         clearAgyPending(id)
@@ -412,6 +463,9 @@ object JarvisTasks {
         AgentKind.OPENCODE -> openCodeBackends[t.id]?.isCurrentChatActivelyRunning?.value == true ||
             (vm.currentConversation.value?.id == t.id && vm.openCodeBackend.isCurrentChatActivelyRunning.value) ||
             vm.openCodeBackend.conversations.value.any { it.id == t.id && it.isRunning }
+        AgentKind.CODEX -> codexBackends[t.id]?.isCurrentChatActivelyRunning?.value == true ||
+            (vm.currentConversation.value?.id == t.id && vm.codexBackend.isCurrentChatActivelyRunning.value) ||
+            vm.codexBackend.conversations.value.any { it.id == t.id && it.isRunning }
     }
 
     private fun agyBusy(id: String): Boolean {
@@ -475,6 +529,17 @@ object JarvisTasks {
                     ?.let { m -> Regex("\"userMessage\":\"((?:[^\"\\\\]|\\\\.)*)\"").find(m.content)?.groupValues?.get(1) ?: "the provider failed" }
                 sig = "${msgs.size}:${last?.content?.length}:${last?.toolCalls?.size}:${last?.toolCalls?.lastOrNull()?.status}"
             }
+            AgentKind.CODEX -> {
+                val b = ensureCodexBackend(t.id)
+                running = b.isCurrentChatActivelyRunning.value
+                needsApproval = b.pendingApprovals.value.isNotEmpty()
+                val msgs = b.messages.value
+                val last = msgs.lastOrNull()
+                // Codex reports a failed turn as an error card in the reply (usage limit, connection, model)
+                error = b.conversationError.value ?: last?.takeIf { !running && it.role == MessageRole.ASSISTANT && it.content.contains("<!-- error -->") }
+                    ?.let { m -> Regex("\"userMessage\":\"((?:[^\"\\\\]|\\\\.)*)\"").find(m.content)?.groupValues?.get(1) ?: "Codex failed" }
+                sig = "${msgs.size}:${last?.content?.length}:${last?.toolCalls?.size}:${last?.toolCalls?.lastOrNull()?.status}"
+            }
         }
         if (progressSig.put(t.id, sig) != sig) t = t.copy(progressAt = now)
         if (running && !t.seenRunning) t = t.copy(seenRunning = true)
@@ -522,6 +587,7 @@ object JarvisTasks {
                     if (find(t.id)?.active == false) {
                         claudeBackends.remove(t.id)?.let { runCatching { it.detach() } }
                         openCodeBackends.remove(t.id)?.let { runCatching { it.stop() } }
+                        codexBackends.remove(t.id)?.let { runCatching { it.stop() } }
                         attachedAt.remove(t.id)
                     }
                 }

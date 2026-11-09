@@ -247,10 +247,17 @@ object LocalServerManager {
             ""
         }
 
+        val codexCmd = authPrefs.getCodexBinaryPathSync().trim()
+        val codexBinParam = if (codexCmd.isNotBlank() && com.example.gemini.domain.model.AgentKind.CODEX in com.example.gemini.data.agent.AgentPreferences.enabledSync(context)) {
+            " --codex-bin \"$codexCmd\""
+        } else {
+            ""
+        }
+
         // agents switched off in the app never run (no AGY hub / no Claude Code endpoints)
         val agentFlags = com.example.gemini.data.agent.AgentPreferences.bridgeFlags(context)
 
-        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$claudeBinParam$openCodeBinParam$agentFlags"
+        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$claudeBinParam$openCodeBinParam$codexBinParam$agentFlags"
     }
 
     /**

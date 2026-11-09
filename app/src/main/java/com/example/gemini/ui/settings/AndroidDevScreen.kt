@@ -433,7 +433,7 @@ private fun TaskOutput(state: AndroidDevManager.State, task: String) {
 /** How agents (any agent) and the user build: the adev commands in the terminal. */
 @Composable
 private fun UseGuide(state: AndroidDevManager.State) {
-    Hint("Any agent that can run terminal commands can build apps: Antigravity, Claude Code or OpenCode. Ask it in chat; the Android Development skill (below) tells it the commands. In the terminal yourself:")
+    Hint("Any agent that can run terminal commands can build apps: Antigravity, Claude Code, OpenCode or Codex. Ask it in chat; the Android Development skill (below) tells it the commands. In the terminal yourself:")
     if (Component.LAUNCHER !in state.installed) Hint("Install Kotlin / Java above first.")
     DevCopyLine("adev-new compose ~/${AndroidDevManager.PROJECTS_DIR}/my-app", mono = true)
     DevCopyLine("cd ~/${AndroidDevManager.PROJECTS_DIR}/my-app && adev ./gradlew assembleDebug", mono = true)
@@ -478,7 +478,7 @@ private fun TerminalCard(state: AndroidDevManager.State, cardBg: Color, cardBord
             "mkdir -p \$PREFIX/share/antigem-android && cd \$PREFIX/share/antigem-android && for f in files.json android-setup.sh adev adev-new; do curl -fsSLO $raw/\$f; done",
         "2. See every step" to "bash $s help",
         "3. Kotlin / Java / Compose (container base java sdk launcher)" to "bash $s kotlin",
-        "4. Flutter and / or React Native (Node.js)" to "bash $s flutter node",
+        "4. Flutter (with release builds) and / or React Native (Node.js and the NDK)" to "bash $s flutter flutter-release node ndk",
         "5. Check it, and build a test app" to "bash $s doctor && bash $s test compose"
     )
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {

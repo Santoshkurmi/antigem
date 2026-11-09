@@ -69,6 +69,11 @@ private val AGENT_OPTIONS = listOf(
         AgentKind.OPENCODE,
         "OpenCode",
         "Open-source coding agent: 200+ providers with your own keys, any OpenAI-compatible API, and free models."
+    ),
+    AgentOption(
+        AgentKind.CODEX,
+        "Codex",
+        "OpenAI's Codex CLI on this device: sign in with your ChatGPT account (or an API key)."
     )
 )
 
@@ -136,10 +141,12 @@ fun AgentChoiceDialog(step: Int = 1, total: Int = 1, onConfirm: (Set<AgentKind>)
         total = total,
         accent = MaterialTheme.colorScheme.primary,
         icon = {
-            Box(Modifier.size(width = 64.dp, height = 44.dp)) {
-                AgentMark(AgentKind.AGY, size = 34.dp, modifier = Modifier.align(Alignment.CenterStart))
-                AgentMark(AgentKind.CLAUDE, size = 34.dp, modifier = Modifier.align(Alignment.Center).offset(y = (-6).dp))
-                AgentMark(AgentKind.OPENCODE, size = 34.dp, modifier = Modifier.align(Alignment.CenterEnd))
+            // one mark per agent, two by two (fits the round icon)
+            Box(Modifier.size(52.dp)) {
+                val corners = listOf(Alignment.TopStart, Alignment.TopEnd, Alignment.BottomStart, Alignment.BottomEnd)
+                AgentKind.entries.take(corners.size).forEachIndexed { i, agent ->
+                    AgentMark(agent, size = 28.dp, modifier = Modifier.align(corners[i]))
+                }
             }
         },
         title = "Choose your agents",

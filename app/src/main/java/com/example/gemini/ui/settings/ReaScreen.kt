@@ -436,7 +436,7 @@ private fun ConnectGuide(state: ReaManager.State) {
     val directDefault = state.serverTokens(ReaManager.Mode.DIRECT, state.defaultSelection.ifEmpty { listOf("all") }, emptyList(), false)
     val directAll = state.serverTokens(ReaManager.Mode.DIRECT, listOf("all"), emptyList(), false)
     Hint("REA is not tied to an agent: any agent can use it. Add it where you manage that agent's MCP servers, with the REA preset:")
-    Mono("Antigravity → MCP Servers → REA\nClaude Code → MCP → REA\nOpenCode → MCP servers → REA")
+    Mono("Antigravity → MCP Servers → REA\nClaude Code → MCP → REA\nOpenCode → MCP servers → REA\nCodex → MCP servers → REA")
     if (!state.usable) Hint("Install REA and the MCP launcher above first.")
     Text("The preset asks how the agent should see REA's tools", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     Text(
@@ -508,7 +508,7 @@ private fun ManualSetupCard(state: ReaManager.State, cardBg: Color, cardBorder: 
                 TextButton(onClick = { open = !open }) { Text(if (open) "Hide" else "Show", fontSize = 12.5.sp) }
             }
             if (!open) {
-                Hint("Prefer the terminal, or setting up Claude Code or OpenCode? These are the same steps as commands.")
+                Hint("Prefer the terminal, or setting up Claude Code, OpenCode or Codex? These are the same steps as commands.")
                 return@Column
             }
             steps.forEach { (label, command) ->
@@ -547,7 +547,7 @@ private fun RemoveCard(state: ReaManager.State, busy: Boolean, cardBg: Color, ca
 }
 
 /**
- * The REA preset of every agent's MCP settings (Antigravity, Claude Code, OpenCode): adds or updates an REA MCP server.
+ * The REA preset of every agent's MCP settings (Antigravity, Claude Code, OpenCode, Codex): adds or updates an REA MCP server.
  * The user chooses how the agent sees REA's tools (on demand through four small gateway tools, or every tool
  * directly), which tools it may use (tool groups or all), and in on-demand mode which groups to offer directly as
  * well; each choice shows what it does and what it costs in context per request.

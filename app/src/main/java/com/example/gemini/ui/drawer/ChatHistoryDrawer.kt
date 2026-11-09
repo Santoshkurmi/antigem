@@ -835,6 +835,7 @@ fun ChatHistoryDrawer(
                                 com.example.gemini.domain.model.AgentKind.AGY -> "Antigravity"
                                 com.example.gemini.domain.model.AgentKind.CLAUDE -> "Claude"
                                 com.example.gemini.domain.model.AgentKind.OPENCODE -> "OpenCode"
+                                com.example.gemini.domain.model.AgentKind.CODEX -> "Codex"
                             }
                             add(agent to label)
                         }
@@ -1569,14 +1570,16 @@ private fun ChatHistoryItemRow(
                 // Claude chats are marked by an orange chat icon (instead of a "Claude" text badge)
                 val isClaudeChat = conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
                 val isOpenCodeChat = conv.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
+                val isCodexChat = conv.agent == com.example.gemini.domain.model.AgentKind.CODEX
                 if (isJarvis) {
                     com.example.gemini.ui.jarvis.JarvisBotIcon(19.dp, com.example.gemini.ui.jarvis.Cyan.copy(alpha = if (isSelected) 1f else 0.85f))
                 } else Icon(
                     imageVector = Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else null,
+                    contentDescription = if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else if (isCodexChat) "Codex chat" else null,
                     tint = when {
                         isClaudeChat -> com.example.gemini.ui.components.ClaudeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isOpenCodeChat -> com.example.gemini.ui.components.OpenCodeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
+                        isCodexChat -> com.example.gemini.ui.components.CodexAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isSelected -> ClaudeTerracotta
                         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     },

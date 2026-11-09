@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 object JarvisDriver {
     private val claude = ConcurrentHashMap<String, ClaudeChatBackend>()
     private val openCode = ConcurrentHashMap<String, OpenCodeChatBackend>()
+    private val codex = ConcurrentHashMap<String, com.example.gemini.data.agent.codex.CodexChatBackend>()
     private val hub by lazy { AgyHubClient() }
     private val vm get() = JarvisController.vm
 
@@ -39,6 +40,8 @@ object JarvisDriver {
                 vm.claudeBackend.conversations.value.any { it.id == id && it.isRunning }
             AgentKind.OPENCODE -> openCode[id]?.isCurrentChatActivelyRunning?.value == true ||
                 vm.openCodeBackend.conversations.value.any { it.id == id && it.isRunning }
+            AgentKind.CODEX -> codex[id]?.isCurrentChatActivelyRunning?.value == true ||
+                vm.codexBackend.conversations.value.any { it.id == id && it.isRunning }
             AgentKind.AGY -> {
                 val c = vm.agyBackend.conversations.value.find { it.id == id }
                 c != null && vm.systemConnectionState.value.isHubOnline && (c.isRunning || c.notFullyIdle)
@@ -52,6 +55,7 @@ object JarvisDriver {
         when (agentOf(id)) {
             AgentKind.CLAUDE -> claude.getOrPut(id) { newClaude().also { it.selectConversation(id) } }
             AgentKind.OPENCODE -> openCode.getOrPut(id) { newOpenCode().also { it.selectConversation(id) } }
+            AgentKind.CODEX -> codex.getOrPut(id) { newCodex().also { it.selectConversation(id) } }
             AgentKind.AGY -> Unit
         }
     }
@@ -62,12 +66,16 @@ object JarvisDriver {
     /** The chat's own OpenCode backend. */
     fun openCodeOf(id: String): OpenCodeChatBackend? = openCode[id]
 
+    /** The chat's own Codex backend. */
+    fun codexOf(id: String): com.example.gemini.data.agent.codex.CodexChatBackend? = codex[id]
+
     /** A live backend is kept on this chat. */
-    fun isAttached(id: String): Boolean = claude.containsKey(id) || openCode.containsKey(id)
+    fun isAttached(id: String): Boolean = claude.containsKey(id) || openCode.containsKey(id) || codex.containsKey(id)
 
     fun release(id: String) {
         claude.remove(id)?.let { runCatching { it.detach() } }
         openCode.remove(id)?.let { runCatching { it.stop() } }
+        codex.remove(id)?.let { runCatching { it.stop() } }
     }
 
     private fun newClaude() = ClaudeChatBackend(JarvisController.app, JarvisController.scopeForDrivers, ChatSessionStore(), vm.claudePrefs, ClaudeBridgeClient())
@@ -75,6 +83,11 @@ object JarvisDriver {
     private fun newOpenCode() = OpenCodeChatBackend(
         JarvisController.app, JarvisController.scopeForDrivers, ChatSessionStore(), vm.openCodePrefs, OpenCodeBridgeClient(),
         rememberChoices = false
+    ).also { it.start() }
+
+    private fun newCodex() = com.example.gemini.data.agent.codex.CodexChatBackend(
+        JarvisController.app, JarvisController.scopeForDrivers, ChatSessionStore(), vm.codexPrefs,
+        com.example.gemini.data.agent.codex.CodexBridgeClient(), rememberChoices = false
     ).also { it.start() }
 
     /**
@@ -102,6 +115,12 @@ object JarvisDriver {
                 val enum = AgyHubClient.resolveModelEnum(vm.agyBackend.modelOfChat(id))
                 hub.sendUserPrompt(id, text, enum).getOrThrow()
             }
+            AgentKind.CODEX -> if (screenFree) vm.codexBackend.sendMessage(text) else {
+                val fresh = !codex.containsKey(id)
+                val b = codex.getOrPut(id) { newCodex().also { it.selectConversation(id) } }
+                if (fresh) delay(900) else if (b.currentConversation.value?.id != id) { b.selectConversation(id); delay(900) }
+                b.sendMessage(text)
+            }
         }
     }
 
@@ -118,6 +137,7 @@ object JarvisDriver {
                 }
             }
             AgentKind.OPENCODE -> (openCode[id] ?: vm.openCodeBackend).interrupt(id)
+            AgentKind.CODEX -> (codex[id] ?: vm.codexBackend).interrupt(id)
             AgentKind.AGY -> hub.cancelCascadeInvocation(id)
         }
     }
@@ -126,6 +146,7 @@ object JarvisDriver {
     fun liveMessages(id: String): List<ChatMessage>? = when (agentOf(id)) {
         AgentKind.CLAUDE -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.CLAUDE) vm.claudeBackend.messages.value else claude[id]?.messages?.value
         AgentKind.OPENCODE -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.OPENCODE) vm.openCodeBackend.messages.value else openCode[id]?.messages?.value
+        AgentKind.CODEX -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.CODEX) vm.codexBackend.messages.value else codex[id]?.messages?.value
         AgentKind.AGY -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.AGY) vm.messages.value else null
     }
 

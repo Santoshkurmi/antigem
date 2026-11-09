@@ -4,5 +4,6 @@ package com.example.gemini.domain.model
 enum class AgentKind {
     AGY,
     CLAUDE,
-    OPENCODE
+    OPENCODE,
+    CODEX
 }
