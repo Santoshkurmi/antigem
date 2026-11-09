@@ -26,6 +26,7 @@ import com.example.gemini.theme.GeminiBlue
 fun AttachmentSelectorBottomSheet(
     onPickImage: () -> Unit,
     onPickFile: () -> Unit,
+    onPickFromFiles: () -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -54,7 +55,7 @@ fun AttachmentSelectorBottomSheet(
                 icon = Icons.Outlined.Image,
                 iconColor = ClaudeTerracotta,
                 title = "Photo / Image",
-                subtitle = "Attach an image for multimodal vision & analysis",
+                subtitle = "The model sees the image directly. Big photos are shrunk first.",
                 onClick = {
                     onDismiss()
                     onPickImage()
@@ -67,10 +68,23 @@ fun AttachmentSelectorBottomSheet(
                 icon = Icons.Outlined.Description,
                 iconColor = GeminiBlue,
                 title = "Document / File",
-                subtitle = "Attach a PDF, text, or binary file from your device",
+                subtitle = "Copied from your phone to the agent's machine. Avoid large files here: copying takes time and storage. Use \"From Files\" for big files.",
                 onClick = {
                     onDismiss()
                     onPickFile()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            AttachmentOptionRow(
+                icon = Icons.Outlined.Folder,
+                iconColor = ClaudeTerracotta,
+                title = "From Files",
+                subtitle = "Attach any file, any size: nothing is copied. The agent opens the original file, so it could change it (it is told not to, and usually won't).",
+                onClick = {
+                    onDismiss()
+                    onPickFromFiles()
                 }
             )
         }

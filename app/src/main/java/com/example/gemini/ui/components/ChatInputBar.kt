@@ -166,6 +166,8 @@ fun ChatInputBar(
     onStopStreaming: () -> Unit,
     attachments: List<ChatAttachment> = emptyList(),
     isUploadingAttachment: Boolean = false,
+    /** Files being copied to the agent's machine: attachment id → 0..1. */
+    attachmentProgress: Map<String, Float> = emptyMap(),
     onRemoveAttachment: (String) -> Unit = {},
     onAddAttachment: (ChatAttachment) -> Unit = {},
     onAttachClick: () -> Unit = {},
@@ -591,6 +593,8 @@ fun ChatInputBar(
     // derived, so the bar redraws only when the box turns empty / non-empty, not on every key press
     val hasText by remember(textFieldState) { derivedStateOf { textFieldState.text.isNotBlank() } }
     val canSend = hasText || attachments.isNotEmpty()
+    // attachments still being prepared or copied must be ready first (they go with the message)
+    val attachmentsBusy = isUploadingAttachment || attachmentProgress.isNotEmpty()
     val familyColor = if (selectedModel.family == ModelFamily.CLAUDE) ClaudeTerracotta else GeminiBlue
     val fileLinkHandler = LocalFileLinkHandler.current
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
@@ -957,7 +961,7 @@ fun ChatInputBar(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Uploading attachment...",
+                                            text = "Preparing attachment…",
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -966,9 +970,13 @@ fun ChatInputBar(
                             }
 
                             for (att in attachments) {
-                                val isImg = att.isImage || att.name.endsWith(".jpg", true) || att.name.endsWith(".png", true) ||
+                                // an image sent only by path (too big to shrink, TIFF, …) shows as a file
+                                val isImg = !(att.reference && att.base64.isNullOrBlank()) && (
+                                    att.isImage || att.name.endsWith(".jpg", true) || att.name.endsWith(".png", true) ||
                                         att.name.endsWith(".jpeg", true) || att.name.endsWith(".webp", true) ||
                                         att.name.endsWith(".gif", true) || att.mimeType?.startsWith("image/") == true
+                                )
+                                val copyProgress = attachmentProgress[att.id]
 
                                 val imgSource = remember(att) {
                                     when {
@@ -991,6 +999,12 @@ fun ChatInputBar(
                                         Row(
                                             modifier = Modifier
                                                 .clickable {
+                                                    if (att.reference && !isImg) {
+                                                        // a file on the agent's machine: opened like any file link (encoded, the handler decodes);
+                                                        // still copying: nothing to open yet
+                                                        if (att.path.isNotBlank()) fileLinkHandler.onOpenFile(java.net.URLEncoder.encode(att.path, "UTF-8"))
+                                                        return@clickable
+                                                    }
                                                     val ext = (att.name.ifBlank { att.path }).substringAfterLast('.', "").lowercase()
                                                     val isText = att.mimeType?.startsWith("text/") == true ||
                                                             att.mimeType?.contains("json") == true ||
@@ -1069,15 +1083,41 @@ fun ChatInputBar(
                                                 )
                                             }
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = att.name,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.widthIn(max = 130.dp)
-                                            )
+                                            Column(modifier = Modifier.widthIn(max = 130.dp)) {
+                                                Text(
+                                                    text = att.name,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                // a file sent by path: its size, or how far its copy to the agent's machine is
+                                                if (copyProgress != null) {
+                                                    Text(
+                                                        text = "Copying ${(copyProgress * 100).toInt()}%",
+                                                        fontSize = 10.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1
+                                                    )
+                                                    LinearProgressIndicator(
+                                                        progress = { copyProgress },
+                                                        modifier = Modifier
+                                                            .width(110.dp)
+                                                            .padding(top = 2.dp)
+                                                            .height(3.dp)
+                                                            .clip(RoundedCornerShape(2.dp)),
+                                                        color = ClaudeTerracotta
+                                                    )
+                                                } else if (att.reference && att.size > 0) {
+                                                    Text(
+                                                        text = com.example.gemini.data.files.FileKinds.formatSize(att.size),
+                                                        fontSize = 10.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
                                         }
 
                                         Spacer(modifier = Modifier.width(2.dp))
@@ -1270,12 +1310,16 @@ fun ChatInputBar(
                                 }
                             }
                         } else if (canSend) {
-                            val sendBtnColor = if (!isAuth) com.example.gemini.theme.AppColors.textSecondary else if (!isOnline) com.example.gemini.theme.AppColors.textSecondary else if (isBackgroundActive) com.example.gemini.theme.AppColors.warning else ClaudeTerracotta
+                            val sendBtnColor = if (!isAuth) com.example.gemini.theme.AppColors.textSecondary else if (!isOnline) com.example.gemini.theme.AppColors.textSecondary else if (attachmentsBusy) com.example.gemini.theme.AppColors.textSecondary else if (isBackgroundActive) com.example.gemini.theme.AppColors.warning else ClaudeTerracotta
                             Surface(
                                 onClick = {
                                     val trimmed = textFieldState.text.toString().trim()
                                         if (!isAuth) {
                                             Toast.makeText(context, "Please sign in first to send messages.", Toast.LENGTH_SHORT).show()
+                                            return@Surface
+                                        }
+                                        if (attachmentsBusy) {
+                                            Toast.makeText(context, "Wait until the attachments are ready.", Toast.LENGTH_SHORT).show()
                                             return@Surface
                                         }
                                         if (!isOnline) {

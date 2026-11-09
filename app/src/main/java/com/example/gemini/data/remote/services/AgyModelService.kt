@@ -35,10 +35,22 @@ class AgyModelService {
 
         private val keyToModelEnum = ConcurrentHashMap<String, String>()
         private val nameToModelEnum = ConcurrentHashMap<String, String>()
+        private val slugToModelEnum = ConcurrentHashMap<String, String>()
         private val allValidEnums = CopyOnWriteArraySet<String>()
 
         @Volatile
         private var defaultModelEnum: String = ""
+
+        /** "Gemini 4 Argon (Medium)" → "gemini-4-argon-medium": how cloud chats name the model of a reply. */
+        fun modelSlug(name: String): String =
+            name.lowercase().replace(Regex("[^a-z0-9.]+"), "-").trim('-')
+
+        /**
+         * The model enum of a cloud chat reply's model name (its `model_info`, e.g. "gemini-4-argon-medium"), or null
+         * when no listed model has that name.
+         */
+        fun modelEnumForCloudName(name: String?): String? =
+            name?.takeIf { it.isNotBlank() }?.let { slugToModelEnum[modelSlug(it)] }
 
         fun updateModelRegistry(models: List<AiModel>) {
             if (models.isEmpty()) return
@@ -48,6 +60,7 @@ class AgyModelService {
                     keyToModelEnum[m.key.lowercase()] = m.id
                 }
                 keyToModelEnum[m.displayName.lowercase()] = m.id
+                slugToModelEnum[modelSlug(m.displayName)] = m.id
                 if (m.baseName.isNotBlank()) {
                     nameToModelEnum[m.baseName.lowercase()] = m.id
                 }

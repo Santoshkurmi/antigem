@@ -48,11 +48,14 @@ class AgyConversationService {
     /**
      * Subscribes to live conversation summary updates pushed by the AGY daemon via typed Wire LanguageServerService.
      */
-    fun subscribeToSummaries(hubUrl: String = AuthPreferences.currentHubUrl): Flow<SummariesUpdate> = flow {
+    fun subscribeToSummaries(hubUrl: String = AuthPreferences.currentHubUrl, cloud: Boolean = false): Flow<SummariesUpdate> = flow {
         if (!com.example.gemini.data.remote.AgyBridgeService.instance.awaitHubReady(timeoutMs = 10_000L)) {
             throw Exception("Antigravity Hub is not running")
         }
-        AgyLanguageService.JetboxSubscribeToSummaries().asFlowSafely(JetboxSubscribeToSummariesRequest())
+        // cloud = the account's Antigravity cloud chats (Remote Agents), which the hub lists on request
+        val request = if (cloud) JetboxSubscribeToSummariesRequest(backend = exa.language_server_pb.BackendType.BACKEND_TYPE_REMOTE_AICODE)
+            else JetboxSubscribeToSummariesRequest()
+        AgyLanguageService.JetboxSubscribeToSummaries().asFlowSafely(request)
             .collect { response ->
                 try {
                     val frameList = mutableListOf<Conversation>()
@@ -101,7 +104,8 @@ class AgyConversationService {
                         frameList.add(
                             Conversation(
                                 id = cid,
-                                title = summary,
+                                // a summary made from the first prompt can carry the app's hidden blocks
+                                title = com.example.gemini.data.remote.PromptExpansion.cleanTitle(summary),
                                 modelId = "",
                                 sessionId = cid,
                                 summary = summary,
@@ -117,7 +121,8 @@ class AgyConversationService {
                                 subagentRole = subagentRole,
                                 subagentTypeName = subagentTypeName,
                                 nestingDepth = nestingDepth,
-                                archived = annotations?.archived == true
+                                archived = annotations?.archived == true,
+                                cloudProjectId = if (cloud || summaryObj.cloud) metaObj?.project_id.orEmpty() else null
                             )
                         )
                     }

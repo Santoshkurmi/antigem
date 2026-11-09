@@ -1,16 +1,10 @@
 {
-  "version_code": 124,
-  "version_name": "1.1.4",
+  "version_code": 125,
+  "version_name": "1.1.5",
   "min_supported_version_code": 1,
   "changelog": [
-    "New agent: Codex — chat, settings, MCP servers, accounts, and works with Jarvis",
-    "REA (Reverse Engineering Anything): reverse engineer APKs, Flutter, React Native and native code with any agent",
-    "Android Development: build Kotlin/Compose, Flutter and React Native apps on the phone itself (com.termux build)",
-    "Global context: tell every agent about the app and add your own notes, for the first message or every message",
-    "Rewritten video player and better opening of file links in chat",
-    "Archive support for chats",
-    "Settings: Themes and Appearance are now separate sections",
-    "Some bugs fixes that you never noticed."
+    "Antigravity live call feature added(with all different voice etc same like in gemini app voice call)",
+    "Added 32 bit .so for at least install the app for 32 bit phone(to run in server mode only)"
   ],
   "is_critical": false
 }

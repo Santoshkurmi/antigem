@@ -255,7 +255,8 @@ object FileExplorerApi {
 
     /**
      * Streams [input] into [targetPath] on the bridge machine. [onProgress] gets bytes sent so far.
-     * conflict: "rename" (default, keeps both), "overwrite" or "fail".
+     * conflict: "rename" (default, keeps both), "overwrite" or "fail". Cancelling the calling coroutine stops the
+     * transfer; the bridge then removes the partly written file.
      */
     suspend fun upload(
         input: () -> InputStream,
@@ -264,6 +265,7 @@ object FileExplorerApi {
         conflict: String = "rename",
         onProgress: (Long) -> Unit = {}
     ): FsResult = withContext(Dispatchers.IO) {
+        val job = coroutineContext[kotlinx.coroutines.Job]
         val body = object : RequestBody() {
             override fun contentType() = OCTET
             override fun contentLength() = if (length > 0) length else -1
@@ -272,6 +274,7 @@ object FileExplorerApi {
                     val src = stream.source()
                     var sent = 0L
                     while (true) {
+                        if (job?.isActive == false) throw java.io.IOException("Upload cancelled")
                         val n = src.read(sink.buffer, 64 * 1024)
                         if (n == -1L) break
                         sent += n

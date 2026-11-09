@@ -90,7 +90,10 @@ data class ClaudeControlRequestBody(
     val cancel_queued: Boolean? = null,
     val settings: JsonObject? = null,
     val user_message_id: String? = null,
-    val dry_run: Boolean? = null
+    val dry_run: Boolean? = null,
+    /** `generate_session_title`: what the chat is about, and whether to save the title in the chat's transcript. */
+    val description: String? = null,
+    val persist: Boolean? = null
 )
 
 @Serializable

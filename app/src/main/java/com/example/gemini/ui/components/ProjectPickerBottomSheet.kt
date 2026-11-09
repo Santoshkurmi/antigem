@@ -48,6 +48,10 @@ fun ProjectPickerDialog(
     onBrowseFolder: () -> Unit,
     onCloneRepo: (() -> Unit)? = null,
     onRefresh: (() -> Unit)? = null,
+    /** Extra items at the top of the list (the Antigravity cloud projects). */
+    cloudSection: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
+    /** A cloud project is picked: no local choice shows as selected. */
+    cloudSelected: Boolean = false,
     onDismiss: () -> Unit
 ) {
     val initialScrollIndex = remember {
@@ -169,9 +173,10 @@ fun ProjectPickerDialog(
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    cloudSection?.invoke(this)
                     // Option 1: General / No Workspace
                     item {
-                        val isSelected = activeProject == null || activeProject.path.isBlank()
+                        val isSelected = !cloudSelected && (activeProject == null || activeProject.path.isBlank())
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),

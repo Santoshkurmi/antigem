@@ -65,7 +65,11 @@ class CodexTranscript(var threadId: String = "") {
     }
 
     /** A prompt sent from the app that Codex has not shown as a user message yet. */
-    class LocalPrompt(val clientId: String, val text: String, val attachmentNames: List<String>, val created: Long)
+    class LocalPrompt(
+        val clientId: String, val text: String, val attachmentNames: List<String>, val created: Long,
+        /** Images sent with it, shown as previews until Codex confirms the message. */
+        val images: List<com.example.gemini.domain.model.ChatAttachment> = emptyList()
+    )
 
     /** A question Codex asked (`item/tool/requestUserInput`), answered in the chat's question card. */
     class Question(val key: String, val turnId: String?, val questions: List<JsonObject>)
@@ -192,8 +196,11 @@ class CodexTranscript(var threadId: String = "") {
     // ------------------------------------------------------------------ live events
 
     /** The prompt was sent from the app: shown at once (its user message replaces it, matched by [clientId]). */
-    fun addLocalPrompt(clientId: String, text: String, attachmentNames: List<String>, startsTurn: Boolean) {
-        localPrompts[clientId] = LocalPrompt(clientId, text, attachmentNames, System.currentTimeMillis())
+    fun addLocalPrompt(
+        clientId: String, text: String, attachmentNames: List<String>, startsTurn: Boolean,
+        images: List<com.example.gemini.domain.model.ChatAttachment> = emptyList()
+    ) {
+        localPrompts[clientId] = LocalPrompt(clientId, text, attachmentNames, System.currentTimeMillis(), images)
         if (startsTurn) awaitingStart = true
     }
 
@@ -379,6 +386,9 @@ class CodexTranscript(var threadId: String = "") {
     /** The ids of the turns, oldest first. */
     fun turnIds(): List<String> = turns.keys.toList()
 
+    /** What was asked in each turn, oldest first (as sent: hidden blocks included). */
+    fun prompts(): List<String> = turns.values.mapNotNull { promptOf(it) }
+
     /** The last plan Codex proposed (plan mode), if the newest finished turn has one. */
     val lastPlan: String?
         get() = turns.values.lastOrNull { it.status != "inProgress" }?.items?.values?.lastOrNull { it.type == "plan" }?.text?.toString()?.takeIf { it.isNotBlank() }
@@ -426,8 +436,9 @@ class CodexTranscript(var threadId: String = "") {
             flush(true)
         }
         for (lp in localPrompts.values) {
+            val (text, files) = com.example.gemini.data.files.AttachedFiles.extract(lp.text, "local_" + lp.clientId)
             out.add(ChatMessage(id = "local_" + lp.clientId, conversationId = conversationId, role = MessageRole.USER,
-                content = lp.text + attachmentsSuffix(lp.attachmentNames), createdAt = lp.created))
+                content = text + attachmentsSuffix(lp.attachmentNames), attachments = lp.images + files, createdAt = lp.created))
         }
         for ((at, e) in errorCards) {
             out.add(ChatMessage(id = "err_$at", conversationId = conversationId, role = MessageRole.ASSISTANT,
@@ -440,18 +451,40 @@ class CodexTranscript(var threadId: String = "") {
 
     private fun userMessage(conversationId: String, item: Item, t: Turn): ChatMessage {
         val parts = item.json.a("content").orEmpty().mapNotNull { it.obj() }
-        val text = parts.filter { it.str("type") == "text" }.joinToString("\n") { it.str("text").orEmpty() }
+        // files sent by path are listed in the message's hidden text: shown as cards
+        val (text, files) = com.example.gemini.data.files.AttachedFiles.extract(
+            parts.filter { it.str("type") == "text" }.joinToString("\n") { it.str("text").orEmpty() }, item.id
+        )
+        // images show as previews: a localImage is a file on the bridge machine, an image a data URL
+        val images = parts.mapIndexedNotNull { i, p ->
+            when (p.str("type")) {
+                "localImage" -> p.str("path")?.takeIf { it.isNotBlank() }?.let { path ->
+                    com.example.gemini.domain.model.ChatAttachment(
+                        id = "${item.id}_img_$i", name = path.substringAfterLast('/'), path = path, isImage = true,
+                        url = com.example.gemini.data.files.FileExplorerApi.rawUrl(path),
+                        mimeType = com.example.gemini.data.files.AttachedFiles.mimeOf(path)
+                    )
+                }
+                "image" -> p.str("url")?.takeIf { it.startsWith("data:") && it.contains(";base64,") }?.let { url ->
+                    com.example.gemini.domain.model.ChatAttachment(
+                        id = "${item.id}_img_$i", name = "image", path = "", isImage = true,
+                        mimeType = url.substringAfter("data:").substringBefore(';'), base64 = url.substringAfter(";base64,")
+                    )
+                }
+                else -> null
+            }
+        }
         val names = parts.mapNotNull { p ->
             when (p.str("type")) {
-                "localImage", "localAudio" -> p.str("path")?.substringAfterLast('/')
-                "image" -> "image"
+                "localAudio" -> p.str("path")?.substringAfterLast('/')
+                "image" -> if (p.str("url")?.startsWith("data:") == true) null else "image"
                 "mention" -> "@" + p.str("name").orEmpty()
                 "skill" -> "$" + p.str("name").orEmpty()
                 else -> null
             }
         }
         return ChatMessage(id = item.id, conversationId = conversationId, role = MessageRole.USER,
-            content = text + attachmentsSuffix(names), createdAt = item.startedAt ?: t.startedAt ?: 0L)
+            content = text + attachmentsSuffix(names), attachments = images + files, createdAt = item.startedAt ?: t.startedAt ?: 0L)
     }
 
     private fun assistantMessage(conversationId: String, t: Turn, items: List<Item>, turnEnd: Boolean, awaiting: Set<String>, question: Question?): ChatMessage {

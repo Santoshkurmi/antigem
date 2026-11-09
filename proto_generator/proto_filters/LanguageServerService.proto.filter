@@ -109,3 +109,9 @@ GetTranscription
 StreamAudioTranscription
 SendAudioChunk
 EndAudioSession
+ListProjects
+ListResourceProviders
+ListAvailableResources
+ListRemotePlugins
+DisconnectRemotePlugin
+FetchSandboxPort

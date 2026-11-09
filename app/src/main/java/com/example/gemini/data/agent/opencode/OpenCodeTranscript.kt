@@ -63,6 +63,8 @@ class OpenCodeTranscript(var sessionId: String = "") {
         // user
         var text: String = ""
         var attachmentNames: List<String> = emptyList()
+        /** Images sent with the prompt, shown as previews (OpenCode keeps their data with the message). */
+        var images: List<com.example.gemini.domain.model.ChatAttachment> = emptyList()
         // assistant
         val parts = mutableListOf<Part>()
         var model: String? = null
@@ -163,9 +165,19 @@ class OpenCodeTranscript(var sessionId: String = "") {
             "user" -> {
                 val msg = Msg(id, "user", created)
                 msg.text = m.str("text") ?: m.o("payload").str("text") ?: ""
-                msg.attachmentNames = (m.a("files") ?: m.o("payload").a("files")).orEmpty().mapNotNull { f ->
-                    f.obj()?.let { it.str("name") ?: it.str("uri")?.substringAfterLast('/') }
+                val files = (m.a("files") ?: m.o("payload").a("files")).orEmpty().mapNotNull { it.obj() }
+                // a stored file is {data (base64), mime, source, name}: images become previews, the rest a name
+                val images = files.mapIndexedNotNull { i, f ->
+                    val mime = f.str("mime").orEmpty()
+                    val data = f.str("data").orEmpty()
+                    if (!mime.startsWith("image/") || data.isBlank()) null
+                    else com.example.gemini.domain.model.ChatAttachment(
+                        id = "${id}_img_$i", name = f.str("name") ?: "image", path = "", isImage = true, mimeType = mime, base64 = data
+                    )
                 }
+                msg.images = images
+                msg.attachmentNames = files.filter { f -> !(f.str("mime").orEmpty().startsWith("image/") && !f.str("data").isNullOrBlank()) }
+                    .mapNotNull { it.str("name") ?: it.str("uri")?.substringAfterLast('/') }
                 messages[id] = msg
             }
             "assistant" -> {
@@ -221,10 +233,11 @@ class OpenCodeTranscript(var sessionId: String = "") {
     // ------------------------------------------------------------------ live events
 
     /** The prompt was sent from the app: shown at once (OpenCode confirms it with the same id). */
-    fun addLocalPrompt(id: String, text: String, attachmentNames: List<String>) {
+    fun addLocalPrompt(id: String, text: String, attachmentNames: List<String>, images: List<com.example.gemini.domain.model.ChatAttachment> = emptyList()) {
         val msg = Msg(id, "user", System.currentTimeMillis())
         msg.text = text
         msg.attachmentNames = attachmentNames
+        msg.images = images
         msg.pending = true
         msg.local = true
         messages[id] = msg
@@ -247,6 +260,9 @@ class OpenCodeTranscript(var sessionId: String = "") {
     }
 
     fun userMessage(id: String): Msg? = messages[id]?.takeIf { it.role == "user" }
+
+    /** The user's prompts in this chat, oldest first (as sent: hidden blocks included). */
+    fun userPrompts(): List<String> = messages.values.filter { it.role == "user" }.map { it.text }
 
     /**
      * The turn waits for the model itself: no command or tool is running, nothing waits for the user. Only then does
@@ -502,12 +518,15 @@ class OpenCodeTranscript(var sessionId: String = "") {
             when (m.role) {
                 "user" -> {
                     flush()
+                    // files sent by path are listed in the message's hidden text: shown as cards
+                    val (text, files) = com.example.gemini.data.files.AttachedFiles.extract(m.text, m.id)
                     out.add(
                         ChatMessage(
                             id = m.id,
                             conversationId = conversationId,
                             role = MessageRole.USER,
-                            content = m.text + m.attachmentNames.takeIf { it.isNotEmpty() }?.let { "\n\n📎 " + it.joinToString(", ") }.orEmpty(),
+                            content = text + m.attachmentNames.takeIf { it.isNotEmpty() }?.let { "\n\n📎 " + it.joinToString(", ") }.orEmpty(),
+                            attachments = m.images + files,
                             createdAt = m.created
                         )
                     )

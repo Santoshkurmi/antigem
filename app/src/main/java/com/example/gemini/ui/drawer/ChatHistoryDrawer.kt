@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Public
 import com.example.gemini.ui.components.AppToastHelper
 import com.example.gemini.ui.components.ChatToastType
@@ -1574,9 +1575,11 @@ private fun ChatHistoryItemRow(
                 if (isJarvis) {
                     com.example.gemini.ui.jarvis.JarvisBotIcon(19.dp, com.example.gemini.ui.jarvis.Cyan.copy(alpha = if (isSelected) 1f else 0.85f))
                 } else Icon(
-                    imageVector = Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else if (isCodexChat) "Codex chat" else null,
+                    // an Antigravity cloud chat (Remote Agents) shows a cloud
+                    imageVector = if (conv.isCloud) Icons.Outlined.Cloud else Icons.Outlined.ChatBubbleOutline,
+                    contentDescription = if (conv.isCloud) "Cloud chat" else if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else if (isCodexChat) "Codex chat" else null,
                     tint = when {
+                        conv.isCloud -> com.example.gemini.theme.GeminiBlue.copy(alpha = if (isSelected) 1f else 0.85f)
                         isClaudeChat -> com.example.gemini.ui.components.ClaudeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isOpenCodeChat -> com.example.gemini.ui.components.OpenCodeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isCodexChat -> com.example.gemini.ui.components.CodexAccent.copy(alpha = if (isSelected) 1f else 0.85f)

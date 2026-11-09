@@ -438,6 +438,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             AgentKind.CODEX -> codexBackend.deleteConversation(id)
             AgentKind.AGY -> agyBackend.deleteConversation(id)
         }
+        // files the app copied for this chat go with it (never the user's own files picked in Files)
+        val copies = com.example.gemini.data.files.AttachedFiles.takeCopiesOf(getApplication(), id)
+        if (copies.isNotEmpty()) viewModelScope.launch(Dispatchers.IO) { com.example.gemini.data.files.FileExplorerApi.delete(copies) }
         // Jarvis forgets it too: a deleted Jarvis chat is replaced by a new one on the next message
         com.example.gemini.data.jarvis.JarvisController.onChatDeleted(id)
     }
@@ -464,12 +467,33 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         isCodexActive -> codexBackend.selectModel(modelId)
         else -> agyBackend.selectModel(modelId)
     }
-    /** `/plu:` plugin skills and custom slash commands are expanded here, for both agents. */
-    fun sendMessage(content: String): Unit = PromptExpansion.expand(content).let { expanded ->
+    /**
+     * `/plu:` plugin skills and custom slash commands are expanded here, for every agent. Attached files go along as a
+     * hidden list of their paths at the end (the agent opens them in place). Sends once copies still running are done.
+     */
+    fun sendMessage(content: String) {
+        val pending = uploadJobs.values.toList()
+        if (pending.isEmpty() && !_isUploadingAttachment.value) {
+            sendNow(content)
+            return
+        }
+        viewModelScope.launch {
+            for (job in pending) job.join()
+            _isUploadingAttachment.first { !it }
+            sendNow(content)
+        }
+    }
+
+    private fun sendNow(content: String) {
+        val refs = com.example.gemini.data.files.AttachedFiles.refsOf(_attachments.value)
+        val typed = PromptExpansion.expand(content)
+        val expanded = if (refs.isEmpty()) typed
+            else listOf(typed, com.example.gemini.data.files.AttachedFiles.block(refs)).filter { it.isNotBlank() }.joinToString("\n\n")
         // a Jarvis chat on screen: its message carries Jarvis' hidden note (or goes to the voice Jarvis chat as a typed turn)
         val jarvis = com.example.gemini.data.jarvis.JarvisController
         val chatId = currentConversation.value?.id
         val intercepted = (if (jarvis.isAttached) jarvis.interceptScreenMessage(chatId, expanded) else expanded) ?: return
+        rememberCopies(chatId, refs)
         // a normal chat (a Jarvis chat carries its own guide instead): the app's global context goes in front
         val it = if (intercepted === expanded) withGlobalContext(chatId, expanded) else intercepted
         when {
@@ -477,6 +501,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             isOpenCodeActive -> openCodeBackend.sendMessage(it)
             isCodexActive -> codexBackend.sendMessage(it)
             else -> agyBackend.sendMessage(it)
+        }
+    }
+
+    /** The copies a sent message uses are kept under its chat (a new chat once it has its id), so deleting the chat deletes them. */
+    private fun rememberCopies(chatId: String?, refs: List<com.example.gemini.data.files.AttachedFiles.Ref>) {
+        // sent: these copies now belong to the chat, not to chips that could still be removed
+        uploadFolders.keys.removeAll(_attachments.value.map { it.id }.toSet())
+        if (refs.none { com.example.gemini.data.files.AttachedFiles.isUploadCopy(it.path) }) return
+        val app = getApplication<Application>()
+        if (!chatId.isNullOrBlank()) {
+            com.example.gemini.data.files.AttachedFiles.rememberCopies(app, chatId, refs)
+            return
+        }
+        viewModelScope.launch {
+            withTimeoutOrNull(120_000) { currentConversation.first { !it?.id.isNullOrBlank() } }
+                ?.id?.let { com.example.gemini.data.files.AttachedFiles.rememberCopies(app, it, refs) }
         }
     }
     /** Settings → Agents → Global context, hidden in front of the message; a new chat is remembered once it has its id. */
@@ -519,21 +559,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             claudeNotSupported("Editing a sent message")
             return null
         }
-        return agyBackend.prepareEditMessage(messageId)?.let(PromptExpansion::collapse)
+        return agyBackend.prepareEditMessage(messageId)?.let { restoreAttachedFiles(it); editableText(it) }
     }
     fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) {
         forgetContextIfFirst(targetMsg.id)
-        if (isCodexActive) codexBackend.editMessage(targetMsg.id) { onRestored(PromptExpansion.collapse(it)) }
-        else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false) { onRestored(PromptExpansion.collapse(it)) }
-        else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false) { onRestored(PromptExpansion.collapse(it)) }
-        else agyBackend.revertAndEditLastUserMessage(targetMsg) { onRestored(PromptExpansion.collapse(it)) }
+        val restored: (String) -> Unit = { restoreAttachedFiles(it); onRestored(editableText(it)) }
+        if (isCodexActive) codexBackend.editMessage(targetMsg.id, restored)
+        else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false, restored)
+        else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false, restored)
+        else agyBackend.revertAndEditLastUserMessage(targetMsg, restored)
     }
 
     /** Claude: edit a sent prompt in a copy of the chat that ends before it; optionally restore the files changed since. */
-    fun editClaudeMessage(targetMsg: ChatMessage, restoreCode: Boolean, onRestored: (String) -> Unit) =
-        if (isCodexActive) codexBackend.editMessage(targetMsg.id) { onRestored(PromptExpansion.collapse(it)) }
-        else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreCode) { onRestored(PromptExpansion.collapse(it)) }
-        else claudeBackend.editMessage(targetMsg.id, restoreCode) { onRestored(PromptExpansion.collapse(it)) }
+    fun editClaudeMessage(targetMsg: ChatMessage, restoreCode: Boolean, onRestored: (String) -> Unit) {
+        val restored: (String) -> Unit = { restoreAttachedFiles(it); onRestored(editableText(it)) }
+        if (isCodexActive) codexBackend.editMessage(targetMsg.id, restored)
+        else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreCode, restored)
+        else claudeBackend.editMessage(targetMsg.id, restoreCode, restored)
+    }
 
     /** Sidebar export / share of a Claude chat that is not open. */
     suspend fun loadClaudeMessages(conversationId: String): List<ChatMessage> = claudeBackend.loadMessages(conversationId)
@@ -766,15 +809,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val attachments: StateFlow<List<com.example.gemini.domain.model.ChatAttachment>> = _attachments.asStateFlow()
 
     private val _isUploadingAttachment = MutableStateFlow(false)
+    /** True while picked images are being prepared (shrunk); sending waits for it. */
     val isUploadingAttachment: StateFlow<Boolean> = _isUploadingAttachment.asStateFlow()
 
+    /** Files being copied to the bridge machine: attachment id → 0..1, shown on their chips. Sending waits for them. */
+    private val _attachmentProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val attachmentProgress: StateFlow<Map<String, Float>> = _attachmentProgress.asStateFlow()
+    private val uploadJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+    /** The copy folder made for each attachment picked here (deleted if the chip is removed before sending). */
+    private val uploadFolders = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * Android's picker. An image becomes a shrunk copy the model sees directly; any other file is streamed (never read
+     * into memory) to the bridge machine and the agent gets its path there.
+     */
     fun addAttachmentsFromUris(uris: List<android.net.Uri>, context: android.content.Context) {
         if (uris.isEmpty()) return
+        val appContext = context.applicationContext
         viewModelScope.launch {
             _isUploadingAttachment.value = true
             try {
                 for (uri in uris) {
-                    processAndUploadUri(uri, context)
+                    addFromUri(uri, appContext)
                 }
             } finally {
                 _isUploadingAttachment.value = false
@@ -786,19 +842,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         addAttachmentsFromUris(listOf(uri), context)
     }
 
-    private suspend fun processAndUploadUri(uri: android.net.Uri, context: android.content.Context) {
+    private fun newAttachmentId() = "att_${System.currentTimeMillis()}_${(0..999).random()}"
+
+    private suspend fun addFromUri(uri: android.net.Uri, context: android.content.Context) {
+        var fileName = "attachment_${System.currentTimeMillis()}"
         try {
             val contentResolver = context.contentResolver
-            var fileName = "attachment_${System.currentTimeMillis()}"
             var fileSize = 0L
-
-            val cursor = contentResolver.query(uri, null, null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                    if (nameIndex >= 0) fileName = it.getString(nameIndex) ?: fileName
-                    if (sizeIndex >= 0) fileSize = it.getLong(sizeIndex)
+            withContext(Dispatchers.IO) {
+                contentResolver.query(uri, null, null, null, null)?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        val sizeIndex = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                        if (nameIndex >= 0) fileName = it.getString(nameIndex) ?: fileName
+                        if (sizeIndex >= 0 && !it.isNull(sizeIndex)) fileSize = it.getLong(sizeIndex)
+                    }
                 }
             }
 
@@ -806,44 +864,155 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val mimeType = contentResolver.getType(uri)
                 ?: android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
                 ?: "application/octet-stream"
-            val isImg = mimeType.startsWith("image/")
-            val isAud = mimeType.startsWith("audio/")
 
-            val bytes = withContext(Dispatchers.IO) {
-                contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }
-
-            if (bytes != null) {
-                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                // Antigravity keeps attachments as hub artifacts; a Claude chat sends them itself (inline or saved
-                // on the bridge when the message is sent), so nothing goes to the AGY hub
-                val savedHostUri = if (isClaudeActive || isOpenCodeActive || isCodexActive) uri.toString() else {
-                    agyHubClient.saveMediaAsArtifact(
-                        mimeType = mimeType,
-                        base64Data = base64,
-                        description = fileName,
-                        thumbnailBase64 = if (isImg) base64 else "",
-                        hubUrl = AuthPreferences.currentHubUrl
-                    ).getOrNull() ?: uri.toString()
+            if (mimeType.startsWith("image/")) {
+                val shrunk = withContext(Dispatchers.IO) { com.example.gemini.data.files.ImageShrinker.fromUri(context, uri, mimeType, fileSize) }
+                if (shrunk != null) {
+                    _attachments.value = _attachments.value + ChatAttachment(
+                        id = newAttachmentId(),
+                        name = com.example.gemini.data.files.ImageShrinker.nameFor(fileName, shrunk),
+                        path = "",
+                        isImage = true,
+                        localUri = uri.toString(),
+                        size = shrunk.bytes.size.toLong(),
+                        mimeType = shrunk.mimeType,
+                        base64 = android.util.Base64.encodeToString(shrunk.bytes, android.util.Base64.NO_WRAP)
+                    )
+                    return
                 }
-
-                val att = com.example.gemini.domain.model.ChatAttachment(
-                    id = "att_${System.currentTimeMillis()}_${(0..999).random()}",
-                    name = fileName,
-                    path = savedHostUri,
-                    isImage = isImg,
-                    isAudio = isAud,
-                    localUri = uri.toString(),
-                    size = if (fileSize > 0) fileSize else bytes.size.toLong(),
-                    mimeType = mimeType,
-                    base64 = base64
-                )
-                _attachments.value = _attachments.value + att
+                // an image Android cannot decode (e.g. TIFF) goes to the agent as a file
             }
-        } catch (e: Exception) {
-            android.util.Log.e("ChatViewModel", "Failed to add attachment from uri $uri: ${e.message}")
+            startCopy(uri, context, fileName, fileSize, mimeType)
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
+            Log.e("ChatViewModel", "Failed to add attachment from uri $uri: ${t.message}")
+            com.example.gemini.ui.components.AppToastHelper.showToast(
+                "Could not attach $fileName: ${t.message ?: t.javaClass.simpleName}",
+                com.example.gemini.ui.components.ChatToastType.ERROR
+            )
         }
     }
+
+    /** Streams a picked file to [AttachedFiles.UPLOADS_DIR] on the bridge machine; its chip shows the progress. */
+    private fun startCopy(uri: android.net.Uri, context: android.content.Context, fileName: String, fileSize: Long, mimeType: String) {
+        val id = newAttachmentId()
+        val folder = "${com.example.gemini.data.files.AttachedFiles.UPLOADS_DIR}/${UUID.randomUUID().toString().replace("-", "").take(16)}"
+        val safeName = fileName.replace('/', '_').replace('\u0000', '_').trim().ifBlank { "attachment" }.take(200)
+        _attachments.value = _attachments.value + ChatAttachment(
+            id = id,
+            name = fileName,
+            path = "",
+            localUri = uri.toString(),
+            size = fileSize,
+            mimeType = mimeType,
+            reference = true
+        )
+        uploadFolders[id] = folder
+        _attachmentProgress.update { it + (id to 0f) }
+        val job = viewModelScope.launch {
+            var sentTotal = 0L
+            var lastPercent = -1
+            val result = com.example.gemini.data.files.FileExplorerApi.upload(
+                input = { context.contentResolver.openInputStream(uri) ?: throw java.io.IOException("the file cannot be read") },
+                length = -1,
+                targetPath = "$folder/$safeName"
+            ) { sent ->
+                sentTotal = sent
+                if (fileSize > 0) {
+                    val percent = (sent * 100 / fileSize).toInt().coerceIn(0, 100)
+                    if (percent != lastPercent) {
+                        lastPercent = percent
+                        _attachmentProgress.update { m -> if (id in m) m + (id to percent / 100f) else m }
+                    }
+                }
+            }
+            val path = result.path
+            if (result.ok && !path.isNullOrBlank()) {
+                val size = if (fileSize > 0) fileSize else sentTotal
+                _attachments.update { list -> list.map { if (it.id == id) it.copy(path = path, size = size) else it } }
+            } else if (isActive) {
+                _attachments.update { list -> list.filter { it.id != id } }
+                uploadFolders.remove(id)?.let { com.example.gemini.data.files.FileExplorerApi.delete(listOf(it)) }
+                com.example.gemini.ui.components.AppToastHelper.showToast(
+                    "Could not copy $fileName to the agent's machine: ${result.error ?: "unknown error"}",
+                    com.example.gemini.ui.components.ChatToastType.ERROR
+                )
+            }
+        }
+        uploadJobs[id] = job
+        job.invokeOnCompletion {
+            uploadJobs.remove(id)
+            _attachmentProgress.update { it - id }
+        }
+    }
+
+    /**
+     * Files picked in the app's Files screen: they are already on the agent's machine, so nothing is copied and the
+     * agent opens the originals. An image also goes to the model as a shrunk copy, so the model sees it right away.
+     */
+    fun addExplorerFiles(entries: List<com.example.gemini.data.files.ExplorerEntry>) {
+        val files = entries.filter { !it.isDir }
+        if (files.isEmpty()) return
+        viewModelScope.launch {
+            _isUploadingAttachment.value = true
+            try {
+                for (e in files) {
+                    if (_attachments.value.any { it.reference && it.path == e.path }) continue
+                    val mime = com.example.gemini.data.files.AttachedFiles.mimeOf(e.name)
+                    var att = ChatAttachment(
+                        id = newAttachmentId(),
+                        name = e.name,
+                        path = e.path,
+                        size = e.size,
+                        mimeType = mime,
+                        url = com.example.gemini.data.files.FileExplorerApi.rawUrl(e.path),
+                        reference = true
+                    )
+                    if (mime.startsWith("image/")) {
+                        val shrunk = try {
+                            shrinkBridgeImage(e, mime)
+                        } catch (t: Throwable) {
+                            if (t is kotlinx.coroutines.CancellationException) throw t
+                            Log.w("ChatViewModel", "Could not prepare ${e.path} as an image: ${t.message}")
+                            null
+                        }
+                        if (shrunk != null) {
+                            att = att.copy(isImage = true, mimeType = shrunk.mimeType, base64 = android.util.Base64.encodeToString(shrunk.bytes, android.util.Base64.NO_WRAP))
+                        }
+                    }
+                    _attachments.value = _attachments.value + att
+                }
+            } finally {
+                _isUploadingAttachment.value = false
+            }
+        }
+    }
+
+    /** The shrunk copy of an image on the bridge machine: read in place when this phone can, else downloaded (streamed) first. */
+    private suspend fun shrinkBridgeImage(e: com.example.gemini.data.files.ExplorerEntry, mime: String): com.example.gemini.data.files.ImageShrinker.Shrunk? =
+        withContext(Dispatchers.IO) {
+            val api = com.example.gemini.data.files.FileExplorerApi
+            if (api.isLocallyReadable(e.path)) return@withContext com.example.gemini.data.files.ImageShrinker.fromFile(java.io.File(e.path), mime)
+            if (e.size > MAX_IMAGE_DOWNLOAD_BYTES) return@withContext null
+            val dir = java.io.File(getApplication<Application>().cacheDir, "attach-images").apply { mkdirs() }
+            val tmp = java.io.File(dir, UUID.randomUUID().toString())
+            try {
+                if (!api.download(e.path, tmp).ok) null else com.example.gemini.data.files.ImageShrinker.fromFile(tmp, mime)
+            } finally {
+                tmp.delete()
+            }
+        }
+
+    /** Editing a sent message puts its files back as chips. */
+    private fun restoreAttachedFiles(raw: String) {
+        val refs = com.example.gemini.data.files.AttachedFiles.parse(raw)
+        if (refs.isEmpty()) return
+        addExplorerFiles(refs.map { com.example.gemini.data.files.ExplorerEntry(name = it.path.trimEnd('/').substringAfterLast('/'), path = it.path, isDir = false, size = it.size) })
+    }
+
+    /** The text of a sent message as the user typed it (no hidden instructions, no file list). */
+    private fun editableText(raw: String): String =
+        PromptExpansion.collapse(com.example.gemini.data.files.AttachedFiles.extract(raw, "edit").first)
 
     fun addProjectFileAttachment(filePath: String, fileName: String) {
         viewModelScope.launch {
@@ -872,24 +1041,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeAttachment(attachmentId: String) {
         val target = _attachments.value.find { it.id == attachmentId }
-        if (target != null && target.path.isNotBlank() && !target.path.startsWith("content://") && !target.path.startsWith("/data/")) {
-            viewModelScope.launch(Dispatchers.IO) {
-                agyHubClient.deleteMediaArtifact(target.path)
-            }
-        }
         _attachments.value = _attachments.value.filter { it.id != attachmentId }
+        if (target != null) discardAttachment(target)
     }
 
     fun clearAttachments() {
         val atts = _attachments.value
-        viewModelScope.launch(Dispatchers.IO) {
-            for (target in atts) {
-                if (target.path.isNotBlank() && !target.path.startsWith("content://") && !target.path.startsWith("/data/")) {
-                    agyHubClient.deleteMediaArtifact(target.path)
-                }
+        _attachments.value = emptyList()
+        atts.forEach { discardAttachment(it) }
+    }
+
+    /**
+     * An attachment removed before it was sent: its copy stops and what the app made for it is deleted. A file the user
+     * picked in Files is their own and is never touched.
+     */
+    private fun discardAttachment(target: ChatAttachment) {
+        val job = uploadJobs.remove(target.id)
+        job?.cancel()
+        if (target.reference) {
+            val folder = uploadFolders.remove(target.id) ?: return
+            val delete: () -> Unit = { viewModelScope.launch(Dispatchers.IO) { com.example.gemini.data.files.FileExplorerApi.delete(listOf(folder)) } }
+            // a running copy is removed once it has stopped (the bridge drops the partial file itself)
+            if (job != null) job.invokeOnCompletion { delete() } else delete()
+            return
+        }
+        if (target.path.isNotBlank() && !target.path.startsWith("content://") && !target.path.startsWith("/data/")) {
+            viewModelScope.launch(Dispatchers.IO) {
+                agyHubClient.deleteMediaArtifact(target.path)
             }
         }
-        _attachments.value = emptyList()
     }
 
     private val _isDevModeEnabled = MutableStateFlow(false)
@@ -1732,6 +1912,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             cm?.unregisterNetworkCallback(networkCallback)
         } catch (_: Exception) {}
         agyBackend.dispose()
+    }
+
+    private companion object {
+        /** An image picked in Files on a remote bridge is downloaded to be shrunk only up to this size (else: path only). */
+        const val MAX_IMAGE_DOWNLOAD_BYTES = 50L * 1024 * 1024
     }
 }
 

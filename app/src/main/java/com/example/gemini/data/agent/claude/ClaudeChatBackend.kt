@@ -1,7 +1,6 @@
 package com.example.gemini.data.agent.claude
 
 import android.app.Application
-import android.util.Base64
 import android.util.Log
 import com.example.gemini.data.agent.AgentChatBackend
 import com.example.gemini.data.agent.ChatSessionStore
@@ -335,7 +334,7 @@ class ClaudeChatBackend(
                     )
                 }
                 publishQueue()
-                val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(conv.id, text, atts))))
+                val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
                 ensureConnected(conv.id)
                 send(frame)
                 return@launch
@@ -350,7 +349,7 @@ class ClaudeChatBackend(
                 }
             }
             emitNow()
-            val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(conv.id, text, atts))))
+            val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
             ensureConnected(conv.id)
             send(frame)
         }
@@ -1137,6 +1136,40 @@ class ClaudeChatBackend(
 
     private fun effortName(level: String) = if (level.equals("xhigh", true)) "extra high" else level.lowercase()
 
+    /** Chats already asked for a title in this run of the app. */
+    private val titleAsked = HashSet<String>()
+
+    /**
+     * Claude Code names a chat only when its client asks (the VS Code extension does; a chat run through the bridge never
+     * got one, so it kept its first message as the title). After the first reply of a new chat, ask once: the title is
+     * saved in the chat's transcript, where the bridge's chat list reads it.
+     */
+    private fun requestTitleOnce() {
+        val id = attachedId ?: return
+        val prompts = _messages.value.filter { it.role == com.example.gemini.domain.model.MessageRole.USER }
+        if (prompts.size != 1 || !titleAsked.add(id)) return
+        val first = prompts.first()
+        val typed = com.example.gemini.data.remote.PromptExpansion.cleanTitle(first.content).trim()
+        val files = first.attachments.map { it.name }.filter { it.isNotBlank() }
+        val description = listOfNotNull(
+            typed.takeIf { it.isNotBlank() },
+            files.takeIf { it.isNotEmpty() }?.let { "Attached files: " + it.joinToString(", ") }
+        ).joinToString("\n").take(2_000)
+        if (description.isBlank()) return
+        backendScope.launch(worker) {
+            val reply = request(ClaudeControlRequestBody(subtype = "generate_session_title", description = description, persist = true), 60_000)
+            val title = reply?.response?.get("title")?.jsonPrimitive?.contentOrNull
+                ?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it).trim() }
+            if (title.isNullOrBlank()) {
+                Log.w(TAG, "no title for $id: ${reply?.error ?: "no reply"}")
+                return@launch
+            }
+            _conversations.value = _conversations.value.map { if (it.id == id) it.copy(title = title) else it }
+            synchronized(localConversations) { localConversations[id]?.let { localConversations[id] = it.copy(title = title) } }
+            store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = it.copy(title = title) }
+        }
+    }
+
     /** The CLI writes a chat's AI title shortly after the first reply: look again a few times. */
     private fun scheduleTitleRefresh() {
         val id = attachedId ?: return
@@ -1154,7 +1187,8 @@ class ClaudeChatBackend(
             val fromBridge = resp.sessions.map { s ->
                 Conversation(
                     id = s.id,
-                    title = s.title.ifBlank { "Claude Chat" },
+                    // an older bridge makes titles from the raw first prompt, hidden blocks included
+                    title = com.example.gemini.data.remote.PromptExpansion.cleanTitle(s.title).ifBlank { "Claude Chat" },
                     sessionId = s.id,
                     createdAt = s.created_at,
                     updatedAt = s.updated_at,
@@ -1365,6 +1399,7 @@ class ClaudeChatBackend(
                             restartOn(it)
                         }
                         endCompactingNotice()
+                        requestTitleOnce()
                         scheduleTitleRefresh()
                         onTurnFinished()
                         refreshContextUsage()
@@ -1372,7 +1407,7 @@ class ClaudeChatBackend(
                     "system" -> when (data["subtype"]?.jsonPrimitive?.contentOrNull) {
                         "api_retry" -> showRetryNotice(data)
                         "session_title_changed" -> {
-                            val title = data["title"]?.jsonPrimitive?.contentOrNull
+                            val title = data["title"]?.jsonPrimitive?.contentOrNull?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }
                             val cur = store.currentConversation.value
                             if (!title.isNullOrBlank() && cur != null && cur.id == attachedId) {
                                 store.currentConversation.value = cur.copy(title = title)
@@ -1593,16 +1628,16 @@ class ClaudeChatBackend(
     }
 
     /**
-     * The prompt's content blocks. Images small enough go inline (Claude sees them directly); every other file (and
-     * bigger images) is saved on the bridge for this chat and listed by path, so Claude reads it with its tools and
-     * the chat can show it again later. If saving fails, PDFs and text files still go inline.
+     * The prompt's content blocks. Images (already shrunk by the app) go inline, so Claude sees them directly. Other
+     * files never come here as data: the message's text lists them by path (see AttachedFiles) and Claude opens them
+     * in place with its tools.
      */
-    private suspend fun buildBlocks(sessionId: String, text: String, atts: List<ChatAttachment>): List<ClaudeContentBlock> {
+    private fun buildBlocks(text: String, atts: List<ChatAttachment>): List<ClaudeContentBlock> {
         val blocks = mutableListOf<ClaudeContentBlock>()
         val notes = mutableListOf<String>()
-        val saved = mutableListOf<ClaudeAttachments.SavedFile>()
         for (a in atts) {
             val b64 = a.base64
+            if (a.reference && b64.isNullOrBlank()) continue
             val mime = a.mimeType?.lowercase().orEmpty()
             if (b64.isNullOrBlank()) {
                 notes.add("[Attachment ${a.name} could not be read]")
@@ -1612,36 +1647,13 @@ class ClaudeChatBackend(
                 blocks.add(ClaudeContentBlock(type = "image", source = ClaudeBlockSource("base64", mime, b64)))
                 continue
             }
-            val result = client.saveAttachment(sessionId, a.name, mime.ifBlank { "application/octet-stream" }, b64).getOrNull()
-            val path = result?.path
-            if (result?.success == true && path != null) {
-                saved.add(ClaudeAttachments.SavedFile(path, result.mime_type ?: mime, result.size))
-                continue
-            }
-            Log.w(TAG, "attachment ${a.name} not saved: ${result?.error}")
-            when {
-                mime in IMAGE_TYPES -> blocks.add(ClaudeContentBlock(type = "image", source = ClaudeBlockSource("base64", mime, b64)))
-                mime == "application/pdf" -> blocks.add(ClaudeContentBlock(type = "document", title = a.name, source = ClaudeBlockSource("base64", mime, b64)))
-                isTextLike(mime, a.name) -> {
-                    val decoded = runCatching { String(Base64.decode(b64, Base64.DEFAULT), Charsets.UTF_8) }.getOrNull()
-                    if (decoded != null) {
-                        blocks.add(ClaudeContentBlock(type = "document", title = a.name, source = ClaudeBlockSource("text", "text/plain", decoded)))
-                    } else notes.add("[Attachment ${a.name} could not be decoded]")
-                }
-                else -> notes.add("[Attachment ${a.name} could not be saved for Claude: ${result?.error ?: "the bridge did not answer"}]")
-            }
+            notes.add("[Attachment ${a.name} could not be sent]")
         }
-        val fullText = (notes + listOf(text) + listOfNotNull(saved.takeIf { it.isNotEmpty() }?.let { ClaudeAttachments.block(it) }))
+        val fullText = (notes + listOf(text))
             .filter { it.isNotBlank() }
             .joinToString("\n\n")
         if (fullText.isNotBlank() || blocks.isEmpty()) blocks.add(ClaudeContentBlock(type = "text", text = fullText.ifBlank { " " }))
         return blocks
-    }
-
-    private fun isTextLike(mime: String, name: String): Boolean {
-        if (mime.startsWith("text/") || mime in TEXT_MIME_TYPES) return true
-        val ext = name.substringAfterLast('.', "").lowercase()
-        return ext in TEXT_EXTENSIONS
     }
 
     companion object {
@@ -1654,17 +1666,8 @@ class ClaudeChatBackend(
         fun rawModel(modelId: String): String = if (modelId.startsWith("@")) modelId.substringAfter('/') else modelId
 
         private val IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/gif", "image/webp")
-        /** Larger images are saved as files (the API takes inline images up to about 5 MB). */
+        /** The API takes inline images up to about 5 MB of base64; the app's shrunk images stay well below. */
         private const val INLINE_IMAGE_BYTES = 3_500_000L
-        private val TEXT_MIME_TYPES = setOf(
-            "application/json", "application/xml", "application/javascript", "application/x-sh",
-            "application/x-yaml", "application/toml", "application/sql"
-        )
-        private val TEXT_EXTENSIONS = setOf(
-            "txt", "md", "json", "xml", "yaml", "yml", "toml", "csv", "log", "kt", "kts", "java", "py", "js", "ts",
-            "tsx", "jsx", "go", "rs", "c", "h", "cpp", "hpp", "cs", "swift", "rb", "php", "sh", "bash", "zsh",
-            "html", "css", "scss", "sql", "gradle", "properties", "ini", "conf", "env", "dart", "lua", "proto"
-        )
 
         /** The start-up notice appears only when Claude Code takes longer than this to answer a sent message. */
         private const val STARTUP_NOTICE_DELAY_MS = 4_000L

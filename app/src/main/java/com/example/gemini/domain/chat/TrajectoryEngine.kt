@@ -249,7 +249,7 @@ class TrajectoryEngine {
             }
         }
 
-        val frameLastStepError = update.main_trajectory_update?.last_step_error
+        val frameLastStepError = update.main_trajectory_update?.last_step_error.realError()
 
         val terminationErrorMsg = if (daemonRunning) null else when (liveTerminationReason) {
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_ERROR -> {
@@ -286,7 +286,7 @@ class TrajectoryEngine {
 
         if (effectiveError != null && isTargetInActiveTurn) {
             val existingStep = activeStepsMap[targetIdx]
-            if (existingStep != null && (existingStep.error_message != null || existingStep.error != null)) {
+            if (existingStep != null && (existingStep.error_message?.error.realError() != null || existingStep.error.realError() != null)) {
                 val curErr = existingStep.error_message?.error ?: existingStep.error
                 val baseErr = curErr ?: effectiveError
                 val enrichedErr = baseErr.copy(
@@ -300,7 +300,7 @@ class TrajectoryEngine {
                     error_message = CortexStepErrorMessage(error = enrichedErr, should_show_user = true),
                     error = enrichedErr
                 )
-            } else if (activeStepsMap.none { (_, s) -> s.error_message != null || s.error != null || s.type == CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE }) {
+            } else if (activeStepsMap.none { (_, s) -> s.error_message?.error.realError() != null || s.error.realError() != null || s.type == CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE }) {
                 val newErrorStep = Step(
                     type = CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE,
                     status = CortexStepStatus.CORTEX_STEP_STATUS_DONE,
@@ -472,7 +472,30 @@ class TrajectoryEngine {
 
     /** The model that generated a turn: the last step that names one (the enum name, as in AiModel.id). */
     private fun turnModel(steps: Iterable<Step>): String? =
-        steps.mapNotNull { it.metadata?.generator_model?.name?.takeUnless { n -> n.contains("UNSPECIFIED") } }.lastOrNull()
+        steps.mapNotNull { stepModel(it) }.lastOrNull()
+
+    /**
+     * The model that wrote a step (the enum name, as in AiModel.id). Cloud chats (Remote Agents) always report
+     * MODEL_GOOGLE_GEMINI_INTERNAL_BYOM; the real model is in `model_info` ("gemini-4-argon-medium"), mapped back to
+     * the listed model, else shown as a readable name ("Gemini 4 Argon (Medium)").
+     */
+    private fun stepModel(step: Step): String? {
+        val meta = step.metadata ?: return null
+        val gen = meta.generator_model.name.takeUnless { it.contains("UNSPECIFIED") } ?: return null
+        if (gen != "MODEL_GOOGLE_GEMINI_INTERNAL_BYOM") return gen
+        val cloudName = meta.model_info?.display_name?.takeIf { it.isNotBlank() } ?: meta.model_info?.model_name?.takeIf { it.isNotBlank() }
+            ?: return null
+        return com.example.gemini.data.remote.services.AgyModelService.modelEnumForCloudName(cloudName) ?: readableModelName(cloudName)
+    }
+
+    /** "gemini-3.8-flash-high" → "Gemini 3.8 Flash (High)". */
+    private fun readableModelName(slug: String): String {
+        val parts = slug.split('-').filter { it.isNotBlank() }
+        val levels = setOf("low", "medium", "high", "minimal", "max", "xhigh")
+        val level = parts.lastOrNull()?.takeIf { it.lowercase() in levels }
+        val words = (if (level != null) parts.dropLast(1) else parts).joinToString(" ") { w -> w.replaceFirstChar { it.uppercaseChar() } }
+        return if (level != null) "$words (${level.replaceFirstChar { it.uppercaseChar() }})" else words
+    }
 
     private fun parseTimestampToMillis(ts: Timestamp?): Long? {
         if (ts == null) return null
@@ -833,11 +856,10 @@ class TrajectoryEngine {
             return
         }
 
-        val stepError = step.error_message?.error ?: step.error
+        val stepError = step.error_message?.error.realError() ?: step.error.realError()
         val isErrorType = step.type == CortexStepType.CORTEX_STEP_TYPE_ERROR_MESSAGE ||
                 step.status == CortexStepStatus.CORTEX_STEP_STATUS_ERROR ||
-                step.error_message != null ||
-                step.error != null
+                stepError != null
 
         if (isErrorType) {
             val userMsg = stepError?.user_error_message?.takeIf { it.isNotBlank() } ?: "Agent Execution Error"
@@ -1254,7 +1276,10 @@ class TrajectoryEngine {
         val tags = step.user_input?.tags.orEmpty()
         val createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 }
         val voice = VoiceTurn.parse(userText, tags)
-        val attachments = extractUserAttachments(step.user_input, stepIndex)
+        // files sent by path are listed in the message's hidden text: shown as cards (the text keeps the list, hidden
+        // on screen, so editing the message brings the files back)
+        val attachments = extractUserAttachments(step.user_input, stepIndex) +
+            com.example.gemini.data.files.AttachedFiles.extract(userText, "att_$stepIndex").second
         if (voice == null) return ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = createdAt)
         return ChatTurn.User(
             stepIndex = stepIndex,
@@ -1366,4 +1391,13 @@ class TrajectoryEngine {
         }
         return if (firstLine.isNotBlank() && firstLine.length <= 40) firstLine else "System Notification"
     }
+}
+
+/**
+ * The error, if it says anything. Cloud chats (Antigravity Remote Agents) send an empty `last_step_error` (and may send
+ * empty step errors) with every frame; taken as an error, every reply showed "Agent Execution Error" while it ran.
+ */
+internal fun CortexErrorDetails?.realError(): CortexErrorDetails? = this?.takeIf {
+    it.user_error_message.isNotBlank() || it.short_error.isNotBlank() || it.full_error.isNotBlank() ||
+        it.model_error_message.isNotBlank() || it.details.isNotBlank() || it.error_code != 0 || it.structured_error_parts.isNotEmpty()
 }

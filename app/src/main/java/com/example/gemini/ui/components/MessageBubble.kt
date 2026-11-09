@@ -416,9 +416,12 @@ fun UserMessageBubble(
                 // 2. Image attachments preview
                 val imageAtts = remember(message.attachments) {
                     message.attachments.filter {
-                        it.isImage || it.name.endsWith(".jpg", true) || it.name.endsWith(".png", true) ||
+                        // an image sent only by path (too big to shrink, TIFF, …) is a file card that opens it
+                        !(it.reference && it.base64.isNullOrBlank()) && (
+                            it.isImage || it.name.endsWith(".jpg", true) || it.name.endsWith(".png", true) ||
                                 it.name.endsWith(".jpeg", true) || it.name.endsWith(".webp", true) ||
                                 it.name.endsWith(".gif", true) || it.mimeType?.startsWith("image/") == true
+                        )
                     }
                 }
                 if (imageAtts.isNotEmpty()) {
@@ -1149,6 +1152,11 @@ private fun UserMessageDocumentItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable {
+                if (attachment.reference && attachment.path.isNotBlank()) {
+                    // a file on the agent's machine (sent by path): opened like any file link (encoded, the handler decodes)
+                    fileLinkHandler.onOpenFile(java.net.URLEncoder.encode(attachment.path, "UTF-8"))
+                    return@clickable
+                }
                 val bridgeUrl = attachment.url?.takeIf { HubMediaResolver.isBridgeFileUrl(it) }
                 if (bridgeUrl != null && attachment.localUri.isNullOrBlank()) {
                     // saved on the bridge (Claude chat): fetch it, then open like a local file

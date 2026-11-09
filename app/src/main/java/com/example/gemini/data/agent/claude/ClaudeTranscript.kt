@@ -428,11 +428,10 @@ class ClaudeTranscript {
         if (joined.startsWith("<local-command-caveat>")) return
 
         val uuid = e.uuid ?: "u_${turns.size}"
-        // files saved on the bridge are listed in an <attached-files> block: show them as attachments, not text
-        val (promptText, savedFiles) = ClaudeAttachments.extract(joined)
+        // files sent by path are listed in an <attached-files> block: show them as attachments, not text
+        val (promptText, savedFiles) = com.example.gemini.data.files.AttachedFiles.extract(joined, uuid)
         val displayText = commandDisplay(promptText) ?: stripContextTags(promptText)
-        val attachments = blocks.mapIndexedNotNull { i, b -> b.toAttachment(uuid, i) } +
-            savedFiles.mapIndexed { i, f -> ClaudeAttachments.toChatAttachment(f, "${uuid}_file_$i") }
+        val attachments = blocks.mapIndexedNotNull { i, b -> b.toAttachment(uuid, i) } + savedFiles
         if (displayText.isBlank() && attachments.isEmpty()) return
         val createdAt = parseTime(e.timestamp) ?: System.currentTimeMillis()
         // a message sent while Claude was replying arrives inside that turn (at a tool boundary): the reply so far

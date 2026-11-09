@@ -387,6 +387,12 @@ func (s *Session) spawnLocked() error {
 	if root := s.mgr.attachmentsRoot(); os.MkdirAll(root, 0o700) == nil {
 		args = append(args, "--add-dir", root)
 	}
+	// files the app copied from the phone for its chats (~/.antigem/uploads, where the Files screen's "~" points)
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if uploads := filepath.Join(home, ".antigem", "uploads"); os.MkdirAll(uploads, 0o700) == nil {
+			args = append(args, "--add-dir", uploads)
+		}
+	}
 
 	transcript := s.mgr.FindTranscript(s.ID)
 	rewindAt, rewinding := s.mgr.rewindPoint(s.ID)

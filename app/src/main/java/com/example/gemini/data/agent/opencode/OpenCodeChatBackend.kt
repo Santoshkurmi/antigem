@@ -404,7 +404,7 @@ class OpenCodeChatBackend(
         val dir = s.o("location").str("directory").orEmpty()
         return Conversation(
             id = id,
-            title = s.str("title")?.takeIf { it.isNotBlank() } ?: "New Chat",
+            title = s.str("title")?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }?.takeIf { it.isNotBlank() } ?: "New Chat",
             modelId = OpenCodeTranscript.modelRef(s.o("model")).orEmpty(),
             sessionId = id,
             createdAt = s.o("time").long("created") ?: 0L,
@@ -561,7 +561,9 @@ class OpenCodeChatBackend(
                 attachedId = conv.id
                 transcript.reset(conv.id)
             }
-            transcript.addLocalPrompt(msgId, text, atts.map { it.name })
+            // images show as previews, other files sent by the app by name; files by path come from the text's list
+            val images = atts.filter { it.isImage && !it.base64.isNullOrBlank() }
+            transcript.addLocalPrompt(msgId, text, atts.filter { !it.reference && it !in images }.map { it.name }, images)
             turnStartedAt = System.nanoTime()
             lastActivityAt = System.currentTimeMillis()
             startWatchdog()
@@ -589,7 +591,7 @@ class OpenCodeChatBackend(
             }
             val files = mutableListOf<JsonObject>()
             val notes = mutableListOf<String>()
-            for (a in atts) attachmentPart(a, workspacePath(conv).orEmpty(), files, notes)
+            for (a in atts) attachmentPart(a, files, notes)
             val promptText = (listOf(text) + notes).filter { it.isNotBlank() }.joinToString("\n\n")
             val r = client.post("/session/${conv.id}/prompt", buildJsonObject {
                 put("id", msgId)
@@ -600,8 +602,10 @@ class OpenCodeChatBackend(
         }
     }
 
-    private suspend fun attachmentPart(a: ChatAttachment, project: String, files: MutableList<JsonObject>, notes: MutableList<String>) {
+    private fun attachmentPart(a: ChatAttachment, files: MutableList<JsonObject>, notes: MutableList<String>) {
         val b64 = a.base64
+        // a file by path is already listed in the message's text; only an image's shrunk copy is sent itself
+        if (a.reference && b64.isNullOrBlank()) return
         val mime = a.mimeType ?: if (a.isImage) "image/png" else "application/octet-stream"
         if (b64.isNullOrBlank()) {
             if (a.path.startsWith("/")) notes.add("Attached file: ${a.path}")
@@ -615,17 +619,8 @@ class OpenCodeChatBackend(
             })
             return
         }
-        val textLike = mime.startsWith("text/") || mime.contains("json") || mime.contains("xml") || mime.contains("yaml") ||
-            a.name.substringAfterLast('.', "").lowercase() in TEXT_EXTENSIONS
-        val bytes = runCatching { android.util.Base64.decode(b64, android.util.Base64.DEFAULT) }.getOrNull()
-        if (textLike && bytes != null && bytes.size <= 200_000) {
-            notes.add("Attached file `${a.name}`:\n```\n${String(bytes, Charsets.UTF_8)}\n```")
-            return
-        }
-        // anything else is saved on the server so OpenCode can open it with its tools
-        client.upload(a.name, b64, project)
-            .onSuccess { path -> notes.add("Attached file `${a.name}` (saved at $path)") }
-            .onFailure { notes.add("(The attachment ${a.name} could not be saved on the server: ${it.message})") }
+        // other files never come inline any more: they go by path (see AttachedFiles)
+        notes.add("(The attachment ${a.name} could not be sent)")
     }
 
     private fun fail(msgId: String, title: String, e: Throwable?) {
@@ -676,6 +671,55 @@ class OpenCodeChatBackend(
                 }
                 .onFailure { _toasts.tryEmit("Could not copy the chat: ${it.message}") }
         }
+    }
+
+    /** Chats already checked for a title in this run of the app. */
+    private val titleChecked = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * OpenCode names a new chat itself right after the first message, but only when its title call works: when it fails
+     * (no small model, quota, …) the chat keeps no title and the app's first-message title stays. After the first reply,
+     * once: if OpenCode set no title by then, one is made with the chat's own model in a single stateless call (only the
+     * first message, no chat context) and saved as the chat's title.
+     */
+    private fun titleIfMissing(sessionId: String) {
+        val prompts = transcript.userPrompts()
+        if (prompts.size != 1 || !titleChecked.add(sessionId)) return
+        val raw = prompts.first()
+        val typed = com.example.gemini.data.remote.PromptExpansion.cleanTitle(raw).trim()
+        val files = com.example.gemini.data.files.AttachedFiles.parse(raw).map { it.path.substringAfterLast('/') }
+        val subject = listOfNotNull(
+            typed.takeIf { it.isNotBlank() },
+            files.takeIf { it.isNotEmpty() }?.let { "Attached files: " + it.joinToString(", ") }
+        ).joinToString("\n").take(900)
+        if (subject.isBlank()) return
+        val model = modelRefJson(_selectedModelId.value)
+        backendScope.launch {
+            delay(6_000)
+            val current = client.get("/session/$sessionId").getOrNull().obj().o("data").str("title")
+            if (!current.isNullOrBlank()) return@launch
+            // one stateless call with just this prompt (the chat's own context would be its whole system prompt, tools
+            // and history); an OpenCode without it gets no title rather than that heavy call
+            val text = client.post("/experimental/generate/text", buildJsonObject {
+                put("prompt", "Name this conversation for a list of past chats: reply with a title of three to five words and " +
+                    "nothing else (one line, no quotes, no trailing period). Name the subject; do not answer the request.\n\n" +
+                    "First message:\n$subject")
+                model?.let { put("model", it) }
+            }).getOrNull().obj().o("data").str("text") ?: return@launch
+            val title = com.example.gemini.data.remote.PromptExpansion.cleanTitle(text).lines().firstOrNull { it.isNotBlank() }
+                ?.trim()?.trim('"', '\'', '`')?.removeSuffix(".")?.take(60)?.takeIf { it.isNotBlank() } ?: return@launch
+            client.api("PATCH", "/session/$sessionId", buildJsonObject { put("title", title) })
+                .onSuccess { backendScope.launch(worker) { applyTitle(sessionId, title) } }
+                .onFailure { Log.w(TAG, "could not save the title of $sessionId: ${it.message}") }
+        }
+    }
+
+    /** A chat's new title, in the list and on the open chat. */
+    private fun applyTitle(sessionId: String, title: String) {
+        lastServerList = lastServerList.map { if (it.id == sessionId) it.copy(title = title) else it }
+        localConversations[sessionId]?.let { localConversations[sessionId] = it.copy(title = title) }
+        publishConversations()
+        store.currentConversation.value?.takeIf { it.id == sessionId }?.let { store.currentConversation.value = it.copy(title = title) }
     }
 
     fun renameConversation(id: String, title: String) {
@@ -933,13 +977,8 @@ class OpenCodeChatBackend(
             "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle" ->
                 sid?.let { if (running.remove(it)) publishConversations() }
             "session.renamed" -> {
-                val title = d.str("title")
-                if (sid != null && title != null) {
-                    lastServerList = lastServerList.map { if (it.id == sid) it.copy(title = title) else it }
-                    localConversations[sid]?.let { localConversations[sid] = it.copy(title = title) }
-                    publishConversations()
-                    store.currentConversation.value?.takeIf { it.id == sid }?.let { store.currentConversation.value = it.copy(title = title) }
-                }
+                val title = d.str("title")?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }?.takeIf { it.isNotBlank() }
+                if (sid != null && title != null) applyTitle(sid, title)
             }
         }
         if (sid == null || sid != attachedId) return
@@ -964,6 +1003,7 @@ class OpenCodeChatBackend(
         when (type) {
             "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted" -> {
                 emitNow()
+                if (type == "session.execution.succeeded") titleIfMissing(sid)
                 onTurnFinished()
                 // the stored chat is the reference (ids, final texts, usage): reload it once the turn is over
                 val id = sid
@@ -1035,10 +1075,6 @@ class OpenCodeChatBackend(
         /** Silence while waiting for the model before the notice shows, and before the turn is stopped. */
         private const val STALL_NOTICE_MS = 20_000L
         private const val STALL_MS = 90_000L
-        private val TEXT_EXTENSIONS = setOf(
-            "txt", "md", "markdown", "csv", "tsv", "log", "json", "yaml", "yml", "toml", "xml", "html", "css", "js", "ts", "tsx", "jsx",
-            "kt", "kts", "java", "py", "go", "rs", "c", "h", "cpp", "hpp", "cs", "rb", "php", "sh", "bash", "zsh", "sql", "ini", "conf", "gradle", "swift", "dart"
-        )
         private val random = SecureRandom()
         private const val BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
         private var lastMs = 0L
@@ -1078,7 +1114,9 @@ class OpenCodeChatBackend(
                     if (plan) null else rule("edit", "ask"),
                     rule("webfetch", "ask"),
                     rule("websearch", "ask"),
-                    rule("external_directory", "ask")
+                    rule("external_directory", "ask"),
+                    // files the app copied for the chat (OpenCode's `*` also matches across folders; last match wins)
+                    rule("external_directory", "allow", "*/.antigem/uploads/*")
                 ))
                 else -> null
             }

@@ -123,6 +123,7 @@ private data class PendingConflict(val names: List<String>, val move: Boolean, v
  * The file explorer. One component serves the Files screen and every picker:
  * - [onConfirmFolder]: a "choose this folder" bar (open as project, pick a destination, import shared files here)
  * - [onPickFile]: tapping a file picks it
+ * - [onPickFiles]: tapping a file picks it; a long press selects several, picked together with [pickFilesLabel]
  * - [onSave]: a file name field and a "Save here" bar
  * - [onOpenedInIde] / [onOpenFolderInIde]: the IDE options, and what happens after a file or folder is opened there
  */
@@ -139,6 +140,8 @@ fun FileExplorer(
     confirmLabel: String = "Choose this folder",
     onConfirmFolder: ((String) -> Unit)? = null,
     onPickFile: ((ExplorerEntry) -> Unit)? = null,
+    onPickFiles: ((List<ExplorerEntry>) -> Unit)? = null,
+    pickFilesLabel: String = "Pick",
     saveFileName: String? = null,
     onSave: ((folder: String, name: String) -> Unit)? = null,
     onOpenedInIde: (() -> Unit)? = null,
@@ -342,6 +345,7 @@ fun FileExplorer(
     fun openEntry(e: ExplorerEntry) {
         when {
             e.isDir -> go(e.path)
+            onPickFiles != null -> onPickFiles(listOf(e))
             onPickFile != null -> onPickFile(e)
             onSave != null -> saveName = e.name
             else -> {
@@ -433,6 +437,18 @@ fun FileExplorer(
             Surface(color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.fillMaxWidth().statusBarsPadding()) {
                     when {
+                        selecting && onPickFiles != null -> {
+                            val pickable = visible.filter { !it.isDir }
+                            val files = selected.values.filter { !it.isDir }
+                            PickSelectionBar(
+                                count = files.size,
+                                label = pickFilesLabel,
+                                allSelected = files.size == pickable.size && pickable.isNotEmpty(),
+                                onClear = { selected.clear() },
+                                onSelectAll = { if (files.size == pickable.size) selected.clear() else pickable.forEach { selected[it.path] = it } },
+                                onPick = { selected.clear(); onPickFiles(files) }
+                            )
+                        }
                         selecting -> SelectionBar(
                             count = selected.size,
                             allSelected = selected.size == visible.size && visible.isNotEmpty(),
@@ -1022,6 +1038,8 @@ fun FileExplorerDialog(
     confirmLabel: String = "Choose this folder",
     onConfirmFolder: ((String) -> Unit)? = null,
     onPickFile: ((ExplorerEntry) -> Unit)? = null,
+    onPickFiles: ((List<ExplorerEntry>) -> Unit)? = null,
+    pickFilesLabel: String = "Pick",
     saveFileName: String? = null,
     onSave: ((folder: String, name: String) -> Unit)? = null,
     onOpenedInIde: (() -> Unit)? = null,
@@ -1043,6 +1061,8 @@ fun FileExplorerDialog(
                 confirmLabel = confirmLabel,
                 onConfirmFolder = onConfirmFolder,
                 onPickFile = onPickFile,
+                onPickFiles = onPickFiles,
+                pickFilesLabel = pickFilesLabel,
                 saveFileName = saveFileName,
                 onSave = onSave,
                 onOpenedInIde = onOpenedInIde,
@@ -1055,6 +1075,24 @@ fun FileExplorerDialog(
 }
 
 // ---------------- bars ----------------
+
+/** Picking several files: what is selected and the button that picks them. */
+@Composable
+private fun PickSelectionBar(
+    count: Int,
+    label: String,
+    allSelected: Boolean,
+    onClear: () -> Unit,
+    onSelectAll: () -> Unit,
+    onPick: () -> Unit
+) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = "Clear selection") }
+        Text("$count selected", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = "Select all files") }
+        Button(onClick = onPick, enabled = count > 0, modifier = Modifier.padding(end = 8.dp)) { Text("$label ($count)") }
+    }
+}
 
 @Composable
 private fun SelectionBar(

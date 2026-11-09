@@ -105,7 +105,13 @@ data class ChatAttachment(
     val url: String? = null,
     val durationSeconds: Int = 0,
     val mimeType: String? = null,
-    val base64: String? = null
+    val base64: String? = null,
+    /**
+     * A file the agent opens in place: [path] is its real path on the agent's machine and it goes to the agent only as a
+     * line in the message's hidden `<attached-files>` list (see AttachedFiles). An image may also carry [base64], a
+     * shrunk copy the model sees directly. Never uploaded or inlined by the backends.
+     */
+    val reference: Boolean = false
 )
 
 @Serializable
@@ -130,8 +136,12 @@ data class Conversation(
     val nestingDepth: Int = 0,
     val agent: AgentKind = AgentKind.AGY,
     /** Archived: listed only in the sidebar's archive view. */
-    val archived: Boolean = false
-)
+    val archived: Boolean = false,
+    /** An Antigravity cloud chat (Remote Agents): the cloud project it runs in; null = runs on the hub's machine. */
+    val cloudProjectId: String? = null
+) {
+    val isCloud: Boolean get() = cloudProjectId != null
+}
 
 /** A message sent while the agent was working, waiting to be delivered (shown in the queued-messages card). */
 data class QueuedMessage(

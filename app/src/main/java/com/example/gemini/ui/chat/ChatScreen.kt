@@ -119,6 +119,7 @@ import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import com.example.gemini.ui.cloud.cloudProjectsSection
 
 enum class ScrollDirection { UP, DOWN }
 
@@ -342,6 +343,7 @@ fun ChatScreen(
         }
     }
     var showAttachmentSelector by remember { mutableStateOf(false) }
+    var showAttachFromFiles by remember { mutableStateOf(false) }
     var showProjectPickerDialog by remember { mutableStateOf(false) }
     var showGitCloneDialog by remember { mutableStateOf(false) }
     var showWorkspaceFolderBrowserDialog by remember { mutableStateOf(false) }
@@ -368,6 +370,19 @@ fun ChatScreen(
         showSettingsDialog = true
         com.example.gemini.data.jarvis.JarvisController.consumeSettingsRequest()
     }
+
+    // Antigravity cloud agents (Remote Agents): cloud projects, through the hub
+    LaunchedEffect(Unit) { com.example.gemini.data.agent.agy.AgyCloud.init(context) }
+    val cloudProjects by com.example.gemini.data.agent.agy.AgyCloud.projects.collectAsState()
+    LaunchedEffect(systemConnectionState.canSend) {
+        if (systemConnectionState.canSend) com.example.gemini.data.agent.agy.AgyCloud.refreshProjects()
+    }
+    var showCloudProjects by remember { mutableStateOf(false) }
+    var showCloudCreate by remember { mutableStateOf(false) }
+    var showCloudPreview by remember { mutableStateOf(false) }
+    /** The in-app preview on screen: (cloud chat, port). */
+    var cloudPreviewInApp by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    var showCloudRunCommand by remember { mutableStateOf(false) }
 
     // Antigravity voice call (a live spoken call with the agent about the chat on screen)
     val voiceCall by com.example.gemini.data.voice.AgyVoiceCall.state.collectAsState()
@@ -603,6 +618,7 @@ fun ChatScreen(
 
     val attachments by viewModel.attachments.collectAsState()
     val isUploadingAttachment by viewModel.isUploadingAttachment.collectAsState()
+    val attachmentProgress by viewModel.attachmentProgress.collectAsState()
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -1510,9 +1526,12 @@ fun ChatScreen(
                         }
 
                         val isChatStarted = messages.isNotEmpty()
-                        val displayedProjectName = remember(currentConv?.workspaceUri, isChatStarted) {
+                        val displayedProjectName = remember(currentConv?.workspaceUri, isChatStarted, currentConv?.cloudProjectId, cloudProjects) {
                             val convUri = currentConv?.workspaceUri
-                            if (!convUri.isNullOrBlank()) {
+                            if (currentConv?.isCloud == true) {
+                                // an Antigravity cloud chat: its cloud project
+                                "☁ " + (com.example.gemini.data.agent.agy.AgyCloud.projectName(currentConv?.cloudProjectId) ?: "Cloud")
+                            } else if (!convUri.isNullOrBlank()) {
                                 val clean = convUri.removePrefix("file://").trimEnd('/')
                                 File(clean).name.ifBlank { "Workspace" }
                             } else {
@@ -2645,6 +2664,20 @@ fun ChatScreen(
                     agentWorking = isActivelyRunning && currentConv?.id == voiceCall.conversationId
                 )
 
+                // an Antigravity cloud chat: its project, web preview, run a command, the chat on the web
+                if (isAgyChat && currentConv?.isCloud == true) {
+                    com.example.gemini.ui.cloud.CloudChatStrip(
+                        projectName = cloudProjects.firstOrNull { it.id == currentConv?.cloudProjectId }?.name,
+                        onProject = { showCloudProjects = true },
+                        onPreview = {
+                            if (messages.isEmpty()) com.example.gemini.ui.components.AppToastHelper.showToast(
+                                "Send the cloud agent a message first: its VM starts with the chat.", com.example.gemini.ui.components.ChatToastType.INFO
+                            ) else showCloudPreview = true
+                        },
+                        onRunCommand = { showCloudRunCommand = true }
+                    )
+                }
+
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 ChatInputBar(
                     isOnline = if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.OFFLINE && codexState != com.example.gemini.data.agent.codex.CodexState.NOT_INSTALLED && codexState != com.example.gemini.data.agent.codex.CodexState.DISABLED && codexState != com.example.gemini.data.agent.codex.CodexState.OUTDATED
@@ -2711,6 +2744,7 @@ fun ChatScreen(
                     onStopStreaming = { showStopConfirmDialog = true },
                     attachments = attachments,
                     isUploadingAttachment = isUploadingAttachment,
+                    attachmentProgress = attachmentProgress,
                     onRemoveAttachment = { viewModel.removeAttachment(it) },
                     onAddAttachment = { viewModel.addAttachment(it) },
                     onAttachClick = { showAttachmentSelector = true },
@@ -2732,6 +2766,59 @@ fun ChatScreen(
                 )
             }
         }
+    }
+
+    // Antigravity cloud agents: projects and connections, preview, run a command
+    if (showCloudProjects || showCloudCreate) {
+        com.example.gemini.ui.cloud.CloudProjectsDialog(
+            startWithCreate = showCloudCreate,
+            onStartChatIn = { projectId ->
+                showCloudProjects = false
+                showCloudCreate = false
+                com.example.gemini.data.agent.agy.AgyCloud.select(projectId)
+                viewModel.startNewChat(com.example.gemini.domain.model.AgentKind.AGY)
+                viewModel.agyBackend.setNewChatCloudProject(projectId)
+            },
+            onDismiss = { showCloudProjects = false; showCloudCreate = false }
+        )
+    }
+    if (showCloudPreview && currentConv?.isCloud == true) {
+        val previewConvId = currentConv!!.id
+        val previewPorts = remember(messages) { com.example.gemini.ui.cloud.cloudPreviewPorts(messages) }
+        // first: which port, and in the app or in the system browser
+        com.example.gemini.ui.cloud.CloudPreviewChooser(
+            suggestedPorts = previewPorts,
+            onOpenInApp = { port -> showCloudPreview = false; cloudPreviewInApp = previewConvId to port },
+            onOpenInBrowser = { port ->
+                showCloudPreview = false
+                runCatching {
+                    // served on this phone through the hub, so the system browser can show the VM's page
+                    val url = com.example.gemini.data.agent.agy.CloudPreviewServer.urlFor(previewConvId, port)
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }.onFailure {
+                    com.example.gemini.ui.components.AppToastHelper.showToast("Couldn't open the browser: ${it.message}", com.example.gemini.ui.components.ChatToastType.ERROR)
+                }
+            },
+            onDismiss = { showCloudPreview = false }
+        )
+    }
+    cloudPreviewInApp?.let { (convId, port) ->
+        val previewPorts = remember(messages) { com.example.gemini.ui.cloud.cloudPreviewPorts(messages) }
+        com.example.gemini.ui.cloud.CloudPreviewDialog(
+            conversationId = convId,
+            suggestedPorts = previewPorts,
+            initialPort = port,
+            onDismiss = { cloudPreviewInApp = null }
+        )
+    }
+    if (showCloudRunCommand) {
+        com.example.gemini.ui.cloud.CloudRunCommandDialog(
+            onRun = { cmd ->
+                viewModel.sendMessage(com.example.gemini.ui.cloud.cloudRunCommandPrompt(cmd))
+                userSentMessageTrigger++
+            },
+            onDismiss = { showCloudRunCommand = false }
+        )
     }
 
     // the Antigravity voice call screen (Back minimizes it to the pill above the message box)
@@ -3350,7 +3437,23 @@ fun ChatScreen(
         AttachmentSelectorBottomSheet(
             onPickImage = { photoPickerLauncher.launch("image/*") },
             onPickFile = { filePickerLauncher.launch("*/*") },
+            onPickFromFiles = { showAttachFromFiles = true },
             onDismiss = { showAttachmentSelector = false }
+        )
+    }
+
+    // Files on the agent's machine, attached by path (nothing is copied)
+    if (showAttachFromFiles) {
+        com.example.gemini.ui.files.FileExplorerDialog(
+            stateKey = "chat_attach",
+            title = "Attach files",
+            onPickFiles = { picked ->
+                showAttachFromFiles = false
+                viewModel.addExplorerFiles(picked)
+            },
+            pickFilesLabel = "Attach",
+            showClipboard = false,
+            onDismiss = { showAttachFromFiles = false }
         )
     }
 
@@ -3443,14 +3546,34 @@ fun ChatScreen(
             usedProjects.find { it.path == currentConvPath } ?: ProjectItem(File(currentConvPath).name, currentConvPath)
         } else null
 
+        val cloudSelectedId by com.example.gemini.data.agent.agy.AgyCloud.selectedProjectId.collectAsState()
+        val cloudError by com.example.gemini.data.agent.agy.AgyCloud.error.collectAsState()
+        val chatCloudId = if (isAgyChat) currentConv?.cloudProjectId ?: cloudSelectedId else null
+        val cloudPickerSection: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = if (!isAgyChat) null else fun androidx.compose.foundation.lazy.LazyListScope.() {
+            cloudProjectsSection(
+                projects = cloudProjects,
+                selectedId = chatCloudId,
+                error = cloudError,
+                onSelect = { id ->
+                    viewModel.agyBackend.setNewChatCloudProject(id)
+                    showProjectPickerDialog = false
+                },
+                onCreate = { showProjectPickerDialog = false; showCloudCreate = true },
+                onManage = { showProjectPickerDialog = false; showCloudProjects = true }
+            )
+        }
         ProjectPickerDialog(
             projects = usedProjects,
-            activeProject = activeProj,
+            activeProject = if (chatCloudId != null) null else activeProj,
             onSelectProject = { proj ->
+                if (isAgyChat) viewModel.agyBackend.setNewChatCloudProject(null)
                 TermuxDaemonManager.setActiveProject(proj)
                 viewModel.onProjectChanged(proj?.path ?: "")
                 showProjectPickerDialog = false
             },
+            // Antigravity chats can also run in Google's cloud (Remote Agents) with a cloud project's repos
+            cloudSection = cloudPickerSection,
+            cloudSelected = chatCloudId != null,
             onBrowseFolder = {
                 showProjectPickerDialog = false
                 showWorkspaceFolderBrowserDialog = true

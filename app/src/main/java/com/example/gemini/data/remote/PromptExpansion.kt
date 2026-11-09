@@ -60,6 +60,21 @@ object PromptExpansion {
     fun collapse(text: String): String =
         if (!text.contains("<$TAG ")) text else BLOCK.replace(text) { unescape(it.groupValues[1]) }
 
+    private val ATTACHED_FILES = Regex("<attached-files>[\\s\\S]*?</attached-files>")
+
+    /**
+     * A chat title (or history preview) without the app's hidden blocks. A title made from a prompt (the bridge's
+     * first-prompt title, an agent's own title, a cut-off preview) can still carry one, even cut off half-way.
+     */
+    fun cleanTitle(title: String): String {
+        if (!title.contains("<$TAG") && !title.contains("<attached-files>")) return title
+        return collapse(title)
+            .replace(ATTACHED_FILES, "")
+            .substringBefore("<$TAG")
+            .substringBefore("<attached-files>")
+            .trim()
+    }
+
     private fun block(command: String, body: String) = "<$TAG command=\"${escape(command)}\">\n$body\n</$TAG>"
 
     /** Instructions for the model that the chat never shows (the block collapses to nothing for display). */

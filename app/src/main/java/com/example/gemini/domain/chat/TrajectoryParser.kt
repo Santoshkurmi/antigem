@@ -181,6 +181,9 @@ object TrajectoryParser {
                             )
                         }
                     }
+                    // files sent by path are listed in the message's hidden text: shown as cards (the text keeps the
+                    // list, hidden on screen, so editing the message brings the files back)
+                    userAttachments.addAll(com.example.gemini.data.files.AttachedFiles.extract(userText, "att_${conversationId}_$stepIndex").second)
                     if (userText.isNotBlank() || userAttachments.isNotEmpty()) {
                         messages.add(
                             ChatMessage(
@@ -811,11 +814,15 @@ object TrajectoryParser {
      * Extracts structured error JSON payload from a trajectory step if present.
      */
     fun extractStepErrorJson(step: JSONObject, stepIndex: Int): String? {
+        // an error object only counts when it says something (cloud chats send empty ones with every step)
+        fun JSONObject.says() = optString("userErrorMessage").isNotBlank() || optString("shortError").isNotBlank() ||
+            optString("fullError").isNotBlank() || optString("modelErrorMessage").isNotBlank() || optString("message").isNotBlank() ||
+            optInt("errorCode", 0) != 0
         val errMsgObj = step.optJSONObject("errorMessage")
-        val errObj = errMsgObj?.optJSONObject("error") ?: step.optJSONObject("error")
-        val plannerErr = step.optJSONObject("plannerResponse")?.optJSONObject("error")
+        val errObj = (errMsgObj?.optJSONObject("error") ?: step.optJSONObject("error"))?.takeIf { it.says() }
+        val plannerErr = step.optJSONObject("plannerResponse")?.optJSONObject("error")?.takeIf { it.says() }
         val stepType = step.optString("type", "")
-        val isErrorStep = errMsgObj != null || step.has("error") || plannerErr != null || stepType.contains("ERROR", ignoreCase = true)
+        val isErrorStep = errObj != null || plannerErr != null || stepType.contains("ERROR", ignoreCase = true)
 
         if (!isErrorStep && errObj == null && plannerErr == null) {
             return null

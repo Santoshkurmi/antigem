@@ -444,6 +444,7 @@ class CodexChatBackend(
             try {
                 client.rpc("model/list", buildJsonObject { put("limit", 100) })
                     .onSuccess { res ->
+                        allModelIds = res.obj().a("data").orEmpty().mapNotNull { it.obj().str("id") }.toSet()
                         val raw = res.obj().a("data").orEmpty().mapNotNull { it.obj() }.filter { it.str("hidden") != "true" }
                         modelEfforts = raw.associate { m ->
                             m.str("id").orEmpty() to m.a("supportedReasoningEfforts").orEmpty().mapNotNull { it.obj().str("reasoningEffort") }
@@ -524,8 +525,9 @@ class CodexChatBackend(
     private fun conversationOf(t: JsonObject?, archived: Boolean): Conversation? {
         val id = t.str("id") ?: return null
         val cwd = t.str("cwd").orEmpty()
-        val title = t.str("name")?.takeIf { it.isNotBlank() }
-            ?: t.str("preview")?.let { com.example.gemini.data.remote.PromptExpansion.collapse(it) }?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.let { if (it.length > 60) it.take(60) + "…" else it }
+        // the preview is the first message as sent: its hidden blocks (even cut off) never become the title
+        val title = t.str("name")?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }?.takeIf { it.isNotBlank() }
+            ?: t.str("preview")?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.let { if (it.length > 60) it.take(60) + "…" else it }
             ?: "New Chat"
         return Conversation(
             id = id,
@@ -697,7 +699,11 @@ class CodexChatBackend(
                 }.onFailure { _toasts.tryEmit("Could not queue the message: ${it.message}") }
                 return@launch
             }
-            transcript.addLocalPrompt(clientId, text, atts.map { it.name }, startsTurn = true)
+            // images show as previews, other files sent by the app by name; files by path come from the text's list
+            val images = atts.filter { it.isImage && !it.base64.isNullOrBlank() }
+            transcript.addLocalPrompt(
+                clientId, text, atts.filter { !it.reference && it !in images }.map { it.name }, startsTurn = true, images = images
+            )
             turnStartedAt = System.nanoTime()
             _isStreaming.value = true
             emitNow()
@@ -773,11 +779,15 @@ class CodexChatBackend(
             gc.markSent(threadId, gc.fingerprint())
             gc.forget(tempId)
         }
+        // files copied for the first message were kept under the temporary id
+        com.example.gemini.data.files.AttachedFiles.moveCopies(application, tempId, threadId)
         publishConversations()
     }
 
     private suspend fun attachmentInput(a: ChatAttachment, project: String, inputs: MutableList<JsonObject>, notes: MutableList<String>) {
         val b64 = a.base64
+        // a file by path is already listed in the message's text; only an image's shrunk copy is sent itself
+        if (a.reference && b64.isNullOrBlank()) return
         if (b64.isNullOrBlank()) {
             if (a.path.startsWith("/")) {
                 if (a.isImage) inputs.add(buildJsonObject { put("type", "localImage"); put("path", a.path) })
@@ -1348,6 +1358,12 @@ class CodexChatBackend(
 
     private suspend fun handleNotification(method: String, p: JsonObject, key: String?) {
         val tid = p.str("threadId") ?: p.o("thread").str("id")
+        // a hidden thread that only makes a title: its reply is the title, nothing of it shows anywhere
+        if (tid != null && titleRuns.containsKey(tid)) {
+            if (method == "item/completed" && p.o("item").str("type") == "agentMessage") p.o("item").str("text")?.let { titleAnswers[tid] = it }
+            if (method == "turn/completed") titleRuns[tid]?.complete(titleAnswers.remove(tid))
+            return
+        }
         when (method) {
             "serverRequest/resolved" -> if (key != null && pendingAll.remove(key) != null && tid == attachedId) emitNow()
             "thread/status/changed" -> if (tid != null) {
@@ -1391,6 +1407,7 @@ class CodexChatBackend(
         if (method == "turn/completed") {
             _notice.value = null
             emitNow()
+            requestTitleOnce(tid)
             onTurnFinished()
             // the plan's usage after each reply (like Claude's and Antigravity's)
             refreshRateLimitsSoon()
@@ -1404,6 +1421,95 @@ class CodexChatBackend(
             return
         }
         if (changed) emitSoon()
+    }
+
+    /** Every model Codex offers, hidden ones included (the title model can be hidden). */
+    @Volatile private var allModelIds: Set<String> = emptySet()
+    /** Hidden title threads: their reply ends here. */
+    private val titleRuns = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<String?>>()
+    private val titleAnswers = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** Chats already asked for a title in this run of the app. */
+    private val titleAsked = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * Codex's app-server never names a chat: its own terminal app does, after the first message, by running one turn in
+     * a hidden read-only thread (its small title model at low effort when the plan has it) and saving the answer with
+     * `thread/name/set`. The same here, once, after the first reply of a new chat. The hidden thread gets no chat
+     * history: only the title instructions and the first message (plus the tool text every Codex thread carries).
+     */
+    private fun requestTitleOnce(threadId: String) {
+        if (threadId !in createdSnapshot()) return
+        val prompts = transcript.prompts()
+        if (prompts.size != 1 || !titleAsked.add(threadId)) return
+        val raw = prompts.first()
+        val typed = com.example.gemini.data.remote.PromptExpansion.cleanTitle(raw).trim()
+        val files = com.example.gemini.data.files.AttachedFiles.parse(raw).map { it.path.substringAfterLast('/') }
+        val subject = listOfNotNull(
+            typed.takeIf { it.isNotBlank() },
+            files.takeIf { it.isNotEmpty() }?.let { "Attached files: " + it.joinToString(", ") }
+        ).joinToString("\n")
+        if (subject.isBlank()) return
+        val model = if (TITLE_MODEL in allModelIds) TITLE_MODEL else _selectedModelId.value
+        backendScope.launch {
+            // like Codex's own app: no MCP servers for the hidden thread (nothing to start, nothing it could call)
+            val mcp = mcpServerNames().getOrDefault(emptySet())
+            val temp = client.rpc("thread/start", buildJsonObject {
+                if (model.isNotBlank()) put("model", model)
+                put("sandbox", "read-only")
+                put("approvalPolicy", "never")
+                put("ephemeral", true)
+                // as small as app-server allows (measured ~8.3k input tokens instead of ~12k): no environments, extra
+                // tools or workspace roots (like Codex's own app), and a one-line base prompt instead of the coding one
+                put("environments", JsonArray(emptyList()))
+                put("dynamicTools", JsonArray(emptyList()))
+                put("runtimeWorkspaceRoots", JsonArray(emptyList()))
+                put("selectedCapabilityRoots", JsonArray(emptyList()))
+                put("baseInstructions", "You write short titles for chats. Follow the user's instructions exactly.")
+                if (mcp.isNotEmpty()) put("config", buildJsonObject {
+                    put("mcp_servers", buildJsonObject { mcp.forEach { name -> put(name, buildJsonObject { put("enabled", false) }) } })
+                })
+            }).getOrNull().obj().o("thread").str("id") ?: return@launch
+            val done = kotlinx.coroutines.CompletableDeferred<String?>()
+            titleRuns[temp] = done
+            try {
+                val prompt = titlePrompt(subject)
+                val started = client.rpc("turn/start", buildJsonObject {
+                    put("threadId", temp)
+                    put("input", JsonArray(listOf(textInput(prompt))))
+                    put("outputSchema", TITLE_SCHEMA)
+                    if (model == TITLE_MODEL) put("effort", "low")
+                })
+                if (started.isFailure) return@launch
+                val answer = kotlinx.coroutines.withTimeoutOrNull(90_000) { done.await() } ?: return@launch
+                val title = runCatching { CodexJson.parseToJsonElement(answer).obj().str("title") }.getOrNull()
+                    ?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it).trim().take(60) }
+                    ?.takeIf { it.isNotBlank() } ?: return@launch
+                client.rpc("thread/name/set", buildJsonObject { put("threadId", threadId); put("name", title) })
+                    .onSuccess { backendScope.launch(worker) { applyTitle(threadId, title) } }
+            } finally {
+                titleRuns.remove(temp)
+                titleAnswers.remove(temp)
+                client.rpc("thread/unsubscribe", buildJsonObject { put("threadId", temp) })
+            }
+        }
+    }
+
+    /** Codex's own title instructions (its terminal app), at most 960 bytes in all. */
+    private fun titlePrompt(subject: String): String {
+        val prefix = "Generate a concise, single-line task title of at most 36 characters and under five words where possible. " +
+            "Start with an imperative verb. Capitalize only the first word unless the user's language, proper nouns, acronyms, " +
+            "or code terms require otherwise. Preserve ticket references exactly. Write in the user's language. " +
+            "Do not use quotes, markdown, or trailing punctuation. Do not answer the request.\n\nUser prompt:\n"
+        val room = 960 - prefix.toByteArray().size
+        val sb = StringBuilder()
+        var used = 0
+        for (ch in subject.trim()) {
+            val n = ch.toString().toByteArray().size
+            if (used + n > room) break
+            sb.append(ch)
+            used += n
+        }
+        return prefix + sb
     }
 
     private fun applyTitle(id: String, title: String) {
@@ -1476,6 +1582,18 @@ class CodexChatBackend(
         private const val TAG = "CodexBackend"
         /** Live copies kept of chats replying while not on screen. */
         private const val MAX_SHADOWS = 12
+
+        /** The small model Codex's own app names chats with (when the plan offers it; else the chat's model). */
+        private const val TITLE_MODEL = "gpt-5.6-luna"
+        /** One title of at most 36 characters, as Codex's own app asks for it. */
+        private val TITLE_SCHEMA = buildJsonObject {
+            put("type", "object")
+            put("properties", buildJsonObject {
+                put("title", buildJsonObject { put("type", "string"); put("minLength", 1); put("maxLength", 36) })
+            })
+            put("required", JsonArray(listOf(kotlinx.serialization.json.JsonPrimitive("title"))))
+            put("additionalProperties", false)
+        }
 
         /** Codex's own commands in the "/" menu of a Codex chat. */
         val BUILTIN_COMMANDS = listOf(

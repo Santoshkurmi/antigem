@@ -488,6 +488,12 @@ func (m *HubManager) Start() error {
 			args = append(args, "--add-dir="+wsDir)
 		}
 	}
+	// files the app copied from the phone for its chats: readable even when outside-workspace access asks first
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if uploads := filepath.Join(home, ".antigem", "uploads"); os.MkdirAll(uploads, 0o700) == nil {
+			args = append(args, "--add-dir="+uploads)
+		}
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel

@@ -4,7 +4,7 @@ package exa.language_server_pb;
 
 // Filtered subset for Android app compilation
 
-// Service: LanguageServerService (84 Methods)
+// Service: LanguageServerService (90 Methods)
 service LanguageServerService {
   rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
   rpc GetRemoteControlInfo (GetRemoteControlInfoRequest) returns (GetRemoteControlInfoResponse);
@@ -40,6 +40,7 @@ service LanguageServerService {
   rpc RevertToCascadeStep (RevertToCascadeStepRequest) returns (RevertToCascadeStepResponse);
   rpc HandleCascadeUserInteraction (HandleCascadeUserInteractionRequest) returns (HandleCascadeUserInteractionResponse);
   rpc DeleteCascadeTrajectory (DeleteCascadeTrajectoryRequest) returns (DeleteCascadeTrajectoryResponse);
+  rpc FetchSandboxPort (FetchSandboxPortRequest) returns (FetchSandboxPortResponse);
   rpc GetTrajectoryFileDiffs (GetTrajectoryFileDiffsRequest) returns (GetTrajectoryFileDiffsResponse);
   rpc GetCodeActionDiff (GetCodeActionDiffRequest) returns (GetCodeActionDiffResponse);
   rpc InitializeCascadePanelState (InitializeCascadePanelStateRequest) returns (InitializeCascadePanelStateResponse);
@@ -87,6 +88,11 @@ service LanguageServerService {
   rpc ProjectUpdatesStream (ProjectUpdatesStreamRequest) returns (stream ProjectUpdatesStreamResponse);
   rpc ReadProject (ReadProjectRequest) returns (ReadProjectResponse);
   rpc ReadProjects (ReadProjectsRequest) returns (ReadProjectsResponse);
+  rpc ListProjects (ListProjectsRequest) returns (ListProjectsResponse);
+  rpc ListResourceProviders (ListResourceProvidersRequest) returns (ListResourceProvidersResponse);
+  rpc ListAvailableResources (ListAvailableResourcesRequest) returns (ListAvailableResourcesResponse);
+  rpc ListRemotePlugins (ListRemotePluginsRequest) returns (ListRemotePluginsResponse);
+  rpc DisconnectRemotePlugin (DisconnectRemotePluginRequest) returns (DisconnectRemotePluginResponse);
   rpc GetAuthStatus (GetAuthStatusRequest) returns (GetAuthStatusResponse);
   rpc Login (LoginRequest) returns (LoginResponse);
   rpc AuthLogout (AuthLogoutRequest) returns (AuthLogoutResponse);
@@ -3395,6 +3401,12 @@ enum RememberLastModelSelection {
   REMEMBER_LAST_MODEL_SELECTION_UNSPECIFIED = 0;
   REMEMBER_LAST_MODEL_SELECTION_ENABLED = 1;
   REMEMBER_LAST_MODEL_SELECTION_DISABLED = 2;
+}
+
+enum RemoteAgentProxyPluginconnection_State {
+  REMOTEAGENTPROXYPLUGINCONNECTION_STATE_STATE_UNSPECIFIED = 0;
+  REMOTEAGENTPROXYPLUGINCONNECTION_STATE_CONNECTED = 1;
+  EXPIRED = 2;
 }
 
 enum RenderLocation {
@@ -7296,6 +7308,15 @@ message DisconnectMcpOAuthRequest {
 message DisconnectMcpOAuthResponse {
 }
 
+message DisconnectRemotePluginRequest {
+  BackendType backend = 1;
+  string plugin_id = 2;
+  string account = 3;
+}
+
+message DisconnectRemotePluginResponse {
+}
+
 message Document {
   string absolute_path_migrate_me_to_uri = 1;
   string relative_path_migrate_me_to_workspace_uri = 2;
@@ -7605,6 +7626,22 @@ message FetchAvailableModelsResponse {
   repeated int32 experiment_ids = 13;
   TieredModelConfig tiered_model_ids = 14;
   map<string, ModelExperiments> shared_model_experiments = 15;
+}
+
+message FetchSandboxPortRequest {
+  string conversation_id = 1;
+  int32 port = 2;
+  string method = 3;
+  string path = 4;
+  repeated SandboxHttpHeader headers = 5;
+  bytes body = 6;
+}
+
+message FetchSandboxPortResponse {
+  int32 status_code = 1;
+  repeated SandboxHttpHeader headers = 2;
+  bytes body = 3;
+  bool truncated = 4;
 }
 
 message Field {
@@ -8606,6 +8643,17 @@ message LinkScopeItem {
   string provider = 5;
 }
 
+message ListAvailableResourcesRequest {
+  BackendType backend = 1;
+  string type = 2;
+}
+
+message ListAvailableResourcesResponse {
+  repeated RemoteResource resources = 1;
+  string oauth_access_token = 2;
+  string oauth_client_id = 3;
+}
+
 message ListDirToolConfig {
   bool force_disable = 2;
 }
@@ -8627,6 +8675,31 @@ message ListDirectoryResultStep {
 
 message ListPluginAccountsToolConfig {
   bool enabled = 1;
+}
+
+message ListProjectsRequest {
+  BackendType backend = 1;
+}
+
+message ListProjectsResponse {
+  repeated string project_ids = 1;
+}
+
+message ListRemotePluginsRequest {
+  BackendType backend = 1;
+  string return_to_app = 2;
+}
+
+message ListRemotePluginsResponse {
+  repeated PluginInfo plugins = 1;
+}
+
+message ListResourceProvidersRequest {
+  BackendType backend = 1;
+}
+
+message ListResourceProvidersResponse {
+  repeated ResourceProviderInfo providers = 1;
 }
 
 message ListTerminalsRequest {
@@ -9542,11 +9615,31 @@ message PluginAuthor {
   string url = 2;
 }
 
+message PluginConnection {
+  string connection_id = 1;
+  RemoteAgentProxyPluginconnection_State state = 2;
+  repeated string granted_scopes = 3;
+  string account = 4;
+}
+
 message PluginDiscoveryConfig {
   bool inherit_user = 1;
   repeated CustomizationPath plugins_paths = 2;
   repeated string builtin_plugin_names = 3;
   repeated CustomizationPath inherited_plugins_paths = 4;
+}
+
+message PluginInfo {
+  string plugin_id = 1;
+  string display_name = 2;
+  string version = 3;
+  string description = 4;
+  string logo_uri = 5;
+  bool auth_required = 6;
+  repeated PluginConnection connections = 7;
+  string authorize_uri = 8;
+  string credential_key = 9;
+  string connect_uri = 10;
 }
 
 message PluginMcpUserConfig {
@@ -10102,6 +10195,12 @@ message Resource {
   RemoteResource remote_resource = 4;
 }
 
+message ResourceProviderInfo {
+  string type = 1;
+  string display_name = 2;
+  string icon_url = 3;
+}
+
 message Resources {
   repeated Resource resources = 1;
 }
@@ -10236,6 +10335,11 @@ message RuntimeEnvironment {
   string os = 5;
   string environment_type = 6;
   string identity_type = 7;
+}
+
+message SandboxHttpHeader {
+  string name = 1;
+  string value = 2;
 }
 
 message SandboxProxy {
