@@ -401,7 +401,6 @@ class OpenCodeChatBackend(
 
     private fun conversationOf(s: JsonObject, active: JsonObject?): Conversation? {
         val id = s.str("id") ?: return null
-        if (s.o("time").long("archived") != null) return null
         val dir = s.o("location").str("directory").orEmpty()
         return Conversation(
             id = id,
@@ -413,7 +412,8 @@ class OpenCodeChatBackend(
             isRunning = active?.containsKey(id) == true,
             workspaceUri = if (dir.isBlank()) "" else "file://$dir",
             parentConversationId = s.str("parentID"),
-            agent = AgentKind.OPENCODE
+            agent = AgentKind.OPENCODE,
+            archived = s.o("time").long("archived") != null
         )
     }
 
@@ -683,6 +683,16 @@ class OpenCodeChatBackend(
             client.api("PATCH", "/session/$id", buildJsonObject { put("title", title) })
                 .onSuccess { refreshSessions() }
                 .onFailure { _toasts.tryEmit("Could not rename: ${it.message}") }
+        }
+    }
+
+    /** Archives / unarchives a chat (`PATCH /session/{id}` with `archived`); the session.(un)archived event refreshes the list. */
+    fun setArchived(id: String, archived: Boolean) {
+        backendScope.launch {
+            if (id !in createdSnapshot()) return@launch
+            client.api("PATCH", "/session/$id", buildJsonObject { put("archived", archived) })
+                .onSuccess { refreshSessions() }
+                .onFailure { _toasts.tryEmit("Could not ${if (archived) "archive" else "unarchive"} the chat: ${it.message}") }
         }
     }
 

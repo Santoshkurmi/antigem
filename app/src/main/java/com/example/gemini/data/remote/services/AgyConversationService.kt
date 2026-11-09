@@ -60,6 +60,7 @@ class AgyConversationService {
 
                     for ((cid, summaryObj) in response.updates) {
                         val annotations = summaryObj.annotations
+                        if (annotations != null) lastAnnotations[cid] = annotations else lastAnnotations.remove(cid)
                         val annTitle = annotations?.title?.takeIf { it.isNotBlank() }
                         val rawSummary = summaryObj.summary.takeIf { it.isNotBlank() }
                         val stepCount = summaryObj.step_count
@@ -115,7 +116,8 @@ class AgyConversationService {
                                 parentConversationId = parentCid,
                                 subagentRole = subagentRole,
                                 subagentTypeName = subagentTypeName,
-                                nestingDepth = nestingDepth
+                                nestingDepth = nestingDepth,
+                                archived = annotations?.archived == true
                             )
                         )
                     }
@@ -188,6 +190,29 @@ class AgyConversationService {
             cascade_ids = listOf(cascadeId),
             annotations = ConversationAnnotations(title = title),
             merge_annotations = true
+        )
+        AgyLanguageService.UpdateConversationAnnotations().executeSafely(req).map { }
+    }
+
+    /** The annotations the summaries stream last pushed per chat (archive toggling sends them back whole). */
+    private val lastAnnotations = java.util.concurrent.ConcurrentHashMap<String, ConversationAnnotations>()
+
+    /**
+     * Archives or unarchives a chat (ConversationAnnotations.archived, as the Antigravity IDE does). The known
+     * annotations are sent back whole without merging: a merge may skip `archived = false`, the proto default.
+     */
+    suspend fun setConversationArchived(
+        cascadeId: String,
+        archived: Boolean,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val stamp = exa.language_server_pb.Timestamp(seconds = now / 1000, nanos = ((now % 1000) * 1_000_000).toInt())
+        val known = lastAnnotations[cascadeId]
+        val req = UpdateConversationAnnotationsRequest(
+            cascade_ids = listOf(cascadeId),
+            annotations = (known ?: ConversationAnnotations()).copy(archived = archived, archival_status_timestamp = stamp),
+            merge_annotations = known == null
         )
         AgyLanguageService.UpdateConversationAnnotations().executeSafely(req).map { }
     }

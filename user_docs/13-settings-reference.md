@@ -488,6 +488,22 @@ An interactive timeline of every release of AntiGem. Changes are organized by ve
 - **Export Bridge Binary**: Exports the `agy_ide_bridge` binary directly into your phone's public `Downloads` directory so you can easily copy it to an external server or PC.
 - **System Information**: Displays device architecture (e.g. `aarch64`), Android API level, and package details.
 
+
+## 27. REA · Reverse Engineering (`REA`) and REA Tool Groups (`REA_GROUPS`)
+*Subtitle: "Let agents analyze APKs, Flutter, React Native and native code"*
+### What it is:
+Sets up **REA**, an MCP server for static reverse engineering, in a proot-distro Ubuntu container of the terminal. Any agent can use it: it is connected with the REA preset in each agent's MCP settings. Shown on com.termux builds only; the main-page row shows *Partly set up*, *Installing…* or REA's version. Full guide: [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md).
+### Steps on the page:
+1. **Setup files**: **Get setup files** downloads the setup scripts (not shipped in the app); **Update to vX** when newer ones exist; **Change** sets the source repository.
+2. **Install**: tick parts and tap **Install selected (N)**, or use a part's own **Install** / **Reinstall** / **Update**. **Stop** ends a running part. The screen stays on while installing.
+3. **Tool groups**: **Edit tool groups** opens *REA Tool Groups* (create, rename, delete, reset groups; tick tools per group; *In no group* list); **Refresh tool list**.
+4. **Connect REA to your agent**: where the REA preset is in each agent's MCP settings (Antigravity → MCP Servers, Claude Code → MCP, OpenCode → MCP servers), what *On demand* (≈0.7k tokens) and *Directly* (every tool costs context) mean, and the plain command and env with copy buttons.
+5. **Check it works**: **Run health check** (rea doctor) and copyable example prompts.
+- **REA skill for agents**: **Install skill** / **Update skill**, **Plugins**.
+- **Phone access**: link to **Set up ADB Connect**.
+- **Set up in the terminal**: the same steps as copyable commands.
+- **Remove**: **Remove REA** (keeps the container) and **Delete container**.
+
 ## 🛠️ Troubleshooting Settings Issues
 
 ### ❌ Symptom: A settings page I read about is missing.

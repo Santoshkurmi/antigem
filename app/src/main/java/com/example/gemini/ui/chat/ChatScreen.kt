@@ -266,6 +266,7 @@ fun ChatScreen(
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
+    val showArchivedChats by viewModel.showArchivedChats.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
     val chatHeaderItems by viewModel.chatHeaderItems.collectAsState()
@@ -1077,6 +1078,8 @@ fun ChatScreen(
                 errorMessage = conversationError,
                 isStreaming = isActivelyRunning,
                 groupByWorkspace = groupChatsByWorkspace,
+                showArchived = showArchivedChats,
+                onToggleShowArchived = { viewModel.setShowArchivedChats(it) },
                 onToggleGroupByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
                 onRetry = { viewModel.retryConnections() },
                 isOpen = drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
@@ -1153,6 +1156,7 @@ fun ChatScreen(
                             else viewModel.loadClaudeMessages(id)
                         },
                         rename = { id, title -> viewModel.renameConversation(id, title) },
+                        archive = { id, archived -> viewModel.setConversationArchived(id, archived) },
                         restart = { id, onDone -> viewModel.claudeBackend.restartChat(id, onDone) }
                     )
                 }

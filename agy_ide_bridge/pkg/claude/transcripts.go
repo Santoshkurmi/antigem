@@ -43,6 +43,7 @@ type SessionSummary struct {
 	Live       bool   `json:"live"`
 	Busy       bool   `json:"busy"`
 	SizeBytes  int64  `json:"size_bytes"`
+	Archived   bool   `json:"archived"`
 }
 
 type transcriptLine struct {
@@ -65,6 +66,7 @@ type transcriptLine struct {
 func (m *Manager) ListSessions() []SessionSummary {
 	files, _ := filepath.Glob(filepath.Join(m.ProjectsDir(), "*", "*.jsonl"))
 	live := m.Snapshot()
+	archived := m.ArchivedSessions()
 	out := make([]SessionSummary, 0, len(files))
 	for _, f := range files {
 		name := filepath.Base(f)
@@ -85,6 +87,7 @@ func (m *Manager) ListSessions() []SessionSummary {
 			sum.CreatedAt = sum.UpdatedAt
 		}
 		sum.SizeBytes = fi.Size()
+		_, sum.Archived = archived[sum.ID]
 		if st, ok := live[sum.ID]; ok {
 			sum.Live = st.Live
 			sum.Busy = st.Busy
@@ -364,6 +367,7 @@ func (m *Manager) DeleteSession(id string) error {
 	m.removeAttachments(id)
 	m.clearRewind(id)
 	m.rememberSessionModel(id, "")
+	_ = m.SetSessionArchived(id, false)
 	path := m.FindTranscript(id)
 	if path == "" {
 		return nil

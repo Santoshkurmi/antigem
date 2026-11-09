@@ -77,6 +77,10 @@ class ClaudeBridgeClient(
     suspend fun rename(sessionId: String, title: String): Result<BridgeSimpleResponse> =
         post("/sessions/$sessionId/title", ClaudeJson.encodeToString(ClaudeTitleRequest(title)))
 
+    /** Archives / unarchives a chat (the bridge keeps the list; the transcript is untouched). */
+    suspend fun archive(sessionId: String, archived: Boolean): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/archive", ClaudeJson.encodeToString(ClaudeArchiveRequest(archived)))
+
     suspend fun kill(sessionId: String): Result<BridgeSimpleResponse> = post("/sessions/$sessionId/kill")
 
     /** Cuts the chat right before the prompt [beforeUuid]; the next message continues from there. */

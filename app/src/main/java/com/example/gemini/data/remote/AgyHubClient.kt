@@ -153,6 +153,13 @@ class AgyHubClient {
     ): Result<Unit> =
         conversationService.updateConversationTitle(cascadeId, title, hubUrl)
 
+    suspend fun setConversationArchived(
+        cascadeId: String,
+        archived: Boolean,
+        hubUrl: String = AuthPreferences.currentHubUrl
+    ): Result<Unit> =
+        conversationService.setConversationArchived(cascadeId, archived, hubUrl)
+
     suspend fun getCascadeTrajectorySteps(
         cascadeId: String,
         hubUrl: String = AuthPreferences.currentHubUrl

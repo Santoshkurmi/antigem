@@ -1316,6 +1316,24 @@ class AgyChatBackend(
         }
     }
 
+    /** Archives / unarchives a chat: the daemon stores it in the chat's annotations and the summaries stream pushes it back. */
+    fun setArchived(id: String, archived: Boolean) {
+        val before = _conversations.value.find { it.id == id }?.archived ?: return
+        if (before == archived) return
+        _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = archived) else it }
+        _currentConversation.value?.let { if (it.id == id) _currentConversation.value = it.copy(archived = archived) }
+        backendScope.launch {
+            agyHubClient.setConversationArchived(id, archived, AuthPreferences.currentHubUrl).onFailure { e ->
+                Log.w("AgyChatBackend", "archive failed: ${e.message}")
+                _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = before) else it }
+                _currentConversation.value?.let { if (it.id == id) _currentConversation.value = it.copy(archived = before) }
+                com.example.gemini.ui.components.AppToastHelper.showToast(
+                    "Could not ${if (archived) "archive" else "unarchive"}: ${e.message}", com.example.gemini.ui.components.ChatToastType.ERROR
+                )
+            }
+        }
+    }
+
     override fun forkConversation(id: String) {
         backendScope.launch {
             _isLoadingConversation.value = true

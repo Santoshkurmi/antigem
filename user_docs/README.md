@@ -49,6 +49,7 @@ Explore the guides below to learn how each part of AntiGem works:
 | **13** | [Complete Settings Reference](13-settings-reference.md) | An exhaustive walkthrough of active settings pages: Appearance & real themes, Servers, Backups, Protection, ADB Connect, Automation, Termux:API, X11 Desktop, Changelog, and About. |
 | **14** | [Troubleshooting & Diagnostics](14-troubleshooting-and-diagnostics.md) | Plain-language self-help for connection errors, audio/mic issues, terminal freezes, floating diagnostics HUD, and network inspector. |
 | **15** | [FAQ & Glossary](15-faq-and-glossary.md) | Answers to common questions and plain-English definitions of technical terms used throughout the app. |
+| **16** | [Reverse Engineering with REA](16-reverse-engineering-rea.md) | Letting agents analyze APKs, installed apps, Flutter, React Native and native code with REA: modular install in an Ubuntu container, tool groups, MCP setup and the REA skill. |
 
 ---
 

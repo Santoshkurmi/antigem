@@ -54,8 +54,14 @@ object PluginVersions {
 object PluginRepositories {
     const val INDEX = "antigem-plugins.json"
     private const val PREFS = "plugin_repositories"
-    const val DEFAULT_REPO = "dipeshkrydv/antigem_plugins"
-    private const val DEFAULT_REPO_ADDED = "default_repo_added"
+    /**
+     * The official repositories, each added once (for new and existing users) under its own "added" flag, so a
+     * repository added later still reaches users who already got the earlier ones. A removed one stays removed.
+     */
+    private val DEFAULT_REPOS = listOf(
+        "dipeshkrydv/antigem_plugins" to "default_repo_added",
+        "Santoshkurmi/antigem_plugins" to "default_repo_added_santoshkurmi"
+    )
     private val NAME = "[A-Za-z0-9_.-]+"
 
     val repos = mutableStateListOf<PluginRepo>()
@@ -76,11 +82,12 @@ object PluginRepositories {
         prefs.getString("repos", null)?.let { stored ->
             runCatching { val array = JSONArray(stored); repos.addAll((0 until array.length()).map { parse(array.getString(it)) }) }
         }
-        // The official repository is added once, for new and existing users; if the user removes it, it stays removed
-        if (!prefs.getBoolean(DEFAULT_REPO_ADDED, false)) {
-            val official = parse(DEFAULT_REPO)
-            if (repos.none { it.label.equals(official.label, ignoreCase = true) }) repos.add(0, official)
-            prefs.edit().putBoolean(DEFAULT_REPO_ADDED, true).apply()
+        // Each official repository is added once, at the top in this order; if the user removes it, it stays removed
+        DEFAULT_REPOS.forEachIndexed { index, (repo, addedKey) ->
+            if (prefs.getBoolean(addedKey, false)) return@forEachIndexed
+            val official = parse(repo)
+            if (repos.none { it.slug.equals(official.slug, ignoreCase = true) }) repos.add(index.coerceAtMost(repos.size), official)
+            prefs.edit().putBoolean(addedKey, true).apply()
             persist()
         }
     }

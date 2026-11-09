@@ -133,7 +133,12 @@ fun OpenCodeSettingsGroup(backend: OpenCodeChatBackend, cardBg: Color, onOpen: (
 
 /** One page of Settings → OpenCode. */
 @Composable
-fun OpenCodeSettingsScreen(backend: OpenCodeChatBackend, page: OpenCodeSettingsPage = OpenCodeSettingsPage.SERVER) {
+fun OpenCodeSettingsScreen(
+    backend: OpenCodeChatBackend,
+    page: OpenCodeSettingsPage = OpenCodeSettingsPage.SERVER,
+    onOpenRea: () -> Unit = {},
+    onOpenReaGroups: () -> Unit = {}
+) {
     val scope = rememberCoroutineScope()
     val state by backend.state.collectAsState()
     val status by backend.status.collectAsState()
@@ -369,7 +374,7 @@ fun OpenCodeSettingsScreen(backend: OpenCodeChatBackend, page: OpenCodeSettingsP
                 Icon(Icons.Outlined.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Add manually")
             }
         }
-        if (page == OpenCodeSettingsPage.MCP) OpenCodeMcpPage(backend)
+        if (page == OpenCodeSettingsPage.MCP) OpenCodeMcpPage(backend, onOpenRea, onOpenReaGroups)
         Spacer(Modifier.height(24.dp))
     }
 

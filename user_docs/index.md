@@ -16,6 +16,7 @@ If you are new, start with the [front page](README.md), then [Getting Started](0
 | Use my voice (Jarvis) | [11 — Jarvis Voice Assistant](11-jarvis-voice-assistant.md) |
 | Find one specific setting | [13 — Complete Settings Reference](13-settings-reference.md) |
 | Know what a word means | [15 — FAQ & Glossary](15-faq-and-glossary.md) |
+| Let agents analyze apps (APK, Flutter, React Native) | [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md) |
 | Check that everything is documented | [00 — Feature Coverage & Verification Proof](00-feature-coverage.md) |
 
 ---
@@ -204,6 +205,7 @@ Every settings page in the app, in order, with the exact labels and options you 
 - 24. X11 Desktop (`X11_DESKTOP`)
 - 25. What's New (`CHANGELOG`)
 - 26. About & Info (`ABOUT`)
+- 27. REA · Reverse Engineering (`REA`) and REA Tool Groups (`REA_GROUPS`)
 - 🛠️ Troubleshooting Settings Issues
 
 ### [14 — Troubleshooting & Diagnostics](14-troubleshooting-and-diagnostics.md)
@@ -224,3 +226,20 @@ Short answers to common questions, and plain-English definitions of the technica
 - ❓ Frequently Asked Questions (FAQ)
 - 📖 Glossary of Terms
 - 🛠️ Troubleshooting FAQ
+
+### [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md)
+Set up REA in an Ubuntu container part by part, choose its tool groups, connect it to any agent (Antigravity, Claude Code, OpenCode), and use the REA skill.
+
+- 🚀 Quick start
+- 🧭 1. Where it lives
+- 📥 2. Getting the setup files
+- 🧩 3. Installing the parts
+- 🗂️ 4. Tool groups
+- 🔌 5. Connecting REA to an agent
+  - 🤔 What should I choose? (context, modes, tool groups, costs per group, recommended setups)
+- ✅ 6. Checking that it works
+- 🎓 7. The REA skill plugin (recommended): installing it, and `/plu:rea` / `/plu:rea:rea` in chat
+- 📱 8. Phone access (optional)
+- ⌨️ 9. Setting up in the terminal
+- 🗑️ 10. Removing REA
+- 🛠️ Troubleshooting

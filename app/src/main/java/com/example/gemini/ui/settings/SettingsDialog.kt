@@ -120,6 +120,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     GITHUB("GitHub", "Sign in with the GitHub CLI, your repositories and git credentials"),
     ADB_CONNECT("ADB Connect", "Connect the terminal's adb to this phone over Wireless debugging"),
     ANDROID_AUTOMATION("Android Automation", "Let AI agents see and control this phone"),
+    REA("REA · Reverse Engineering", "Let agents analyze APKs, Flutter, React Native and native code"),
+    REA_GROUPS("REA Tool Groups", "Which REA tools each REA MCP server shows"),
     TERMUX_SUPPORT("Termux Support", "Termux:API and the X11 desktop"),
     TERMUX_API("Termux:API", "How termux-api commands are handled"),
     X11_DESKTOP("X11 Desktop", "Linux desktop apps with Termux:X11"),
@@ -147,6 +149,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         CLAUDE_PAGE -> CLAUDE
         OPENCODE_PAGE -> OPENCODE
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
+        REA_GROUPS -> REA
         CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
@@ -483,7 +486,9 @@ fun SettingsDialog(
                         isCascadePluginsLoading = isCascadePluginsLoading,
                         installingCascadePluginId = installingCascadePluginId,
                         onSearchCascadePlugins = onSearchCascadePlugins,
-                        onInstallCascadePlugin = onInstallCascadePlugin
+                        onInstallCascadePlugin = onInstallCascadePlugin,
+                        onOpenRea = { currentSection = SettingsSection.REA },
+                        onOpenReaGroups = { currentSection = SettingsSection.REA_GROUPS }
                     )
 
                     SettingsSection.SKILLS_PLUGINS -> SkillsAndPluginsSubScreen(
@@ -634,10 +639,18 @@ fun SettingsDialog(
                         }
                     }
                     SettingsSection.OPENCODE_PAGE -> if (openCode != null) {
-                        com.example.gemini.ui.opencode.OpenCodeSettingsScreen(openCode, openCodePage)
+                        com.example.gemini.ui.opencode.OpenCodeSettingsScreen(
+                            openCode, openCodePage,
+                            onOpenRea = { currentSection = SettingsSection.REA },
+                            onOpenReaGroups = { currentSection = SettingsSection.REA_GROUPS }
+                        )
                     }
                     SettingsSection.CLAUDE_PAGE -> if (claude != null) {
-                        com.example.gemini.ui.claude.ClaudeSettingsScreen(claude, claudePage) { currentSection = SettingsSection.CLAUDE }
+                        com.example.gemini.ui.claude.ClaudeSettingsScreen(
+                            claude, claudePage,
+                            onOpenRea = { currentSection = SettingsSection.REA },
+                            onOpenReaGroups = { currentSection = SettingsSection.REA_GROUPS }
+                        ) { currentSection = SettingsSection.CLAUDE }
                     }
                     SettingsSection.UTILITIES -> UtilitiesSubScreen(
                         cardBg = cardBg,
@@ -672,6 +685,18 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT }
+                    )
+                    SettingsSection.REA -> ReaScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenGroups = { currentSection = SettingsSection.REA_GROUPS },
+                        onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT },
+                        onOpenPlugins = { currentSection = SettingsSection.WEBVIEW_EXTENSIONS }
+                    )
+                    SettingsSection.REA_GROUPS -> ReaGroupsScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onOpenRea = { currentSection = SettingsSection.REA }
                     )
                     SettingsSection.ABOUT -> AboutSubScreen(
                         cardBg = cardBg,
@@ -726,6 +751,7 @@ private fun MainSettingsMenu(
     val activeMcp = mcpServers.count { it.isEnabled }
     val deviceTools = rememberDeviceToolRows(onNavigate)
     val githubRow = rememberGitHubRow(onNavigate)
+    val reaRow = rememberReaRow(onNavigate)
 
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
@@ -778,6 +804,7 @@ private fun MainSettingsMenu(
                 githubRow,
                 deviceTools.adb,
                 deviceTools.automation,
+                reaRow,
                 // Termux:API and X11 need the com.termux package; shown on both of its builds (and before the terminal is
                 // installed) so standalone users learn these exist: each page explains the Shared UID build they need
                 if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(LocalContext.current))
@@ -912,6 +939,28 @@ private fun rememberGitHubRow(onNavigate: (SettingsSection) -> Unit): SettingsRo
     }
     return SettingsRowItem(Icons.Outlined.AccountTree, c.accentAlt, SettingsSection.GITHUB.title, value, color) {
         onNavigate(SettingsSection.GITHUB)
+    }
+}
+
+/** The REA row of the main settings page (com.termux builds only), with the setup state; null elsewhere. */
+@Composable
+private fun rememberReaRow(onNavigate: (SettingsSection) -> Unit): SettingsRowItem? {
+    val context = LocalContext.current
+    if (!com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) return null
+    LaunchedEffect(Unit) {
+        com.example.gemini.data.rea.ReaManager.init(context)
+        com.example.gemini.data.rea.ReaManager.refresh()
+    }
+    val rea by com.example.gemini.data.rea.ReaManager.state.collectAsState()
+    val c = com.example.gemini.theme.AppColors
+    val (value, color) = when {
+        rea.busy -> "Installing…" to c.info
+        rea.usable && rea.requiredDone -> (rea.reaVersion?.let { "v$it" } ?: "Ready") to QuotaGreen
+        rea.installed.isNotEmpty() -> "Partly set up" to c.warning
+        else -> null to null
+    }
+    return SettingsRowItem(Icons.Outlined.BugReport, c.accentPink, SettingsSection.REA.title, value, color) {
+        onNavigate(SettingsSection.REA)
     }
 }
 
@@ -2049,7 +2098,10 @@ private data class McpPreset(
     val subtitle: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val accent: Color,
-    val spec: com.example.gemini.domain.model.McpServerSpec?
+    val spec: com.example.gemini.domain.model.McpServerSpec?,
+    /** Opens its own flow instead of the server editor (REA's tool group picker). */
+    val onClick: (() -> Unit)? = null,
+    val added: Boolean = false
 )
 
 /** One preset in the MCP screens' grid (also used by the Claude CLI MCP settings). */
@@ -2257,10 +2309,13 @@ private fun McpSubScreen(
     isCascadePluginsLoading: Boolean = false,
     installingCascadePluginId: String? = null,
     onSearchCascadePlugins: (String) -> Unit = {},
-    onInstallCascadePlugin: (com.example.gemini.data.remote.dto.AvailableCascadePluginDto) -> Unit = {}
+    onInstallCascadePlugin: (com.example.gemini.data.remote.dto.AvailableCascadePluginDto) -> Unit = {},
+    onOpenRea: () -> Unit = {},
+    onOpenReaGroups: () -> Unit = {}
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var chooseWebViewExtension by remember { mutableStateOf(false) }
+    var showReaDialog by remember { mutableStateOf(false) }
     var showCascadeCatalogDialog by remember { mutableStateOf(false) }
     var serverToEdit by remember { mutableStateOf<com.example.gemini.domain.model.McpServerSpec?>(null) }
     var serverToDelete by remember { mutableStateOf<String?>(null) }
@@ -2506,15 +2561,23 @@ private fun McpSubScreen(
                 McpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, com.example.gemini.theme.AppColors.accentTeal, localSpec(bridge.JARVIS_MCP_NAME, "/jarvis")),
                 McpPreset("Theme", "Create & switch app themes", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentAlt, localSpec(bridge.THEME_MCP_NAME, "/theme")),
                 McpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentPink,
-                    com.example.gemini.domain.model.McpServerSpec(serverName = "stitch", serverUrl = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
-            )
+                    com.example.gemini.domain.model.McpServerSpec(serverName = "stitch", serverUrl = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to ""))),
+                // REA runs in the terminal's proot-distro Ubuntu, so only on com.termux builds; the tile picks its tool groups
+                if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context))
+                    McpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null,
+                        onClick = { showReaDialog = true },
+                        added = mcpServers.any { it.spec?.serverUrl.isNullOrBlank() && com.example.gemini.data.rea.ReaManager.isReaCommand(it.spec?.command) })
+                else null
+            ).filterNotNull()
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 presets.chunked(2).forEach { row ->
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { p ->
                             val found = p.spec?.let { existing(it) }
-                            McpPresetTile(p.name, p.subtitle, p.icon, p.accent, added = found != null, modifier = Modifier.weight(1f).fillMaxHeight()) {
-                                if (p.spec == null) {
+                            McpPresetTile(p.name, p.subtitle, p.icon, p.accent, added = found != null || p.added, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                                if (p.onClick != null) {
+                                    p.onClick.invoke()
+                                } else if (p.spec == null) {
                                     chooseWebViewExtension = true
                                 } else {
                                     serverToEdit = found?.spec ?: p.spec
@@ -3091,6 +3154,27 @@ private fun McpSubScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    // REA preset (the same in every agent's MCP settings): a stdio server running the rea-mcp launcher
+    if (showReaDialog) {
+        val reaServers = mcpServers.mapNotNull { srv ->
+            srv.spec?.takeIf { it.serverUrl.isBlank() && com.example.gemini.data.rea.ReaManager.isReaCommand(it.command) }?.let { srv.name to it }
+        }.toMap()
+        ReaServerDialog(
+            agent = "Antigravity",
+            existing = reaServers.mapValues { it.value.env },
+            takenNames = mcpServers.map { it.name }.toSet(),
+            canReplace = true,
+            onDismiss = { showReaDialog = false },
+            onSave = { name, env ->
+                val base = reaServers[name] ?: com.example.gemini.domain.model.McpServerSpec(serverName = name)
+                onSaveServer(base.copy(serverName = name, command = com.example.gemini.data.rea.ReaManager.LAUNCHER, args = emptyList(), env = env), null)
+                showReaDialog = false
+            },
+            onOpenRea = { showReaDialog = false; onOpenRea() },
+            onOpenGroups = { showReaDialog = false; onOpenReaGroups() }
         )
     }
 

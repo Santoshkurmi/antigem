@@ -300,7 +300,8 @@ data class ClaudeSessionSummary(
     val created_at: Long = 0,
     val updated_at: Long = 0,
     val live: Boolean = false,
-    val busy: Boolean = false
+    val busy: Boolean = false,
+    val archived: Boolean = false
 )
 
 @Serializable
@@ -397,6 +398,9 @@ data class BridgeSimpleResponse(
 
 @Serializable
 data class ClaudeTitleRequest(val title: String)
+
+@Serializable
+data class ClaudeArchiveRequest(val archived: Boolean)
 
 /** Edit an earlier prompt in place: the chat is cut right before the prompt [before] (its uuid). */
 @Serializable

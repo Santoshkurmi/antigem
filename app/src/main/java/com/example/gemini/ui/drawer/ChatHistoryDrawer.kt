@@ -31,6 +31,8 @@ import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -97,6 +99,9 @@ fun ChatHistoryDrawer(
     isAuthBusy: Boolean = false,
     groupByWorkspace: Boolean = false,
     onToggleGroupByWorkspace: (Boolean) -> Unit = {},
+    /** Archive view: only archived chats are listed (otherwise only the others). */
+    showArchived: Boolean = false,
+    onToggleShowArchived: (Boolean) -> Unit = {},
     onRetry: () -> Unit = {},
     onSelectConversation: (String) -> Unit,
     onNewChat: () -> Unit,
@@ -155,9 +160,26 @@ fun ChatHistoryDrawer(
     var jarvisFilter by remember { mutableStateOf(false) }
     if (!jarvisEnabled && jarvisFilter) jarvisFilter = false
     val jarvisIds = remember(jarvisConversations) { jarvisConversations.map { it.id }.toSet() }
-    val filtered = remember(conversations, jarvisConversations, searchQuery, agentFilter, jarvisFilter) {
-        val byAgent = if (jarvisFilter) jarvisConversations
-        else agentFilter?.let { a -> conversations.filter { it.agent == a } } ?: conversations
+    // archived chats, sub-agent chats included when a parent up the chain is archived (they move with it)
+    val archivedIds = remember(conversations, jarvisConversations) {
+        val byId = (conversations + jarvisConversations).associateBy { it.id }
+        fun isArchived(c: Conversation): Boolean {
+            var cur: Conversation? = c
+            var hops = 0
+            while (cur != null && hops++ < 32) {
+                if (cur.archived) return true
+                val p = cur.parentConversationId
+                if (p == null || p == cur.id) return false
+                cur = byId[p]
+            }
+            return false
+        }
+        byId.values.filter(::isArchived).map { it.id }.toSet()
+    }
+    val filtered = remember(conversations, jarvisConversations, searchQuery, agentFilter, jarvisFilter, showArchived, archivedIds) {
+        val byAgent = (if (jarvisFilter) jarvisConversations
+        else agentFilter?.let { a -> conversations.filter { it.agent == a } } ?: conversations)
+            .filter { (it.id in archivedIds) == showArchived }
         if (searchQuery.isBlank()) byAgent
         else byAgent.filter {
             it.title.contains(searchQuery, ignoreCase = true) ||
@@ -643,6 +665,11 @@ fun ChatHistoryDrawer(
                     if (groupByWorkspace) "Disable Workspace Grouping" else "Group by Workspace",
                     groupByWorkspace
                 ) { onToggleGroupByWorkspace(!groupByWorkspace) }
+                HeaderIcon(
+                    Icons.Outlined.Archive,
+                    if (showArchived) "Show Chats" else "Show Archived Chats",
+                    showArchived
+                ) { onToggleShowArchived(!showArchived) }
 
                 // Exit app: quiet until pressed (it asks first)
                 Box(
@@ -850,8 +877,42 @@ fun ChatHistoryDrawer(
                 }
             }
 
+            // archive view: say so, or the list looks like chats went missing
+            if (showArchived) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Archive,
+                        contentDescription = null,
+                        tint = ClaudeTerracotta,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Archived chats · ${topLevelChats.size}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ClaudeTerracotta,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "Back to chats",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onToggleShowArchived(false) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
             // the Jarvis tab: start a Jarvis text chat (a command center that leads teams of agents)
-            if (jarvisEnabled && jarvisFilter && onNewJarvisChat != null) {
+            if (jarvisEnabled && jarvisFilter && onNewJarvisChat != null && !showArchived) {
                 JarvisNewChatRow(agents = visibleAgents, onNew = onNewJarvisChat)
             }
 
@@ -924,7 +985,8 @@ fun ChatHistoryDrawer(
                             contentAlignment = Alignment.TopCenter
                         ) {
                             Text(
-                                text = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\""
+                                text = if (searchQuery.isNotBlank()) "No ${if (showArchived) "archived " else ""}chats found matching \"$searchQuery\""
+                                    else if (showArchived) "No archived chats. Archive a chat from its ⋮ menu to keep it here, out of the main list."
                                     else if (jarvisFilter) "No Jarvis chats yet. Start one above: type a big job and Jarvis plans it, runs it with teams of agents and keeps going until it's done."
                                     else "No recent chats",
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -1839,6 +1901,24 @@ private fun ChatHistoryItemRow(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
+                if (claudeActions != null) {
+                    DropdownMenuItem(
+                        text = { Text(if (conv.archived) "Unarchive" else "Archive", fontSize = 13.5.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (conv.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            claudeActions.archive(conv.id, !conv.archived)
+                            AppToastHelper.showToast(if (conv.archived) "Chat unarchived" else "Chat archived", ChatToastType.SUCCESS)
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -2333,7 +2413,9 @@ class ClaudeDrawerActions(
     val loadMessages: suspend (String) -> List<com.example.gemini.domain.model.ChatMessage>,
     val rename: (String, String) -> Unit,
     /** Stops the chat's process (when idle) so its next message starts one with the current provider settings; the callback gets a message. */
-    val restart: (String, (String) -> Unit) -> Unit
+    val restart: (String, (String) -> Unit) -> Unit,
+    /** Archives (true) or unarchives (false) a chat of any agent. */
+    val archive: (String, Boolean) -> Unit = { _, _ -> }
 )
 
 

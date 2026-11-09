@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeveloperMode
@@ -115,7 +116,7 @@ private fun splitCommand(text: String): List<String> {
  * but changed there.
  */
 @Composable
-fun OpenCodeMcpPage(backend: OpenCodeChatBackend) {
+fun OpenCodeMcpPage(backend: OpenCodeChatBackend, onOpenRea: () -> Unit = {}, onOpenReaGroups: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var servers by remember { mutableStateOf<List<OpenCodeBridgeClient.McpServer>>(emptyList()) }
@@ -123,6 +124,7 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend) {
     var error by remember { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf<McpDraft?>(null) }
     var choosePlugin by remember { mutableStateOf(false) }
+    var showReaDialog by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         loading = true
@@ -148,7 +150,35 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend) {
         OpenCodeMcpPreset("Theme", "Create & switch app themes", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentAlt, local(bridge.THEME_MCP_NAME, "/theme")),
         OpenCodeMcpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentPink,
             McpDraft(name = "stitch", url = "https://stitch.googleapis.com/mcp", headers = "X-Goog-Api-Key: ")),
+        // REA runs in the terminal's proot-distro Ubuntu: com.termux builds only; its tile picks the tool groups
+        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context))
+            OpenCodeMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null)
+        else null,
         OpenCodeMcpPreset("Custom server", "Any remote (HTTP) or local (command) server", Icons.Outlined.Add, OpenCodeAccent, McpDraft())
+    ).filterNotNull()
+    // REA servers: local servers running the rea-mcp launcher (name → env)
+    val reaServers = servers.mapNotNull { srv ->
+        val c = srv.config ?: return@mapNotNull null
+        val command = c.a("command")?.firstOrNull()?.let { (it as? JsonPrimitive)?.content }
+        if (c.str("type") != "local" || !com.example.gemini.data.rea.ReaManager.isReaCommand(command)) return@mapNotNull null
+        srv.name to c.o("environment")?.mapValues { (it.value as? JsonPrimitive)?.content.orEmpty() }.orEmpty()
+    }.toMap()
+    if (showReaDialog) com.example.gemini.ui.settings.ReaServerDialog(
+        agent = "OpenCode",
+        existing = reaServers,
+        takenNames = servers.map { it.name }.toSet(),
+        canReplace = true,
+        onDismiss = { showReaDialog = false },
+        onSave = { name, env ->
+            showReaDialog = false
+            scope.launch {
+                backend.client.addLocalMcp(name, listOf(com.example.gemini.data.rea.ReaManager.LAUNCHER), env)
+                    .onSuccess { AppToastHelper.showToast("$name saved", ChatToastType.SUCCESS); reload() }
+                    .onFailure { AppToastHelper.showToast("Could not save: ${it.message}", ChatToastType.ERROR) }
+            }
+        },
+        onOpenRea = { showReaDialog = false; onOpenRea() },
+        onOpenGroups = { showReaDialog = false; onOpenReaGroups() }
     )
     if (choosePlugin) com.example.gemini.ui.settings.WebViewExtensionMcpPicker(onDismiss = { choosePlugin = false }) { extension ->
         val m = com.example.gemini.ui.browser.BrowserExtensionManager.instance
@@ -177,13 +207,22 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend) {
                     row.forEach { p ->
                         val d = p.draft
                         val name = d?.name.orEmpty()
-                        val added = name.isNotBlank() && servers.any { it.name == name || (bridge.isDeveloperMcpName(name) && bridge.isDeveloperMcpName(it.name)) }
+                        val isRea = p.name == "REA" && d == null
+                        val added = if (isRea) reaServers.isNotEmpty()
+                            else name.isNotBlank() && servers.any { it.name == name || (bridge.isDeveloperMcpName(name) && bridge.isDeveloperMcpName(it.name)) }
                         com.example.gemini.ui.settings.McpPresetTile(
                             name = p.name, subtitle = p.subtitle, icon = p.icon, accent = p.accent,
                             added = added, addedLabel = "Added",
-                            enabled = !added,
+                            // REA can be added more than once (different tool groups)
+                            enabled = isRea || !added,
                             modifier = Modifier.weight(1f).fillMaxHeight()
-                        ) { if (d == null) choosePlugin = true else draft = d }
+                        ) {
+                            when {
+                                isRea -> showReaDialog = true
+                                d == null -> choosePlugin = true
+                                else -> draft = d
+                            }
+                        }
                     }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }

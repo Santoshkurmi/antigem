@@ -17,7 +17,7 @@ AntiGem manages MCP configurations through the global `mcp_config.json` file and
 
 ## ⚡ 2. Quick Presets & Built-In Integrations
 
-In the **Quick Presets & Templates** section, AntiGem provides nine pre-configured, one-tap server templates:
+In the **Quick Presets & Templates** section, AntiGem provides nine pre-configured, one-tap server templates, plus **REA** on com.termux builds:
 
 | Preset Name | Subtitle / Function | Transport & Connection |
 | :--- | :--- | :--- |
@@ -30,6 +30,7 @@ In the **Quick Presets & Templates** section, AntiGem provides nine pre-configur
 | **Jarvis** | *Voice control of this app* | Local bridge `/jarvis` (`jarvis_mcp`) for voice-driven tool invocation, project creation, and task management |
 | **Theme** | *Create & switch app themes* | Local bridge `/theme` (`theme_mcp`) for generating, previewing, and applying custom app color schemes |
 | **Stitch** | *Google Stitch UI design · API key* | Remote SSE endpoint (`https://stitch.googleapis.com/mcp`) for generating UI prototypes using Google Stitch (requires entering your `X-Goog-Api-Key` in HTTP headers) |
+| **REA** | *Reverse engineering · APK & native* | Local Stdio server (`rea-mcp`) for analyzing APKs, Flutter, React Native and native code. Opens a dialog to choose how the agent sees its tools and which tool groups it may use; needs REA installed in **Settings → REA** first. The same preset is in Claude Code's and OpenCode's MCP settings. See [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md). |
 
 Tapping any preset tile opens the editor with all required arguments pre-filled, making it easy to configure or activate in seconds. If a preset is already active, its tile displays an added badge.
 

@@ -437,6 +437,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             AgentKind.AGY -> agyBackend.renameConversation(id, title)
         }
     }
+
+    /** Archives / unarchives a chat, each agent the way it stores it (AGY annotations, OpenCode session, Claude bridge list). */
+    fun setConversationArchived(id: String, archived: Boolean) {
+        when (agentOf(id)) {
+            AgentKind.CLAUDE -> claudeBackend.setArchived(id, archived)
+            AgentKind.OPENCODE -> openCodeBackend.setArchived(id, archived)
+            AgentKind.AGY -> agyBackend.setArchived(id, archived)
+        }
+    }
+
+    /** Sidebar archive view (archived chats only). Kept in memory only: the app always starts on the normal list. */
+    private val _showArchivedChats = MutableStateFlow(false)
+    val showArchivedChats: StateFlow<Boolean> = _showArchivedChats.asStateFlow()
+    fun setShowArchivedChats(on: Boolean) { _showArchivedChats.value = on }
     fun stopStreaming() = when {
         isClaudeActive -> claudeBackend.stopStreaming()
         isOpenCodeActive -> openCodeBackend.stopStreaming()

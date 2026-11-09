@@ -31,6 +31,7 @@ var upgrader = websocket.Upgrader{
 //	GET    /api/claude/sessions                 session list for the sidebar
 //	GET    /api/claude/sessions/{id}/history    main-chain transcript entries + live state (?full=1: also the live part)
 //	POST   /api/claude/sessions/{id}/title      {"title": "..."}
+//	POST   /api/claude/sessions/{id}/archive    {"archived": true|false} (kept by the bridge, see archive.go)
 //	POST   /api/claude/sessions/{id}/kill       stop the process
 //	POST   /api/claude/sessions/{id}/rewind     {"before": "<prompt uuid>"} edit an earlier prompt in place
 //	POST   /api/claude/sessions/{id}/fork       {"new_id", "title"} copy the chat under a new id
@@ -161,6 +162,23 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 		}
 		if err := m.RenameSession(id, strings.TrimSpace(body.Title)); err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	case action == "archive" && r.Method == http.MethodPost:
+		var body struct {
+			Archived *bool `json:"archived"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Archived == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "archived (true/false) required"})
+			return
+		}
+		if *body.Archived && m.FindTranscript(id) == "" {
+			writeJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": "session not found"})
+			return
+		}
+		if err := m.SetSessionArchived(id, *body.Archived); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})

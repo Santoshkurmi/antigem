@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.RecordVoiceOver
@@ -168,7 +169,13 @@ fun ClaudeSettingsGroup(deps: ClaudeSettingsDeps, cardBg: Color, onOpen: (Claude
 
 /** One Claude settings page (the settings top bar shows its title); [onBack] returns to the main settings menu. */
 @Composable
-fun ClaudeSettingsScreen(deps: ClaudeSettingsDeps, page: ClaudeSettingsPage, onBack: () -> Unit) {
+fun ClaudeSettingsScreen(
+    deps: ClaudeSettingsDeps,
+    page: ClaudeSettingsPage,
+    onOpenRea: () -> Unit = {},
+    onOpenReaGroups: () -> Unit = {},
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     BackHandler { onBack() }
     LaunchedEffect(Unit) {
@@ -191,7 +198,7 @@ fun ClaudeSettingsScreen(deps: ClaudeSettingsDeps, page: ClaudeSettingsPage, onB
             ClaudeSettingsPage.DEFAULTS -> DefaultsPage(deps)
             ClaudeSettingsPage.PROVIDERS -> ProvidersPage(deps)
             ClaudeSettingsPage.PERMISSIONS -> PermissionsPage(deps)
-            ClaudeSettingsPage.MCP -> McpPage(deps)
+            ClaudeSettingsPage.MCP -> McpPage(deps, onOpenRea, onOpenReaGroups)
             ClaudeSettingsPage.PLUGINS -> Unit
             ClaudeSettingsPage.MEMORY -> MemoryPage(deps)
             ClaudeSettingsPage.ADVANCED -> AdvancedPage(deps)
@@ -515,7 +522,7 @@ private fun PermissionsPage(deps: ClaudeSettingsDeps) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun McpPage(deps: ClaudeSettingsDeps) {
+private fun McpPage(deps: ClaudeSettingsDeps, onOpenRea: () -> Unit, onOpenReaGroups: () -> Unit) {
     val servers by deps.config.mcpServers.collectAsState()
     val loading by deps.config.mcpLoading.collectAsState()
     val ops by deps.config.mcpOps.collectAsState()
@@ -557,6 +564,27 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
             ClaudeMcpAddRequest(name = "stitch", transport = "http", url = "https://stitch.googleapis.com/mcp", headers = mapOf("X-Goog-Api-Key" to "")))
     )
     var chooseWebViewExtension by remember { mutableStateOf(false) }
+    var showReaDialog by remember { mutableStateOf(false) }
+    // REA servers: stdio servers running the rea-mcp launcher (name → env)
+    val reaServers = servers.mapNotNull { srv ->
+        val config = srv.config ?: return@mapNotNull null
+        val command = (config["command"] as? JsonPrimitive)?.content
+        if (!com.example.gemini.data.rea.ReaManager.isReaCommand(command)) return@mapNotNull null
+        srv.name to (config["env"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.content.orEmpty() }.orEmpty()
+    }.toMap()
+    if (showReaDialog) com.example.gemini.ui.settings.ReaServerDialog(
+        agent = "Claude Code",
+        existing = reaServers,
+        takenNames = servers.map { it.name }.toSet(),
+        canReplace = false,
+        onDismiss = { showReaDialog = false },
+        onSave = { name, env ->
+            deps.config.addMcp(ClaudeMcpAddRequest(name = name, transport = "stdio", command = com.example.gemini.data.rea.ReaManager.LAUNCHER, env = env), cwd)
+            showReaDialog = false
+        },
+        onOpenRea = { showReaDialog = false; onOpenRea() },
+        onOpenGroups = { showReaDialog = false; onOpenReaGroups() }
+    )
     val extensionManager = remember { com.example.gemini.ui.browser.BrowserExtensionManager.instance }
     if (chooseWebViewExtension) com.example.gemini.ui.settings.WebViewExtensionMcpPicker(onDismiss = { chooseWebViewExtension = false }) { extension ->
         addDraft = ClaudeMcpAddRequest(
@@ -568,14 +596,23 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
     Text("Quick presets", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     val tiles = listOf(
         ClaudeMcpPreset("Custom Plugin MCP", "Pick an installed plugin", Icons.Outlined.Extension, ClaudeTerracotta, null),
-    ) + presets + ClaudeMcpPreset("Custom server", "Any stdio, HTTP or SSE server", Icons.Outlined.Add, ClaudeAccent, null)
+    ) + presets +
+        // REA runs in the terminal's proot-distro Ubuntu: com.termux builds only; its tile picks the tool groups
+        listOfNotNull(
+            if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context))
+                ClaudeMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null)
+            else null
+        ) +
+        ClaudeMcpPreset("Custom server", "Any stdio, HTTP or SSE server", Icons.Outlined.Add, ClaudeAccent, null)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         tiles.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { p ->
                     val req = p.request
+                    val isRea = p.name == "REA" && req == null
                     // The plugin developer may already be added under its old name
-                    val added = req != null && servers.any { it.name == req.name || (bridge.isDeveloperMcpName(req.name) && bridge.isDeveloperMcpName(it.name)) }
+                    val added = if (isRea) reaServers.isNotEmpty()
+                        else req != null && servers.any { it.name == req.name || (bridge.isDeveloperMcpName(req.name) && bridge.isDeveloperMcpName(it.name)) }
                     val busy = req != null && req.name in ops
                     com.example.gemini.ui.settings.McpPresetTile(
                         name = p.name,
@@ -584,11 +621,13 @@ private fun McpPage(deps: ClaudeSettingsDeps) {
                         accent = p.accent,
                         added = added,
                         addedLabel = "Added",
-                        enabled = !added && !busy,
+                        // REA can be added more than once (different tool groups)
+                        enabled = isRea || (!added && !busy),
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     ) {
                         when {
                             req != null -> addDraft = req
+                            isRea -> showReaDialog = true
                             p.name == "Custom server" -> addDraft = ClaudeMcpAddRequest(name = "")
                             else -> chooseWebViewExtension = true
                         }

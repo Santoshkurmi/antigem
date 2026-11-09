@@ -124,7 +124,9 @@ data class Conversation(
     val subagentRole: String? = null,
     val subagentTypeName: String? = null,
     val nestingDepth: Int = 0,
-    val agent: AgentKind = AgentKind.AGY
+    val agent: AgentKind = AgentKind.AGY,
+    /** Archived: listed only in the sidebar's archive view. */
+    val archived: Boolean = false
 )
 
 /** A message sent while the agent was working, waiting to be delivered (shown in the queued-messages card). */

@@ -871,6 +871,26 @@ class ClaudeChatBackend(
         }
     }
 
+    /** Archives / unarchives a chat on the bridge (a chat without a transcript yet cannot be archived). */
+    fun setArchived(id: String, archived: Boolean) {
+        val before = _conversations.value.find { it.id == id }?.archived ?: return
+        if (before == archived) return
+        _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = archived) else it }
+        store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = it.copy(archived = archived) }
+        backendScope.launch {
+            client.archive(id, archived)
+                .mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+                .onFailure { e ->
+                    Log.w(TAG, "archive $id failed: ${e.message}")
+                    _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = before) else it }
+                    com.example.gemini.ui.components.AppToastHelper.showToast(
+                        "Could not ${if (archived) "archive" else "unarchive"}: ${e.message}", com.example.gemini.ui.components.ChatToastType.ERROR
+                    )
+                }
+            refreshSessions()
+        }
+    }
+
     /** The context window the user saved for a custom model (0 = unknown or a Claude model). */
     fun contextLengthOf(modelId: String): Long {
         val provider = providerOf(modelId).ifEmpty { return 0 }
@@ -1140,7 +1160,8 @@ class ClaudeChatBackend(
                     updatedAt = s.updated_at,
                     isRunning = s.busy,
                     workspaceUri = if (s.cwd.isNotBlank()) "file://${s.cwd}" else "",
-                    agent = AgentKind.CLAUDE
+                    agent = AgentKind.CLAUDE,
+                    archived = s.archived
                 )
             }
             val ids = fromBridge.map { it.id }.toSet()
