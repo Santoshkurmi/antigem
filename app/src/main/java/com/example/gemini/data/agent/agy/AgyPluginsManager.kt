@@ -10,9 +10,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient
-import com.example.gemini.data.remote.AntigravityApiService
-import com.example.gemini.data.remote.GoogleOAuthManager
-import com.example.gemini.data.remote.StreamEvent
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.ChatAttachment

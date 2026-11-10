@@ -173,8 +173,6 @@ fun SettingsDialog(
     availableModels: List<AiModel> = AiModel.DEFAULT_MODELS,
     enabledModelIds: Set<String>?,
     quotas: List<ModelQuota>,
-    isServerListening: Boolean = false,
-    isServerLoading: Boolean = false,
     contextWindowLimit: Int = 10,
     summaryModelId: String = "always_ask",
     isDevModeEnabled: Boolean = false,
@@ -195,10 +193,7 @@ fun SettingsDialog(
     terminalTheme: String = "DEFAULT",
     isLocalToolsEnabled: Boolean = false,
     isLocalToolsInstalled: Boolean = false,
-    onLoginWithGoogle: () -> Unit,
-    onToggleServer: (Boolean) -> Unit = {},
     onLogout: () -> Unit = {},
-    onManualTokenEntered: (String) -> Unit,
     onToggleModelEnabled: (String, Boolean) -> Unit,
     onEnableAllModels: () -> Unit,
     onRefreshQuotas: () -> Unit,
@@ -573,7 +568,6 @@ fun SettingsDialog(
                         cardBorder = cardBorder,
                         onStopServer = {
                             LocalServerManager.stopServer()
-                            onToggleServer(false)
                         }
                     )
 

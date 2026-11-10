@@ -38,13 +38,13 @@
 
 AntiGem runs three coding agents on your phone:
 
-- **Antigravity (`agy`)**: the app talks to the `agy` language server directly over gRPC.
+- **Antigravity (`agy`)**: Google's official `agy` CLI, installed with Google's own installer, runs inside the app's Linux environment.
 - **Claude Code**: Anthropic's official `claude` CLI runs inside the app's Linux environment, and the app talks to it over its stream-json protocol, with one CLI process per chat.
 - **OpenCode**: the open-source coding agent. It works with 200+ providers with your own keys, any OpenAI-compatible API, and free models.
 
 You can turn on any of the three agents, on first launch or later in **Settings → Agents**. An agent you turn off does not run.
 
-The app reads each agent's structured protocol, not its terminal output. That is how it shows streaming replies, tool approvals, the agent's questions, subagents and file changes as normal chat UI.
+The app reads each agent's structured output, not its terminal text. That is how it shows streaming replies, tool approvals, the agent's questions, subagents and file changes as normal chat UI.
 
 ---
 
@@ -78,7 +78,7 @@ Use the whole app hands-free by voice, on top of Antigravity, Claude Code or Ope
 - Settings for chat defaults, permission rules, the command sandbox, MCP servers, plugins and marketplaces, `CLAUDE.md` and Claude's memory.
 
 ### Antigravity
-- Direct gRPC connection to the `agy` daemon.
+- Runs Google's official `agy` CLI.
 - Model picker with live quota, Google sign-in and account details.
 - Security presets and per-project rules for command auto-run and file access.
 - MCP servers, skills and Google plugins.
@@ -226,14 +226,14 @@ Then open Termux:X11. Don't install `termux-x11-nightly` from x11-repo: it only 
 │                    AntiGem Android app                   │
 │     Compose UI · terminal · editor · browser · MCPs      │
 └────────────────────────────┬─────────────────────────────┘
-                             │  gRPC / WebSocket (localhost)
+                             │  HTTP / WebSocket (localhost)
 ┌────────────────────────────▼─────────────────────────────┐
 │                agy_ide_bridge (Go, local)                │
 │     Git · files · Claude Code relay · plugin manager     │
 └───────────────┬──────────────────────────┬───────────────┘
-                │ gRPC                     │ stream-json
+                │                          │ stream-json
 ┌───────────────▼─────────────┐ ┌──────────▼───────────────┐
-│  Antigravity (agy) daemon   │ │  Claude Code CLI         │
+│  Antigravity CLI (agy)      │ │  Claude Code CLI         │
 │                             │ │  (one process per chat)  │
 └─────────────────────────────┘ └──────────────────────────┘
 ```
@@ -334,28 +334,9 @@ antigem/
 ├── agy_ide_bridge/        # Go bridge: agy hub, Claude Code relay, Git, plugins
 ├── extensions/            # Bundled plugins
 ├── extension_docs/        # Plugin SDK documentation and examples
-├── proto_generator/       # Protobuf definitions and generators for the agy API
 ├── scripts/               # Build, backup and restore scripts
 └── version.json           # Version and changelog used by the in-app updater
 ```
-
-### Adding an agy RPC
-
-Do not edit `app/src/main/proto/LanguageServerService.proto` by hand. It is generated from the full daemon proto in
-`proto_generator/protos/`, filtered down to the RPCs the app uses.
-
-1. Add the RPC name (one per line) to `proto_generator/proto_filters/LanguageServerService.proto.filter`.
-2. Run the filter from `proto_generator/`:
-
-   ```bash
-   cd proto_generator
-   python3 filter_proto.py --copy
-   ```
-
-   It keeps the listed RPCs plus every message and enum they need, and copies the result to `app/src/main/proto/`.
-   Without `--copy` it asks before copying.
-3. Rebuild the app. Wire generates the new call (for example `AgyLanguageService.UpdateConversationAnnotations()`)
-   and its request/response classes.
 
 ---
 

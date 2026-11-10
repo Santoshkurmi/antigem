@@ -10,10 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gemini.data.preferences.AuthPreferences
 import com.example.gemini.data.remote.AgyHubClient
-import com.example.gemini.data.remote.AntigravityApiService
-import com.example.gemini.data.remote.GoogleOAuthManager
 import com.example.gemini.data.remote.PromptExpansion
-import com.example.gemini.data.remote.StreamEvent
 import com.example.gemini.domain.model.AgentKind
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
@@ -46,7 +43,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     val authPreferences = AuthPreferences(application)
     private val authPrefs get() = authPreferences
-    private val apiService = AntigravityApiService()
     private val store = com.example.gemini.data.agent.ChatSessionStore()
     val agyBackend: com.example.gemini.data.agent.agy.AgyChatBackend = com.example.gemini.data.agent.agy.AgyChatBackend(
         application = application,
@@ -707,7 +703,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setCommandAutoExecutionPolicy(policy: String) = securityManager.setCommandAutoExecutionPolicy(policy)
     fun setCommandSandboxEnabled(enabled: Boolean) = securityManager.setCommandSandboxEnabled(enabled)
 
-    private val oauthManager = GoogleOAuthManager()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val _conversations = store.conversations
@@ -773,10 +768,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _userEmail = store.userEmail
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
-
-    val isOAuthServerListening: StateFlow<Boolean> = oauthManager.isServerListening.asStateFlow()
-    private val _isOAuthServerLoading = MutableStateFlow(false)
-    val isOAuthServerLoading: StateFlow<Boolean> = _isOAuthServerLoading.asStateFlow()
 
     private val _projectId = MutableStateFlow("rising-fact-p41fc")
     val projectId: StateFlow<String> = _projectId.asStateFlow()
@@ -1427,9 +1418,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSearchingConversations = MutableStateFlow(false)
     val isSearchingConversations: StateFlow<Boolean> = _isSearchingConversations.asStateFlow()
 
-    private var serverJob: Job? = null
-    var pendingPkceVerifier: String? = null
-
     init {
         try {
             val cm = getApplication<Application>().getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -1536,126 +1524,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 
-    suspend fun getValidAccessToken(forceRefresh: Boolean = false): String? {
-        val currentAccess = authPrefs.accessToken.firstOrNull()
-        val currentRefresh = authPrefs.refreshToken.firstOrNull()
-        val expiresAt = authPrefs.expiresAt.firstOrNull() ?: 0L
-
-        val isExpired = forceRefresh || (expiresAt > 0 && System.currentTimeMillis() >= expiresAt - 60_000)
-
-        if (!isExpired && !currentAccess.isNullOrBlank()) {
-            return currentAccess
-        }
-
-        if (!currentRefresh.isNullOrBlank()) {
-            android.util.Log.d("GeminiApp", "[Auth] Refreshing Google OAuth access token using refresh_token...")
-            val result = oauthManager.refreshToken(currentRefresh)
-            if (result.isSuccess) {
-                val tokenData = result.getOrThrow()
-                android.util.Log.d("GeminiApp", "[Auth] Token refreshed successfully! New access token acquired.")
-                authPrefs.saveTokens(
-                    accessToken = tokenData.access_token,
-                    refreshToken = tokenData.refresh_token ?: currentRefresh,
-                    expiresInSeconds = tokenData.expires_in ?: 3600
-                )
-                return tokenData.access_token
-            } else {
-                android.util.Log.e("GeminiApp", "[Auth] Failed to refresh token: ${result.exceptionOrNull()?.message}")
-            }
-        }
-
-        return currentAccess
-    }
-
-
-    fun applyManualInput(input: String) {
-        val trimmed = input.trim()
-        android.util.Log.d("GeminiApp", "[OAuth] applyManualInput received: ${trimmed.take(30)}...")
-        if (trimmed.contains("code=")) {
-            val match = Regex("[?&]code=([^&\\s]+)").find(trimmed)
-            val code = match?.groupValues?.get(1)?.let { java.net.URLDecoder.decode(it, "UTF-8") }
-            if (code != null) {
-                android.util.Log.d("GeminiApp", "[OAuth] Extracted auth code from manual input: ${code.take(15)}...")
-                handleOAuthCode(code)
-                return
-            }
-        }
-
-        if (trimmed.startsWith("4/0")) {
-            val decoded = try { java.net.URLDecoder.decode(trimmed, "UTF-8") } catch (_: Exception) { trimmed }
-            handleOAuthCode(decoded)
-            return
-        }
-
-        // Direct access token (e.g. ya29...)
-        viewModelScope.launch {
-            android.util.Log.d("GeminiApp", "[OAuth] Applying direct token...")
-            authPrefs.saveTokens(trimmed, null, "Manual Token")
-            val assistRes = apiService.loadCodeAssist(trimmed)
-            if (assistRes.isSuccess) {
-                val (proj, tier) = assistRes.getOrThrow()
-                authPrefs.saveProjectInfo(proj, tier)
-                _projectId.value = proj
-                _tier.value = tier
-            }
-            val userRes = oauthManager.fetchUserInfo(trimmed)
-            if (userRes.isSuccess) {
-                userRes.getOrNull()?.email?.let { email ->
-                    authPrefs.saveTokens(trimmed, null, email)
-                    _userEmail.value = email
-                }
-            }
-            refreshQuotas()
-        }
-    }
-
-    fun startOAuthServer() {
-        if (oauthManager.isServerListening.value && serverJob?.isActive == true) {
-            android.util.Log.d("GeminiApp", "[OAuth] Server is already active, ignoring start request")
-            return
-        }
-        serverJob?.cancel()
-        serverJob = viewModelScope.launch {
-            _isOAuthServerLoading.value = true
-            try {
-                if (pendingPkceVerifier == null) {
-                    val pkce = oauthManager.generatePkce()
-                    pendingPkceVerifier = pkce.codeVerifier
-                    android.util.Log.d("GeminiApp", "[OAuth] Generated PKCE verifier for server session")
-                }
-                _isOAuthServerLoading.value = false
-                oauthManager.startLocalCallbackServer { code ->
-                    handleOAuthCode(code)
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("GeminiApp", "[OAuth] Server start failed: ${e.message}")
-                _isOAuthServerLoading.value = false
-            }
-        }
-    }
-
-    fun stopOAuthServer() {
-        serverJob?.cancel()
-        serverJob = null
-        _isOAuthServerLoading.value = false
-        oauthManager.stopLocalCallbackServer()
-    }
-
-    fun toggleOAuthServer(enable: Boolean) {
-        if (enable) {
-            startOAuthServer()
-        } else {
-            stopOAuthServer()
-        }
-    }
-
     fun login() {
         loginToAgyHub()
     }
 
     fun logout() {
-        stopOAuthServer()
-        pendingPkceVerifier = null
         logoutFromAgyHub()
         viewModelScope.launch {
             authPrefs.clearAuth()
@@ -1664,71 +1537,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _projectId.value = "rising-fact-p41fc"
         _tier.value = "pro"
         agyBackend.resetQuotaState()
-    }
-
-    fun getGoogleOAuthUrl(): String {
-        val pkce = oauthManager.generatePkce()
-        pendingPkceVerifier = pkce.codeVerifier
-        android.util.Log.d("GeminiApp", "[OAuth] getGoogleOAuthUrl generated verifier (len=${pkce.codeVerifier.length})")
-        startOAuthServer()
-        return pkce.authUrl
-    }
-
-    fun handleOAuthCode(code: String) {
-        val trimmedCode = code.trim()
-        android.util.Log.d("GeminiApp", "[OAuth] handleOAuthCode processing code: ${trimmedCode.take(20)}...")
-        val verifier = pendingPkceVerifier
-        if (verifier == null) {
-            android.util.Log.e("GeminiApp", "[OAuth] ERROR: pendingPkceVerifier is null! Cannot exchange auth code.")
-            return
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            // Brief delay to let the server socket fully close and free the IO thread pool
-            // before making outbound network calls. This prevents DNS resolution failures
-            // that occur when the token exchange fires from within the server socket callback.
-            delay(400L)
-
-            var tokenRes: Result<GoogleOAuthManager.TokenResponse>? = null
-            for (attempt in 1..3) {
-                android.util.Log.d("GeminiApp", "[OAuth] exchangeCodeForToken attempt $attempt...")
-                tokenRes = oauthManager.exchangeCodeForToken(trimmedCode, verifier)
-                if (tokenRes.isSuccess) break
-                android.util.Log.w("GeminiApp", "[OAuth] Attempt $attempt failed: ${tokenRes.exceptionOrNull()?.message}")
-                if (attempt < 3) delay(1000L * attempt)
-            }
-
-            if (tokenRes?.isSuccess == true) {
-                val tokenData = tokenRes.getOrThrow()
-                android.util.Log.d("GeminiApp", "[OAuth] Token exchange SUCCESS! Fetching user profile...")
-                val userRes = oauthManager.fetchUserInfo(tokenData.access_token)
-                val email = userRes.getOrNull()?.email ?: "Google Account"
-                android.util.Log.d("GeminiApp", "[OAuth] User email resolved: $email")
-
-                authPrefs.saveTokens(
-                    accessToken = tokenData.access_token,
-                    refreshToken = tokenData.refresh_token,
-                    email = email,
-                    expiresInSeconds = tokenData.expires_in ?: 3600
-                )
-                withContext(Dispatchers.Main) { _userEmail.value = email }
-
-                val assistRes = apiService.loadCodeAssist(tokenData.access_token)
-                if (assistRes.isSuccess) {
-                    val (proj, tier) = assistRes.getOrThrow()
-                    android.util.Log.d("GeminiApp", "[OAuth] CodeAssist project: $proj, tier: $tier")
-                    authPrefs.saveProjectInfo(proj, tier)
-                    withContext(Dispatchers.Main) {
-                        _projectId.value = proj
-                        _tier.value = tier
-                    }
-                } else {
-                    android.util.Log.w("GeminiApp", "[OAuth] CodeAssist loading warning: ${assistRes.exceptionOrNull()?.message}")
-                }
-                refreshQuotas()
-            } else {
-                android.util.Log.e("GeminiApp", "[OAuth] Token exchange FAILED after retries: ${tokenRes?.exceptionOrNull()?.message}")
-            }
-        }
     }
 
 

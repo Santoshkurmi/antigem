@@ -694,8 +694,6 @@ fun ChatScreen(
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
-    val isOAuthServerListening by viewModel.isOAuthServerListening.collectAsState()
-    val isOAuthServerLoading by viewModel.isOAuthServerLoading.collectAsState()
     val isConversationsLoading by viewModel.isConversationsLoading.collectAsState()
     val hasReceivedInitialSync by viewModel.hasReceivedInitialSync.collectAsState()
     val isLoadingConversation by viewModel.isLoadingConversation.collectAsState()
@@ -2893,8 +2891,6 @@ fun ChatScreen(
             availableModels = availableModels,
             enabledModelIds = enabledModelIds,
             quotas = quotas,
-            isServerListening = isOAuthServerListening,
-            isServerLoading = isOAuthServerLoading,
             contextWindowLimit = contextWindowLimit,
             summaryModelId = summaryModelIdPref,
             isDevModeEnabled = isDevModeEnabled,
@@ -2915,19 +2911,8 @@ fun ChatScreen(
             terminalTheme = terminalTheme,
             isLocalToolsEnabled = isLocalToolsEnabled,
             isLocalToolsInstalled = isLocalToolsInstalled,
-            onLoginWithGoogle = {
-                val url = viewModel.getGoogleOAuthUrl()
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                context.startActivity(intent)
-            },
-            onToggleServer = { enable ->
-                viewModel.toggleOAuthServer(enable)
-            },
             onLogout = {
                 viewModel.logout()
-            },
-            onManualTokenEntered = { token ->
-                viewModel.applyManualInput(token)
             },
             onToggleModelEnabled = { modelId, isEnabled ->
                 viewModel.setModelEnabled(modelId, isEnabled)
