@@ -20,6 +20,24 @@ class OpenCodePreferences(context: Context) {
     /** [MODE_DEFAULT], [MODE_ASK] or [MODE_AUTO]. */
     val permissionMode: StateFlow<String> = _permissionMode.asStateFlow()
 
+    private val _hiddenModels = MutableStateFlow(prefs.getStringSet(KEY_HIDDEN_MODELS, null)?.toSet().orEmpty())
+    /** "provider/model" ids turned off in Settings → OpenCode → Providers: left out of the model picker. */
+    val hiddenModels: StateFlow<Set<String>> = _hiddenModels.asStateFlow()
+
+    private val _hiddenProviders = MutableStateFlow(prefs.getStringSet(KEY_HIDDEN_PROVIDERS, null)?.toSet().orEmpty())
+    /** Provider ids turned off: none of their models are in the picker (each model keeps its own on/off). */
+    val hiddenProviders: StateFlow<Set<String>> = _hiddenProviders.asStateFlow()
+
+    fun setHiddenModels(ids: Set<String>) {
+        prefs.edit().putStringSet(KEY_HIDDEN_MODELS, ids.toSet()).apply()
+        _hiddenModels.value = ids.toSet()
+    }
+
+    fun setHiddenProviders(ids: Set<String>) {
+        prefs.edit().putStringSet(KEY_HIDDEN_PROVIDERS, ids.toSet()).apply()
+        _hiddenProviders.value = ids.toSet()
+    }
+
     fun setModel(id: String) {
         prefs.edit().putString(KEY_MODEL, id).apply()
         _model.value = id
@@ -39,6 +57,8 @@ class OpenCodePreferences(context: Context) {
         private const val KEY_MODEL = "model"
         private const val KEY_AGENT = "agent"
         private const val KEY_MODE = "permission_mode"
+        private const val KEY_HIDDEN_MODELS = "hidden_models"
+        private const val KEY_HIDDEN_PROVIDERS = "hidden_providers"
 
         /** OpenCode's own rules (its config and the agent's; most tools run without asking). */
         const val MODE_DEFAULT = "default"

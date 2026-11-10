@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Add
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Refresh
@@ -55,6 +57,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -212,6 +216,8 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
         }
     }
 
+    ModelsCard(backend)
+
     ClaudeCard {
         Text("Connect", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Spacer(Modifier.height(8.dp))
@@ -255,6 +261,87 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
             signingIn = null
             backend.refreshModels()
             scope.launch { reload() }
+        }
+    }
+}
+
+/**
+ * Every provider that has models (connected accounts, OpenCode's free models, custom endpoints), each with a switch
+ * for the whole provider and, opened, a switch per model. Turned-off ones are left out of the model picker; this is
+ * kept by the app only, OpenCode itself still has them.
+ */
+@Composable
+private fun ModelsCard(backend: OpenCodeChatBackend) {
+    val all by backend.allModels.collectAsState()
+    val hiddenModels by backend.hiddenModels.collectAsState()
+    val hiddenProviders by backend.hiddenProviders.collectAsState()
+    if (all.isEmpty()) return
+    val groups = all.groupBy { backend.providerOf(it.id) }.toList().sortedBy { (_, ms) -> ms.first().baseName.lowercase() }
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val switchColors = SwitchDefaults.colors(checkedTrackColor = OpenCodeAccent)
+    val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+
+    ClaudeCard {
+        Text("Models", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text(
+            "Turn providers or single models off to keep them out of the model picker. Tap a provider to see its models.",
+            fontSize = 11.5.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        groups.forEach { (providerId, models) ->
+            val providerOn = providerId !in hiddenProviders
+            val onCount = models.count { it.id !in hiddenModels }
+            val open = expanded[providerId] == true
+            HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { expanded[providerId] = !open }.padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (open) Icons.Outlined.KeyboardArrowDown else Icons.AutoMirrored.Outlined.KeyboardArrowRight, null,
+                    tint = dim, modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(models.first().baseName, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        if (providerOn) "$onCount of ${models.size} models on" else "Off · ${models.size} models",
+                        fontSize = 10.5.sp, color = dim
+                    )
+                }
+                Switch(checked = providerOn, onCheckedChange = { backend.setProviderEnabled(providerId, it) }, colors = switchColors)
+            }
+            if (open) {
+                var query by remember(providerId) { mutableStateOf("") }
+                Column(Modifier.padding(start = 24.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { backend.setProviderModelsEnabled(providerId, true) }, enabled = providerOn) { Text("All on", fontSize = 12.sp) }
+                        TextButton(onClick = { backend.setProviderModelsEnabled(providerId, false) }, enabled = providerOn) { Text("All off", fontSize = 12.sp) }
+                    }
+                    if (models.size > 12) {
+                        OutlinedTextField(
+                            value = query, onValueChange = { query = it }, singleLine = true, shape = RoundedCornerShape(12.dp),
+                            leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
+                            placeholder = { Text("Search ${models.size} models", fontSize = 13.sp) },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                        )
+                    }
+                    models.filter { query.isBlank() || it.displayName.contains(query, true) || it.id.contains(query, true) }.forEach { m ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    m.displayName, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (providerOn) 1f else 0.45f)
+                                )
+                                Text(m.id.substringAfter('/'), fontSize = 10.sp, color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Switch(
+                                checked = m.id !in hiddenModels, onCheckedChange = { backend.setModelEnabled(m.id, it) },
+                                enabled = providerOn, colors = switchColors
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
