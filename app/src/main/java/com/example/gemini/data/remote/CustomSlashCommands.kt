@@ -48,13 +48,13 @@ object CustomSlashCommands {
                 Use AntiGem's built-in browser to do this: ${'$'}ARGUMENTS
                 If that is empty or unclear, first ask the user what to do and on which website, then continue.
 
-                1. Check that you have the Browser Automation MCP: its tools start with browser_ (server browser_mcp), such as browser_open_url, browser_screenshot, browser_inspect_dom and browser_interact. It might not be added for this agent yet. If you don't have these tools, stop and tell the user how to add it:
+                1. Check that you have the Browser Automation MCP: its tools start with browser_ (server browser_mcp), such as browser_open_url, browser_find, browser_read_page and browser_computer. It might not be added for this agent yet. If you don't have these tools, stop and tell the user how to add it:
                    - Antigravity: open AntiGem → Settings → MCP Servers & Tools, tap the "Browser Automation" preset under Quick Presets, and save.
                    - Claude Code: open AntiGem → Settings → Claude Code → MCP servers, and tap the "Browser Automation" preset.
                    - Then reload the tools or start a new chat, and send this command again.
                    Don't try to do the task another way while the tools are missing.
-                2. Open the page with browser_open_url, then look before you act: browser_inspect_dom for the elements and selectors, browser_screenshot to see the page.
-                3. Act with browser_interact (click, type, scroll) using selectors from the latest inspection, and check the result with another inspection or screenshot after each step. Use browser_get_console_logs when something fails.
+                2. Open the page with browser_open_url, then look before you act: browser_find for a specific element or browser_read_page for the page's structure (both give refs like ref_12), browser_computer action=screenshot to see it, browser_get_page_text to read it.
+                3. Act on refs: browser_computer (left_click, type, key, hover, scroll_to; coordinates from the latest screenshot also work) and browser_form_input to fill fields, pick options and tick boxes. Put predictable steps into one browser_batch call (e.g. click a field, type, press Enter, screenshot). Check each result: actions report page changes and new tabs; read the page again or take a screenshot when unsure. Use browser_get_console_logs and browser_read_network when something fails.
                 4. Ask the user before anything outward-facing or hard to undo: submitting forms, sending messages, posting, buying, or signing in with their account. If a page needs them to log in or solve a captcha, ask them to do it in the browser and tell you when they're done.
                 5. Finish with what you did and what you found.
             """.trimIndent()

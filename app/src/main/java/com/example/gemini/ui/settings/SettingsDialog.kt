@@ -245,7 +245,7 @@ fun SettingsDialog(
     pluginActionStatusMessage: String? = null,
     pluginActionErrorMessage: String? = null,
     onClearPluginStatus: () -> Unit = {},
-    floatingSwitcherOrientation: String = "HORIZONTAL",
+    floatingSwitcherOrientation: String = "VERTICAL",
     floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser", "notes", "files"),
     floatingSwitcherAutoCollapseSec: Int = 0,
     onSetFloatingSwitcherOrientation: (String) -> Unit = {},

@@ -695,12 +695,24 @@ fun BrowserScreen(
                             modifier = Modifier.fillMaxSize()
                         )
 
+                        // Browser MCP agent: cursor, clicks and a glowing frame drawn over the page
+                        com.example.gemini.ui.browser.mcp.BrowserAgentOverlay(tab.id, topInset = if (tab.agentLocked) 62.dp else 10.dp)
+
                         if (tab.blocksUserInput) {
                             BrowserAiLockOverlay(
                                 busy = tab.aiBusy,
                                 onUnlock = { tab.userUnlocked = true }
                             )
                         }
+
+                        // Browser MCP explicit lock (browser_lock): touches blocked, draggable Unlock pill
+                        if (tab.agentLocked) {
+                            com.example.gemini.ui.browser.mcp.BrowserAgentLockOverlay(
+                                onUnlock = { com.example.gemini.ui.browser.mcp.BrowserAgentLock.unlockByUser(tab) }
+                            )
+                        }
+                        // A page alert/confirm/prompt the tab is waiting on
+                        com.example.gemini.ui.browser.mcp.BrowserJsDialogCard(tab)
                     }
                 }
             }
@@ -1962,6 +1974,26 @@ private fun TabCardView(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                // The browser MCP agent holds this tab (browser_lock); unlock it from the pill inside the tab
+                if (tab.agentLocked) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 4.dp)
+                            .background(ClaudeTerracotta.copy(alpha = 0.16f), RoundedCornerShape(50))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.SmartToy,
+                            contentDescription = "Locked by AI",
+                            tint = ClaudeTerracotta,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("AI", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = ClaudeTerracotta)
+                    }
                 }
 
                 IconButton(

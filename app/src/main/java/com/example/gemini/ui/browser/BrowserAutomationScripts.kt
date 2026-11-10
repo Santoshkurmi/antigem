@@ -64,4 +64,99 @@ object BrowserAutomationScripts {
           return freezeZoom($enabled);
         })();
     """.trimIndent()
+
+    /**
+     * Browser MCP lock: text fields get inputmode=none, so focusing one never asks for the soft keyboard. With [pinZoom]
+     * the zoom is also pinned with the page's whole width on screen (used while the agent holds the tab and the user
+     * cannot touch it). Unlike [inputLock] it keeps the page's own layout width, so mobile pages stay mobile.
+     * Idempotent and switchable; enabled=false restores the page.
+     */
+    fun agentInputLock(enabled: Boolean, pinZoom: Boolean = false) = """
+        (function (on, pinZoom) {
+          var FIELDS = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+          var S = window.__antigemAgentLock;
+          function restoreMeta() {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (meta) {
+              if (S.created) meta.remove();
+              else if (S.original == null) meta.removeAttribute('content');
+              else meta.setAttribute('content', S.original);
+            }
+          }
+          if (!on) {
+            if (!S) return true;
+            S.observer.disconnect();
+            document.removeEventListener('focusin', S.onFocus, true);
+            if (window.visualViewport) window.visualViewport.removeEventListener('resize', S.pin);
+            S.fields.forEach(function (original, el) {
+              if (original == null) el.removeAttribute('inputmode'); else el.setAttribute('inputmode', original);
+            });
+            if (S.pinning) restoreMeta();
+            window.__antigemAgentLock = null;
+            return true;
+          }
+          if (!S) {
+            S = { fields: new Map(), pinning: false, width: Math.max(1, Math.round(window.innerWidth)) };
+            window.__antigemAgentLock = S;
+            var protect = function (el) {
+              if (!el || el.nodeType !== 1 || !el.matches || !el.matches(FIELDS)) return;
+              if (!S.fields.has(el)) S.fields.set(el, el.getAttribute('inputmode'));
+              if (el.getAttribute('inputmode') !== 'none') el.setAttribute('inputmode', 'none');
+            };
+            S.protectAll = function () { document.querySelectorAll(FIELDS).forEach(protect); };
+            S.pin = function () {
+              if (!S.pinning) return;
+              var meta = document.querySelector('meta[name="viewport"]');
+              if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                (document.head || document.documentElement).appendChild(meta);
+              }
+              var vv = window.visualViewport;
+              var screenWidth = vv ? vv.width * vv.scale : window.innerWidth;
+              var scale = screenWidth / S.width;
+              scale = Math.abs(scale - 1) < 0.01 ? 1 : Math.max(0.05, Math.round(scale * 10000) / 10000);
+              var content = 'width=' + S.width + ', initial-scale=' + scale + ', minimum-scale=' + scale + ', maximum-scale=' + scale + ', user-scalable=no';
+              if (meta.getAttribute('content') !== content) meta.setAttribute('content', content);
+            };
+            S.setPin = function (want) {
+              if (want && !S.pinning) {
+                var meta0 = document.querySelector('meta[name="viewport"]');
+                S.original = meta0 && meta0.getAttribute('content');
+                S.created = !meta0;
+                S.width = Math.max(1, Math.round(window.innerWidth));
+                S.pinning = true;
+              } else if (!want && S.pinning) {
+                S.pinning = false;
+                restoreMeta();
+              }
+              S.pin();
+            };
+            S.onFocus = function (e) { protect(e.composedPath ? e.composedPath()[0] : e.target); };
+            S.observer = new MutationObserver(function (records) {
+              var repin = false;
+              records.forEach(function (r) {
+                if (r.type === 'attributes') {
+                  if (r.attributeName === 'content' && r.target.name === 'viewport') repin = true;
+                  else if (r.attributeName === 'inputmode' && S.fields.has(r.target)) protect(r.target);
+                  return;
+                }
+                r.addedNodes.forEach(function (n) {
+                  if (n.nodeType !== 1) return;
+                  protect(n);
+                  if (n.querySelectorAll) n.querySelectorAll(FIELDS).forEach(protect);
+                  if (n.localName === 'meta') repin = true;
+                });
+              });
+              if (repin) S.pin();
+            });
+            S.observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['content', 'inputmode'] });
+            document.addEventListener('focusin', S.onFocus, true);
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', S.pin);
+          }
+          S.protectAll();
+          S.setPin(pinZoom);
+          return true;
+        })($enabled, $pinZoom);
+    """.trimIndent()
 }

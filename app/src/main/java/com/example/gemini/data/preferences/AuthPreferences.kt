@@ -839,9 +839,9 @@ class AuthPreferences(private val context: Context) {
     }
 
     val floatingSwitcherOrientation: Flow<String> = context.dataStore.data
-        .map { it[FLOATING_SWITCHER_ORIENTATION] ?: "HORIZONTAL" }
+        .map { it[FLOATING_SWITCHER_ORIENTATION] ?: "VERTICAL" }
 
-    fun getFloatingSwitcherOrientationSync(): String = syncPrefs.getString("floating_switcher_orientation", "HORIZONTAL") ?: "HORIZONTAL"
+    fun getFloatingSwitcherOrientationSync(): String = syncPrefs.getString("floating_switcher_orientation", "VERTICAL") ?: "VERTICAL"
 
     suspend fun saveFloatingSwitcherOrientation(orientation: String) {
         syncPrefs.edit().putString("floating_switcher_orientation", orientation).apply()

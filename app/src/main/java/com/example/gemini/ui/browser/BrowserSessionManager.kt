@@ -29,6 +29,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.example.gemini.ui.browser.mcp.BrowserAgentIndicator
+import com.example.gemini.ui.browser.mcp.BrowserAgentLock
+import com.example.gemini.ui.browser.mcp.BrowserCdp
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -84,6 +87,31 @@ data class BrowserNetworkError(
 }
 
 /**
+ * A JavaScript alert, confirm, prompt or "leave page?" the page is waiting on. The page (and, since tabs share one
+ * renderer, every page) is paused until it is answered, by the user's card or browser_handle_dialog.
+ */
+class BrowserJsDialog(
+    val type: String,
+    val message: String,
+    val defaultText: String,
+    val url: String,
+    private val result: android.webkit.JsResult
+) {
+    @Volatile private var answered = false
+
+    /** Answers on the main thread; [text] is the prompt's reply. */
+    fun answer(accept: Boolean, text: String? = null) {
+        if (answered) return
+        answered = true
+        when {
+            accept && result is android.webkit.JsPromptResult -> result.confirm(text ?: defaultText)
+            accept -> result.confirm()
+            else -> result.cancel()
+        }
+    }
+}
+
+/**
  * Model representing a persistent browser tab.
  */
 class BrowserTabSession(
@@ -112,6 +140,14 @@ class BrowserTabSession(
     var aiBusy by mutableStateOf(false)
     var userUnlocked by mutableStateOf(false)
     var isOnScreen by mutableStateOf(false)
+
+    // Browser MCP: keyboard/zoom lock while an agent acts (short, automatic), the agent's explicit lock (browser_lock,
+    // until unlocked), and a page dialog waiting for an answer
+    var agentInputLock by mutableStateOf(false)
+    var agentLocked by mutableStateOf(false)
+    /** The agent lock pinned the page zoom (only while agent-locked). */
+    var agentZoomPinned = false
+    var pendingDialog by mutableStateOf<BrowserJsDialog?>(null)
 
     /** True while the user must not interact with the page (overlay shown, keyboard kept away). */
     val blocksUserInput: Boolean
@@ -210,6 +246,8 @@ class BrowserTabSession(
         put("hasActiveWebView", webView != null)
         put("consoleErrorCount", consoleLogs.count { it.level == "ERROR" })
         put("networkErrorCount", networkErrors.size)
+        if (agentLocked) put("lockedByAgent", true)
+        pendingDialog?.let { put("dialog", JSONObject().put("type", it.type).put("message", it.message.take(300))) }
     }
 }
 
@@ -621,6 +659,11 @@ class BrowserSessionManager private constructor() {
         if (index == -1) return false
         val tabToRemove = tabs[index]
         setAutomationInput(tabToRemove, false)
+        tabToRemove.pendingDialog?.answer(false)
+        tabToRemove.pendingDialog = null
+        BrowserCdp.forget(tabId)
+        BrowserAgentIndicator.clear(tabId)
+        BrowserAgentLock.forget(tabId)
         mainHandler.post {
             try {
                 tabToRemove.webView?.onPause()
@@ -791,10 +834,21 @@ class BrowserSessionManager private constructor() {
                 )
             }
         }
-        if (BrowserIdentity.isGoogleSignInUrl(effectiveUrl) && BrowserExtensionManager.instance.isHostRunning()) {
-            BrowserExtensionManager.instance.releaseTab(tab) { load() }
+        if (BrowserIdentity.isGoogleSignInUrl(effectiveUrl) && hasDevTools(tab)) {
+            releaseDevTools(tab) { load() }
         } else {
             mainHandler.post { load() }
+        }
+    }
+
+    /** Whether a DevTools session (the extension host's or the browser MCP's) may be attached to [tab]. */
+    private fun hasDevTools(tab: BrowserTabSession) =
+        BrowserExtensionManager.instance.isHostRunning() || BrowserCdp.isAttached(tab.id)
+
+    /** Detaches every DevTools session from [tab] (Google sign-in must load without one), then runs [then] on the main thread. */
+    private fun releaseDevTools(tab: BrowserTabSession, then: () -> Unit) {
+        BrowserCdp.releaseThen(tab.id) {
+            if (BrowserExtensionManager.instance.isHostRunning()) BrowserExtensionManager.instance.releaseTab(tab, then) else then()
         }
     }
 
@@ -884,7 +938,7 @@ class BrowserSessionManager private constructor() {
         tab.webView = null
 
         val wv = object : WebView(context) {
-            private fun blocksFlowInput() = tab.blocksUserInput
+            private fun blocksFlowInput() = tab.blocksUserInput || tab.agentInputLock
 
             // While AI automation drives this tab, page input focus must never bring up the soft keyboard
             override fun onCheckIsTextEditor(): Boolean = if (blocksFlowInput()) false else super.onCheckIsTextEditor()
@@ -983,6 +1037,7 @@ class BrowserSessionManager private constructor() {
                         view?.postDelayed({ zoomOutFully(tab) }, 800)
                     }
                     setAutomationInput(tab, tab.aiBusy)
+                    if (tab.agentInputLock) view?.evaluateJavascript(BrowserAutomationScripts.agentInputLock(true, tab.agentZoomPinned), null)
                     view?.postDelayed({
                         tab.capturePreview()
                     }, 400)
@@ -994,6 +1049,7 @@ class BrowserSessionManager private constructor() {
                         injectDesktopSpoofing(view, url)
                     }
                     setAutomationInput(tab, tab.aiBusy)
+                    if (tab.agentInputLock) view?.evaluateJavascript(BrowserAutomationScripts.agentInputLock(true, tab.agentZoomPinned), null)
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -1090,17 +1146,17 @@ class BrowserSessionManager private constructor() {
                     val uri = request?.url ?: return false
                     val scheme = uri.scheme?.lowercase() ?: return false
                     if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about" || scheme == "data") {
-                        // Detach the extension host's DevTools session before Google sign-in loads,
+                        // Detach DevTools sessions (extension host, browser MCP) before Google sign-in loads,
                         // so its bot checks never see an attached debugger. GET only: a POST cannot be replayed.
                         val target = uri.toString()
                         if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) &&
                             BrowserIdentity.isGoogleSignInUrl(target) && !BrowserIdentity.isGoogleSignInUrl(tab.url) &&
-                            BrowserExtensionManager.instance.isHostRunning()
+                            hasDevTools(tab)
                         ) {
                             val referer = Uri.parse(tab.url).takeIf { it.scheme == "https" && !it.host.isNullOrBlank() }
                                 ?.let { "https://${it.host}/" }
                             tab.url = target
-                            BrowserExtensionManager.instance.releaseTab(tab) {
+                            releaseDevTools(tab) {
                                 if (referer != null) view?.loadUrl(target, mapOf("Referer" to referer)) else view?.loadUrl(target)
                             }
                             return true
@@ -1166,12 +1222,36 @@ class BrowserSessionManager private constructor() {
                         it.isDesktopMode = tab.isDesktopMode
                     }
                     transport.webView = createWebView(context, popupTab, isDark, loadInitialUrl = false)
+                    // A tab the browser MCP opens from a locked tab is locked too
+                    BrowserAgentLock.inherit(popupTab, tab)
                     tabs.add(popupTab)
                     // Leave AI-driven tabs in front so automation keeps the tab it is working on
                     if (!tab.aiBusy) activeTabId = popupTab.id
                     resultMsg.sendToTarget()
                     return true
                 }
+
+                // While an agent drives this tab, or the tab is not on screen, keep page dialogs in the tab: the page waits
+                // until the agent (browser_handle_dialog) or the user (the card over the page) answers. Otherwise the
+                // WebView shows its own dialog as usual.
+                private fun keepDialog(type: String, url: String?, message: String?, defaultText: String?, result: android.webkit.JsResult?): Boolean {
+                    if (result == null || !(BrowserAgentLock.isAgentActive(tab) || !tab.isOnScreen)) return false
+                    tab.pendingDialog?.answer(false)
+                    tab.pendingDialog = BrowserJsDialog(type, message.orEmpty(), defaultText.orEmpty(), url.orEmpty(), result)
+                    return true
+                }
+
+                override fun onJsAlert(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean =
+                    keepDialog("alert", url, message, null, result) || super.onJsAlert(view, url, message, result)
+
+                override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean =
+                    keepDialog("confirm", url, message, null, result) || super.onJsConfirm(view, url, message, result)
+
+                override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: android.webkit.JsPromptResult?): Boolean =
+                    keepDialog("prompt", url, message, defaultValue, result) || super.onJsPrompt(view, url, message, defaultValue, result)
+
+                override fun onJsBeforeUnload(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean =
+                    keepDialog("beforeunload", url, message, null, result) || super.onJsBeforeUnload(view, url, message, result)
 
                 override fun onCloseWindow(window: WebView?) {
                     tabs.firstOrNull { it.webView === window }?.let { closeTab(it.id) }
