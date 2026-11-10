@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="512" height="512">
+  <!-- AntiGem "Prism" launcher icon, converted from app/src/main/res/drawable/ic_launcher_{background,foreground}.xml -->
+  <defs>
+    <clipPath id="shape"><rect x="18" y="18" width="72" height="72" rx="16" ry="16"/></clipPath>
+    <radialGradient id="bg" gradientUnits="userSpaceOnUse" cx="54" cy="30" r="80">
+      <stop offset="0" stop-color="#252832"/><stop offset="1" stop-color="#07080B"/>
+    </radialGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#9FD8FF" stop-opacity="0.5"/><stop offset="1" stop-color="#9FD8FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="crownShine" gradientUnits="userSpaceOnUse" x1="0" y1="33" x2="0" y2="42">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="crownLight" gradientUnits="userSpaceOnUse" x1="0" y1="38" x2="0" y2="45">
+      <stop offset="0" stop-color="#9FD8FF" stop-opacity="0"/><stop offset="1" stop-color="#9FD8FF" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="pavShade" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="0" y2="75">
+      <stop offset="0" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity="0.28"/>
+    </linearGradient>
+    <linearGradient id="pavLight" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="0" y2="58">
+      <stop offset="0" stop-color="#9FD8FF" stop-opacity="0.38"/><stop offset="1" stop-color="#9FD8FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="seam" gradientUnits="userSpaceOnUse" x1="29" y1="47.5" x2="79" y2="47.5">
+      <stop offset="0" stop-color="#5EE7FF" stop-opacity="0"/>
+      <stop offset="0.2" stop-color="#5EE7FF"/>
+      <stop offset="0.4" stop-color="#FFFFFF"/>
+      <stop offset="0.6" stop-color="#C79BFF"/>
+      <stop offset="0.8" stop-color="#FFB86B"/>
+      <stop offset="1" stop-color="#FFB86B" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#shape)">
+    <rect x="0" y="0" width="108" height="108" fill="url(#bg)"/>
+    <ellipse cx="54" cy="47.5" rx="28" ry="7" fill="url(#glow)"/>
+    <!-- Crown -->
+    <path fill="#C9D1DC" d="M41,33L67,33L77,45L31,45Z"/>
+    <path fill="#D3DAE4" d="M41,33L31,45L47.5,45Z"/>
+    <path fill="#FFFFFF" d="M41,33L54,33L47.5,45Z"/>
+    <path fill="#E8EDF3" d="M54,33L47.5,45L60.5,45Z"/>
+    <path fill="#AFB9C8" d="M54,33L67,33L60.5,45Z"/>
+    <path fill="#808C9E" d="M67,33L60.5,45L77,45Z"/>
+    <path fill="url(#crownShine)" d="M41,33L67,33L77,45L31,45Z"/>
+    <path fill="url(#crownLight)" d="M41,33L67,33L77,45L31,45Z"/>
+    <path d="M41,33L67,33" stroke="#FFFFFF" stroke-opacity="0.65" stroke-width="0.8" stroke-linecap="round"/>
+    <!-- Pavilion -->
+    <path fill="#8893A5" d="M31,50L77,50L54,75Z"/>
+    <path fill="#9AA5B6" d="M31,50L47.5,50L54,75Z"/>
+    <path fill="#DCE2EA" d="M47.5,50L54,50L54,75Z"/>
+    <path fill="#69748A" d="M54,50L60.5,50L54,75Z"/>
+    <path fill="#3E4757" d="M60.5,50L77,50L54,75Z"/>
+    <path fill="url(#pavShade)" d="M31,50L77,50L54,75Z"/>
+    <path fill="url(#pavLight)" d="M31,50L77,50L54,75Z"/>
+    <!-- Seam of light -->
+    <path fill="url(#seam)" d="M29.6,46.9H78.4A0.6,0.6 0,0 1,78.4 48.1H29.6A0.6,0.6 0,0 1,29.6 46.9Z"/>
+  </g>
+</svg>
