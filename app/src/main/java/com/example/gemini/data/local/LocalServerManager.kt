@@ -357,11 +357,17 @@ object LocalServerManager {
 
     private suspend fun startServerInternal(context: Context, forceRestart: Boolean) {
         val current = _status.value
-        val existingSession = _serverSession.value
+        var existingSession = _serverSession.value
 
         if (!forceRestart && existingSession != null && !existingSession.isExited.value && (current is LocalServerStatus.Running || current is LocalServerStatus.Starting)) {
             Log.d(TAG, "[ServerManager] Server session already running, skipping start")
             return
+        }
+
+        // a restart always starts the bridge in a new session (see retireServerSession)
+        if (forceRestart && existingSession != null) {
+            retireServerSession(existingSession)
+            existingSession = null
         }
 
         if (!LocalEnvironmentManager.isInstalled(context)) {
@@ -421,6 +427,36 @@ object LocalServerManager {
                 }
             }
         }
+    }
+
+    /**
+     * A restart starts the bridge in a new terminal session instead of typing the command into the old one. The old
+     * session can still be running the bridge while it stops (it drops the app's connection first, then stops the
+     * agents and the hub), and the Ctrl+C sent to stop it also ends zsh's `-c` line, so its `exec login` never ran:
+     * the session closed and the typed start command was lost (the server stopped and did not come back).
+     * Waits until the old bridge is gone (its session ended or its port refuses connections, 15 s at most), then
+     * closes that session.
+     */
+    private suspend fun retireServerSession(session: LocalPtySession) {
+        _status.value = LocalServerStatus.Starting
+        // its exit must not mark the new server stopped
+        exitObserverJob?.cancel()
+        exitObserverJob = null
+        val healthUrl = AuthPreferences.currentBridgeHttpUrl.trimEnd('/') + "/api/health"
+        withTimeoutOrNull(15_000L) {
+            while (!session.isExited.value && bridgeStillUp(healthUrl)) delay(250)
+        }
+        if (!session.isExited.value) session.close()
+    }
+
+    /** False once the bridge's port refuses connections; a slow answer while it stops still counts as up. */
+    private fun bridgeStillUp(healthUrl: String): Boolean = try {
+        AgyBridgeService.instance.fastClient.newCall(Request.Builder().url(healthUrl).get().build()).execute().close()
+        true
+    } catch (_: java.net.ConnectException) {
+        false
+    } catch (_: Exception) {
+        true
     }
 
     fun stopServer() {

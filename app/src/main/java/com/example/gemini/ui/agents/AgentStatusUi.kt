@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.DropdownMenu
@@ -391,13 +392,17 @@ fun AgentStatusIndicator(
     }
 }
 
-/** The agents' status popup (each agent's state with its fix, and the server logs); anchored to its parent. */
+/**
+ * The agents' status popup (each agent's state with its fix, the server logs and, with [onRestartServer], a restart
+ * of the server, which many did not find inside the logs); anchored to its parent.
+ */
 @Composable
 fun AgentStatusMenu(
     entries: List<AgentStatusEntry>,
     expanded: Boolean,
     onDismiss: () -> Unit,
-    onOpenServerLogs: () -> Unit
+    onOpenServerLogs: () -> Unit,
+    onRestartServer: (() -> Unit)? = null
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -437,6 +442,22 @@ fun AgentStatusMenu(
             Spacer(Modifier.width(10.dp))
             Text("Server logs", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+        }
+        if (onRestartServer != null) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onDismiss()
+                        onRestartServer()
+                    }
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.RestartAlt, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Restart server", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+            }
         }
     }
 }

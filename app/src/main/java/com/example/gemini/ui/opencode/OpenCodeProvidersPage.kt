@@ -527,7 +527,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                             scope.launch {
                                 val answer = OpenCodeAuth.answer(m.form, answers)
                                 when {
-                                    m.isKey -> backend.client.connectKey(integ.id, key.trim())
+                                    m.isKey -> backend.client.connectKey(integ.id, key.trim(), answer)
                                         .onSuccess { finish("${integ.name} connected") }.onFailure { failed = it.message }
                                     m.isExternal -> backend.client.connectExternal(integ.id, m.id.orEmpty(), answer)
                                         .onSuccess { finish("${integ.name} connected") }.onFailure { failed = it.message }

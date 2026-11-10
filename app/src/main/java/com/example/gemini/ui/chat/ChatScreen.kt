@@ -1691,7 +1691,8 @@ fun ChatScreen(
                                     entries = agentEntries,
                                     expanded = statusMenuOpen,
                                     onDismiss = { statusMenuOpen = false },
-                                    onOpenServerLogs = { showLocalServerOutputDialog = true }
+                                    onOpenServerLogs = { showLocalServerOutputDialog = true },
+                                    onRestartServer = { com.example.gemini.data.local.LocalServerManager.restartServer(context) }
                                 )
                             }
                             // shortcut icons chosen in Settings > Appearance > Chat Header Icons (default: just New chat)

@@ -240,6 +240,10 @@ class CodexChatBackend(
                         is CodexSocketEvent.Closed -> {
                             if (ev.disabled) { _state.value = CodexState.DISABLED; off = true }
                             if (ev.outdated) { _state.value = CodexState.OUTDATED; off = true }
+                            if (!off && _state.value == CodexState.READY) {
+                                // the stream dropped (bridge stopped?): READY is never re-checked otherwise, so the dot stayed green
+                                backendScope.launch(worker) { if (_state.value == CodexState.READY) refreshStatus() }
+                            }
                         }
                     }
                 }

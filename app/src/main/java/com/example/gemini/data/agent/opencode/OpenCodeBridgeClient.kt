@@ -247,9 +247,10 @@ class OpenCodeBridgeClient(private val bridge: AgyBridgeService = AgyBridgeServi
             put("label", kotlinx.serialization.json.JsonPrimitive("Added from AntiGem"))
         }).map { }
 
-    suspend fun connectKey(integrationId: String, key: String, label: String = "Added from AntiGem"): Result<Unit> =
+    suspend fun connectKey(integrationId: String, key: String, answer: Map<String, JsonElement> = emptyMap(), label: String = "Added from AntiGem"): Result<Unit> =
         post("/integration/$integrationId/connect/key", kotlinx.serialization.json.buildJsonObject {
             put("key", kotlinx.serialization.json.JsonPrimitive(key))
+            if (answer.isNotEmpty()) put("answer", JsonObject(answer))
             put("label", kotlinx.serialization.json.JsonPrimitive(label))
         }).map { }
 
