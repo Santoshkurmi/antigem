@@ -4,6 +4,8 @@
 
 # AntiGem
 
+*A gem that defies gravity. A full coding environment, light enough to carry in your pocket.*
+
 **An AI coding workspace for Android: Antigravity, Claude Code, OpenCode and Codex agents, a real Linux terminal, a code editor and a browser the agent can control, all in one app.**
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://developer.android.com/jetpack/compose)
