@@ -57,6 +57,8 @@ class OpenCodeTranscript(var sessionId: String = "") {
         var exitCode: Int? = null
         /** Waiting for a permission reply (status shown as such; the request itself is in [pendingPermissions]). */
         var awaitingPermission = false
+        /** The question tool's answers, one list per question (its result's metadata.answers). */
+        var toolAnswers: List<List<String>>? = null
     }
 
     class Msg(val id: String, val role: String, var created: Long) {
@@ -98,9 +100,18 @@ class OpenCodeTranscript(var sessionId: String = "") {
         val metadata: JsonObject
     )
 
-    class Form(val id: String, val sessionId: String, val title: String, val fields: List<JsonObject>) {
+    class Form(
+        val id: String, val sessionId: String, val title: String, val fields: List<JsonObject>,
+        val metadata: JsonObject = JsonObject(emptyMap())
+    ) {
         /** Question prompt → field key (the question panel answers by prompt text). */
         val keyByPrompt = HashMap<String, String>()
+        /** Keys of the fields shown as questions, in order (answers come back in this order). */
+        var questionKeys: List<String> = emptyList()
+        /** Made by OpenCode's question tool: each field is one question (title = its short header). */
+        val isQuestion: Boolean get() = metadata.str("kind") == "question"
+        /** Id of the question tool call that asked it, null for other forms. */
+        val toolCallId: String? get() = metadata.o("tool").str("id")?.takeIf { it.isNotBlank() }
     }
 
     private val messages = LinkedHashMap<String, Msg>()
@@ -208,6 +219,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                             }
                             state.o("error")?.let { p.toolError = it.str("message"); if (p.toolStatus == "RUNNING") p.toolStatus = "FAILED" }
                             state.o("metadata").long("exit")?.let { p.exitCode = it.toInt() }
+                            p.toolAnswers = answersOf(state.o("metadata"))
                             p.startedAt = co.o("time").long("ran") ?: co.o("time").long("created")
                             p.endedAt = co.o("time").long("completed")
                             msg.parts.add(p)
@@ -356,6 +368,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                         part.awaitingPermission = false
                         part.toolOutput = contentText(d.a("content")).ifBlank { part.toolOutput }
                         d.o("metadata").long("exit")?.let { part.exitCode = it.toInt() }
+                        answersOf(d.o("metadata"))?.let { part.toolAnswers = it }
                         part.endedAt = System.currentTimeMillis()
                     }
                     "session.tool.failed" -> {
@@ -403,7 +416,8 @@ class OpenCodeTranscript(var sessionId: String = "") {
             "form.created" -> {
                 val f = d.o("form") ?: return false
                 val id = f.str("id") ?: return false
-                pendingForms[id] = Form(id, f.str("sessionID") ?: sessionId, f.str("title").orEmpty(), f.a("fields").orEmpty().mapNotNull { it.obj() })
+                pendingForms[id] = Form(id, f.str("sessionID") ?: sessionId, f.str("title").orEmpty(), f.a("fields").orEmpty().mapNotNull { it.obj() },
+                    f.o("metadata") ?: JsonObject(emptyMap()))
             }
             "form.replied", "form.cancelled" -> pendingForms.remove(d.str("formID") ?: d.str("id") ?: d.o("form").str("id"))
             else -> return false
@@ -571,7 +585,9 @@ class OpenCodeTranscript(var sessionId: String = "") {
                     }
                     Part.Kind.TEXT -> p.text.toString().trim().takeIf { it.isNotBlank() }?.let { content.add(it) }
                     Part.Kind.TOOL -> {
-                        val call = toolCall(p)
+                        // a question waiting for its answer: the form's card takes the tool card's place
+                        val form = pendingForms.values.firstOrNull { it.toolCallId != null && "tool:${it.toolCallId}" == p.key }
+                        val call = form?.let { formCall(it) } ?: toolCall(p)
                         if (tools.none { it.id == call.id }) {
                             tools.add(call)
                             content.add("<!-- tool_call:${call.id} -->")
@@ -597,15 +613,16 @@ class OpenCodeTranscript(var sessionId: String = "") {
             )
             cost += step.cost
         }
-        // a question (form) is shown as a choice card at the end of the reply
-        for (f in pendingForms.values) {
-            val q = questionnaireOf(f) ?: continue
-            val id = formToolId(f.id)
-            tools.add(
-                ToolCall(id = id, name = "question", toolType = ToolType.ASK_CHOICE, command = f.title.ifBlank { "Question" },
-                    status = "AWAITING_CHOICE", interactionType = "opencode", questionnaire = q)
-            )
-            content.add("<!-- tool_call:$id -->")
+        // any other question (form) is shown as a choice card at the end of the newest reply only
+        if (trailing) {
+            val toolKeys = messages.values.flatMap { m -> m.parts.map { it.key } }.toSet()
+            for (f in pendingForms.values) {
+                if (f.toolCallId != null && "tool:${f.toolCallId}" in toolKeys) continue // shown in place of its tool call
+                val call = formCall(f) ?: continue
+                if (tools.any { it.id == call.id }) continue
+                tools.add(call)
+                content.add("<!-- tool_call:${call.id} -->")
+            }
         }
         val first = steps.first()
         val last = steps.last()
@@ -636,6 +653,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
             p.awaitingPermission && p.toolStatus == "RUNNING" -> "PENDING_APPROVAL"
             else -> p.toolStatus
         }
+        if (p.toolName == "question") questionToolCall(p, status)?.let { return it }
         val output = buildString {
             append(p.toolOutput)
             p.toolError?.takeIf { it.isNotBlank() && !p.toolOutput.contains(it) }?.let { if (isNotEmpty()) append("\n"); append(it) }
@@ -654,39 +672,103 @@ class OpenCodeTranscript(var sessionId: String = "") {
         )
     }
 
+    /** The choice card of a pending form. */
+    private fun formCall(f: Form): ToolCall? {
+        val q = questionnaireOf(f) ?: return null
+        return ToolCall(id = formToolId(f.id), name = "question", toolType = ToolType.ASK_CHOICE, command = f.title.ifBlank { "Question" },
+            status = "AWAITING_CHOICE", interactionType = "opencode", questionnaire = q)
+    }
+
+    /** The question tool's card once asked: its questions, and the answers when there are some. */
+    private fun questionToolCall(p: Part, status: String): ToolCall? {
+        val qs = p.toolInput.a("questions").orEmpty().mapNotNull { it.obj() }
+        if (qs.isEmpty()) return null
+        val questions = qs.mapIndexed { i, q ->
+            ChoiceQuestion(
+                id = "q$i",
+                prompt = q.str("question")?.takeIf { it.isNotBlank() } ?: q.str("header").orEmpty(),
+                description = q.str("header")?.takeIf { it.isNotBlank() && it != q.str("question") },
+                isMultiSelect = q.bool("multiple") == true,
+                options = q.a("options").orEmpty().mapNotNull { o ->
+                    val oo = o.obj() ?: return@mapNotNull null
+                    val label = oo.str("label") ?: return@mapNotNull null
+                    ChoiceOption(id = label, label = label, description = oo.str("description"))
+                },
+                allowCustomAnswer = true
+            )
+        }
+        val answers = p.toolAnswers
+        val output = if (answers != null) questions.mapIndexed { i, q ->
+            "• ${q.prompt}: ${answers.getOrNull(i)?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "Unanswered"}"
+        }.joinToString("\n") else listOfNotNull(p.toolOutput.takeIf { it.isNotBlank() }, p.toolError).joinToString("\n")
+        return ToolCall(
+            id = safeId(p.key.removePrefix("tool:")),
+            name = "question",
+            toolType = ToolType.ASK_CHOICE,
+            command = questions.first().prompt,
+            status = status,
+            output = output,
+            durationMs = p.startedAt?.let { s -> p.endedAt?.let { e -> (e - s).coerceAtLeast(0) } },
+            interactionType = "opencode",
+            questionnaire = ChoiceQuestionnaire(title = "Questions", questions = questions, allowCustomNote = false)
+        )
+    }
+
+    /** metadata.answers of the question tool: one list of chosen labels / typed answers per question. */
+    private fun answersOf(md: JsonObject?): List<List<String>>? = md?.a("answers")?.map { a ->
+        (a as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: listOfNotNull((a as? JsonPrimitive)?.contentOrNull)
+    }
+
+    private fun optionsOf(field: JsonObject): List<ChoiceOption> = field.a("options").orEmpty().mapNotNull { o ->
+        val oo = o.obj() ?: return@mapNotNull null
+        val value = oo.str("value") ?: return@mapNotNull null
+        ChoiceOption(id = value, label = oo.str("label") ?: value, description = oo.str("description"))
+    }
+
     private fun questionnaireOf(f: Form): ChoiceQuestionnaire? {
+        val keys = mutableListOf<String>()
         val questions = f.fields.mapNotNull { field ->
             if (field.bool("hidden") == true) return@mapNotNull null
             val key = field.str("key") ?: return@mapNotNull null
-            val prompt = field.str("title") ?: field.str("description") ?: key
-            f.keyByPrompt[prompt] = key
-            when (field.str("type")) {
+            val title = field.str("title")?.takeIf { it.isNotBlank() }
+            val about = field.str("description")?.takeIf { it.isNotBlank() }
+            // a question form: the field's description is the question, its title the short header (like Claude's and Codex's)
+            val prompt = (if (f.isQuestion) about ?: title else title ?: about) ?: key
+            val description = (if (f.isQuestion) title else about)?.takeIf { it != prompt }
+            val q = when (field.str("type")) {
                 "multiselect" -> {
                     val max = field.long("maxItems")
                     ChoiceQuestion(
-                        id = key,
-                        prompt = prompt,
-                        description = field.str("description")?.takeIf { it != prompt },
+                        id = key, prompt = prompt, description = description,
                         isMultiSelect = max == null || max > 1,
-                        options = field.a("options").orEmpty().mapNotNull { o ->
-                            val oo = o.obj() ?: return@mapNotNull null
-                            ChoiceOption(id = oo.str("value") ?: return@mapNotNull null, label = oo.str("label") ?: oo.str("value")!!, description = oo.str("description"))
-                        },
-                        allowCustomAnswer = field.bool("custom") != false
+                        options = optionsOf(field),
+                        allowCustomAnswer = field.bool("custom") == true
                     )
                 }
                 "boolean" -> ChoiceQuestion(
-                    id = key, prompt = prompt, description = field.str("description")?.takeIf { it != prompt },
+                    id = key, prompt = prompt, description = description,
                     options = listOf(ChoiceOption(id = "true", label = "Yes"), ChoiceOption(id = "false", label = "No")),
                     allowCustomAnswer = false
                 )
-                "string", "number", "integer" -> ChoiceQuestion(
-                    id = key, prompt = prompt, description = field.str("description")?.takeIf { it != prompt } ?: field.str("placeholder"),
+                "string" -> {
+                    // a single-choice question is a string field with options
+                    val options = optionsOf(field)
+                    ChoiceQuestion(
+                        id = key, prompt = prompt, description = description ?: field.str("placeholder").takeIf { options.isEmpty() },
+                        options = options, allowCustomAnswer = options.isEmpty() || field.bool("custom") == true
+                    )
+                }
+                "number", "integer" -> ChoiceQuestion(
+                    id = key, prompt = prompt, description = description ?: field.str("placeholder"),
                     options = emptyList(), allowCustomAnswer = true
                 )
                 else -> null
-            }
+            } ?: return@mapNotNull null
+            f.keyByPrompt[prompt] = key
+            keys += key
+            q
         }
+        f.questionKeys = keys
         if (questions.isEmpty()) return null
         return ChoiceQuestionnaire(title = f.title.ifBlank { "OpenCode has a question" }, questions = questions, allowCustomNote = false)
     }

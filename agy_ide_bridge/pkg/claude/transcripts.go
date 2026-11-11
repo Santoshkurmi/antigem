@@ -45,6 +45,10 @@ type SessionSummary struct {
 	Busy       bool   `json:"busy"`
 	SizeBytes  int64  `json:"size_bytes"`
 	Archived   bool   `json:"archived"`
+	// Subagent transcripts (read-only): the chat or subagent that started it, and its agent type (e.g. "Explore").
+	Subagent  bool   `json:"subagent,omitempty"`
+	ParentID  string `json:"parent_id,omitempty"`
+	AgentType string `json:"agent_type,omitempty"`
 }
 
 type transcriptLine struct {
@@ -95,12 +99,23 @@ func (m *Manager) ListSessions() []SessionSummary {
 		}
 		out = append(out, sum)
 	}
+	// the subagents of the listed chats, nested under them by the app
+	parents := make(map[string]bool, len(out))
+	for _, s := range out {
+		parents[s.ID] = true
+	}
+	out = append(out, m.listSubagents(parents, live)...)
 	// Sessions created in this bridge that have no transcript yet are not listed: the app shows them itself.
 	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt > out[j].UpdatedAt })
 	return out
 }
 
 func summarize(path string, size int64) (SessionSummary, bool) {
+	return summarizeFile(path, size, false)
+}
+
+// summarizeFile reads a transcript's summary; [sidechain] = a subagent's transcript, where every line is a sidechain.
+func summarizeFile(path string, size int64, sidechain bool) (SessionSummary, bool) {
 	var sum SessionSummary
 	f, err := os.Open(path)
 	if err != nil {
@@ -119,7 +134,7 @@ func summarize(path string, size int64) (SessionSummary, bool) {
 					sum.CreatedAt = t.UnixMilli()
 				}
 			}
-			if firstPrompt == "" && l.Type == "user" && !l.IsMeta && !l.IsSidechain {
+			if firstPrompt == "" && l.Type == "user" && !l.IsMeta && (sidechain || !l.IsSidechain) {
 				firstPrompt = userText(l.Message)
 			}
 		})
@@ -291,6 +306,12 @@ func transcriptCwd(path string) string {
 // entry instead of the newest message ("" = no entries): a rewind not followed by a new prompt yet.
 func (m *Manager) History(id string, maxBytes int64, cut *string) ([]json.RawMessage, error) {
 	path := m.FindTranscript(id)
+	// a subagent's own transcript: all of it is a sidechain
+	sidechain := false
+	if path == "" {
+		path = m.findSubagentTranscript(id)
+		sidechain = path != ""
+	}
 	if path == "" {
 		return []json.RawMessage{}, nil
 	}
@@ -318,7 +339,7 @@ func (m *Manager) History(id string, maxBytes int64, cut *string) ([]json.RawMes
 			continue
 		}
 		var l transcriptLine
-		if json.Unmarshal(b, &l) != nil || l.UUID == "" || l.IsSidechain {
+		if json.Unmarshal(b, &l) != nil || l.UUID == "" || (l.IsSidechain && !sidechain) {
 			continue
 		}
 		// every uuid line is part of the parent chain (attachments, progress, …); only messages are returned

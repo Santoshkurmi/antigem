@@ -282,7 +282,7 @@ class ClaudeChatBackend(
 
     override fun selectConversation(id: String) {
         val conv = _conversations.value.find { it.id == id }
-            ?: Conversation(id = id, title = "Claude Chat", sessionId = id, agent = AgentKind.CLAUDE)
+            ?: Conversation(id = id, title = "Claude Chat", sessionId = id, agent = AgentKind.CLAUDE, readOnly = ClaudeTranscript.isSubagentId(id))
         showConversation(conv, loading = true)
         backendScope.launch(worker) {
             detachLocked()
@@ -297,6 +297,7 @@ class ClaudeChatBackend(
         if (content.isBlank() && atts.isEmpty()) return
         val conv = store.currentConversation.value ?: return
         if (conv.agent != AgentKind.CLAUDE) return
+        if (ClaudeTranscript.isSubagentId(conv.id)) { _controlMessages.tryEmit("A subagent chat can only be read"); return }
         store.attachments.value = emptyList()
         sendPrompt(conv, content.trim(), atts)
     }
@@ -1195,7 +1196,12 @@ class ClaudeChatBackend(
                     isRunning = s.busy,
                     workspaceUri = if (s.cwd.isNotBlank()) "file://${s.cwd}" else "",
                     agent = AgentKind.CLAUDE,
-                    archived = s.archived
+                    archived = s.archived,
+                    // a subagent nests under the chat (or subagent) that started it and can only be read
+                    parentConversationId = s.parent_id.takeIf { s.subagent && it.isNotBlank() },
+                    subagentRole = if (s.subagent) s.title.ifBlank { s.agent_type } else null,
+                    subagentTypeName = s.agent_type.takeIf { s.subagent && it.isNotBlank() },
+                    readOnly = s.subagent
                 )
             }
             val ids = fromBridge.map { it.id }.toSet()
@@ -1254,6 +1260,11 @@ class ClaudeChatBackend(
         _isLoadingConversation.value = true
         val res = client.history(id)
         if (attachedId != id) return
+        if (ClaudeTranscript.isSubagentId(id)) {
+            res.onSuccess { h -> showSubagent(id, h) }
+                .onFailure { _isLoadingConversation.value = false; _conversationError.value = "Cannot load the subagent: ${it.message}" }
+            return
+        }
         res.onSuccess { h ->
             transcript.reset(id)
             h.entries.forEach { transcript.applyHistory(it) }
@@ -1293,6 +1304,27 @@ class ClaudeChatBackend(
             }
             _isLoadingConversation.value = false
             _conversationError.value = "Cannot load Claude chat: ${it.message}"
+        }
+    }
+
+    /**
+     * A subagent's transcript, read-only: no process and no live connection (Claude cannot resume a subagent). While it
+     * is running its transcript is read again every few seconds.
+     */
+    private fun showSubagent(id: String, h: ClaudeHistoryResponse) {
+        transcript.reset(id)
+        h.entries.forEach { transcript.applyHistory(it) }
+        transcript.finishHistory()
+        processLive = false
+        emitNow()
+        _isLoadingConversation.value = false
+        if (_conversations.value.find { it.id == id }?.isRunning != true) return
+        backendScope.launch(worker) {
+            delay(4_000)
+            if (attachedId != id) return@launch
+            refreshSessions()
+            val fresh = client.history(id).getOrNull() ?: return@launch
+            if (attachedId == id) showSubagent(id, fresh)
         }
     }
 

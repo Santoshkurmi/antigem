@@ -362,6 +362,8 @@ fun UserMessageBubble(
     onEdit: (ChatMessage) -> Unit = {},
     onRetry: (ChatMessage) -> Unit = {},
     onViewRawPayload: ((String) -> Unit)? = null,
+    /** false in a read-only chat: no "undo and edit". */
+    canEdit: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -558,8 +560,8 @@ fun UserMessageBubble(
                 }
 
                 // Edit Prompt
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(
+                if (canEdit) Spacer(modifier = Modifier.width(4.dp))
+                if (canEdit) IconButton(
                     onClick = {
                         onEdit(message)
                         showUserActions = false
@@ -605,6 +607,8 @@ fun AssistantMessageFooter(
     onViewRawPayload: ((String) -> Unit)? = null,
     onShowArtifacts: (() -> Unit)? = null,
     artifactsCount: Int = 0,
+    /** false in a read-only chat: no "regenerate". */
+    canRetry: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -666,11 +670,11 @@ fun AssistantMessageFooter(
                 SelectTextSheet(content = message.content) { showSelectText = false }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            if (canRetry) Spacer(modifier = Modifier.width(4.dp))
 
             // a mistaken tap must not replace the reply: ask first
             var confirmRetry by remember { mutableStateOf(false) }
-            IconButton(
+            if (canRetry) IconButton(
                 onClick = { confirmRetry = true },
                 modifier = Modifier.size(28.dp)
             ) {

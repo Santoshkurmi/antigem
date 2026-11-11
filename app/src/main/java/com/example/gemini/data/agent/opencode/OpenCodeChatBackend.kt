@@ -427,8 +427,12 @@ class OpenCodeChatBackend(
 
     suspend fun refreshSessions() {
         val res = client.get("/session?limit=200&parentID=null").getOrElse { return }
+        // sub-agent sessions (made by the task tool) have a parentID: the sidebar nests them under their chat
+        val all = client.get("/session?limit=300").getOrNull()
         val active = client.get("/session/active").getOrNull().obj().o("data")
-        val list = res.obj().a("data").orEmpty().mapNotNull { it.obj() }.mapNotNull { s -> conversationOf(s, active) }
+        val roots = res.obj().a("data").orEmpty().mapNotNull { it.obj() }
+        val children = all.obj().a("data").orEmpty().mapNotNull { it.obj() }.filter { !it.str("parentID").isNullOrBlank() }
+        val list = (roots + children).mapNotNull { s -> conversationOf(s, active) }.distinctBy { it.id }
         backendScope.launch(worker) {
             synchronized(created) { list.forEach { created.add(it.id) } }
             running.clear()
@@ -461,7 +465,10 @@ class OpenCodeChatBackend(
             updatedAt = s.o("time").long("updated") ?: 0L,
             isRunning = active?.containsKey(id) == true,
             workspaceUri = if (dir.isBlank()) "" else "file://$dir",
-            parentConversationId = s.str("parentID"),
+            parentConversationId = s.str("parentID")?.takeIf { it.isNotBlank() },
+            // a sub-agent session is named after its task; the agent that ran it (e.g. "explore") labels it
+            subagentRole = s.str("parentID")?.takeIf { it.isNotBlank() }?.let { s.str("title")?.takeIf { t -> t.isNotBlank() } ?: s.str("agent") },
+            subagentTypeName = s.str("parentID")?.takeIf { it.isNotBlank() }?.let { s.str("agent") },
             agent = AgentKind.OPENCODE,
             archived = s.o("time").long("archived") != null
         )
@@ -552,7 +559,8 @@ class OpenCodeChatBackend(
         for (f in forms) {
             if (f.o("state").str("status")?.let { it != "pending" } == true) continue
             val fid = f.str("id") ?: continue
-            transcript.addForm(OpenCodeTranscript.Form(fid, id, f.str("title").orEmpty(), f.a("fields").orEmpty().mapNotNull { it.obj() }))
+            transcript.addForm(OpenCodeTranscript.Form(fid, id, f.str("title").orEmpty(), f.a("fields").orEmpty().mapNotNull { it.obj() },
+                f.o("metadata") ?: JsonObject(emptyMap())))
         }
         sessionInfo?.let { s ->
             OpenCodeTranscript.modelRef(s.o("model"))?.let { _selectedModelId.value = it }
@@ -880,9 +888,11 @@ class OpenCodeChatBackend(
         backendScope.launch(worker) {
             val form = transcript.pendingForms.values.firstOrNull { OpenCodeTranscript.formToolId(it.id) == toolCall.id } ?: return@launch
             val answer = buildJsonObject {
-                for (r in responses) {
+                // the answers come in the order of the questions (two questions may have the same text)
+                val byPosition = responses.size == form.questionKeys.size
+                for ((i, r) in responses.withIndex()) {
                     if (r.skipped == true) continue
-                    val key = form.keyByPrompt[r.question] ?: continue
+                    val key = (if (byPosition) form.questionKeys[i] else null) ?: form.keyByPrompt[r.question] ?: continue
                     val field = form.fields.firstOrNull { it.str("key") == key } ?: continue
                     val picked = r.selectedOptionIds.orEmpty()
                     val write = r.writeInResponse?.trim().orEmpty()

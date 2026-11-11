@@ -1730,6 +1730,70 @@ object JarvisController {
         return JarvisTasks.reply(id, text, interrupt = false)
     }
 
+    /** Claude Code's effort levels, for a model whose own list is not known (yet). */
+    val CLAUDE_EFFORT_LEVELS = listOf("low", "medium", "high", "xhigh", "max")
+    /** Codex's reasoning efforts, for a model whose own list is not known (yet). */
+    val CODEX_EFFORT_LEVELS = listOf("none", "minimal", "low", "medium", "high", "xhigh")
+
+    /**
+     * The reasoning efforts [kind]'s [modelId] supports ([modelId] null = the agent's default model), or an error text
+     * for an agent without an effort setting (AGY has a model per thinking level; OpenCode has none in the app).
+     */
+    fun effortLevelsFor(kind: AgentKind, modelId: String?): Result<List<String>> = when (kind) {
+        AgentKind.CLAUDE -> {
+            val b = vm.claudeBackend
+            val m = modelId ?: b.selectedModelId.value
+            Result.success(b.modelInfos.value.find { it.value == m }?.supportedEffortLevels.orEmpty().ifEmpty { CLAUDE_EFFORT_LEVELS })
+        }
+        AgentKind.CODEX -> {
+            val b = vm.codexBackend
+            Result.success(b.effortsOf(modelId ?: b.selectedModelId.value).ifEmpty { CODEX_EFFORT_LEVELS })
+        }
+        AgentKind.AGY -> Result.failure(IllegalArgumentException(
+            "AGY has no separate effort: each thinking level is its own model. Pick that model with model / jarvis_set_model (see jarvis_list_models)."))
+        AgentKind.OPENCODE -> Result.failure(IllegalArgumentException(
+            "OpenCode chats have no effort setting in the app. Pick the model with model / jarvis_set_model."))
+    }
+
+    /**
+     * Sets the reasoning effort of chat [id] (Claude Code or Codex; [level] null = the model's default). Applies to its
+     * next message. Returns an error text, or null when it was set.
+     */
+    suspend fun setChatEffort(id: String, kind: AgentKind, level: String?): String? {
+        when (kind) {
+            AgentKind.CLAUDE -> {
+                val task = JarvisTasks.backendOf(id)
+                val b = when {
+                    id == JarvisPreferences.currentChatId.value && JarvisPreferences.currentChatAgent.value == AgentKind.CLAUDE.name -> jarvisClaude
+                    vm.currentConversation.value?.id == id -> vm.claudeBackend
+                    task != null -> task
+                    else -> opsClaude.also { if (it.currentConversation.value?.id != id) { it.selectConversation(id); delay(900) } }
+                }
+                if (level != null) {
+                    val levels = b.modelInfos.value.find { it.value == b.selectedModelId.value }?.supportedEffortLevels.orEmpty().ifEmpty { CLAUDE_EFFORT_LEVELS }
+                    if (level !in levels) return "This chat's model supports these efforts: ${levels.joinToString()} (or default)."
+                }
+                b.setEffort(level)
+            }
+            AgentKind.CODEX -> {
+                val task = JarvisTasks.codexBackendOf(id)
+                val b = when {
+                    id == JarvisPreferences.currentChatId.value && JarvisPreferences.currentChatAgent.value == AgentKind.CODEX.name -> jarvisCodex
+                    vm.currentConversation.value?.id == id -> vm.codexBackend
+                    task != null -> task
+                    else -> return "That Codex chat is not open: show it first with jarvis_open_chat, then set its effort."
+                }
+                val model = b.selectedModelId.value
+                val levels = b.effortsOf(model).ifEmpty { CODEX_EFFORT_LEVELS }
+                val chosen = level ?: b.defaultEffortOf(model) ?: return "The default effort of this model is not known; name a level: ${levels.joinToString()}."
+                if (chosen !in levels) return "This chat's model supports these efforts: ${levels.joinToString()} (or default)."
+                b.selectEffort(chosen)
+            }
+            AgentKind.AGY, AgentKind.OPENCODE -> return effortLevelsFor(kind, null).exceptionOrNull()?.message
+        }
+        return null
+    }
+
     /** Sets the model of a chat that is not on screen. Applies to its next message. */
     suspend fun setChatModel(id: String, kind: AgentKind, modelId: String) {
         when (kind) {

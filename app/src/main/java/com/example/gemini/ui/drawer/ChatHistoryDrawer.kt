@@ -1737,7 +1737,8 @@ private fun ChatHistoryItemRow(
             )
         }
 
-        Box {
+        // a read-only chat (a Claude Code subagent) has nothing to do but open it
+        if (!conv.readOnly) Box {
             IconButton(
                 onClick = { menuExpanded = true },
                 modifier = Modifier.size(26.dp)

@@ -1,6 +1,11 @@
 package com.example.gemini.ui.claude
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -93,7 +99,11 @@ private fun compactTokens(n: Long): String = when {
 fun ClaudeControlsStrip(
     backend: ClaudeChatBackend,
     prefs: ClaudePreferences,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Subagents this chat started (and theirs), newest first: the agents chip, shown once there is one. */
+    subagents: List<com.example.gemini.domain.model.Conversation> = emptyList(),
+    /** Opens a subagent's chat (Back returns here). */
+    onOpenSubagent: (String) -> Unit = {}
 ) {
     val mode by backend.permissionMode.collectAsState()
     val effort by backend.effort.collectAsState()
@@ -154,6 +164,9 @@ fun ClaudeControlsStrip(
             )
         }
 
+        // this chat's subagents: how many are working now; tap for the list
+        if (subagents.isNotEmpty()) SubagentsChip(subagents, onOpenSubagent)
+
         // thinking
         ControlChip(
             text = if (thinking) "Thinking" else "No thinking",
@@ -174,6 +187,7 @@ fun ClaudeControlsStrip(
                 onClick = { showCache = true }
             )
         }
+
 
         // context window
         context?.let { ctx ->
@@ -672,4 +686,89 @@ fun ClaudeProviderSwitchDialog(backend: ClaudeChatBackend) {
             }
         }
     )
+}
+
+
+/** In place of the input in a subagent's chat: it can be read, not continued. */
+@Composable
+fun ReadOnlySubagentNote(agentType: String?, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 14.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.AccountTree, null, tint = ClaudeAccent, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = (agentType?.takeIf { it.isNotBlank() }?.let { "$it subagent" } ?: "Subagent") +
+                    " · read only. It worked for the chat it is listed under; continue there.",
+                fontSize = 12.5.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+            )
+        }
+    }
+}
+
+
+/**
+ * "2 agents" with a green dot while some of this chat's subagents work, "0 agents" with a white dot when none does.
+ * Tapping lists them all; picking one opens its (read-only) chat.
+ */
+@Composable
+private fun SubagentsChip(subagents: List<com.example.gemini.domain.model.Conversation>, onOpen: (String) -> Unit) {
+    val running = subagents.count { it.isRunning }
+    val green = com.example.gemini.theme.AppColors.success
+    val color = if (running > 0) green else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { open = true },
+            shape = RoundedCornerShape(14.dp),
+            color = if (running > 0) green.copy(alpha = 0.14f) else MaterialTheme.colorScheme.background,
+            border = BorderStroke(1.dp, if (running > 0) green.copy(alpha = 0.45f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+        ) {
+            Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(if (running > 0) green else Color.White)
+                        .border(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                )
+                Spacer(Modifier.width(5.dp))
+                Text(if (running == 1) "1 agent" else "$running agents", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1)
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, shape = RoundedCornerShape(12.dp)) {
+            Text(
+                "Subagents · $running of ${subagents.size} running",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+            )
+            subagents.forEach { a ->
+                DropdownMenuItem(
+                    leadingIcon = {
+                        Box(
+                            Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (a.isRunning) green else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f))
+                        )
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                a.subagentRole?.takeIf { it.isNotBlank() } ?: a.title,
+                                fontSize = 13.5.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Text(
+                                listOfNotNull(a.subagentTypeName?.takeIf { it.isNotBlank() }, if (a.isRunning) "running" else "done").joinToString(" · "),
+                                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = { open = false; onOpen(a.id) },
+                    modifier = Modifier.widthIn(min = 220.dp, max = 320.dp)
+                )
+            }
+        }
+    }
 }

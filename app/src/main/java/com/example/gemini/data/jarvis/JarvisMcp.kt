@@ -120,6 +120,7 @@ object JarvisMcp {
             "team" to prop("string", "One of your teams (jarvis_team_create): its agent, model, project and role are used unless given here"),
             "agent" to prop("string", "claude, agy, opencode or codex (default: the team's, else the app's new-chat agent). OpenCode runs any provider's models (OpenAI-compatible, NVIDIA, Groq, free models); Codex is OpenAI's agent on the user's ChatGPT plan", listOf("claude", "agy", "opencode", "codex")),
             "model" to prop("string", "Model id or part of its name (default: the team's, else the agent's default)"),
+            "effort" to prop("string", "Reasoning effort / thinking level for claude (low, medium, high, xhigh, max) or codex (e.g. low, medium, high, xhigh); default: the model's default. AGY has a model per thinking level: choose it with model instead"),
             "project" to prop("string", "Project name or path to work in (default: the team's, else the active project)"),
             "open" to prop("boolean", "Also show the chat on screen (default false)"), managerId))
         put(tool("jarvis_task_list", "Your tasks: state (starting, running, waiting for approval, asking a question, no progress, done, failed, stopped), team, age and last note. Not for polling: the news comes to you by itself.",
@@ -247,6 +248,7 @@ object JarvisMcp {
             "agent" to prop("string", "claude, agy, opencode or codex (default: the app's current new-chat agent)", listOf("claude", "agy", "opencode", "codex")),
             "message" to prop("string", "The first message / task"),
             "model" to prop("string", "Model id or name (default: the agent's default)"),
+            "effort" to prop("string", "Reasoning effort / thinking level for claude (low, medium, high, xhigh, max) or codex (e.g. low, medium, high, xhigh); default: the model's default. AGY has a model per thinking level: choose it with model instead"),
             "project" to prop("string", "Project name or path to work in (default: the active project)"),
             "open" to prop("boolean", "Also show the chat on screen (default false)")))
         put(tool("jarvis_send_to_chat",
@@ -275,8 +277,11 @@ object JarvisMcp {
             "model" to prop("string", "Model id or part of its name, e.g. opus, sonnet, flash"),
             "scope" to prop("string", "screen (default) or jarvis", listOf("screen", "jarvis"))))
         put(tool("jarvis_set_effort",
-            "Claude Code chat on screen: set the reasoning effort.",
-            listOf("level"), "level" to prop("string", "low, medium, high, xhigh, max or default")))
+            "Set the reasoning effort (thinking level) of a Claude Code or Codex chat: with id that chat or task, without id the chat on screen. " +
+                "Applies to the chat's next message. (AGY has a model per thinking level: use jarvis_set_model.)",
+            listOf("level"),
+            "level" to prop("string", "claude: low, medium, high, xhigh, max; codex: e.g. low, medium, high, xhigh; or default"),
+            "id" to prop("string", "Chat or task id to change (default: the chat on screen)")))
         put(tool("jarvis_set_thinking", "Claude Code chat on screen: turn extended thinking on or off.", listOf("enabled"),
             "enabled" to prop("boolean", "true or false")))
         put(tool("jarvis_set_permission_mode",
@@ -540,12 +545,7 @@ object JarvisMcp {
                 }
                 "jarvis_list_models" -> listModels(args)
                 "jarvis_set_model" -> setModel(args, caller)
-                "jarvis_set_effort" -> {
-                    val b = claudeOnScreen() ?: return error("The chat on screen is not a Claude Code chat.")
-                    val level = args.optString("level").lowercase()
-                    b.setEffort(if (level == "default" || level.isBlank()) null else level)
-                    text("Effort set to ${level.ifBlank { "default" }}.")
-                }
+                "jarvis_set_effort" -> setEffort(args, caller)
                 "jarvis_set_thinking" -> {
                     val b = claudeOnScreen() ?: return error("The chat on screen is not a Claude Code chat.")
                     b.setThinking(args.optBoolean("enabled"))
@@ -825,9 +825,10 @@ object JarvisMcp {
         val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
         val modelArg = args.optString("model").trim().ifBlank { if (team != null && team.agent == agent) team.model else "" }
         val model = modelArg.takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No ${agent.name.lowercase()} model matches \"$it\".") }
+        val effort = effortArg(args, agent, model).getOrElse { return error(it.message ?: "Unknown effort") }
         val t = JarvisTasks.start(
             agent, goal, args.optString("title").ifBlank { null }, model, project?.path,
-            owner = caller, team = team?.name.orEmpty(), brief = subAgentBrief(team)
+            owner = caller, team = team?.name.orEmpty(), brief = subAgentBrief(team), effort = effort
         )
         // work started: the autopilot's patience starts over
         JarvisManagers.resetNudges(caller)
@@ -1276,14 +1277,45 @@ object JarvisMcp {
         val projectArg = args.optString("project").trim()
         val project = if (projectArg.isBlank()) null else findProject(projectArg) ?: return error("No project matches \"$projectArg\". Use jarvis_ide_list_projects.")
         val model = args.optString("model").trim().takeIf { it.isNotEmpty() }?.let { findModel(it, modelsFor(agent))?.id ?: return error("No $agent model matches \"$it\".") }
+        val effort = effortArg(args, agent, model).getOrElse { return error(it.message ?: "Unknown effort") }
         if (project != null) { TermuxDaemonManager.setActiveProject(project); vm.onProjectChanged(project.path) }
         vm.startNewChat(agent)
         model?.let { vm.selectModel(it) }
+        effort?.let { level ->
+            when (agent) {
+                AgentKind.CLAUDE -> vm.claudeBackend.setEffort(level)
+                AgentKind.CODEX -> vm.codexBackend.selectEffort(level)
+                else -> {}
+            }
+        }
         vm.requestViewMode("CHAT")
         return text("Started an empty ${agent.name.lowercase()} chat on screen.")
     }
 
     // ---------------- models
+
+    /**
+     * The "effort" argument checked against [agent]'s [modelId] (null = its default model): the level, null for none /
+     * "default", or a failure telling the model what to do instead.
+     */
+    private fun effortArg(args: JSONObject, agent: AgentKind, modelId: String?): Result<String?> {
+        val level = args.optString("effort").trim().lowercase()
+        if (level.isEmpty() || level == "default") return Result.success(null)
+        val levels = JarvisController.effortLevelsFor(agent, modelId).getOrElse { return Result.failure(it) }
+        return if (level in levels) Result.success(level)
+        else Result.failure(IllegalArgumentException("No effort \"$level\" for this ${agent.name.lowercase()} model. It supports: ${levels.joinToString()} (or default)."))
+    }
+
+    private suspend fun setEffort(args: JSONObject, caller: String): JSONObject {
+        val raw = args.optString("level").trim().lowercase()
+        val level = if (raw.isEmpty() || raw == "default") null else raw
+        val chatId = args.optString("id").trim().let { JarvisTasks.find(it)?.id ?: it }
+            .ifEmpty { vm.currentConversation.value?.id ?: return error("No chat on screen. Pass id to change another chat.") }
+        if (chatId != caller) foreign(chatId, caller)?.let { return error(it) }
+        val kind = JarvisController.agentOfChat(chatId)
+        JarvisController.setChatEffort(chatId, kind, level)?.let { return error(it) }
+        return text("Effort set to ${level ?: "default"}. It applies to the chat's next message.")
+    }
 
     private fun modelsFor(agent: AgentKind): List<AiModel> = when (agent) {
         AgentKind.CLAUDE -> vm.claudeBackend.availableModels.value

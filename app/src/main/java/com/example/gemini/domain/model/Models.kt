@@ -138,7 +138,9 @@ data class Conversation(
     /** Archived: listed only in the sidebar's archive view. */
     val archived: Boolean = false,
     /** An Antigravity cloud chat (Remote Agents): the cloud project it runs in; null = runs on the hub's machine. */
-    val cloudProjectId: String? = null
+    val cloudProjectId: String? = null,
+    /** Can only be read: no sending, sidebar actions, fork or rewind (a Claude Code subagent's transcript). */
+    val readOnly: Boolean = false
 ) {
     val isCloud: Boolean get() = cloudProjectId != null
 }

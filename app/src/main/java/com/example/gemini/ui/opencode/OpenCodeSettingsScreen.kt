@@ -448,7 +448,12 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                             error = null
                             scope.launch {
                                 backend.client.fetchModels(kind, baseUrl.trim(), apiKey.trim(), initial.id)
-                                    .onSuccess { fetched = it; if (it.isEmpty()) error = "The endpoint listed no models." }
+                                    .onSuccess { list ->
+                                        fetched = list
+                                        if (list.isEmpty()) error = "The endpoint listed no models."
+                                        // nothing chosen yet (a new provider): every model the endpoint lists is on; untick the unwanted ones
+                                        else if (models.isEmpty()) models.addAll(list.distinctBy { it.id })
+                                    }
                                     .onFailure { error = it.message }
                                 fetching = false
                             }
@@ -456,7 +461,9 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                         enabled = baseUrl.isNotBlank() && !fetching
                     ) { Text(if (fetching) "Fetching…" else "Fetch from endpoint") }
                 }
-                models.toList().forEach { m ->
+                // models from the endpoint are ticked in its list below; here only the ones added by hand
+                val fetchedIds = fetched.orEmpty().map { it.id }.toSet()
+                models.toList().filter { it.id !in fetchedIds }.forEach { m ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(m.id, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         IconButton(onClick = { models.remove(m) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.Delete, "Remove", Modifier.size(16.dp)) }
@@ -472,7 +479,15 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                 }
                 fetched?.takeIf { it.isNotEmpty() }?.let { list ->
                     Spacer(Modifier.height(6.dp))
-                    Text("Tap to add (${list.size} found):", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    val chosen = list.count { f -> models.any { it.id == f.id } }
+                    val all = chosen == list.size
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("$chosen of ${list.size} found are added:", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            if (all) models.removeAll { m -> list.any { it.id == m.id } }
+                            else list.forEach { f -> if (models.none { it.id == f.id }) models.add(f) }
+                        }) { Text(if (all) "Select none" else "Select all", fontSize = 12.sp) }
+                    }
                     Column(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
                         list.forEach { m ->
                             val on = models.any { it.id == m.id }

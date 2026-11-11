@@ -341,6 +341,10 @@ func (s *Session) Write(line []byte) error {
 }
 
 func (s *Session) spawnLocked() error {
+	// a subagent's transcript is read-only: Claude cannot resume it
+	if IsSubagentID(s.ID) {
+		return errors.New("a subagent chat is read-only")
+	}
 	bin, err := s.mgr.ResolveBinary()
 	if err != nil {
 		return err

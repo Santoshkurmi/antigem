@@ -499,10 +499,17 @@ class CodexChatBackend(
     private fun createdSnapshot(): Set<String> = synchronized(created) { created.toSet() }
 
     suspend fun refreshThreads() {
-        val sources = buildJsonArray { listOf("cli", "vscode", "exec", "appServer").forEach { add(JsonPrimitive(it)) } }
-        val res = client.rpc("thread/list", buildJsonObject {
-            put("limit", 100); put("sortKey", "updated_at"); put("sourceKinds", sources)
-        }).getOrElse { return }
+        val base = listOf("cli", "vscode", "exec", "appServer")
+        // subAgentThreadSpawn: agents a chat spawned, nested under it in the sidebar (review / compact threads stay out).
+        // A Codex that does not know that kind yet gets the old list.
+        var sources = buildJsonArray { (base + "subAgentThreadSpawn").forEach { add(JsonPrimitive(it)) } }
+        fun listCall(src: kotlinx.serialization.json.JsonArray) = buildJsonObject {
+            put("limit", 100); put("sortKey", "updated_at"); put("sourceKinds", src)
+        }
+        val res = client.rpc("thread/list", listCall(sources)).getOrNull() ?: run {
+            sources = buildJsonArray { base.forEach { add(JsonPrimitive(it)) } }
+            client.rpc("thread/list", listCall(sources)).getOrElse { return }
+        }
         val archived = client.rpc("thread/list", buildJsonObject {
             put("limit", 50); put("sortKey", "updated_at"); put("archived", true); put("sourceKinds", sources)
         }).getOrNull()
@@ -533,6 +540,9 @@ class CodexChatBackend(
         val title = t.str("name")?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }?.takeIf { it.isNotBlank() }
             ?: t.str("preview")?.let { com.example.gemini.data.remote.PromptExpansion.cleanTitle(it) }?.lines()?.firstOrNull { it.isNotBlank() }?.trim()?.let { if (it.length > 60) it.take(60) + "…" else it }
             ?: "New Chat"
+        // a spawned sub-agent: {"source": {"subAgent": {"thread_spawn": {parent_thread_id, depth, agent_nickname, agent_role}}}}
+        val spawn = t.o("source").o("subAgent").o("thread_spawn")
+        val parent = (t.str("parentThreadId") ?: spawn.str("parent_thread_id"))?.takeIf { it.isNotBlank() }
         return Conversation(
             id = id,
             title = title,
@@ -542,6 +552,10 @@ class CodexChatBackend(
             updatedAt = (t.long("updatedAt") ?: t.long("createdAt") ?: 0L) * 1000,
             isRunning = t.o("status").str("type") == "active",
             workspaceUri = if (cwd.isBlank()) "" else "file://$cwd",
+            parentConversationId = parent,
+            subagentRole = if (parent == null) null else (t.str("agentNickname") ?: spawn.str("agent_nickname") ?: t.str("agentRole") ?: spawn.str("agent_role")),
+            subagentTypeName = if (parent == null) null else (t.str("agentRole") ?: spawn.str("agent_role")),
+            nestingDepth = (spawn.long("depth") ?: 0L).toInt(),
             agent = AgentKind.CODEX,
             archived = archived
         )
@@ -921,6 +935,12 @@ class CodexChatBackend(
         _effort.value = effort
         if (rememberChoices) prefs.setEffort(effort)
     }
+
+    /** Reasoning efforts [modelId] supports (empty until the models are loaded). */
+    fun effortsOf(modelId: String): List<String> = modelEfforts[modelId].orEmpty()
+
+    /** The effort [modelId] uses by default, null when not known. */
+    fun defaultEffortOf(modelId: String): String? = modelDefaultEffort[modelId]?.takeIf { it.isNotBlank() }
 
     /** Plan mode on / off for the chat's next messages. */
     fun setPlanMode(on: Boolean) {

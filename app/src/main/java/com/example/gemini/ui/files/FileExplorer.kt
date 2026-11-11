@@ -201,6 +201,7 @@ fun FileExplorer(
     var conflict by remember { mutableStateOf<PendingConflict?>(null) }
     var notText by remember { mutableStateOf<Pair<ExplorerEntry, String>?>(null) }
     var markdownDoc by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var imageView by remember { mutableStateOf<ExplorerEntry?>(null) }
     var confirmOverwrite by remember { mutableStateOf<String?>(null) }
 
     fun snack(msg: String) {
@@ -212,8 +213,7 @@ fun FileExplorer(
 
     suspend fun load(target: String, pushFrom: String?): Boolean {
         loading = true
-        val res = FileExplorerApi.list(target)
-        loading = false
+        val res = try { FileExplorerApi.list(target) } finally { loading = false }
         res.onSuccess { l ->
             if (pushFrom != null && pushFrom != l.path) history.add(pushFrom)
             path = l.path
@@ -278,7 +278,14 @@ fun FileExplorer(
         if (key != stateKey) return@LaunchedEffect
         ExplorerNav.consume()
         if (!loaded) path = target
-        if (!load(target, pushFrom = if (loaded) path else null)) snack("Cannot open $target")
+        val from = if (loaded) path else null
+        // consume() just changed navRequest, which cancels this effect: load in the explorer's own scope
+        scope.launch {
+            if (load(target, pushFrom = from)) return@launch
+            snack("Cannot open $target")
+            // nothing shown yet: fall back to home instead of an empty screen
+            if (!loaded && target != "~") load("~", null)
+        }
     }
 
     fun runOp(label: String, op: suspend () -> FsResult, after: suspend (FsResult) -> Unit = {}) {
@@ -308,6 +315,19 @@ fun FileExplorer(
         }
     }
 
+    /** "Share" in the Open with sheet: sends the file to another app. */
+    fun shareOne(e: ExplorerEntry) {
+        if (busy != null) return
+        scope.launch {
+            busy = "Preparing ${e.name}…"
+            busyProgress = null
+            val uri = FileOpener.uriFor(context, e.path, e.size) { busyProgress = it }
+            busy = null
+            uri.onSuccess { FileOpener.share(context, listOf(it to e.name))?.let(::snack) }
+                .onFailure { snack(it.message ?: "Could not share ${e.name}") }
+        }
+    }
+
     fun openInIde(e: ExplorerEntry, force: Boolean = false) {
         scope.launch {
             busy = "Opening ${e.name}…"
@@ -324,6 +344,8 @@ fun FileExplorer(
     fun preview(e: ExplorerEntry) {
         if (e.kind == FileKind.VIDEO) {
             com.example.gemini.ui.components.FullscreenVideo.play(context, e.path, e.name)
+        } else if (e.kind == FileKind.IMAGE) {
+            imageView = e
         } else if (e.kind == FileKind.MARKDOWN) {
             scope.launch {
                 busy = "Opening ${e.name}…"
@@ -340,6 +362,7 @@ fun FileExplorer(
         OpenChoice.IDE -> if (ideAvailable) openInIde(e) else openExternal(e)
         OpenChoice.EXTERNAL -> openExternal(e)
         OpenChoice.PREVIEW -> preview(e)
+        OpenChoice.SHARE -> shareOne(e)
     }
 
     fun openEntry(e: ExplorerEntry) {
@@ -863,6 +886,10 @@ fun FileExplorer(
             onDetails = { close(); detailsFor = e },
             onDelete = { close(); deleteTargets = listOf(e) }
         )
+    }
+
+    imageView?.let { e ->
+        com.example.gemini.ui.components.FullScreenImageDialog(imageUrl = e.path, title = e.name, onDismiss = { imageView = null })
     }
 
     openWithFor?.let { e ->

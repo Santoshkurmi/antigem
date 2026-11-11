@@ -144,6 +144,18 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    // The sidebar is 82% of the screen width, so turning the phone (e.g. a landscape full-screen video)
+    // changes its width; the drawer then moves to whichever position is nearest and can open by itself.
+    // Remember where it was before the width changed and put it back once the new layout is in.
+    val drawerScreenWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val drawerValueBeforeResize = remember(drawerScreenWidthDp) { drawerState.targetValue }
+    LaunchedEffect(drawerScreenWidthDp) {
+        withFrameNanos { }
+        withFrameNanos { }
+        if (drawerState.currentValue != drawerValueBeforeResize && !drawerState.isAnimationRunning) {
+            drawerState.snapTo(drawerValueBeforeResize)
+        }
+    }
     var showArtifactsDrawer by rememberSaveable { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -163,6 +175,22 @@ fun ChatScreen(
     val jarvisConversations by viewModel.jarvisConversations.collectAsState()
     val jarvisEnabled by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
     val currentConv by viewModel.currentConversation.collectAsState()
+    // a Claude Code subagent's transcript: it can only be read
+    val isReadOnlyChat = currentConv?.readOnly == true
+    // subagents of the chat on screen (and theirs), newest first: the agents chip of the Claude strip
+    val chatSubagents = remember(conversations, currentConv?.id) {
+        val root = currentConv?.id
+        if (root == null) emptyList() else {
+            val byParent = conversations.filter { it.parentConversationId != null }.groupBy { it.parentConversationId }
+            val seen = HashSet<String>()
+            val out = ArrayList<com.example.gemini.domain.model.Conversation>()
+            fun collect(id: String) {
+                byParent[id].orEmpty().forEach { c -> if (seen.add(c.id)) { out.add(c); collect(c.id) } }
+            }
+            collect(root)
+            out.sortedByDescending { it.createdAt }
+        }
+    }
     val newChatAgent by viewModel.newChatAgent.collectAsState()
     val isClaudeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
     val isOpenCodeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
@@ -2127,6 +2155,7 @@ fun ChatScreen(
                                                 message = feedItem.message,
                                                 isLastUserMessage = true,
                                                 isDevModeEnabled = isDevModeEnabled,
+                                                canEdit = !isReadOnlyChat,
                                                 onEdit = { targetMsg ->
                                                     if (willDeleteOutput) {
                                                         pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
@@ -2192,6 +2221,7 @@ fun ChatScreen(
                                                 // fades in where the working row fades out (no pop-in at the end of a turn)
                                                 modifier = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = null, fadeOutSpec = null),
                                                 isDevModeEnabled = isDevModeEnabled,
+                                                canRetry = !isReadOnlyChat,
                                                 onRetry = { targetMsg ->
                                                     viewModel.retryMessage(targetMsg.id)
                                                     userSentMessageTrigger++
@@ -2646,7 +2676,12 @@ fun ChatScreen(
                             onRetry = { viewModel.claudeAccount.refreshStatus() }
                         )
                     }
-                    com.example.gemini.ui.claude.ClaudeControlsStrip(claudeBackend, viewModel.claudePrefs)
+                    if (!isReadOnlyChat) com.example.gemini.ui.claude.ClaudeControlsStrip(
+                        claudeBackend, viewModel.claudePrefs,
+                        subagents = chatSubagents,
+                        // like a conversation:// link: Back returns to this chat
+                        onOpenSubagent = { id -> fileLinkHandler.onOpenConversation(id) }
+                    )
                 }
                 if (isOpenCodeChat) {
                     com.example.gemini.ui.opencode.OpenCodeControlsStrip(openCodeBackend)
@@ -2683,8 +2718,13 @@ fun ChatScreen(
                     )
                 }
 
+                // a subagent's chat can only be read: a note instead of the input
+                if (isReadOnlyChat) {
+                    com.example.gemini.ui.claude.ReadOnlySubagentNote(currentConv?.subagentTypeName)
+                }
+
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
-                ChatInputBar(
+                if (!isReadOnlyChat) ChatInputBar(
                     isOnline = if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.OFFLINE && codexState != com.example.gemini.data.agent.codex.CodexState.NOT_INSTALLED && codexState != com.example.gemini.data.agent.codex.CodexState.DISABLED && codexState != com.example.gemini.data.agent.codex.CodexState.OUTDATED
                         else if (isOpenCodeChat) !openCodeState.isBlocking else if (isClaudeChat) !claudeState.isBlocking else systemConnectionState.canSend,
                     isAuth = if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.SIGNED_OUT else if (isOpenCodeChat) true else if (isClaudeChat) claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNED_OUT && claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNING_IN else systemConnectionState.isAuth,

@@ -168,7 +168,9 @@ object JarvisTasks {
      */
     suspend fun start(
         agent: AgentKind, goal: String, title: String?, modelId: String?, projectPath: String?,
-        owner: String = JarvisManagers.VOICE, team: String = "", brief: String? = null
+        owner: String = JarvisManagers.VOICE, team: String = "", brief: String? = null,
+        /** Reasoning effort for Claude Code / Codex (already checked against the model); null = the model's default. */
+        effort: String? = null
     ): Task {
         val text = goal.trim()
         require(text.isNotEmpty()) { "The task needs a goal." }
@@ -182,6 +184,7 @@ object JarvisTasks {
                 if (b.state.value.isBlocking) { b.stop(); error("Codex is not available: ${b.state.value.label}.") }
                 // Codex gives the chat its id when it is created: create it now so the task knows it
                 val id = runCatching { b.createChatNow(projectPath, modelId) }.getOrElse { b.stop(); throw it }
+                effort?.let { b.selectEffort(it) }
                 b.sendMessage(prompt)
                 codexBackends[id] = b
                 attachedAt[id] = System.currentTimeMillis()
@@ -224,6 +227,7 @@ object JarvisTasks {
                 val id = b.currentConversation.value?.id ?: error("Could not create the chat")
                 projectPath?.let { b.setWorkspaceOfNewChat(it) }
                 modelId?.takeIf { it.isNotBlank() }?.let { b.selectModel(it) }
+                effort?.let { b.setEffort(it) }
                 b.sendMessage(prompt)
                 claudeBackends[id] = b
                 attachedAt[id] = System.currentTimeMillis()

@@ -3166,8 +3166,8 @@ fun parseMarkdownBlocks(
             continue
         }
 
-        // 5a-2. Video files: ![alt](path.mp4) or [alt](path.mp4)
-        val videoMatch = Regex("^\\s*!?\\[(.*?)\\]\\(([^\\s)]+\\.(?:mp4|webm|mov|m4v|3gp)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        // 5a-2. Video files: ![alt](path.mp4) plays; a link [alt](path.mp4) stays a link (models often write both)
+        val videoMatch = Regex("^\\s*!\\[(.*?)\\]\\(([^\\s)]+\\.(?:mp4|webm|mov|m4v|3gp)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
         if (videoMatch != null) {
             result.add(MarkdownBlock.Video(alt = videoMatch.groupValues[1], url = videoMatch.groupValues[2]))
             i++
@@ -3196,21 +3196,13 @@ fun parseMarkdownBlocks(
             continue
         }
 
-        // 5b. Standalone file or image links: [alt](path.jpg/png) or ![alt](path.jpg)
-        val linkImgMatch = Regex("^\\s*!?\\[(.*?)\\]\\(([^\\s)]+\\.(?:png|jpe?g|webp|gif|svg)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        // 5b. Standalone image markdown with a plain path: ![alt](path.jpg). A link [alt](path.jpg) stays a link: models
+        // often write the image and a link to the same file, which would show the picture twice
+        val linkImgMatch = Regex("^\\s*!\\[(.*?)\\]\\(([^\\s)]+\\.(?:png|jpe?g|webp|gif|svg)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
         if (linkImgMatch != null) {
             val alt = linkImgMatch.groupValues[1]
             val url = linkImgMatch.groupValues[2]
             result.add(MarkdownBlock.Image(alt = alt, url = url))
-            i++
-            continue
-        }
-
-        // 5c. Bare image URLs on a single line
-        val bareImageMatch = Regex("^\\s*((?:https?://|file://)\\S+\\.(?:png|jpe?g|webp|gif|svg)(?:\\?\\S*)?)\\s*$", RegexOption.IGNORE_CASE).find(line)
-        if (bareImageMatch != null) {
-            val url = bareImageMatch.groupValues[1]
-            result.add(MarkdownBlock.Image(alt = "", url = url))
             i++
             continue
         }

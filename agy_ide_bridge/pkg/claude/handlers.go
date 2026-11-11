@@ -96,13 +96,19 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.Split(rest, "/")
 	id := parts[0]
-	if !sessionIDRe.MatchString(id) {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "invalid session id"})
-		return
-	}
 	action := ""
 	if len(parts) > 1 {
 		action = parts[1]
+	}
+	if subagentIDRe.MatchString(id) {
+		// a subagent's transcript ("agent-<id>") can only be read
+		if action != "history" || r.Method != http.MethodGet {
+			writeJSON(w, http.StatusForbidden, map[string]interface{}{"success": false, "error": "a subagent chat is read-only"})
+			return
+		}
+	} else if !sessionIDRe.MatchString(id) {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "invalid session id"})
+		return
 	}
 	switch {
 	case action == "restart" && r.Method == http.MethodPost:

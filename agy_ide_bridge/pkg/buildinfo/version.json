@@ -1,11 +1,9 @@
 {
-  "version_code": 126,
-  "version_name": "1.1.6",
+  "version_code": 127,
+  "version_name": "1.1.7",
   "min_supported_version_code": 1,
   "changelog": [
-    "Fixed file upload: files from your phone are now streamed to the agent's machine with progress (big files no longer have to fit in memory), big photos are shrunk first, and the new \"From Files\" option attaches any file of any size without copying it",
-    "Added Antigravity cloud agents: run Antigravity chats on a Google cloud machine with your GitHub repos, and preview the apps they serve (off by default, enable it in Settings → Antigravity → Cloud agents) (and wont work with free pro account may be)",
-    "Added an error log for Antigravity voice calls: when a call fails, tap Details to see the full error and what the Antigravity server logged, then copy it or send a screenshot"
+    "Improved browser mcp connection stability and performance."
   ],
   "is_critical": false
 }

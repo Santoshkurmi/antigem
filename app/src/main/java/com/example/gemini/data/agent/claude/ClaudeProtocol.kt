@@ -304,7 +304,11 @@ data class ClaudeSessionSummary(
     val updated_at: Long = 0,
     val live: Boolean = false,
     val busy: Boolean = false,
-    val archived: Boolean = false
+    val archived: Boolean = false,
+    /** A subagent's transcript (read-only), started by chat or subagent [parent_id]; [agent_type] e.g. "Explore". */
+    val subagent: Boolean = false,
+    val parent_id: String = "",
+    val agent_type: String = ""
 )
 
 @Serializable

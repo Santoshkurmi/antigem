@@ -52,6 +52,8 @@ class FileLinkOpener internal constructor(private val context: Context, private 
     internal var sheet by mutableStateOf<SheetRequest?>(null)
     internal var archive by mutableStateOf<FileProbe.Result.Found?>(null)
     internal var extractTo by mutableStateOf<FileProbe.Result.Found?>(null)
+    /** A picture shown in the built-in viewer (the same one as for images in a chat). */
+    internal var image by mutableStateOf<FileProbe.Result.Found?>(null)
     private var job: Job? = null
 
     internal data class SheetRequest(val file: FileProbe.Result.Found, val ide: Boolean = true)
@@ -87,7 +89,7 @@ class FileLinkOpener internal constructor(private val context: Context, private 
 
     /** Archive contents and extraction run on the bridge, which cannot see a file only this phone has. */
     internal fun canPreview(f: FileProbe.Result.Found): Boolean =
-        f.textual || FileKinds.of(f.name) == FileKind.MARKDOWN || FileKinds.of(f.name) == FileKind.VIDEO ||
+        f.textual || FileKinds.of(f.name) == FileKind.MARKDOWN || FileKinds.of(f.name) == FileKind.VIDEO || FileKinds.of(f.name) == FileKind.IMAGE ||
             !f.local || !AuthPreferences.isRemoteEndpoint()
 
     internal fun perform(f: FileProbe.Result.Found, choice: OpenChoice) = launchJob { performNow(f, choice) }
@@ -97,13 +99,28 @@ class FileLinkOpener internal constructor(private val context: Context, private 
             // the sheet already warned when it is not text, so no second question
             OpenChoice.IDE -> openInIde(f, force = true)
             OpenChoice.EXTERNAL -> openExternal(f)
+            OpenChoice.SHARE -> share(f)
             OpenChoice.PREVIEW -> when (FileKinds.of(f.name)) {
                 FileKind.MARKDOWN -> onPreviewMarkdown(f.path)
                 FileKind.VIDEO -> FullscreenVideo.play(context, f.path, f.name)
+                FileKind.IMAGE -> image = f
                 else -> archive = f
             }
         }
     }
+
+    private suspend fun share(f: FileProbe.Result.Found) {
+        busy = "Preparing ${f.name}…"
+        progress = null
+        val uri = try { uriOf(f) } finally { busy = null }
+        uri.onSuccess { FileOpener.share(context, listOf(it to f.name))?.let(::toast) }
+            .onFailure { toast(it.message ?: "Could not share ${f.name}") }
+    }
+
+    /** A content uri other apps can read: a file on this phone directly, a bridge file copied here first. */
+    private suspend fun uriOf(f: FileProbe.Result.Found) =
+        if (f.local) runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(f.path)) }
+        else FileOpener.uriFor(context, f.path, f.size) { progress = it }
 
     private fun launchJob(block: suspend () -> Unit) {
         if (job?.isActive == true) return
@@ -134,12 +151,7 @@ class FileLinkOpener internal constructor(private val context: Context, private 
     private suspend fun openExternal(f: FileProbe.Result.Found) {
         busy = "Preparing ${f.name}…"
         progress = null
-        val uri = try {
-            if (f.local) runCatching { FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(f.path)) }
-            else FileOpener.uriFor(context, f.path, f.size) { progress = it }
-        } finally {
-            busy = null
-        }
+        val uri = try { uriOf(f) } finally { busy = null }
         uri.onSuccess { FileOpener.view(context, it, f.name, contentMime = f.mime)?.let(::toast) }
             .onFailure { toast(it.message ?: "Could not open ${f.name}") }
     }
@@ -215,6 +227,10 @@ fun FileLinkOpenerHost(opener: FileLinkOpener) {
             onExtractTo = { opener.archive = null; opener.extractTo = f },
             onDismiss = { opener.archive = null }
         )
+    }
+
+    opener.image?.let { f ->
+        com.example.gemini.ui.components.FullScreenImageDialog(imageUrl = f.path, title = f.name, onDismiss = { opener.image = null })
     }
 
     opener.extractTo?.let { f ->

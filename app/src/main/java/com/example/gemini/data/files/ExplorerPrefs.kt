@@ -9,7 +9,8 @@ import org.json.JSONArray
 
 enum class SortBy(val label: String) { NAME("Name"), DATE("Date modified"), SIZE("Size"), TYPE("Type") }
 
-enum class OpenChoice(val label: String) { IDE("Code editor"), EXTERNAL("Other app"), PREVIEW("Preview") }
+/** [SHARE] is never remembered as a file type's default: it sends the file, it does not open it. */
+enum class OpenChoice(val label: String) { IDE("Code editor"), EXTERNAL("Other app"), PREVIEW("Preview"), SHARE("Share") }
 
 data class ExplorerSettings(
     val sortBy: SortBy = SortBy.NAME,

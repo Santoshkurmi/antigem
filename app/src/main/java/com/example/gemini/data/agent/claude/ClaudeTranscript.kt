@@ -34,6 +34,9 @@ import kotlinx.serialization.json.put
  */
 class ClaudeTranscript {
 
+    /** Replaying a subagent's transcript, where every entry is a sidechain (they are skipped in a normal chat). */
+    private var acceptSidechain = false
+
     /** A permission prompt (`can_use_tool`) waiting for the user. */
     data class PendingPermission(
         val requestId: String,
@@ -139,6 +142,8 @@ class ClaudeTranscript {
 
     fun reset(convId: String) {
         conversationId = convId
+        // a subagent's own transcript: every entry is a sidechain
+        acceptSidechain = isSubagentId(convId)
         turns.clear()
         seenUuids.clear()
         tools.clear()
@@ -326,7 +331,7 @@ class ClaudeTranscript {
     }
 
     private fun onAssistant(e: ClaudeAssistantEvent) {
-        if (e.parent_tool_use_id != null || e.isSidechain) return
+        if (e.parent_tool_use_id != null || (e.isSidechain && !acceptSidechain)) return
         // events re-emitted after /compact carry the uuids we already showed
         if (e.uuid != null && !seenUuids.add(e.uuid)) return
         e.uuid?.let { lastEventUuid = it }
@@ -385,7 +390,7 @@ class ClaudeTranscript {
     }
 
     private fun onUser(e: ClaudeUserEvent, live: Boolean) {
-        if (e.parent_tool_use_id != null || e.isSidechain) return
+        if (e.parent_tool_use_id != null || (e.isSidechain && !acceptSidechain)) return
         if (e.uuid != null && e.uuid in seenUuids) return
         e.uuid?.let { seenUuids.add(it) }
         val content = e.message.content ?: return
@@ -737,6 +742,9 @@ class ClaudeTranscript {
     }
 
     companion object {
+        /** A Claude Code subagent's transcript id ("agent-<agentId>", listed by the bridge): read-only. */
+        fun isSubagentId(id: String?): Boolean = id?.startsWith("agent-") == true
+
         /** Internal tools that are not interesting to show as cards. */
         private val HIDDEN_TOOLS = setOf("ToolSearch")
 

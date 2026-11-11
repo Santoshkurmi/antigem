@@ -150,6 +150,53 @@ class OpenCodeTranscriptTest {
         assertTrue(t.toChatMessages("ses_q").single().toolCalls.isEmpty())
     }
 
+    /** The question tool's form as OpenCode 2.x sends it: one field per question, single choice = a string field with options. */
+    private fun questionForm(toolId: String) = obj("""{"form":{"id":"frm_q","sessionID":"ses_t","title":"Questions",
+        "metadata":{"kind":"question","tool":{"messageID":"msg_2","id":"$toolId"}},"fields":[
+        {"key":"q0","type":"string","title":"Layout","description":"Which layout should the page use?","custom":true,
+         "options":[{"value":"Grid","label":"Grid","description":"cards"},{"value":"List","label":"List"}]},
+        {"key":"q1","type":"multiselect","title":"Layout","description":"Which extras?","custom":true,
+         "options":[{"value":"Search","label":"Search"},{"value":"Filters","label":"Filters"}]}]}}""")
+
+    @Test
+    fun questionToolFormShowsOptionsInPlaceOfItsToolCall() {
+        val t = OpenCodeTranscript("ses_t")
+        t.apply("session.step.started", obj("""{"sessionID":"ses_t","assistantMessageID":"msg_1"}"""))
+        t.apply("session.execution.succeeded", obj("""{"sessionID":"ses_t"}"""))
+        t.addLocalPrompt("msg_p2", "second prompt", emptyList())
+        t.apply("session.step.started", obj("""{"sessionID":"ses_t","assistantMessageID":"msg_2"}"""))
+        t.apply("session.tool.called", obj("""{"sessionID":"ses_t","assistantMessageID":"msg_2","id":"call_q","name":"question",
+            "input":{"questions":[{"question":"Which layout should the page use?","header":"Layout","options":[{"label":"Grid"},{"label":"List"}]},
+            {"question":"Which extras?","header":"Layout","multiple":true,"options":[{"label":"Search"},{"label":"Filters"}]}]}}"""))
+        t.apply("form.created", questionForm("call_q"))
+
+        val replies = t.toChatMessages("ses_t").filter { it.role == com.example.gemini.domain.model.MessageRole.ASSISTANT }
+        // only the reply that asked shows the question, once
+        assertTrue(replies.dropLast(1).all { it.toolCalls.isEmpty() })
+        val call = replies.last().toolCalls.single()
+        assertEquals(OpenCodeTranscript.formToolId("frm_q"), call.id)
+        assertEquals("AWAITING_CHOICE", call.status)
+        val q = call.questionnaire!!.questions
+        // the question is the prompt, the header its description
+        assertEquals(listOf("Which layout should the page use?", "Which extras?"), q.map { it.prompt })
+        assertEquals("Layout", q[0].description)
+        // single choice keeps its options
+        assertFalse(q[0].isMultiSelect)
+        assertEquals(listOf("Grid", "List"), q[0].options.map { it.label })
+        assertTrue(q[1].isMultiSelect)
+        // same header twice: keys still follow the question order
+        assertEquals(listOf("q0", "q1"), t.pendingForms["frm_q"]!!.questionKeys)
+
+        // answered: the tool call shows the questions with their answers
+        t.apply("form.replied", obj("""{"id":"frm_q","sessionID":"ses_t"}"""))
+        t.apply("session.tool.success", obj("""{"sessionID":"ses_t","assistantMessageID":"msg_2","id":"call_q","name":"question",
+            "metadata":{"answers":[["Grid"],["Search","Filters"]]}}"""))
+        val done = t.toChatMessages("ses_t").last().toolCalls.single()
+        assertEquals("SUCCESS", done.status)
+        assertEquals("• Which layout should the page use?: Grid\n• Which extras?: Search, Filters", done.output)
+        assertEquals(2, done.questionnaire!!.questions.size)
+    }
+
     @Test
     fun permissionRulesPerMode() {
         val ask = OpenCodeChatBackend.rules(OpenCodePreferences.MODE_ASK, "build")!!
