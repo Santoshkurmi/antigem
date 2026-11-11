@@ -585,8 +585,10 @@ class OpenCodeTranscript(var sessionId: String = "") {
                     }
                     Part.Kind.TEXT -> p.text.toString().trim().takeIf { it.isNotBlank() }?.let { content.add(it) }
                     Part.Kind.TOOL -> {
-                        // a question waiting for its answer: the form's card takes the tool card's place
-                        val form = pendingForms.values.firstOrNull { it.toolCallId != null && "tool:${it.toolCallId}" == p.key }
+                        // a question waiting for its answer: the form's card takes the tool card's place (once the tool
+                        // has finished it is answered, even if the form's "replied" event never came)
+                        val form = if (p.toolStatus != "RUNNING") null
+                            else pendingForms.values.firstOrNull { it.toolCallId != null && "tool:${it.toolCallId}" == p.key }
                         val call = form?.let { formCall(it) } ?: toolCall(p)
                         if (tools.none { it.id == call.id }) {
                             tools.add(call)
@@ -697,10 +699,13 @@ class OpenCodeTranscript(var sessionId: String = "") {
                 allowCustomAnswer = true
             )
         }
+        // the answers as OpenCode writes them ("Q"="A"): the card pairs each question with its own answer, also when a
+        // question has a ":" in it
         val answers = p.toolAnswers
-        val output = if (answers != null) questions.mapIndexed { i, q ->
-            "• ${q.prompt}: ${answers.getOrNull(i)?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "Unanswered"}"
-        }.joinToString("\n") else listOfNotNull(p.toolOutput.takeIf { it.isNotBlank() }, p.toolError).joinToString("\n")
+        fun q(s: String) = "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        val output = if (answers != null) questions.mapIndexed { i, qq ->
+            q(qq.prompt) + "=" + q(answers.getOrNull(i)?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "Skipped")
+        }.joinToString(", ") else listOfNotNull(p.toolOutput.takeIf { it.isNotBlank() }, p.toolError).joinToString("\n")
         return ToolCall(
             id = safeId(p.key.removePrefix("tool:")),
             name = "question",

@@ -295,6 +295,11 @@ fun ChatScreen(
     val themeMode by viewModel.themeMode.collectAsState(initial = viewModel.authPreferences.getThemeModeSync())
     // the floating theme picker opened from the sidebar's palette button
     var showThemePanel by remember { mutableStateOf(false) }
+    // Connect to PC: the side bar's PC button and its sheet
+    val pcContext = LocalContext.current
+    LaunchedEffect(Unit) { com.example.gemini.data.pc.PcConnect.init(pcContext) }
+    val pcConnectEnabled by com.example.gemini.data.pc.PcConnect.enabled.collectAsState()
+    var showPcSheet by remember { mutableStateOf(false) }
     val agyHubUrl by viewModel.agyHubUrl.collectAsState(initial = AuthPreferences.currentHubUrl)
     val agyBridgeHttpUrl by viewModel.agyBridgeHttpUrl.collectAsState(initial = AuthPreferences.currentBridgeHttpUrl)
     val terminalFontSize by viewModel.terminalFontSize.collectAsState(initial = 14)
@@ -1176,7 +1181,7 @@ fun ChatScreen(
             onOpenFile = { rawUrl ->
                 try {
                     val decoded = try { java.net.URLDecoder.decode(rawUrl, "UTF-8") } catch (_: Exception) { rawUrl }
-                    val cleanPath = decoded.removePrefix("file://").substringBefore("#")
+                    val cleanPath = resolveChatFileLink(decoded.removePrefix("file://").substringBefore("#"), currentConv?.workspaceUri)
                     val isMd = cleanPath.endsWith(".md", ignoreCase = true) || cleanPath.endsWith(".markdown", ignoreCase = true)
                     if (isMd) {
                         scope.launch {
@@ -1197,7 +1202,7 @@ fun ChatScreen(
             },
             onShowDetails = { rawUrl ->
                 val decoded = try { java.net.URLDecoder.decode(rawUrl, "UTF-8") } catch (_: Exception) { rawUrl }
-                val cleanPath = decoded.removePrefix("file://").substringBefore("#")
+                val cleanPath = resolveChatFileLink(decoded.removePrefix("file://").substringBefore("#"), currentConv?.workspaceUri)
                 activeFileDetailsPath = cleanPath
             },
             onOpenConversation = { convId ->
@@ -1339,6 +1344,7 @@ fun ChatScreen(
                 },
                 // the sidebar stays open: the picker floats over it so the new look shows on the sidebar and the chat
                 onOpenThemes = { showThemePanel = !showThemePanel },
+                pcButton = if (pcConnectEnabled) ({ com.example.gemini.ui.pc.PcDrawerButton(onClick = { showPcSheet = true }) }) else null,
                 agyEnabled =com.example.gemini.domain.model.AgentKind.AGY in enabledAgents,
                 accountsButton = {
                     com.example.gemini.ui.agents.AccountsButton(
@@ -3758,6 +3764,19 @@ fun ChatScreen(
         )
     }
 
+    // Connect to PC: the side bar's sheet (switch PC, add one, back to this phone)
+    if (showPcSheet) {
+        com.example.gemini.ui.pc.PcQuickSheet(
+            onDismiss = { showPcSheet = false },
+            onManage = {
+                showPcSheet = false
+                requestedSettingsSection = com.example.gemini.ui.settings.SettingsSection.CONNECT_PC
+                showSettingsDialog = true
+                scope.launch { drawerState.close() }
+            }
+        )
+    }
+
     // Floating theme picker: above the sidebar and the chat, touches outside it still reach them
     if (showThemePanel) {
         com.example.gemini.ui.settings.ThemeQuickPanel(
@@ -3866,5 +3885,23 @@ private fun flattenFileNodes(nodes: List<com.example.gemini.data.daemon.FileNode
         }
     }
     return result
+}
+
+/**
+ * A file link from a chat as a full path: a relative one ([Foo.kt](src/Foo.kt), as VS Code chats write them) is a file
+ * in the chat's project folder (on the phone, or on the PC / server the bridge runs on).
+ */
+internal fun resolveChatFileLink(path: String, workspaceUri: String?): String {
+    if (path.startsWith("/") || path.isBlank()) return path
+    val base = workspaceUri?.removePrefix("file://")?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: return path
+    val parts = ArrayDeque(base.split('/').filter { it.isNotEmpty() })
+    for (seg in path.split('/')) {
+        when (seg) {
+            "", "." -> {}
+            ".." -> if (parts.isNotEmpty()) parts.removeLast()
+            else -> parts.addLast(seg)
+        }
+    }
+    return "/" + parts.joinToString("/")
 }
 

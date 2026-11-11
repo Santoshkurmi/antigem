@@ -13,6 +13,25 @@ private val Context.dataStore by preferencesDataStore(name = "auth_prefs")
 
 class AuthPreferences(private val context: Context) {
 
+    data class PcOverride(
+        val pcId: String,
+        val pcName: String,
+        val host: String,
+        val sshPort: Int,
+        val user: String,
+        val bridgePort: Int,
+        val hubPort: Int,
+        val token: String,
+        val privateKey: String,
+        /** JSch server_host_key list matching the host key pinned at pairing. */
+        val hostKeyAlgorithms: String,
+        /** The PC lets this phone's key open a shell ("Allow terminal from phone" in VS Code): checked at every connect. */
+        val shellAllowed: Boolean = false,
+    ) {
+        val bridgeUrl get() = "http://127.0.0.1:$bridgePort"
+        val hubUrl get() = "http://127.0.0.1:$hubPort"
+    }
+
     companion object {
         val ACCESS_TOKEN = stringPreferencesKey("access_token")
         val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
@@ -114,8 +133,20 @@ class AuthPreferences(private val context: Context) {
             return sb.toString()
         }
 
+        /**
+         * Connect to PC: while a paired PC is in use, the connection settings below come from it (Server mode through an
+         * SSH tunnel to its bridge) instead of what the user saved, which stays untouched for "Use this phone".
+         * Set from the preferences at start (see PcConnect.loadOverride); null = no PC in use.
+         */
         @Volatile
-        var currentSecurityToken: String = ""
+        var pcOverride: PcOverride? = null
+
+        @Volatile
+        private var storedSecurityToken: String = ""
+
+        var currentSecurityToken: String
+            get() = pcOverride?.token?.takeIf { it.length == TOKEN_LENGTH } ?: storedSecurityToken
+            set(value) { storedSecurityToken = value }
 
         // ---- Server mode: an extra header the reverse proxy (nginx / Apache / Caddy) in front of the server checks ----
         const val DEFAULT_EDGE_HEADER_NAME = "X-AntiGem-Key"
@@ -159,10 +190,18 @@ class AuthPreferences(private val context: Context) {
         fun migrateBridgeUrl(url: String): String = if (url.trimEnd('/') == LEGACY_BRIDGE_HTTP_URL) DEFAULT_BRIDGE_HTTP_URL else url
 
         @Volatile
-        var currentHubUrl: String = DEFAULT_HUB_URL
+        private var storedHubUrl: String = DEFAULT_HUB_URL
 
         @Volatile
-        var currentBridgeHttpUrl: String = DEFAULT_BRIDGE_HTTP_URL
+        private var storedBridgeHttpUrl: String = DEFAULT_BRIDGE_HTTP_URL
+
+        var currentHubUrl: String
+            get() = pcOverride?.hubUrl ?: storedHubUrl
+            set(value) { storedHubUrl = value }
+
+        var currentBridgeHttpUrl: String
+            get() = pcOverride?.bridgeUrl ?: storedBridgeHttpUrl
+            set(value) { storedBridgeHttpUrl = value }
 
         val currentBridgeWsUrl: String
             get() = toWsUrl(currentBridgeHttpUrl)
@@ -173,7 +212,20 @@ class AuthPreferences(private val context: Context) {
          * Linux, the phone's file system as the project store, ...) is then switched off.
          */
         @Volatile
-        var currentRemoteMode: Boolean = false
+        private var storedRemoteModeValue: Boolean = false
+
+        var currentRemoteMode: Boolean
+            get() = pcOverride != null || storedRemoteModeValue
+            set(value) { storedRemoteModeValue = value }
+
+        /** Server mode as the user set it in Settings > Servers (a PC in use aside). */
+        val storedRemoteMode: Boolean get() = storedRemoteModeValue
+
+        /**
+         * The terminal and Run configurations open a shell on the other machine over SSH: in Server mode, and with a PC in
+         * use only when the PC allows it (otherwise they run in this phone's own terminal).
+         */
+        val remoteShell: Boolean get() = pcOverride?.shellAllowed ?: currentRemoteMode
 
         /**
          * Server mode through an SSH tunnel: the bridge and the hub listen only on the server's 127.0.0.1 and the app
@@ -181,14 +233,26 @@ class AuthPreferences(private val context: Context) {
          * no reverse proxy. Only meaningful while [currentRemoteMode] is on.
          */
         @Volatile
-        var currentRemoteTunnel: Boolean = false
+        private var storedRemoteTunnel: Boolean = false
+
+        var currentRemoteTunnel: Boolean
+            get() = pcOverride != null || storedRemoteTunnel
+            set(value) { storedRemoteTunnel = value }
+
+        @Volatile
+        private var storedSshPrivateKey: String = ""
+
+        @Volatile
+        private var storedSshKeyPassphrase: String = ""
 
         /** SSH private key (PEM/OpenSSH text) and its passphrase, used for the server connection when set. */
-        @Volatile
-        var currentSshPrivateKey: String = ""
+        var currentSshPrivateKey: String
+            get() = pcOverride?.privateKey ?: storedSshPrivateKey
+            set(value) { storedSshPrivateKey = value }
 
-        @Volatile
-        var currentSshKeyPassphrase: String = ""
+        var currentSshKeyPassphrase: String
+            get() = if (pcOverride != null) "" else storedSshKeyPassphrase
+            set(value) { storedSshKeyPassphrase = value }
 
         /**
          * Turns what the user typed into a base URL: `a.xyz.com` -> `http://a.xyz.com:<defaultPort>`,
@@ -284,6 +348,9 @@ class AuthPreferences(private val context: Context) {
         currentSecurityToken = token
         currentEdgeHeaderName = syncPrefs.getString("edge_header_name", null)?.takeIf { it.isNotBlank() } ?: DEFAULT_EDGE_HEADER_NAME
         currentEdgeHeaderValue = syncPrefs.getString("edge_header_value", "") ?: ""
+        // the PC in use (Connect to PC), unless one is set already: its address and token may have been refreshed since
+        val pc = runCatching { com.example.gemini.data.pc.PcConnect.loadOverride(syncPrefs) }.getOrNull()
+        if (pc == null || pcOverride?.pcId != pc.pcId) pcOverride = pc
     }
 
     fun getEdgeHeaderSync(): Pair<String, String> = currentEdgeHeaderName to currentEdgeHeaderValue
@@ -309,13 +376,13 @@ class AuthPreferences(private val context: Context) {
     val agyBridgeHttpUrl: Flow<String> = context.dataStore.data.map { 
         val url = it[AGY_BRIDGE_HTTP_URL]?.let(::migrateBridgeUrl) ?: DEFAULT_BRIDGE_HTTP_URL
         currentBridgeHttpUrl = url
-        url
+        pcOverride?.bridgeUrl ?: url
     }
     val agyBridgeWsUrl: Flow<String> = agyBridgeHttpUrl.map { toWsUrl(it) }
     val agyHubUrl: Flow<String> = context.dataStore.data.map { 
         val url = it[AGY_HUB_URL]?.let(::migrateHubUrl) ?: DEFAULT_HUB_URL
         currentHubUrl = url
-        url
+        pcOverride?.hubUrl ?: url
     }
 
     val accessToken: Flow<String?> = context.dataStore.data.map { it[ACCESS_TOKEN] }
@@ -402,10 +469,11 @@ class AuthPreferences(private val context: Context) {
         th
     }
 
-    val termuxSshHost: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
-    val termuxSshPort: Flow<Int> = context.dataStore.data.map { it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
-    val termuxSshUser: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_USER] ?: "root" }
-    val termuxSshPass: Flow<String> = context.dataStore.data.map { it[TERMUX_SSH_PASS] ?: "root" }
+    // a PC in use (Connect to PC) is the SSH server; its login is this phone's key, never a password
+    val termuxSshHost: Flow<String> = context.dataStore.data.map { pcOverride?.host ?: it[TERMUX_SSH_HOST] ?: "127.0.0.1" }
+    val termuxSshPort: Flow<Int> = context.dataStore.data.map { pcOverride?.sshPort ?: it[TERMUX_SSH_PORT]?.toIntOrNull() ?: 8022 }
+    val termuxSshUser: Flow<String> = context.dataStore.data.map { pcOverride?.user ?: it[TERMUX_SSH_USER] ?: "root" }
+    val termuxSshPass: Flow<String> = context.dataStore.data.map { if (pcOverride != null) "" else it[TERMUX_SSH_PASS] ?: "root" }
     val isTerminalToolEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_TERMINAL_TOOL_ENABLED] ?: false }
     val isAutoExecuteTerminal: Flow<Boolean> = context.dataStore.data.map { it[AUTO_EXECUTE_TERMINAL] ?: true }
 

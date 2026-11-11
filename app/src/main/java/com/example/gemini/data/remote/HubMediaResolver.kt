@@ -289,6 +289,12 @@ object HubMediaResolver {
         downloadMutex.withLock {
             imageRamCache[key]?.let { return@withContext it }
 
+            // a file on the server / PC (Server mode, Connect to PC): the bridge reads it for every agent, while the AGY
+            // hub may not run there at all (only Antigravity uses it)
+            if (com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) {
+                viaBridge(key)?.let { return@withContext it }
+            }
+
             try {
                 val formattedUri = "file://$key"
                 Log.d("ANTI_MEDIA", "HubMediaResolver: Fetching $formattedUri from AGY Hub ($hubUrl)")
@@ -313,9 +319,27 @@ object HubMediaResolver {
             } catch (e: Exception) {
                 Log.e("ANTI_MEDIA", "HubMediaResolver: Error resolving media $rawUri: ${e.message}")
             }
+            // the hub could not read it (not running, or not Antigravity's file): the bridge may
+            if (!com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode) {
+                viaBridge(key)?.let { return@withContext it }
+            }
         }
 
         return@withContext rawUri
+    }
+
+    /** Reads a file from the bridge's machine (`/api/fs/raw`) into the RAM cache as a data: URI; null when it cannot. */
+    private suspend fun viaBridge(path: String): String? {
+        if (!path.startsWith("/")) return null
+        val bytes = fetchBridgeFile(bridgeRawUrl(path))?.takeIf { it.isNotEmpty() } ?: return null
+        val ext = path.substringAfterLast('.', "").lowercase()
+        val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?: if (ext == "svg") "image/svg+xml" else "image/png"
+        imageBytesCache[path] = bytes
+        return "data:$mime;base64,${Base64.encodeToString(bytes, Base64.NO_WRAP)}".also {
+            imageRamCache[path] = it
+            Log.d("ANTI_MEDIA", "HubMediaResolver: read $path through the bridge (${bytes.size} bytes)")
+        }
     }
 }
 

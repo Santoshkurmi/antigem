@@ -60,8 +60,9 @@ fun IdeExecutionRunnerSheet(
     var ctrlState by remember { mutableStateOf(IdeKeyModifierState.OFF) }
     var altState by remember { mutableStateOf(IdeKeyModifierState.OFF) }
 
-    // Remote mode: the command runs on the server, in its own tmux session reached over SSH
-    val remoteRun = com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode
+    // Remote mode: the command runs on the server, in its own tmux session reached over SSH (a PC in use only when it
+    // allows a shell for this phone; otherwise here)
+    val remoteRun = com.example.gemini.data.preferences.AuthPreferences.remoteShell
     val runSessionName = remember(sessionKey) { "antigem-run-" + UUID.randomUUID().toString().take(8) }
 
     val ptySession = remember(sessionKey) {

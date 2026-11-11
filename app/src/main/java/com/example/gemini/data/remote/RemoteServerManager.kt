@@ -77,6 +77,11 @@ object RemoteServerManager {
     private data class Target(val host: String, val port: Int, val user: String, val pass: String)
 
     private suspend fun target(context: Context): Target? {
+        // Connect to PC: the paired PC at the address that answers now, logged in with this phone's key
+        AuthPreferences.pcOverride?.let { pc ->
+            val host = com.example.gemini.data.pc.PcConnect.prepareConnect() ?: pc.host
+            return Target(host, pc.sshPort, pc.user, "")
+        }
         val prefs = AuthPreferences(context)
         val host = prefs.termuxSshHost.firstOrNull().orEmpty().trim()
         val port = prefs.termuxSshPort.firstOrNull() ?: 22
@@ -142,7 +147,9 @@ object RemoteServerManager {
         _ssh.value = SshState(false, "Connecting to ${t.user}@${t.host}:${t.port}…")
         val s = SshSessionFactory.open(t.host, t.port, t.user, t.pass, connectTimeoutMs = 12_000, keepAliveMs = 20_000)
         control = s
-        _ssh.value = SshState(true, "Connected to ${t.user}@${t.host}")
+        // a paired PC: its bridge token may have changed since (read over this login)
+        if (AuthPreferences.pcOverride != null) com.example.gemini.data.pc.PcConnect.afterConnect(s)
+        _ssh.value = SshState(true, "Connected to ${AuthPreferences.pcOverride?.pcName ?: "${t.user}@${t.host}"}")
         AdbTunnel.onNewSession()
         syncTunnels(s)
         s
@@ -538,6 +545,10 @@ object RemoteServerManager {
 
     private suspend fun startInternal(context: Context, force: Boolean) = opLock.withLock {
         withContext(Dispatchers.IO) {
+            if (AuthPreferences.pcOverride != null) {
+                attachToPc()
+                return@withContext
+            }
             LocalServerManager.publishRemoteStatus(LocalServerStatus.Starting)
             try {
                 _detail.value = "Connecting over SSH…"
@@ -620,7 +631,50 @@ object RemoteServerManager {
         }
     }
 
+    /**
+     * Connect to PC: the bridge on the PC belongs to AntiGem in VS Code. Only connect (SSH, tunnels, token) and check
+     * that it answers; never install, start or stop anything there.
+     */
+    private suspend fun attachToPc() {
+        val pc = AuthPreferences.pcOverride ?: return
+        LocalServerManager.publishRemoteStatus(LocalServerStatus.Starting)
+        try {
+            _detail.value = "Connecting to ${pc.pcName}…"
+            val s = session()
+            syncTunnels(s)
+            _detail.value = "Checking AntiGem on ${pc.pcName}…"
+            var up = false
+            for (i in 0 until 12) {
+                if (bridgeReachable()) { up = true; break }
+                delay(500)
+            }
+            _detail.value = ""
+            if (up) {
+                LocalServerManager.publishRemoteStatus(LocalServerStatus.Running())
+            } else {
+                LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(
+                    "Connected to ${pc.pcName}, but AntiGem's bridge is not running there. Open VS Code with AntiGem on the PC " +
+                        "(if it was stopped, press ▶ in its side bar), then tap Retry."
+                ))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _detail.value = ""
+            Log.e(TAG, "connect to PC failed", e)
+            LocalServerManager.publishRemoteStatus(LocalServerStatus.Error("Cannot connect to ${pc.pcName}: ${friendly(e)}"))
+        }
+    }
+
     private suspend fun stopInternal() = opLock.withLock {
+        // Connect to PC: "stop" only disconnects; the PC's bridge keeps running for VS Code
+        if (AuthPreferences.pcOverride != null) {
+            LocalServerManager.publishRemoteStatus(LocalServerStatus.Stopping)
+            disconnect()
+            AgyBridgeService.instance.notifyLocalStopped()
+            LocalServerManager.publishRemoteStatus(LocalServerStatus.Stopped(exitCode = 0))
+            return@withLock
+        }
         withContext(Dispatchers.IO) {
             LocalServerManager.publishRemoteStatus(LocalServerStatus.Stopping)
             try {
@@ -751,6 +805,9 @@ object RemoteServerManager {
      */
     suspend fun ensureExtensionHost(context: Context) = extLock.withLock { withContext(Dispatchers.IO) {
         extensionHostReady = false
+        if (AuthPreferences.pcOverride != null) {
+            throw IllegalStateException("Browser plugins don't run on a connected PC. Switch back to this phone (side bar → PC icon) to use them.")
+        }
         appContext = context.applicationContext
         val hostPort = com.example.gemini.ui.browser.BrowserExtensionManager.instance.hostPort()
         val mcpPort = AndroidLocalBridgeServer.DEFAULT_PORT

@@ -65,14 +65,54 @@ class ClaudeBridgeClient(
 
     suspend fun logout(): Result<BridgeSimpleResponse> = post("/auth/logout")
 
-    suspend fun listSessions(): Result<ClaudeSessionListResponse> = get("/sessions")
+    suspend fun listSessions(): Result<ClaudeSessionListResponse> =
+        get<ClaudeSessionListResponse>("/sessions").map(::expandSubagentRuns)
 
     /**
      * A chat's transcript. [full]: everything written so far, also while its process is live (for reading a chat
      * without attaching to it); otherwise a live process' part is left to the session's event stream.
      */
-    suspend fun history(sessionId: String, full: Boolean = false): Result<ClaudeHistoryResponse> =
-        get("/sessions/$sessionId/history" + if (full) "?full=1" else "")
+    suspend fun history(sessionId: String, full: Boolean = false): Result<ClaudeHistoryResponse> {
+        // a subagent listed by the VS Code bridge: its transcript lives under the chat that ran it
+        subagentParents[sessionId]?.let { parent ->
+            val agentId = sessionId.removePrefix("agent-")
+            return get<ClaudeSubagentHistoryResponse>("/sessions/$parent/subagents/$agentId/history")
+                .map { ClaudeHistoryResponse(success = it.success, entries = it.entries, error = it.error) }
+        }
+        return get("/sessions/$sessionId/history" + if (full) "?full=1" else "")
+    }
+
+    /**
+     * AntiGem's VS Code bridge (Connect to PC) lists a chat's subagent runs inside the chat ("subagents") instead of as
+     * read-only chats of their own like the app's bridge. They become the same "agent-<id>" entries here (nested under
+     * their chat, or the subagent that started them), and [subagentParents] remembers which chat holds each transcript.
+     */
+    private val subagentParents = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun expandSubagentRuns(resp: ClaudeSessionListResponse): ClaudeSessionListResponse {
+        if (resp.sessions.none { it.subagents.isNotEmpty() }) return resp
+        val listed = resp.sessions.mapTo(HashSet()) { it.id }
+        val extra = mutableListOf<ClaudeSessionSummary>()
+        for (chat in resp.sessions) for (run in chat.subagents) {
+            if (run.agent_id.isBlank()) continue
+            val id = "agent-${run.agent_id}"
+            subagentParents[id] = chat.id
+            if (id in listed) continue
+            extra += ClaudeSessionSummary(
+                id = id,
+                title = run.description.lineSequence().firstOrNull().orEmpty().trim().take(80).ifBlank { run.agent_type },
+                cwd = chat.cwd,
+                created_at = run.created_at.takeIf { it > 0 } ?: run.updated_at,
+                updated_at = run.updated_at,
+                live = run.running,
+                busy = run.running,
+                subagent = true,
+                parent_id = if (run.parent_agent_id.isNotBlank()) "agent-${run.parent_agent_id}" else chat.id,
+                agent_type = run.agent_type,
+            )
+        }
+        return resp.copy(sessions = resp.sessions.map { if (it.subagents.isEmpty()) it else it.copy(subagents = emptyList()) } + extra)
+    }
 
     suspend fun rename(sessionId: String, title: String): Result<BridgeSimpleResponse> =
         post("/sessions/$sessionId/title", ClaudeJson.encodeToString(ClaudeTitleRequest(title)))

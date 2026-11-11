@@ -75,6 +75,8 @@ object AgyOkHttpClient {
                     .header("User-Agent", "antiGem-Android-Native")
                     .header("X-Grpc-Web", "1")
                     .header(AuthPreferences.currentFramedHeader, token.ifBlank { "true" })
+                // Connect to PC: VS Code runs the standard agy (not patched like this app's), which reads the usual header
+                if (AuthPreferences.pcOverride != null && token.isNotBlank()) requestBuilder.header("x-codeium-csrf-token", token)
                 AuthPreferences.edgeHeader()?.let { (n, v) -> requestBuilder.header(n, v) }
                 val request = requestBuilder.build()
 

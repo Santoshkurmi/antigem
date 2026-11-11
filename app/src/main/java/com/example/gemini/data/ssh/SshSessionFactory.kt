@@ -42,13 +42,20 @@ object SshSessionFactory {
         user: String,
         pass: String,
         connectTimeoutMs: Int = 10_000,
-        keepAliveMs: Int = 0
+        keepAliveMs: Int = 0,
+        /** Log in with this key instead of the saved one (Connect to PC pairing test). */
+        privateKey: String? = null,
+        /** Ask the server for this host key type only (JSch server_host_key): the one pinned for a paired PC. */
+        hostKeyAlgorithms: String? = null
     ): Session {
         val jsch = JSch()
-        val key = AuthPreferences.currentSshPrivateKey
+        val key = privateKey ?: AuthPreferences.currentSshPrivateKey
         val usingKey = looksLikePrivateKey(key)
+        // a paired PC (Connect to PC) must present exactly the host key that pairing pinned
+        val pc = AuthPreferences.pcOverride
+        val hostKeyAlgos = hostKeyAlgorithms ?: pc?.takeIf { it.host == host && it.sshPort == port }?.hostKeyAlgorithms
         if (usingKey) {
-            val passphrase = AuthPreferences.currentSshKeyPassphrase
+            val passphrase = if (privateKey != null) "" else AuthPreferences.currentSshKeyPassphrase
             jsch.addIdentity(
                 "antigem-key",
                 (key.trim() + "\n").toByteArray(Charsets.UTF_8),
@@ -76,6 +83,7 @@ object SshSessionFactory {
                 if (usingKey) "publickey,password,keyboard-interactive" else "password,keyboard-interactive,publickey"
             )
             put("ConnectTimeout", connectTimeoutMs.toString())
+            if (!hostKeyAlgos.isNullOrBlank()) put("server_host_key", hostKeyAlgos)
             put("compression.s2c", "zlib@openssh.com,zlib,none")
             put("compression.c2s", "zlib@openssh.com,zlib,none")
         })
@@ -86,6 +94,14 @@ object SshSessionFactory {
         }
         session.connect(connectTimeoutMs)
         return session
+    }
+
+    /**
+     * Trusts exactly [keyBase64] (the key blob, as in a .pub file) for [host]:[port], replacing what was pinned there:
+     * Connect to PC learns the PC's host key during pairing, so the first login is not a blind trust-on-first-use.
+     */
+    fun pinHostKey(host: String, port: Int, keyBase64: String) {
+        appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.putString("$host:$port", "key|${keyBase64.trim()}")?.commit()
     }
 
     /** Forget the pinned key of a server (after the server was reinstalled and its key legitimately changed). */

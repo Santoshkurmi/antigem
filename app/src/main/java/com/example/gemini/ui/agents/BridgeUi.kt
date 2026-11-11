@@ -55,6 +55,8 @@ fun BridgeVersionDialog() {
     val bridge by BridgeInfo.version.collectAsState()
     val snoozed by BridgeInfo.snoozedFor.collectAsState()
     val b = bridge ?: return
+    // Connect to PC: the bridge is AntiGem's in VS Code, versioned with the extension, not this app
+    if (AuthPreferences.pcOverride != null) return
     val cmp = BridgeInfo.compareBridgeToApp(b)
     // "Later" hides it until the app is opened again: an outdated bridge must not be forgotten
     if (cmp == 0 || snoozed == b) return

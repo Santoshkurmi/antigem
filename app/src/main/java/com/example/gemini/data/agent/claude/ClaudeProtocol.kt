@@ -308,7 +308,32 @@ data class ClaudeSessionSummary(
     /** A subagent's transcript (read-only), started by chat or subagent [parent_id]; [agent_type] e.g. "Explore". */
     val subagent: Boolean = false,
     val parent_id: String = "",
-    val agent_type: String = ""
+    val agent_type: String = "",
+    /**
+     * The chat's subagent runs, as AntiGem's VS Code bridge lists them (inside the chat instead of as chats of their
+     * own); ClaudeBridgeClient turns them into "agent-<id>" entries like the app's bridge sends.
+     */
+    val subagents: List<ClaudeSubagentRun> = emptyList()
+)
+
+/** One subagent run inside a chat (VS Code bridge, Connect to PC). */
+@Serializable
+data class ClaudeSubagentRun(
+    val agent_id: String = "",
+    val agent_type: String = "",
+    val description: String = "",
+    val parent_agent_id: String = "",
+    val running: Boolean = false,
+    val created_at: Long = 0,
+    val updated_at: Long = 0
+)
+
+/** A subagent's transcript from the VS Code bridge (`/sessions/<chat>/subagents/<agent>/history`). */
+@Serializable
+data class ClaudeSubagentHistoryResponse(
+    val success: Boolean = false,
+    val entries: List<JsonObject> = emptyList(),
+    val error: String? = null
 )
 
 @Serializable

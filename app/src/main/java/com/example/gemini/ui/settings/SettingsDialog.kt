@@ -88,6 +88,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     THEMES("Themes", "Light and dark mode, and the theme gallery"),
     APPEARANCE("Appearance", "Chat text size, chat list, header icons and the app switcher"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
+    CONNECT_PC("Connect to PC", "Use the agents on your PC (AntiGem in VS Code) from this phone"),
     WEBVIEW_EXTENSIONS("Custom AntiGem Plugins", "Install and manage plugins: MCP tools and skills"),
     SLASH_COMMANDS("Slash Commands", "Your own / commands and what they expand to"),
     MCP("MCP Servers", "Model Context Protocol tools & integrations"),
@@ -476,7 +477,10 @@ fun SettingsDialog(
                         onSetChatHeaderItems = onSetChatHeaderItems
                     )
 
-                    SettingsSection.SERVERS -> ServersSubScreen(
+                    // a PC in use (Connect to PC): the form would show the PC's values, so it waits for the switch back
+                    SettingsSection.SERVERS -> if (com.example.gemini.data.pc.PcConnect.active() != null) {
+                        com.example.gemini.ui.pc.PcServersNotice(cardBg, cardBorder, onOpenConnectPc = { currentSection = SettingsSection.CONNECT_PC })
+                    } else ServersSubScreen(
                         currentHubUrl = agyHubUrl,
                         currentBridgeUrl = agyBridgeHttpUrl,
                         isServerOnline = isServerOnline,
@@ -485,6 +489,8 @@ fun SettingsDialog(
                         cardBorder = cardBorder,
                         onSaveServerUrls = onSaveServerUrls
                     )
+
+                    SettingsSection.CONNECT_PC -> com.example.gemini.ui.pc.ConnectPcScreen(cardBg = cardBg, cardBorder = cardBorder)
 
                     SettingsSection.WEBVIEW_EXTENSIONS -> WebViewExtensionsScreen(onChanged = onRefreshMcpServers)
 
@@ -804,6 +810,16 @@ private fun MainSettingsMenu(
     val githubRow = rememberGitHubRow(onNavigate)
     val reaRow = rememberReaRow(onNavigate)
     val androidDevRow = rememberAndroidDevRow(onNavigate)
+    // Connect to PC: off / on / the PC in use
+    val pcContext = LocalContext.current
+    LaunchedEffect(Unit) { com.example.gemini.data.pc.PcConnect.init(pcContext) }
+    val pcEnabled by com.example.gemini.data.pc.PcConnect.enabled.collectAsState()
+    val pcList by com.example.gemini.data.pc.PcConnect.pcs.collectAsState()
+    val pcActiveId by com.example.gemini.data.pc.PcConnect.activeId.collectAsState()
+    val pcInUse = pcList.firstOrNull { it.id == pcActiveId }?.takeIf { pcEnabled }
+    val pcRow = row(SettingsSection.CONNECT_PC, Icons.Outlined.Computer, c.accentTeal,
+        when { !pcEnabled -> "Off"; pcInUse != null -> pcInUse.name; else -> "On" },
+        if (pcInUse != null) QuotaGreen else null)
 
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
@@ -828,7 +844,8 @@ private fun MainSettingsMenu(
             listOf(
                 row(SettingsSection.THEMES, Icons.Outlined.Palette, c.accentPink, com.example.gemini.theme.ThemeManager.current.name),
                 row(SettingsSection.APPEARANCE, Icons.Outlined.Tune, c.accentAlt),
-                row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info, serverValue, serverColor)
+                row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info, serverValue, serverColor),
+                pcRow
             ),
             listOfNotNull(
                 row(SettingsSection.AGENTS, Icons.Outlined.SmartToy, MaterialTheme.colorScheme.primary, when {

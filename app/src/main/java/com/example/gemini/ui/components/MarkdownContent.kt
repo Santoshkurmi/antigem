@@ -2223,7 +2223,9 @@ fun parseHexOrRgbColor(str: String): Color? {
 private val BR_REGEX = Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)
 
 private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
-    "(\\[(.*?)\\]\\(((?:https?|file|conversation)://[^\\s)]+|/[^\\s)]+)\\))|" +       // 1: Markdown Link [text](url)
+    // a link to a file relative to the chat's project folder ([Foo.kt](src/Foo.kt#L42), as VS Code chats write them):
+    // no scheme, and a "/" or "." in it so plain words in parentheses stay text
+    "(\\[(.*?)\\]\\(((?:https?|file|conversation)://[^\\s)]+|/[^\\s)]+|(?![A-Za-z][A-Za-z0-9+.\\-]*:)(?=[^\\s)]*[./])[A-Za-z0-9_.~\\-][^\\s)]*)\\))|" +       // 1: Markdown Link [text](url)
     "(<a\\s+href=[\"']((?:https?|file|conversation)://[^\"']+|/[^\"']+)[\"']\\s*>(.*?)</a>)|" + // 4: HTML Link
     "(file:///[a-zA-Z0-9_./\\-#]+)|" +                                                // 7: Bare file link
     "(conversation://[a-zA-Z0-9_./\\-#]+)|" +                                         // 8: Bare conversation link
@@ -2384,7 +2386,9 @@ private fun buildRichAnnotatedString(
             val linkTitle = fullMatch.substringAfter("[").substringBefore("](")
             val linkUrl = fullMatch.substringAfter("](").substringBeforeLast(")")
             val isConversation = linkUrl.startsWith("conversation://", ignoreCase = true)
-            val isFile = linkUrl.startsWith("file://", ignoreCase = true) || linkUrl.startsWith("/")
+            // a relative path (no scheme) is a file in the chat's project folder; the link handler resolves it
+            val isRelativeFile = !linkUrl.contains("://") && !linkUrl.startsWith("/")
+            val isFile = linkUrl.startsWith("file://", ignoreCase = true) || linkUrl.startsWith("/") || isRelativeFile
 
             if (isConversation) {
                 val convId = linkUrl.removePrefix("conversation://").substringBefore("#").substringBefore("/").trim()

@@ -641,8 +641,29 @@ private data class QuestionAnswerSummary(
     val answer: String
 )
 
+/** Claude Code's and OpenCode's answer text: `User has answered your questions: "Q1"="A1", "Q2"="A2". You can now…` */
+private val QA_PAIR = Regex(""""((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"""")
+
 private fun parseAnswerSummary(output: String, questionnaire: ChoiceQuestionnaire?): List<QuestionAnswerSummary> {
     if (output.isBlank() && questionnaire == null) return emptyList()
+
+    // 0. the one-line "Q"="A" form: each question gets its own answer (not the whole line, questions and all)
+    val qaPairs = QA_PAIR.findAll(output).map { m ->
+        fun unq(s: String) = s.replace(Regex("""\\(.)"""), "$1").trim()
+        QuestionAnswerSummary(unq(m.groupValues[1]), unq(m.groupValues[2]))
+    }.toList()
+    if (qaPairs.isNotEmpty()) {
+        fun norm(s: String) = s.lowercase().replace(Regex("\\s+"), " ").trim()
+        val out = mutableListOf<QuestionAnswerSummary>()
+        val known = questionnaire?.questions.orEmpty()
+        for (q in known) {
+            val hit = qaPairs.firstOrNull { norm(it.question) == norm(q.prompt) }
+            out += QuestionAnswerSummary(q.prompt.trim(), hit?.answer?.ifBlank { "Selected" } ?: "Skipped")
+        }
+        // answers to questions the card does not know (an edited question) are still shown
+        for (p in qaPairs) if (known.none { norm(it.prompt) == norm(p.question) }) out += p
+        return out
+    }
 
     val results = mutableListOf<QuestionAnswerSummary>()
     val cleanOutput = output

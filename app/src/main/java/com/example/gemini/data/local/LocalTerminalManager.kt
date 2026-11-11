@@ -1271,7 +1271,9 @@ object LocalTerminalManager {
 
         val authPrefs = AuthPreferences(context)
         val defaultUseSsh = false
-        val useSsh = AuthPreferences.currentRemoteMode || (authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh)
+        // a PC in use (Connect to PC) without shell access: this phone's own terminal
+        val useSsh = AuthPreferences.remoteShell ||
+            (AuthPreferences.pcOverride == null && (authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh))
         val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
         val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
         val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
@@ -1518,7 +1520,9 @@ object LocalTerminalManager {
         val authPrefs = AuthPreferences(context)
         managerScope.launch {
             val defaultUseSsh = false
-            val useSsh = AuthPreferences.currentRemoteMode || (authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh)
+            // a PC in use (Connect to PC) without shell access: this phone's own terminal
+            val useSsh = AuthPreferences.remoteShell ||
+                (AuthPreferences.pcOverride == null && (authPrefs.useSshTerminal.firstOrNull() ?: defaultUseSsh))
             val host = authPrefs.termuxSshHost.firstOrNull() ?: "127.0.0.1"
             val port = authPrefs.termuxSshPort.firstOrNull() ?: 8022
             val user = authPrefs.termuxSshUser.firstOrNull() ?: "root"
