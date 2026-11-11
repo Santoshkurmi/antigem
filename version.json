@@ -1,9 +1,16 @@
 {
-  "version_code": 127,
-  "version_name": "1.1.7",
+  "version_code": 128,
+  "version_name": "1.1.8",
   "min_supported_version_code": 1,
   "changelog": [
-    "Improved browser mcp connection stability and performance."
+    "Added Connect to PC: use the agents running in AntiGem for VS Code on your PC from your phone, with the same chats live on both. Pair once in Settings → Connect to PC (pick the PC from Nearby PCs and type the 6-digit code VS Code shows), then switch between your PCs and this phone from the new PC button in the side bar",
+    "Added folder tabs in Files: open several folders side by side and copy between them (always on with a PC or server, turn them on with the new tabs button otherwise)",
+    "Claude Code subagents are listed under their chat in the side bar and open read-only; the agents chip in the Claude strip shows how many run and lists them as a tree, nested ones under the agent that started them. OpenCode child sessions and Codex spawned agents nest under their chat too",
+    "Fixed answered question cards: Claude Code no longer repeats every question in each answer, and OpenCode now shows each question with its own answer",
+    "Fixed OpenCode questions (single-choice options were missing, question and header were swapped, the card repeated in every reply). Custom providers now select all fetched models by default, with Select all / Select none",
+    "File links written relative to the project (like src/Main.kt) are now clickable; [text](photo.png) stays a link and only ![...](...) shows an image or video player. Open with: images open in the built-in viewer, and Share is last for every file",
+    "Fixed: images and subagents of chats on a PC or server now load, the terminal uses the phone when the PC does not allow a shell, \"Go there\" after saving a shared file no longer loads forever, and the side bar no longer opens by itself after a full-screen video",
+    "Jarvis can now set the effort when it starts Claude Code or Codex tasks and new chats"
   ],
   "is_critical": false
 }

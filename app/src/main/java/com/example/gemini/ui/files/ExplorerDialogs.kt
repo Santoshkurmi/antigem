@@ -517,13 +517,13 @@ internal fun NewProjectDialog(onCreate: suspend (name: String, template: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DetailsSheet(entry: ExplorerEntry, onCopyPath: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun DetailsSheet(entry: ExplorerEntry, onCopyPath: (String) -> Unit, onDismiss: () -> Unit, side: ExplorerSide = ExplorerSide.BRIDGE) {
     var stat by remember { mutableStateOf<ExplorerStat?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(entry.path, reload) {
-        FileExplorerApi.stat(entry.path).onSuccess { stat = it }.onFailure { error = it.message }
+        ExplorerSource.of(side).stat(entry.path).onSuccess { stat = it }.onFailure { error = it.message }
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
@@ -553,7 +553,8 @@ internal fun DetailsSheet(entry: ExplorerEntry, onCopyPath: (String) -> Unit, on
                 DetailRow("Permissions", "${s.mode}  (${s.modeOctal})", mono = true)
                 DetailRow("Access", listOfNotNull(if (s.readable) "read" else null, if (s.writable) "write" else null).joinToString(" + ").ifBlank { "none" })
                 if (s.symlinkTarget.isNotBlank()) DetailRow("Links to", s.symlinkTarget, mono = true)
-                if (!s.isDir) {
+                // the bridge's machine only (Android storage has no Unix permissions to change)
+                if (!s.isDir && side == ExplorerSide.BRIDGE) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Executable", fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -626,12 +627,12 @@ private fun ChoiceButton(icon: ImageVector, title: String, subtitle: String, dan
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ArchiveSheet(entry: ExplorerEntry, onExtractHere: () -> Unit, onExtractTo: () -> Unit, onDismiss: () -> Unit) {
+internal fun ArchiveSheet(entry: ExplorerEntry, onExtractHere: () -> Unit, onExtractTo: () -> Unit, onDismiss: () -> Unit, side: ExplorerSide = ExplorerSide.BRIDGE) {
     var entries by remember { mutableStateOf<List<ArchiveEntry>?>(null) }
     var truncated by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(entry.path) {
-        FileExplorerApi.archiveEntries(entry.path).onSuccess { entries = it.first; truncated = it.second }.onFailure { error = it.message }
+        ExplorerSource.of(side).archiveEntries(entry.path).onSuccess { entries = it.first; truncated = it.second }.onFailure { error = it.message }
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.85f).padding(horizontal = 16.dp)) {

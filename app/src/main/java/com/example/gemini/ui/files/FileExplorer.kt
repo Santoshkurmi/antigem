@@ -58,11 +58,14 @@ import kotlinx.coroutines.launch
 object ExplorerClipboard {
     val entries = mutableStateListOf<ExplorerEntry>()
     var move by mutableStateOf(false)
+    /** Which side they are on (this phone, or the bridge's machine): pasting on the other side copies across. */
+    var side by mutableStateOf(ExplorerSide.BRIDGE)
 
-    fun set(list: List<ExplorerEntry>, move: Boolean) {
+    fun set(list: List<ExplorerEntry>, move: Boolean, side: ExplorerSide = ExplorerSide.BRIDGE) {
         entries.clear()
         entries.addAll(list)
         this.move = move
+        this.side = side
     }
 
     fun clear() = entries.clear()
@@ -115,7 +118,20 @@ private fun copyText(context: Context, text: String) {
 
 private enum class DestOp { COPY, MOVE, EXTRACT }
 
-private data class DestRequest(val op: DestOp, val entries: List<ExplorerEntry>)
+private data class DestRequest(val op: DestOp, val entries: List<ExplorerEntry>, val side: ExplorerSide = ExplorerSide.BRIDGE)
+
+/** One tab of the Files screen: a folder on the bridge's machine or (server / PC) this phone. */
+private data class ExplorerTabState(val id: Long, val side: ExplorerSide, val path: String)
+
+private var tabIds = 0L
+private fun nextTabId() = ++tabIds
+
+/** The side the explorer on screen shows (thumbnails and dialogs read files from it). */
+val LocalExplorerSide = staticCompositionLocalOf { ExplorerSide.BRIDGE }
+
+/** The bridge's machine as the tab names it: the PC in use (Connect to PC), or the server. */
+private fun bridgeTabName(): String =
+    com.example.gemini.data.preferences.AuthPreferences.pcOverride?.pcName?.takeIf { it.isNotBlank() } ?: "Server"
 
 private data class PendingConflict(val names: List<String>, val move: Boolean, val run: (ConflictPolicy) -> Unit)
 
@@ -147,19 +163,58 @@ fun FileExplorer(
     onOpenedInIde: (() -> Unit)? = null,
     onOpenFolderInIde: ((String) -> Unit)? = null,
     onProjectCreated: ((ProjectItem) -> Unit)? = null,
-    showClipboard: Boolean = true
+    showClipboard: Boolean = true,
+    /** Server mode / Connect to PC: a "This phone" tab next to the bridge machine's files (copy and move between them). */
+    allowPhoneTab: Boolean = false,
+    initialSide: ExplorerSide = ExplorerSide.BRIDGE,
+    /** Like [onConfirmFolder], with the side the chosen folder is on (a destination picker with both tabs). */
+    onConfirmFolderAt: ((String, ExplorerSide) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    remember { ExplorerPrefs.init(context) }
+    remember { ExplorerPrefs.init(context); PhoneSource.init(context) }
+    // the phone tab only makes sense while the bridge (and its files) is on another machine
+    val phoneTab = allowPhoneTab && com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode
+
+    // ----- tabs (the Files screen): each its own folder. Server / PC: always, starting with the bridge's machine and this
+    // phone. Phone-only: turned on with the toolbar button. Pickers (dialogs) show the two sides as plain tabs instead.
+    val multiTab = allowPhoneTab && !inDialog
+    val tabsKey = stateKey + if (phoneTab) ":remote" else ":local"
+    var tabMode by remember { mutableStateOf(multiTab && (phoneTab || ExplorerPrefs.tabMode(stateKey))) }
+    val tabs = remember { mutableStateListOf<ExplorerTabState>() }
+    var activeTab by remember { mutableIntStateOf(0) }
+    remember {
+        if (multiTab) {
+            val (saved, active) = ExplorerPrefs.tabs(tabsKey)
+            saved.forEach { (sideName, p) ->
+                val sd = runCatching { ExplorerSide.valueOf(sideName) }.getOrNull()
+                if (sd != null && (phoneTab || sd == ExplorerSide.BRIDGE)) tabs.add(ExplorerTabState(nextTabId(), sd, p))
+            }
+            if (tabs.isEmpty()) {
+                tabs.add(ExplorerTabState(nextTabId(), ExplorerSide.BRIDGE, ExplorerPrefs.lastPath(stateKey) ?: "~"))
+                if (phoneTab) tabs.add(ExplorerTabState(nextTabId(), ExplorerSide.PHONE, ExplorerPrefs.lastPath("$stateKey:phone") ?: "~"))
+            }
+            activeTab = active.coerceIn(0, tabs.lastIndex)
+            if (!tabMode && tabs.size > 1) { val keep = tabs[activeTab]; tabs.clear(); tabs.add(keep); activeTab = 0 }
+        }
+        true
+    }
+    val showTabs = multiTab && tabMode
+
+    var side by remember { mutableStateOf(if (multiTab && tabs.isNotEmpty()) tabs[activeTab].side else if (phoneTab) initialSide else ExplorerSide.BRIDGE) }
+    fun src(): ExplorerSource = ExplorerSource.of(side)
+    fun keyOf(s: ExplorerSide) = if (s == ExplorerSide.PHONE) "$stateKey:phone" else stateKey
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     val snackbar = remember { SnackbarHostState() }
     val settings by ExplorerPrefs.settings.collectAsState()
     val projects by TermuxDaemonManager.projects.collectAsState()
-    val ideAvailable = onOpenedInIde != null
+    // the IDE edits files on the bridge's machine: not this phone's (on the phone tab)
+    val ideAvailable = onOpenedInIde != null && side == ExplorerSide.BRIDGE
 
     // ----- listing state -----
-    var path by remember { mutableStateOf(initialPath?.takeIf { it.isNotBlank() } ?: ExplorerPrefs.lastPath(stateKey) ?: "~") }
+    var path by remember {
+        mutableStateOf(initialPath?.takeIf { it.isNotBlank() } ?: tabs.getOrNull(activeTab)?.path?.takeIf { multiTab } ?: ExplorerPrefs.lastPath(keyOf(side)) ?: "~")
+    }
     var home by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<ExplorerEntry>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
@@ -213,7 +268,7 @@ fun FileExplorer(
 
     suspend fun load(target: String, pushFrom: String?): Boolean {
         loading = true
-        val res = try { FileExplorerApi.list(target) } finally { loading = false }
+        val res = try { src().list(target) } finally { loading = false }
         res.onSuccess { l ->
             if (pushFrom != null && pushFrom != l.path) history.add(pushFrom)
             path = l.path
@@ -222,7 +277,11 @@ fun FileExplorer(
             loadError = null
             loaded = true
             selected.clear()
-            ExplorerPrefs.setLastPath(stateKey, l.path)
+            ExplorerPrefs.setLastPath(keyOf(side), l.path)
+            if (multiTab && activeTab in tabs.indices) {
+                tabs[activeTab] = tabs[activeTab].copy(side = side, path = l.path)
+                ExplorerPrefs.setTabs(tabsKey, tabs.map { it.side.name to it.path }, activeTab)
+            }
             ExplorerPrefs.addRecentFolder(l.path)
         }.onFailure {
             if (!loaded) loadError = it.message else snack(it.message ?: "Cannot open folder")
@@ -239,7 +298,7 @@ fun FileExplorer(
         scope.launch {
             if (!silent) refreshing = true
             val keep = selected.keys.toSet()
-            FileExplorerApi.list(path).onSuccess { l ->
+            src().list(path).onSuccess { l ->
                 entries = l.entries
                 home = l.home
                 loadError = null
@@ -247,6 +306,59 @@ fun FileExplorer(
                 selected.keys.retainAll(keep.intersect(l.entries.map { it.path }.toSet()))
             }.onFailure { if (!silent) snack(it.message ?: "Refresh failed") }
             refreshing = false
+        }
+    }
+
+    /** Shows [to] in [folder] (a fresh listing: selection, history and search start over). */
+    fun show(to: ExplorerSide, folder: String) {
+        side = to
+        selected.clear()
+        history.clear()
+        searching = false; query = ""; deepResults = null; deep = false
+        loaded = false
+        loadError = null
+        entries = emptyList()
+        path = folder
+        scope.launch { if (!load(folder, null) && folder != "~") load("~", null) }
+    }
+
+    /** Shows the other side, in the folder it showed last (the pickers' two tabs). */
+    fun switchSide(to: ExplorerSide) {
+        if (to == side || busy != null) return
+        show(to, ExplorerPrefs.lastPath(keyOf(to)) ?: "~")
+    }
+
+    fun saveTabs() = ExplorerPrefs.setTabs(tabsKey, tabs.map { it.side.name to it.path }, activeTab)
+
+    fun openTab(i: Int) {
+        if (i == activeTab || i !in tabs.indices) return
+        activeTab = i
+        saveTabs()
+        show(tabs[i].side, tabs[i].path)
+    }
+
+    /** A new tab on [on]: the folder on screen when it is the same side, else that side's last folder. */
+    fun addTab(on: ExplorerSide) {
+        val folder = if (on == side) path else tabs.lastOrNull { it.side == on }?.path ?: ExplorerPrefs.lastPath(keyOf(on)) ?: "~"
+        tabs.add(ExplorerTabState(nextTabId(), on, folder))
+        openTab(tabs.lastIndex)
+    }
+
+    fun closeTab(i: Int) {
+        if (tabs.size <= 1 || i !in tabs.indices) return
+        val wasActive = i == activeTab
+        tabs.removeAt(i)
+        if (wasActive) { activeTab = -1; openTab(i.coerceAtMost(tabs.lastIndex)) }
+        else { if (i < activeTab) activeTab--; saveTabs() }
+    }
+
+    /** Phone-only mode's toolbar button: tabs on, or back to one folder (the one on screen). */
+    fun setTabsOn(on: Boolean) {
+        tabMode = on
+        ExplorerPrefs.setTabMode(stateKey, on)
+        if (!on && tabs.size > 1) {
+            val keep = tabs.getOrNull(activeTab) ?: ExplorerTabState(nextTabId(), side, path)
+            tabs.clear(); tabs.add(keep); activeTab = 0; saveTabs()
         }
     }
 
@@ -277,6 +389,12 @@ fun FileExplorer(
         val (key, target) = navRequest ?: return@LaunchedEffect
         if (key != stateKey) return@LaunchedEffect
         ExplorerNav.consume()
+        // "Show in Files" points at the bridge's machine: a tab on it (with tabs), or the bridge side
+        if (side != ExplorerSide.BRIDGE) {
+            val t = tabs.indexOfFirst { it.side == ExplorerSide.BRIDGE }
+            if (multiTab && t >= 0) { activeTab = t; saveTabs() }
+            side = ExplorerSide.BRIDGE; history.clear(); loaded = false
+        }
         if (!loaded) path = target
         val from = if (loaded) path else null
         // consume() just changed navRequest, which cancels this effect: load in the explorer's own scope
@@ -308,7 +426,7 @@ fun FileExplorer(
         scope.launch {
             busy = "Preparing ${e.name}…"
             busyProgress = null
-            val uri = FileOpener.uriFor(context, e.path, e.size) { busyProgress = it }
+            val uri = FileOpener.uriFor(context, e.path, e.size, local = side == ExplorerSide.PHONE) { busyProgress = it }
             busy = null
             uri.onSuccess { FileOpener.view(context, it, e.name, chooser)?.let(::snack) }
                 .onFailure { snack(it.message ?: "Could not open ${e.name}") }
@@ -321,7 +439,7 @@ fun FileExplorer(
         scope.launch {
             busy = "Preparing ${e.name}…"
             busyProgress = null
-            val uri = FileOpener.uriFor(context, e.path, e.size) { busyProgress = it }
+            val uri = FileOpener.uriFor(context, e.path, e.size, local = side == ExplorerSide.PHONE) { busyProgress = it }
             busy = null
             uri.onSuccess { FileOpener.share(context, listOf(it to e.name))?.let(::snack) }
                 .onFailure { snack(it.message ?: "Could not share ${e.name}") }
@@ -349,7 +467,8 @@ fun FileExplorer(
         } else if (e.kind == FileKind.MARKDOWN) {
             scope.launch {
                 busy = "Opening ${e.name}…"
-                val content = IdeApiClient.readFile(e.path)
+                val content = if (side == ExplorerSide.PHONE) runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { java.io.File(e.path).readText() } }.getOrNull()
+                    else IdeApiClient.readFile(e.path)
                 busy = null
                 if (content == null) snack("Cannot read ${e.name}") else markdownDoc = e.path to content
             }
@@ -384,27 +503,39 @@ fun FileExplorer(
 
     // ----- file operations -----
 
-    fun transfer(items: List<ExplorerEntry>, dest: String, move: Boolean, policy: ConflictPolicy?) {
+    /**
+     * Copies / moves [items] (on [from]) into [dest] (on [to]). Between this phone and the bridge's machine the files
+     * stream across; on one side the side does it itself.
+     */
+    fun transfer(
+        items: List<ExplorerEntry>, dest: String, move: Boolean, policy: ConflictPolicy?,
+        from: ExplorerSide = side, to: ExplorerSide = side
+    ) {
         if (items.isEmpty()) return
         scope.launch {
+            val across = from != to
             if (policy == null) {
-                val destNames = if (dest == path) entries.map { it.name }.toSet()
-                else FileExplorerApi.list(dest).getOrNull()?.entries?.map { it.name }?.toSet().orEmpty()
-                val clashes = items.filter { it.name in destNames && parentOf(it.path) != dest.trimEnd('/') }
+                val destNames = if (dest == path && to == side) entries.map { it.name }.toSet()
+                else ExplorerSource.of(to).list(dest).getOrNull()?.entries?.map { it.name }?.toSet().orEmpty()
+                val clashes = items.filter { it.name in destNames && (across || parentOf(it.path) != dest.trimEnd('/')) }
                 if (clashes.isNotEmpty()) {
-                    conflict = PendingConflict(clashes.map { it.name }, move) { p -> conflict = null; transfer(items, dest, move, p) }
+                    conflict = PendingConflict(clashes.map { it.name }, move) { p -> conflict = null; transfer(items, dest, move, p, from, to) }
                     return@launch
                 }
             }
             val n = items.size
             val noun = if (n == 1) "\"${items.first().name}\"" else "$n items"
-            runOp(if (move) "Moving $noun…" else "Copying $noun…", {
-                FileExplorerApi.transfer(items.map { it.path }, dest, move, policy ?: ConflictPolicy.RENAME)
+            val where = if (!across) "" else if (to == ExplorerSide.PHONE) " to this phone" else " to ${bridgeTabName()}"
+            runOp(if (move) "Moving $noun$where…" else "Copying $noun$where…", {
+                if (across) CrossTransfer.run(from, items, dest, move, policy ?: ConflictPolicy.RENAME) { busyProgress = it }
+                else ExplorerSource.of(to).transfer(items.map { it.path }, dest, move, policy ?: ConflictPolicy.RENAME)
             }) { r ->
                 if (r.ok) {
                     if (ExplorerClipboard.entries.map { it.path }.toSet() == items.map { it.path }.toSet()) ExplorerClipboard.clear()
-                    val where = if (dest == path) "here" else "to ${dest.trimEnd('/').substringAfterLast('/')}"
-                    snack("${if (move) "Moved" else "Copied"} $noun $where")
+                    val place = if (dest == path && to == side) "here" else "to ${dest.trimEnd('/').substringAfterLast('/')}"
+                    snack("${if (move) "Moved" else "Copied"} $noun $place" + if (across) (if (to == ExplorerSide.PHONE) " on this phone" else " on ${bridgeTabName()}") else "")
+                } else if (r.count > 0) {
+                    snack("${r.count} done, ${r.failed} failed: ${r.error ?: ""}")
                 }
             }
         }
@@ -415,14 +546,14 @@ fun FileExplorer(
         if (files.isEmpty()) { snack("Folders cannot be shared. Compress them to ZIP first."); return }
         scope.launch {
             busy = "Preparing to share…"
-            val uris = files.mapNotNull { f -> FileOpener.uriFor(context, f.path, f.size).getOrNull()?.let { it to f.name } }
+            val uris = files.mapNotNull { f -> FileOpener.uriFor(context, f.path, f.size, local = side == ExplorerSide.PHONE).getOrNull()?.let { it to f.name } }
             busy = null
             if (uris.isEmpty()) snack("Could not prepare files to share") else FileOpener.share(context, uris)?.let(::snack)
         }
     }
 
     fun extract(e: ExplorerEntry, targetDir: String?) {
-        runOp("Extracting ${e.name}…", { FileExplorerApi.extract(e.path, targetDir) }) { r ->
+        runOp("Extracting ${e.name}…", { src().extract(e.path, targetDir) }) { r ->
             if (r.ok && r.path != null) {
                 val res = snackbar.showSnackbar("Extracted ${r.count} files", actionLabel = "Open", withDismissAction = true, duration = SnackbarDuration.Long)
                 if (res == SnackbarResult.ActionPerformed) go(r.path)
@@ -477,8 +608,8 @@ fun FileExplorer(
                             allSelected = selected.size == visible.size && visible.isNotEmpty(),
                             onClear = { selected.clear() },
                             onSelectAll = { if (selected.size == visible.size) selected.clear() else visible.forEach { selected[it.path] = it } },
-                            onCopy = { ExplorerClipboard.set(selected.values.toList(), move = false); selected.clear(); snack("Copied. Open a folder and tap Paste.") },
-                            onCut = { ExplorerClipboard.set(selected.values.toList(), move = true); selected.clear(); snack("Cut. Open a folder and tap Paste.") },
+                            onCopy = { ExplorerClipboard.set(selected.values.toList(), move = false, side); selected.clear(); snack(if (phoneTab) "Copied. Open a folder (either tab) and tap Paste." else "Copied. Open a folder and tap Paste.") },
+                            onCut = { ExplorerClipboard.set(selected.values.toList(), move = true, side); selected.clear(); snack(if (phoneTab) "Cut. Open a folder (either tab) and tap Paste." else "Cut. Open a folder and tap Paste.") },
                             onDelete = { deleteTargets = selected.values.toList() },
                             menuOpen = selMenuOpen,
                             onMenu = { selMenuOpen = it },
@@ -486,8 +617,8 @@ fun FileExplorer(
                                 val sel = selected.values.toList()
                                 DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { selMenuOpen = false; shareEntries(sel) })
                                 DropdownMenuItem(text = { Text("Compress to ZIP") }, leadingIcon = { Icon(Icons.Outlined.FolderZip, null) }, onClick = { selMenuOpen = false; compressTargets = sel })
-                                DropdownMenuItem(text = { Text("Copy to…") }, leadingIcon = { Icon(Icons.Outlined.FileCopy, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.COPY, sel) })
-                                DropdownMenuItem(text = { Text("Move to…") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.MOVE, sel) })
+                                DropdownMenuItem(text = { Text("Copy to…") }, leadingIcon = { Icon(Icons.Outlined.FileCopy, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.COPY, sel, side) })
+                                DropdownMenuItem(text = { Text("Move to…") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.MOVE, sel, side) })
                                 if (sel.size == 1) {
                                     DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) }, onClick = { selMenuOpen = false; renameTarget = sel.first() })
                                     DropdownMenuItem(text = { Text("Details") }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = { selMenuOpen = false; detailsFor = sel.first() })
@@ -509,7 +640,7 @@ fun FileExplorer(
                                 if (d && query.isNotBlank()) {
                                     scope.launch {
                                         deepLoading = true
-                                        FileExplorerApi.search(path, query.trim(), settings.showHidden)
+                                        src().search(path, query.trim(), settings.showHidden)
                                             .onSuccess { deepResults = it.first; deepTruncated = it.second }
                                             .onFailure { snack(it.message ?: "Search failed") }
                                         deepLoading = false
@@ -522,7 +653,7 @@ fun FileExplorer(
                                     deep = true
                                     scope.launch {
                                         deepLoading = true
-                                        FileExplorerApi.search(path, query.trim(), settings.showHidden)
+                                        src().search(path, query.trim(), settings.showHidden)
                                             .onSuccess { deepResults = it.first; deepTruncated = it.second }
                                             .onFailure { snack(it.message ?: "Search failed") }
                                         deepLoading = false
@@ -539,6 +670,13 @@ fun FileExplorer(
                                 Text(folderName, fontSize = if (title != null) 18.sp else 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
+                            // phone-only mode: tabs on demand (server / PC mode always shows them)
+                            if (multiTab && !phoneTab) {
+                                IconButton(onClick = { setTabsOn(!tabMode) }) {
+                                    Icon(Icons.Outlined.Tab, contentDescription = if (tabMode) "Turn off tabs" else "Open folders in tabs",
+                                        tint = if (tabMode) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                                }
+                            }
                             IconButton(onClick = { ExplorerPrefs.update { it.copy(grid = !it.grid) } }) {
                                 Icon(if (settings.grid) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView, contentDescription = if (settings.grid) "List view" else "Grid view")
                             }
@@ -558,7 +696,7 @@ fun FileExplorer(
                                     DropdownMenuItem(text = { Text("Sort & view…") }, leadingIcon = { Icon(Icons.Outlined.Sort, null) }, onClick = { menuOpen = false; viewOptionsOpen = true })
                                     DropdownMenuItem(text = { Text("Refresh") }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) }, onClick = { menuOpen = false; reload(silent = false) })
                                     HorizontalDivider()
-                                    if (onOpenFolderInIde != null) {
+                                    if (onOpenFolderInIde != null && side == ExplorerSide.BRIDGE) {
                                         DropdownMenuItem(text = { Text("Open this folder in IDE") }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = { menuOpen = false; onOpenFolderInIde(path) })
                                     }
                                     DropdownMenuItem(text = { Text("Copy folder path") }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = { menuOpen = false; copyText(context, path); snack("Path copied") })
@@ -570,12 +708,32 @@ fun FileExplorer(
                             }
                         }
                     }
+                    if (showTabs && !selecting && !searching) {
+                        FolderTabs(
+                            tabs = tabs.map { t ->
+                                val label = when {
+                                    t.path == "~" -> if (t.side == ExplorerSide.PHONE) "Phone" else "Home"
+                                    t.side == ExplorerSide.PHONE && t.path.trimEnd('/') == PhoneSource.home -> "Internal storage"
+                                    else -> t.path.trimEnd('/').substringAfterLast('/').ifBlank { "/" }
+                                }
+                                FolderTab(t.id, label, t.side)
+                            },
+                            active = activeTab,
+                            showSides = phoneTab,
+                            bridgeName = bridgeTabName(),
+                            onOpen = ::openTab,
+                            onClose = ::closeTab,
+                            onAdd = ::addTab
+                        )
+                    } else if (phoneTab && !multiTab && !selecting && !searching) {
+                        SideTabs(side, bridgeTabName(), enabled = busy == null) { switchSide(it) }
+                    }
                     if (!searching) {
                         BreadcrumbBar(
                             crumbs = crumbs,
                             onPlaces = {
                                 placesOpen = true
-                                scope.launch { roots = FileExplorerApi.roots().second }
+                                scope.launch { roots = src().roots().second }
                             },
                             onCrumb = { c -> if (c.path != path) go(c.path) },
                             onCopyPath = { copyText(context, path); snack("Path copied") }
@@ -610,12 +768,16 @@ fun FileExplorer(
                     }
                 }
                 if (showClipboard && ExplorerClipboard.entries.isNotEmpty() && !selecting) {
+                    // files from the other tab can be pasted here only where that tab exists (and not into a picker)
+                    val clipSide = ExplorerClipboard.side
+                    val pasteable = clipSide == side || phoneTab
                     ClipboardBar(
                         count = ExplorerClipboard.entries.size,
                         firstName = ExplorerClipboard.entries.first().name,
                         move = ExplorerClipboard.move,
-                        enabled = busy == null && loaded,
-                        onPaste = { transfer(ExplorerClipboard.entries.toList(), path, ExplorerClipboard.move, null) },
+                        enabled = busy == null && loaded && pasteable,
+                        fromLabel = if (clipSide == side) null else if (clipSide == ExplorerSide.PHONE) "from this phone" else "from ${bridgeTabName()}",
+                        onPaste = { transfer(ExplorerClipboard.entries.toList(), path, ExplorerClipboard.move, null, from = clipSide, to = side) },
                         onCancel = { ExplorerClipboard.clear() }
                     )
                 }
@@ -631,13 +793,15 @@ fun FileExplorer(
                             // checked now, not against the listing from when the folder was opened (a file may have
                             // been created there since: an earlier save, the agent, another app)
                             scope.launch {
-                                val names = FileExplorerApi.list(folder).getOrNull()?.entries?.map { it.name }?.toSet() ?: existingNames
+                                val names = src().list(folder).getOrNull()?.entries?.map { it.name }?.toSet() ?: existingNames
                                 if (n in names) confirmOverwrite = n else onSave(folder, n)
                             }
                         }
                     )
                 } else if (onConfirmFolder != null && !selecting) {
-                    ConfirmFolderBar(folderName = folderName, path = path, label = confirmLabel, enabled = loaded && busy == null) { onConfirmFolder(path) }
+                    ConfirmFolderBar(folderName = folderName, path = path, label = confirmLabel, enabled = loaded && busy == null) {
+                        if (onConfirmFolderAt != null) onConfirmFolderAt(path, side) else onConfirmFolder(path)
+                    }
                 }
             }
         },
@@ -652,8 +816,25 @@ fun FileExplorer(
             }
         }
     ) { padding ->
+        CompositionLocalProvider(LocalExplorerSide provides side) {
         Box(Modifier.fillMaxSize().padding(padding)) {
+            // the phone tab without storage access: what to do, and a reload once it is allowed
+            var storageOk by remember(side) { mutableStateOf(side != ExplorerSide.PHONE || com.example.gemini.data.local.TermuxStorageSetupManager.hasStoragePermission(context)) }
+            if (!storageOk) {
+                LaunchedEffect(Unit) {
+                    while (!storageOk) {
+                        kotlinx.coroutines.delay(1500)
+                        if (com.example.gemini.data.local.TermuxStorageSetupManager.hasStoragePermission(context)) { storageOk = true; reload(silent = false) }
+                    }
+                }
+            }
             when {
+                !storageOk && (!loaded || entries.isEmpty()) -> EmptyState(
+                    Icons.Outlined.PhoneAndroid, "Allow access to this phone's files",
+                    "AntiGem needs \"All files access\" to show and copy this phone's storage."
+                ) {
+                    Button(onClick = { com.example.gemini.data.local.TermuxStorageSetupManager.requestStoragePermission(context) }) { Text("Allow") }
+                }
                 !loaded && loadError == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 !loaded -> EmptyState(Icons.Outlined.CloudOff, "Files are not available", loadError ?: "") {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -786,6 +967,7 @@ fun FileExplorer(
                 }
             }
         }
+        }
     }
 
     // ---------------- sheets & dialogs ----------------
@@ -810,7 +992,7 @@ fun FileExplorer(
 
     if (createOpen) {
         CreateSheet(
-            allowProject = onProjectCreated != null,
+            allowProject = onProjectCreated != null && side == ExplorerSide.BRIDGE,
             onFolder = { createOpen = false; newIsDir = true },
             onFile = { createOpen = false; newIsDir = false },
             onProject = { createOpen = false; newProjectOpen = true },
@@ -828,7 +1010,7 @@ fun FileExplorer(
             existingNames = existingNames,
             helper = if (isDir) "Created in $folderName" else "Include the extension, e.g. main.py",
             onConfirm = { name ->
-                val r = FileExplorerApi.create(path, name, isDir)
+                val r = src().create(path, name, isDir)
                 if (r.ok) {
                     newIsDir = null
                     reload()
@@ -865,17 +1047,17 @@ fun FileExplorer(
         val close = { actionsFor = null }
         EntryActionsSheet(
             entry = e,
-            caps = ActionCaps(ide = ideAvailable, openFolderInIde = onOpenFolderInIde != null, pickFolder = onConfirmFolder != null),
+            caps = ActionCaps(ide = ideAvailable, openFolderInIde = onOpenFolderInIde != null && side == ExplorerSide.BRIDGE, pickFolder = onConfirmFolder != null),
             onDismiss = close,
             onOpen = { close(); openEntry(e) },
             onOpenWith = { close(); openWithFor = e },
             onOpenInIde = { close(); openInIde(e) },
             onOpenFolderInIde = { close(); onOpenFolderInIde?.invoke(e.path) },
             onShare = { close(); shareEntries(listOf(e)) },
-            onCopy = { close(); ExplorerClipboard.set(listOf(e), move = false); snack("Copied. Open a folder and tap Paste.") },
-            onCut = { close(); ExplorerClipboard.set(listOf(e), move = true); snack("Cut. Open a folder and tap Paste.") },
-            onCopyTo = { close(); destRequest = DestRequest(DestOp.COPY, listOf(e)) },
-            onMoveTo = { close(); destRequest = DestRequest(DestOp.MOVE, listOf(e)) },
+            onCopy = { close(); ExplorerClipboard.set(listOf(e), move = false, side); snack(if (phoneTab) "Copied. Open a folder (either tab) and tap Paste." else "Copied. Open a folder and tap Paste.") },
+            onCut = { close(); ExplorerClipboard.set(listOf(e), move = true, side); snack(if (phoneTab) "Cut. Open a folder (either tab) and tap Paste." else "Cut. Open a folder and tap Paste.") },
+            onCopyTo = { close(); destRequest = DestRequest(DestOp.COPY, listOf(e), side) },
+            onMoveTo = { close(); destRequest = DestRequest(DestOp.MOVE, listOf(e), side) },
             onRename = { close(); renameTarget = e },
             onDuplicate = { close(); transfer(listOf(e), parentOf(e.path), move = false, policy = ConflictPolicy.RENAME) },
             onCompress = { close(); compressTargets = listOf(e) },
@@ -915,7 +1097,7 @@ fun FileExplorer(
             onConfirm = {
                 deleteTargets = null
                 val noun = if (targets.size == 1) "\"${targets.first().name}\"" else "${targets.size} items"
-                runOp("Deleting $noun…", { FileExplorerApi.delete(targets.map { it.path }) }) { r ->
+                runOp("Deleting $noun…", { src().delete(targets.map { it.path }) }) { r ->
                     // close editor tabs of deleted files, including files inside deleted folders
                     val gone = TermuxDaemonManager.openTabs.value.map { it.path }
                         .filter { tab -> targets.any { t -> tab == t.path || (t.isDir && tab.startsWith(t.path.trimEnd('/') + "/")) } }
@@ -938,7 +1120,7 @@ fun FileExplorer(
             existingNames = existingNames,
             onConfirm = { name ->
                 if (name == e.name) { renameTarget = null; null } else {
-                    val r = FileExplorerApi.rename(e.path, name)
+                    val r = src().rename(e.path, name)
                     if (r.ok) {
                         renameTarget = null
                         val newPath = r.path ?: "${parentOf(e.path)}/$name"
@@ -965,7 +1147,7 @@ fun FileExplorer(
             helper = "Saved in $folderName (renamed if the name is taken)",
             onConfirm = { name ->
                 compressTargets = null
-                runOp("Compressing…", { FileExplorerApi.compress(targets.map { it.path }, "$path/$name") }) { r ->
+                runOp("Compressing…", { src().compress(targets.map { it.path }, "$path/$name") }) { r ->
                     if (r.ok) snack("Created ${r.path?.substringAfterLast('/') ?: name} (${r.count} files)")
                 }
                 null
@@ -975,7 +1157,7 @@ fun FileExplorer(
     }
 
     detailsFor?.let { e ->
-        DetailsSheet(entry = e, onCopyPath = { copyText(context, it); snack("Path copied") }, onDismiss = { detailsFor = null })
+        DetailsSheet(entry = e, onCopyPath = { copyText(context, it); snack("Path copied") }, onDismiss = { detailsFor = null }, side = side)
     }
 
     archiveFor?.let { e ->
@@ -983,7 +1165,8 @@ fun FileExplorer(
             entry = e,
             onExtractHere = { archiveFor = null; extract(e, null) },
             onExtractTo = { archiveFor = null; destRequest = DestRequest(DestOp.EXTRACT, listOf(e)) },
-            onDismiss = { archiveFor = null }
+            onDismiss = { archiveFor = null },
+            side = side
         )
     }
 
@@ -1031,6 +1214,9 @@ fun FileExplorer(
         FileExplorerDialog(
             stateKey = "destination",
             initialPath = path,
+            // copy / move: the other tab is a destination too
+            allowPhoneTab = phoneTab && req.op != DestOp.EXTRACT,
+            initialSide = req.side,
             title = when (req.op) {
                 DestOp.COPY -> "Copy $noun to"
                 DestOp.MOVE -> "Move $noun to"
@@ -1042,11 +1228,12 @@ fun FileExplorer(
                 DestOp.EXTRACT -> "Extract here"
             },
             showClipboard = false,
-            onConfirmFolder = { dest ->
+            onConfirmFolder = {},
+            onConfirmFolderAt = { dest, destSide ->
                 destRequest = null
                 when (req.op) {
-                    DestOp.COPY -> transfer(req.entries, dest, move = false, policy = null)
-                    DestOp.MOVE -> transfer(req.entries, dest, move = true, policy = null)
+                    DestOp.COPY -> transfer(req.entries, dest, move = false, policy = null, from = req.side, to = destSide)
+                    DestOp.MOVE -> transfer(req.entries, dest, move = true, policy = null, from = req.side, to = destSide)
                     DestOp.EXTRACT -> extract(req.entries.first(), dest)
                 }
             },
@@ -1072,7 +1259,10 @@ fun FileExplorerDialog(
     onOpenedInIde: (() -> Unit)? = null,
     onOpenFolderInIde: ((String) -> Unit)? = null,
     onProjectCreated: ((ProjectItem) -> Unit)? = null,
-    showClipboard: Boolean = true
+    showClipboard: Boolean = true,
+    allowPhoneTab: Boolean = false,
+    initialSide: ExplorerSide = ExplorerSide.BRIDGE,
+    onConfirmFolderAt: ((String, ExplorerSide) -> Unit)? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -1095,7 +1285,10 @@ fun FileExplorerDialog(
                 onOpenedInIde = onOpenedInIde,
                 onOpenFolderInIde = onOpenFolderInIde,
                 onProjectCreated = onProjectCreated,
-                showClipboard = showClipboard
+                showClipboard = showClipboard,
+                allowPhoneTab = allowPhoneTab,
+                initialSide = initialSide,
+                onConfirmFolderAt = onConfirmFolderAt
             )
         }
     }
@@ -1187,7 +1380,7 @@ private fun SearchBar(
 }
 
 @Composable
-private fun ClipboardBar(count: Int, firstName: String, move: Boolean, enabled: Boolean, onPaste: () -> Unit, onCancel: () -> Unit) {
+private fun ClipboardBar(count: Int, firstName: String, move: Boolean, enabled: Boolean, fromLabel: String? = null, onPaste: () -> Unit, onCancel: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -1203,7 +1396,10 @@ private fun ClipboardBar(count: Int, firstName: String, move: Boolean, enabled: 
                     "${if (move) "Move" else "Copy"} ${if (count == 1) "\"$firstName\"" else "$count items"}",
                     fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 1, overflow = TextOverflow.MiddleEllipsis
                 )
-                Text("Open the destination, then paste", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f))
+                Text(
+                    if (fromLabel != null) "${fromLabel.replaceFirstChar { it.uppercase() }} · open the destination, then paste" else "Open the destination, then paste",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
             }
             TextButton(onClick = onCancel) { Text("Cancel") }
             Button(onClick = onPaste, enabled = enabled, shape = RoundedCornerShape(12.dp)) {
@@ -1267,4 +1463,109 @@ private fun SummaryFooter(text: String) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
         textAlign = androidx.compose.ui.text.style.TextAlign.Center
     )
+}
+
+/** The two tabs while the bridge is on another machine: its files, and this phone's. */
+@Composable
+private fun SideTabs(side: ExplorerSide, bridgeName: String, enabled: Boolean, onSide: (ExplorerSide) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        @Composable
+        fun Tab(s: ExplorerSide, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier) {
+            val on = s == side
+            Surface(
+                onClick = { onSide(s) },
+                enabled = enabled || on,
+                shape = RoundedCornerShape(12.dp),
+                color = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = modifier.height(38.dp)
+            ) {
+                Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(icon, null, tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text(label, fontSize = 13.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+        Tab(ExplorerSide.BRIDGE, bridgeName, Icons.Outlined.Computer, Modifier.weight(1f))
+        Tab(ExplorerSide.PHONE, "This phone", Icons.Outlined.PhoneAndroid, Modifier.weight(1f))
+    }
+}
+
+private data class FolderTab(val id: Long, val label: String, val side: ExplorerSide)
+
+/**
+ * The Files screen's tabs: one folder each (tap to show it, × to close, + for a new one; with this phone and the bridge's
+ * machine both there, + asks which).
+ */
+@Composable
+private fun FolderTabs(
+    tabs: List<FolderTab>,
+    active: Int,
+    showSides: Boolean,
+    bridgeName: String,
+    onOpen: (Int) -> Unit,
+    onClose: (Int) -> Unit,
+    onAdd: (ExplorerSide) -> Unit
+) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(active, tabs.size) { if (active in tabs.indices) listState.animateScrollToItem(active) }
+    var addMenu by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp, top = 2.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.lazy.LazyRow(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            items(tabs.size, key = { tabs[it].id }) { i ->
+                val t = tabs[i]
+                val on = i == active
+                Surface(
+                    onClick = { onOpen(i) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Row(Modifier.padding(start = 10.dp, end = if (tabs.size > 1) 2.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            when {
+                                showSides && t.side == ExplorerSide.PHONE -> Icons.Outlined.PhoneAndroid
+                                showSides -> Icons.Outlined.Computer
+                                else -> Icons.Outlined.Folder
+                            },
+                            null,
+                            tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            t.label, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp)
+                        )
+                        if (tabs.size > 1) {
+                            IconButton(onClick = { onClose(i) }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Close tab", modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Box {
+            IconButton(onClick = { if (showSides) addMenu = true else onAdd(ExplorerSide.BRIDGE) }) {
+                Icon(Icons.Outlined.Add, contentDescription = "New tab")
+            }
+            DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, shape = RoundedCornerShape(14.dp)) {
+                DropdownMenuItem(text = { Text("New tab on $bridgeName") }, leadingIcon = { Icon(Icons.Outlined.Computer, null) },
+                    onClick = { addMenu = false; onAdd(ExplorerSide.BRIDGE) })
+                DropdownMenuItem(text = { Text("New tab on this phone") }, leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, null) },
+                    onClick = { addMenu = false; onAdd(ExplorerSide.PHONE) })
+            }
+        }
+    }
 }

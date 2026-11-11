@@ -23,9 +23,11 @@ object FileOpener {
     fun trimCache(context: Context) = CacheJanitor.trim(cacheDir(context))
 
     /** A content:// URI for [path], downloading it first if needed. */
-    suspend fun uriFor(context: Context, path: String, size: Long = -1, onProgress: (Float) -> Unit = {}): Result<Uri> {
+    /** [onPhone]: a file of this phone's own storage (the Files screen's phone tab), never fetched from the bridge. */
+    suspend fun uriFor(context: Context, path: String, size: Long = -1, local: Boolean = false, onProgress: (Float) -> Unit = {}): Result<Uri> {
+        val onPhone = local
         val local = File(path)
-        val file = if (FileExplorerApi.isLocallyReadable(path)) {
+        val file = if (onPhone || FileExplorerApi.isLocallyReadable(path)) {
             local
         } else {
             trimCache(context)

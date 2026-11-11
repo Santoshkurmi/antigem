@@ -427,6 +427,8 @@ class MainActivity : ComponentActivity() {
                                     if (hasEverOpenedFiles) {
                                         com.example.gemini.ui.files.FileExplorer(
                                             stateKey = "screen",
+                                            // server / PC: a "This phone" tab too, to copy and move files between them
+                                            allowPhoneTab = true,
                                             isVisible = currentViewMode == AppViewMode.FILES,
                                             onClose = {
                                                 currentViewMode =

@@ -100,8 +100,10 @@ internal fun EntryIcon(entry: ExplorerEntry, size: Dp, thumbnails: Boolean, corn
         }
         if (showThumb) {
             val context = LocalContext.current
+            // the phone tab's files are read here, not through the bridge
+            val onPhone = LocalExplorerSide.current == com.example.gemini.data.files.ExplorerSide.PHONE
             val model = remember(entry.path, entry.modTime) {
-                val src: Any = if (FileExplorerApi.isLocallyReadable(entry.path)) File(entry.path) else FileExplorerApi.rawUrl(entry.path)
+                val src: Any = if (onPhone || FileExplorerApi.isLocallyReadable(entry.path)) File(entry.path) else FileExplorerApi.rawUrl(entry.path)
                 ImageRequest.Builder(context).data(src).size(256).crossfade(true).build()
             }
             SubcomposeAsyncImage(
