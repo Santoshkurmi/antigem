@@ -142,6 +142,9 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
     var expandedMarket by remember { mutableStateOf<String?>(null) }
     var marketQuery by remember { mutableStateOf("") }
     var scrollToMarket by remember { mutableStateOf<String?>(null) }
+    // a repository Codex couldn't add as a marketplace: (source, why) for the "Set up with AI" dialog
+    var aiSetup by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    var lastFailed by remember { mutableStateOf<Pair<String, String?>?>(null) }
 
     suspend fun reload() {
         loading = true
@@ -248,6 +251,9 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                         ClaudeCard {
                             Text("Add a marketplace", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             Hint("GitHub owner/repo, owner/repo@branch, or a git URL")
+                            lastFailed?.let { failed ->
+                                com.example.gemini.ui.settings.SetupWithAiLink(CodexAccent) { aiSetup = failed }
+                            }
                             Spacer(Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedTextField(marketSource, { marketSource = it.trim() }, singleLine = true, placeholder = { Text("owner/repo") }, modifier = Modifier.weight(1f), enabled = !addingMarket)
@@ -266,8 +272,13 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                                                 expandedMarket = name
                                                 marketQuery = ""
                                                 scrollToMarket = name
+                                                lastFailed = null
                                             }
-                                            .onFailure { toast(friendly(it), ok = false) }
+                                            .onFailure {
+                                                toast(friendly(it), ok = false)
+                                                aiSetup = marketSource to friendly(it)
+                                                lastFailed = aiSetup
+                                            }
                                         addingMarket = false
                                     }
                                 }, enabled = marketSource.isNotBlank() && !addingMarket, colors = ButtonDefaults.buttonColors(containerColor = CodexAccent)) {
@@ -337,6 +348,9 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
             }
             item(key = "foot") { Hint("Plugins are loaded when a chat starts: start a new chat after installing or removing one.") }
         }
+    }
+    aiSetup?.let { (src, why) ->
+        com.example.gemini.ui.settings.SetupWithAiDialog(src, com.example.gemini.domain.model.AgentKind.CODEX, why) { aiSetup = null }
     }
 }
 

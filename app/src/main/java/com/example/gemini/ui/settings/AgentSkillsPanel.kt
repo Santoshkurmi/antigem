@@ -107,6 +107,8 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
     var inspecting by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf<RepoSkillsInspectResponse?>(null) }
     var findError by remember { mutableStateOf<String?>(null) }
+    // a repository AntiGem can't add by itself: (source, why) for the "Set up with AI" dialog
+    var aiSetup by remember { mutableStateOf<Pair<String, String?>?>(null) }
     val picked = remember { mutableStateMapOf<String, Boolean>() } // repository path → add it
     var installing by remember { mutableStateOf(false) }
 
@@ -131,8 +133,15 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                     found = res
                     picked.clear()
                     res.skills.forEach { picked[it.path] = true }
+                    // no skills, and no plugin this agent's Plugins page can take: an AI agent can set it up
+                    if (res.skills.isEmpty() && pluginHint(agent, res.pluginKinds) == null) aiSetup = text to "it has no skills (no folder with a SKILL.md)"
                 }
-                .onFailure { findError = it.message ?: "Could not read the repository" }
+                .onFailure {
+                    val why = it.message ?: "Could not read the repository"
+                    findError = why
+                    // a typo in the link is fixed by hand; anything else (private repository, GitHub limits…) an agent may manage
+                    if (!why.startsWith("Use owner/repo") && !why.startsWith("Invalid")) aiSetup = text to why
+                }
             inspecting = false
         }
     }
@@ -159,7 +168,10 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
             }
         }
         if (inspecting) PanelHint("Looking for skills in the repository…", Modifier.padding(top = 6.dp))
-        findError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp)) }
+        findError?.let {
+            Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+            SetupWithAiLink(accent) { aiSetup = source.trim() to it }
+        }
 
         found?.let { res ->
             Spacer(Modifier.height(10.dp))
@@ -167,6 +179,7 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                 Text("No skills found in ${res.repo}" + (if (res.subpath.isNotBlank()) "/${res.subpath}" else "") + " (no folder with a SKILL.md).",
                     fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                 pluginHint(agent, res.pluginKinds)?.let { PanelHint(it, Modifier.padding(top = 4.dp)) }
+                SetupWithAiLink(accent) { aiSetup = source.trim() to "it has no skills (no folder with a SKILL.md)" }
             } else {
                 val count = picked.values.count { it }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -216,7 +229,10 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                                         reload()
                                         onChanged()
                                     }
-                                    .onFailure { toast(it.message ?: "Could not add the skills", ok = false) }
+                                    .onFailure { e ->
+                                    toast(e.message ?: "Could not add the skills", ok = false)
+                                    aiSetup = source.trim() to (e.message ?: "adding the skills failed")
+                                }
                                 installing = false
                             }
                         },
@@ -298,6 +314,8 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
         PanelHint("The agent reads its skills when a chat starts: start a new chat after adding, updating or removing one.")
     }
 
+    aiSetup?.let { (src, why) -> SetupWithAiDialog(src, agent, why) { aiSetup = null } }
+
     confirmRemove?.let { s ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
@@ -356,6 +374,7 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
     var installing by remember { mutableStateOf(false) }
     var output by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
+    var aiSetup by remember { mutableStateOf<Pair<String, String?>?>(null) }
     fun install() {
         if (source.isBlank() || installing) return
         installing = true
@@ -368,7 +387,12 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
                     toast("Plugin installed. Start a new chat to use it.")
                     onInstalled()
                 }
-                .onFailure { failed = true; output = it.message ?: "agy could not install it" }
+                .onFailure {
+                    failed = true
+                    output = it.message ?: "agy could not install it"
+                    val why = if (output!!.contains("could not detect plugin structure")) "agy found no plugin in it" else output!!.lines().first()
+                    if (!why.startsWith("Use owner/repo") && !why.startsWith("Invalid")) aiSetup = source.trim() to why
+                }
             installing = false
         }
     }
@@ -391,6 +415,7 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
                     Spacer(Modifier.width(8.dp))
                     PanelHint("Downloading and installing…")
                 }
+                if (failed) SetupWithAiLink(accent) { aiSetup = source.trim() to output?.lines()?.firstOrNull() }
                 output?.let {
                     Spacer(Modifier.height(10.dp))
                     Surface(shape = RoundedCornerShape(8.dp), color = (if (failed) MaterialTheme.colorScheme.error else accent).copy(alpha = 0.08f)) {
@@ -407,6 +432,7 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
         },
         dismissButton = { if (output == null || failed) TextButton(onClick = onDismiss, enabled = !installing) { Text("Cancel") } }
     )
+    aiSetup?.let { (src, why) -> SetupWithAiDialog(src, AgentKind.AGY, why) { aiSetup = null } }
 }
 
 /** A slim row at the top of a list: what it adds, and a button that opens the GitHub dialog. */

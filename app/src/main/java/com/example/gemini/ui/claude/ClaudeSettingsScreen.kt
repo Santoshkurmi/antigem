@@ -905,6 +905,9 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
     var marketQuery by remember { mutableStateOf("") }
     var namesBeforeAdd by remember { mutableStateOf<Set<String>>(emptySet()) }
     var scrollToMarket by remember { mutableStateOf<String?>(null) }
+    // a repository Claude couldn't add as a marketplace: offer the "Set up with AI" request (the CLI's error is a toast)
+    var aiSetup by remember { mutableStateOf<String?>(null) }
+    var lastFailed by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { deps.config.loadPlugins() }
     // the field empties once the marketplace add has finished, and the marketplace just added opens with its
     // plugins (the list is reloaded before the action ends), so they can be installed right there
@@ -914,6 +917,7 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
                 val markets = data?.marketplaces.orEmpty()
                 val added = markets.firstOrNull { it.name !in namesBeforeAdd } ?: markets.firstOrNull { sameMarketSource(it, src) }
                 added?.let { expandedMarket = it.name; marketQuery = ""; scrollToMarket = it.name }
+                if (added == null) { aiSetup = src; lastFailed = src } else lastFailed = null
                 addingMarket = null
                 marketSource = ""
             }
@@ -1044,6 +1048,9 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
                         ClaudeCard {
                             SectionTitle("Add a marketplace")
                             Hint("GitHub owner/repo, a git URL, or a URL to marketplace.json")
+                            lastFailed?.let { failed ->
+                                com.example.gemini.ui.settings.SetupWithAiLink(ClaudeAccent) { aiSetup = failed }
+                            }
                             Spacer(Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedTextField(marketSource, { marketSource = it.trim() }, singleLine = true, placeholder = { Text("owner/repo") }, modifier = Modifier.weight(1f))
@@ -1124,6 +1131,9 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
                 }
             }
         }
+    }
+    aiSetup?.let { src ->
+        com.example.gemini.ui.settings.SetupWithAiDialog(src, com.example.gemini.domain.model.AgentKind.CLAUDE, "Claude Code found no plugin marketplace in it") { aiSetup = null }
     }
 }
 
