@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +26,7 @@ import com.example.gemini.theme.GeminiBlue
 @Composable
 fun AttachmentSelectorBottomSheet(
     onPickImage: () -> Unit,
+    onTakePhoto: () -> Unit,
     onPickFile: () -> Unit,
     onPickFromFiles: () -> Unit,
     onDismiss: () -> Unit
@@ -50,6 +52,19 @@ fun AttachmentSelectorBottomSheet(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(14.dp))
+
+            AttachmentOptionRow(
+                icon = Icons.Outlined.PhotoCamera,
+                iconColor = ClaudeTerracotta,
+                title = "Camera Photo",
+                subtitle = "Take a photo with your camera to attach directly to the chat.",
+                onClick = {
+                    onDismiss()
+                    onTakePhoto()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             AttachmentOptionRow(
                 icon = Icons.Outlined.Image,

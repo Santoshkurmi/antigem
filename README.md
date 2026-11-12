@@ -432,14 +432,15 @@ antigem/
 
 ## Related projects
 
-AntiGem comes in three parts that link to each other:
+AntiGem comes in parts that link to each other:
 
 | Project | What it is | Repository |
 |---|---|---|
 | **AntiGem** (Android app) | The coding agents, a Linux terminal, an editor and a browser on your phone. With **Connect to PC** it also uses the agents of a PC that runs AntiGem for VS Code. | [Santoshkurmi/antigem](https://github.com/Santoshkurmi/antigem) |
 | **AntiGem for VS Code** | The same agents and chat in a VS Code sidebar. Its **Connect phone** lets the app on your phone use them. | [Santoshkurmi/antigem_vscode_extension](https://github.com/Santoshkurmi/antigem_vscode_extension) · install: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santoshkurmi.antigem-vscode-extension), [Open VSX](https://open-vsx.org/extension/santoshkurmi/antigem-vscode-extension) |
 | **AntiGem Browser Bridge** (Chrome extension) | Lets agents in AntiGem for VS Code use your real Chrome. Not needed by the Android app, which has its own browser. | [Santoshkurmi/antigem-browser-extension](https://github.com/Santoshkurmi/antigem-browser-extension) · not in the Chrome Web Store yet: installed with *Load unpacked* from AntiGem for VS Code |
-
+| **AntiGem mini apps** | The official mini apps (Habits, Pocket Notes, Sky, Gallery, Focus, Dev Toolbox, Explorer, Showcase), installed from **Mini Apps → Get apps**. Also the guide to building and publishing your own: real app sources using every SDK feature, signed `.agapp` packages, the catalog format and the `agapp.mjs publish` tool. | [Santoshkurmi/antigem_mini_apps](https://github.com/Santoshkurmi/antigem_mini_apps) |
+This is not polished app they are only for showcase only not for use and will be removed in future.
 ## Contributing
 
 Issues, ideas and pull requests are welcome. For help, join the [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4).

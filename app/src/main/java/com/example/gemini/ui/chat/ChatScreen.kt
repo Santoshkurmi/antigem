@@ -4,10 +4,13 @@ import com.example.gemini.ui.components.ChatToast
 import com.example.gemini.ui.components.ChatToastType
 import com.example.gemini.ui.components.AppToastHelper
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -664,6 +667,54 @@ fun ChatScreen(
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             viewModel.addAttachmentsFromUris(uris, context)
+        }
+    }
+
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraPhotoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            tempCameraUri?.let { uri ->
+                viewModel.addAttachmentsFromUris(listOf(uri), context)
+            }
+        }
+    }
+
+    val launchCamera: () -> Unit = {
+        try {
+            val photoFile = File.createTempFile("camera_", ".jpg", context.cacheDir)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                photoFile
+            )
+            tempCameraUri = uri
+            cameraPhotoLauncher.launch(uri)
+        } catch (e: Exception) {
+            Log.e("ChatScreen", "Failed to launch camera", e)
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            launchCamera()
+        } else {
+            launchCamera()
+        }
+    }
+
+    val onTakePhotoClick: () -> Unit = {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            launchCamera()
+        } else {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
         }
     }
 
@@ -3474,6 +3525,7 @@ fun ChatScreen(
     if (showAttachmentSelector) {
         AttachmentSelectorBottomSheet(
             onPickImage = { photoPickerLauncher.launch("image/*") },
+            onTakePhoto = onTakePhotoClick,
             onPickFile = { filePickerLauncher.launch("*/*") },
             onPickFromFiles = { showAttachFromFiles = true },
             onDismiss = { showAttachmentSelector = false }
