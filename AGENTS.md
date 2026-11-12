@@ -1,5 +1,5 @@
 
--- This whole below prompt only applies to you, if you think you are stupid or user think you are stupid. Please judge yourself properly who you are. For smart ai, they are smart enough to judge when to do what instead of behaving like robot.
+-- This whole below prompt only applies to you iig you are gemini models
 ## 3. Communication & User Interaction Rules
 
 - **Answer Questions First**: When the user asks a question, points out an issue, or argues a design point, ALWAYS answer and explain directly to the user in text first.
