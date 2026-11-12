@@ -363,7 +363,22 @@ class CodexChatBackend(
     private fun limitsOf(o: JsonObject?): CodexRateLimits? {
         if (o == null) return null
         fun window(w: JsonObject?) = w?.let { CodexLimitWindow(it.dbl("usedPercent") ?: 0.0, it.long("windowDurationMins"), it.long("resetsAt")) }
-        return CodexRateLimits(window(o.o("primary")), window(o.o("secondary")), o.str("planType"))
+        return CodexRateLimits(window(o.o("primary")), window(o.o("secondary")), o.str("planType")).also(::trackLimits)
+    }
+
+    /** Each reading also goes to the usage inspector (5-hour window and weekly window, by their length). */
+    private fun trackLimits(l: CodexRateLimits) {
+        val tracker = com.example.gemini.domain.usage.UsageLimitTracker
+        for ((i, w) in listOf(l.primary, l.secondary).withIndex()) {
+            if (w == null) continue
+            val mins = w.windowMinutes
+            val window = when {
+                mins != null && mins <= 600 -> tracker.FIVE_HOUR
+                mins != null -> tracker.WEEKLY
+                else -> if (i == 0) tracker.FIVE_HOUR else tracker.WEEKLY
+            }
+            tracker.record(AgentKind.CODEX, "All models", window, w.usedPercent / 100.0, w.resetsAt?.times(1000))
+        }
     }
 
     /** Installs ([action] "install") or updates ("update") Codex on the server and follows the job's log. */

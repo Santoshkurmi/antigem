@@ -556,7 +556,11 @@ class OpenCodeTranscript(var sessionId: String = "") {
         // the last assistant block streams while the turn runs
         if (isTurnActive) {
             val i = out.indexOfLast { it.role == MessageRole.ASSISTANT }
-            if (i >= 0 && i == out.lastIndex) out[i] = out[i].copy(isStreaming = true, tokenUsage = null)
+            if (i >= 0 && i == out.lastIndex) out[i] = out[i].copy(
+                isStreaming = true,
+                // only the requests so far, for the live usage graph
+                tokenUsage = out[i].tokenUsage?.takeIf { it.calls.isNotEmpty() }?.let { TokenUsage(calls = it.calls, model = it.model) }
+            )
         }
         return out
     }
@@ -568,11 +572,14 @@ class OpenCodeTranscript(var sessionId: String = "") {
         var usage = TokenUsage()
         var cost = 0.0
         var model: String? = null
+        // each step is one model request: the usage inspector's timeline
+        val calls = mutableListOf<com.example.gemini.domain.model.UsageCall>()
         // only the reply after the newest prompt streams: right after a new prompt (before its reply has a step) the
         // previous reply is finished and keeps its usage card and actions
         val active = isTurnActive && trailing
         for (step in steps) {
             model = step.model ?: model
+            val stepTools = mutableListOf<String>()
             for (p in step.parts) {
                 when (p.kind) {
                     Part.Kind.REASONING -> {
@@ -590,6 +597,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                         val form = if (p.toolStatus != "RUNNING") null
                             else pendingForms.values.firstOrNull { it.toolCallId != null && "tool:${it.toolCallId}" == p.key }
                         val call = form?.let { formCall(it) } ?: toolCall(p)
+                        stepTools.add(call.id)
                         if (tools.none { it.id == call.id }) {
                             tools.add(call)
                             content.add("<!-- tool_call:${call.id} -->")
@@ -614,6 +622,20 @@ class OpenCodeTranscript(var sessionId: String = "") {
                 cacheCreationTokens = usage.cacheCreationTokens + step.cacheWrite.toInt()
             )
             cost += step.cost
+            if (step.inputTokens + step.outputTokens + step.reasoningTokens + step.cacheRead + step.cacheWrite > 0) {
+                calls.add(com.example.gemini.domain.model.UsageCall(
+                    id = "oc_${step.id}",
+                    atMs = step.completed ?: step.created,
+                    model = step.model ?: model,
+                    input = step.inputTokens.toInt(),
+                    cacheRead = step.cacheRead.toInt(),
+                    cacheWrite = step.cacheWrite.toInt(),
+                    // OpenCode counts reasoning apart from the output
+                    output = (step.outputTokens + step.reasoningTokens).toInt(),
+                    reasoning = step.reasoningTokens.toInt(),
+                    toolIds = stepTools.distinct()
+                ))
+            }
         }
         // any other question (form) is shown as a choice card at the end of the newest reply only
         if (trailing) {
@@ -639,7 +661,10 @@ class OpenCodeTranscript(var sessionId: String = "") {
             thoughtText = thoughts.joinToString("\n\n").trim().takeIf { it.isNotBlank() },
             toolCalls = tools,
             isStreaming = active,
-            tokenUsage = if (active || total == 0) null else usage.copy(
+            // while it streams only the finished requests (the live usage graph); the token pill waits for the end
+            tokenUsage = if (active) (if (calls.isEmpty()) null else TokenUsage(calls = calls, model = model))
+            else if (total == 0) null else usage.copy(
+                calls = calls,
                 totalTokens = total,
                 costUsd = cost.takeIf { it > 0 },
                 durationMs = if (ended != null && ended > started) ended - started else 0L,

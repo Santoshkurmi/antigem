@@ -151,6 +151,14 @@ class ClaudeAccountManager(
                             _usage.value = resp.usage
                             _usageError.value = null
                             _usageUpdatedAt.value = System.currentTimeMillis()
+                            // a fresh reading (not the bridge's cached one) also goes to the usage inspector
+                            if (force) resp.usage?.rate_limits?.let { rl ->
+                                val tracker = com.example.gemini.domain.usage.UsageLimitTracker
+                                val claude = com.example.gemini.domain.model.AgentKind.CLAUDE
+                                fun resetMs(iso: String?) = iso?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+                                rl.five_hour?.utilization?.let { tracker.record(claude, "All models", tracker.FIVE_HOUR, it / 100.0, resetMs(rl.five_hour.resets_at)) }
+                                rl.seven_day?.utilization?.let { tracker.record(claude, "All models", tracker.WEEKLY, it / 100.0, resetMs(rl.seven_day.resets_at)) }
+                            }
                             if (force) onFreshUsage?.invoke()
                         } else _usageError.value = resp.error ?: "Claude Code did not return usage"
                     }

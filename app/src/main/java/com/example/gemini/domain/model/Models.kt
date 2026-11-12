@@ -55,8 +55,37 @@ data class TokenUsage(
     val isEstimated: Boolean = false,
     val costUsd: Double? = null,
     /** The model that produced the reply, when the agent reports it (Claude). */
-    val model: String? = null
+    val model: String? = null,
+    /** Every model request of this reply, in order (the usage inspector's timeline). Empty when the agent has none. */
+    val calls: List<UsageCall> = emptyList()
 )
+
+/**
+ * One model request (API call) as the agent reported it. Every agent reports the cache separately from the fresh
+ * input, so [input] + [cacheRead] + [cacheWrite] is the whole context the request sent.
+ */
+@Serializable
+data class UsageCall(
+    /** The agent's id of the request (message / step / response id); unique within the chat. */
+    val id: String,
+    /** When the request finished (or started, when that is all the agent tells). */
+    val atMs: Long = 0L,
+    val model: String? = null,
+    /** Fresh (uncached) input tokens. */
+    val input: Int = 0,
+    val cacheRead: Int = 0,
+    val cacheWrite: Int = 0,
+    /** The part of [cacheWrite] kept for an hour (Claude; costs more than a 5-minute write). */
+    val cacheWrite1h: Int = 0,
+    /** Every token the model generated, reasoning included. */
+    val output: Int = 0,
+    /** The reasoning part of [output] (null: the agent does not report it apart). */
+    val reasoning: Int? = null,
+    /** Tool calls this request asked for (ids as in [ToolCall.id]): their results enter the next request's context. */
+    val toolIds: List<String> = emptyList()
+) {
+    val context: Int get() = input + cacheRead + cacheWrite
+}
 
 @Serializable
 data class ArtifactSnapshot(

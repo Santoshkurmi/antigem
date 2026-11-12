@@ -2389,6 +2389,17 @@ fun ChatScreen(
                         }
                     }
 
+                    // Live usage meter (every agent): context, the last requests, the 5-hour limit; tap for the inspector
+                    currentConv?.let { conv ->
+                        com.example.gemini.ui.usage.UsageLiveOverlay(
+                            agent = conv.agent,
+                            messages = messages,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 8.dp, end = 10.dp)
+                        )
+                    }
+
                     // Floating Slash Commands & Skills Autocomplete Suggestions
                     val slash = slashTrigger
                     val slashIndex = slash?.index ?: -1

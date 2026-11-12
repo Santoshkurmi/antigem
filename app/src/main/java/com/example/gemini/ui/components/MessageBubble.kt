@@ -617,8 +617,9 @@ fun AssistantMessageFooter(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp)
     ) {
-        // Token & Cache Telemetry Badge (Displayed just above action icons)
-        if (message.tokenUsage != null) {
+        // Token & Cache Telemetry Badge (Displayed just above action icons); usage with no totals is only the requests
+        // so far of a streaming reply (for the live usage graph), so its pill waits for the end
+        if (message.tokenUsage != null && !(message.isStreaming && message.tokenUsage.totalTokens == 0)) {
             val payloadToShow = message.rawContent ?: message.rawPayload
             TokenUsageTelemetryPill(
                 usage = message.tokenUsage,

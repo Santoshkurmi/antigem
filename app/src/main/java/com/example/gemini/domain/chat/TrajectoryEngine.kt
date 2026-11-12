@@ -389,6 +389,7 @@ class TrajectoryEngine {
 
         var currentTurnBlocks = mutableListOf<TurnBlock>()
         var currentTurnSteps = mutableListOf<Step>()
+        var currentTurnIndices = mutableListOf<Int>()
         var lastUserStepArrayIndex = -1
         var hasUserInputStep = false
 
@@ -401,10 +402,11 @@ class TrajectoryEngine {
                 if (currentTurnBlocks.isNotEmpty()) {
                     val prevUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
                     val turnId = "${conversationId}_${prevUserStepIdx + 1}"
-                    val tokenUsage = computeTokenUsage(currentTurnSteps)
+                    val tokenUsage = computeTokenUsage(currentTurnSteps, currentTurnIndices)
                     completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), tokenUsage = tokenUsage, modelId = turnModel(currentTurnSteps)))
                     currentTurnBlocks = mutableListOf()
                     currentTurnSteps = mutableListOf()
+                    currentTurnIndices = mutableListOf()
                 }
 
                 completedTurns.add(userTurnOf(step, stepIndex))
@@ -412,6 +414,7 @@ class TrajectoryEngine {
                 activeTurnStartStep = stepIndex + 1
             } else {
                 currentTurnSteps.add(step)
+                currentTurnIndices.add(stepIndex)
                 extractStepBlocks(step, stepIndex, isStreaming = false, blocks = currentTurnBlocks)
             }
         }
@@ -432,7 +435,7 @@ class TrajectoryEngine {
         } else if (currentTurnBlocks.isNotEmpty()) {
             val lastUserStepIdx = if (lastUserStepArrayIndex >= 0) (indices.getOrNull(lastUserStepArrayIndex) ?: lastUserStepArrayIndex) else -1
             val turnId = "${conversationId}_${lastUserStepIdx + 1}"
-            val tokenUsage = computeTokenUsage(currentTurnSteps)
+            val tokenUsage = computeTokenUsage(currentTurnSteps, currentTurnIndices)
             completedTurns.add(ChatTurn.Assistant(turnId = turnId, blocks = currentTurnBlocks.toList(), isStreaming = false, tokenUsage = tokenUsage, modelId = turnModel(currentTurnSteps)))
         }
     }
@@ -511,7 +514,7 @@ class TrajectoryEngine {
      * Calculates the aggregated TokenUsage for a set of steps in a turn.
      * Only considers completed PLANNER_RESPONSE steps with valid modelUsage.
      */
-    private fun computeTokenUsage(steps: Iterable<Step>): TokenUsage? {
+    private fun computeTokenUsage(steps: Iterable<Step>, indices: List<Int>? = null): TokenUsage? {
         val allStepsList = steps.toList()
         val plannerSteps = allStepsList.filter {
             it.type == CortexStepType.CORTEX_STEP_TYPE_PLANNER_RESPONSE &&
@@ -544,8 +547,45 @@ class TrajectoryEngine {
             outputTokens = outputTokens,
             cachedTokens = cachedTokens,
             totalTokens = promptTokens + outputTokens,
-            durationMs = durationMs
+            durationMs = durationMs,
+            calls = usageCalls(allStepsList, indices)
         )
+    }
+
+    /**
+     * Each planner response is one model request (the usage inspector's timeline). The steps after it, up to the next
+     * planner response, are the tools it asked for (tool ids are step indices, as in [ToolCall.id]).
+     */
+    private fun usageCalls(steps: List<Step>, indices: List<Int>?): List<com.example.gemini.domain.model.UsageCall> {
+        val out = mutableListOf<com.example.gemini.domain.model.UsageCall>()
+        for ((pos, step) in steps.withIndex()) {
+            if (step.type != CortexStepType.CORTEX_STEP_TYPE_PLANNER_RESPONSE || step.status != CortexStepStatus.CORTEX_STEP_STATUS_DONE) continue
+            val u = step.metadata?.model_usage ?: continue
+            val idx = indices?.getOrNull(pos)
+            val toolIds = if (idx == null) emptyList() else buildList {
+                for (j in pos + 1 until steps.size) {
+                    if (steps[j].type == CortexStepType.CORTEX_STEP_TYPE_PLANNER_RESPONSE) break
+                    if (steps[j].type == CortexStepType.CORTEX_STEP_TYPE_USER_INPUT) break
+                    indices.getOrNull(j)?.let { add(it.toString()) }
+                }
+            }
+            val thinking = u.thinking_output_tokens.toInt()
+            val split = thinking + u.response_output_tokens.toInt()
+            val meta = step.metadata
+            out.add(com.example.gemini.domain.model.UsageCall(
+                id = "agy_${conversationId}_${idx ?: pos}",
+                atMs = parseTimestampToMillis(meta?.finished_generating_at) ?: parseTimestampToMillis(meta?.completed_at)
+                    ?: parseTimestampToMillis(meta?.created_at) ?: 0L,
+                model = stepModel(step)?.let { modelDisplayName(it) },
+                input = u.input_tokens.toInt(),
+                cacheRead = u.cache_read_tokens.toInt(),
+                cacheWrite = u.cache_write_tokens.toInt(),
+                output = maxOf(u.output_tokens.toInt(), split),
+                reasoning = thinking.takeIf { split > 0 },
+                toolIds = toolIds
+            ))
+        }
+        return out
     }
 
     /**
@@ -561,7 +601,7 @@ class TrajectoryEngine {
 
         if (blocks.isNotEmpty()) {
             val turnId = "${conversationId}_$activeTurnStartStep"
-            val tokenUsage = computeTokenUsage(activeStepsMap.values)
+            val tokenUsage = computeTokenUsage(activeStepsMap.values, activeStepsMap.keys.toList())
             val existingIndex = completedTurns.indexOfLast { it is ChatTurn.Assistant && it.turnId == turnId }
             if (existingIndex >= 0) {
                 val existingTurn = completedTurns[existingIndex] as ChatTurn.Assistant
@@ -641,7 +681,7 @@ class TrajectoryEngine {
             activeBlocks.toList()
         }
 
-        val activeTokenUsage = computeTokenUsage(activeStepsMap.values)
+        val activeTokenUsage = computeTokenUsage(activeStepsMap.values, activeStepsMap.keys.toList())
         return if (finalBlocks.isNotEmpty() || (isRunning && !isWaitingInteraction)) {
             val activeTurn = ChatTurn.Assistant(
                 turnId = turnId,

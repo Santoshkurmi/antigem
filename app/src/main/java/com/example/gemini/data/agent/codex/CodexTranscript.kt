@@ -332,13 +332,37 @@ class CodexTranscript(var threadId: String = "") {
                 fun d(k: String) = ((total.long(k) ?: 0) - (base.long(k) ?: 0)).coerceAtLeast(0)
                 val input = d("inputTokens")
                 val cached = d("cachedInputTokens")
+                // this request on its own (`last`), for the usage inspector's timeline; the thread total tells
+                // repeats of the same request apart
+                val calls = t.usage?.calls.orEmpty().let { prev ->
+                    val last = usage.o("last")
+                    val callId = "codex_${t.id}_${total.long("totalTokens") ?: 0}"
+                    if (last == null || prev.any { it.id == callId }) prev else {
+                        val lastIn = last.long("inputTokens") ?: 0
+                        val lastCached = last.long("cachedInputTokens") ?: 0
+                        val asked = prev.flatMap { it.toolIds }.toSet()
+                        val toolIds = t.items.values.filter { it.type !in NON_TOOL_ITEMS }.map { safeId(it.id) }.filter { it !in asked }
+                        prev + com.example.gemini.domain.model.UsageCall(
+                            id = callId,
+                            atMs = System.currentTimeMillis(),
+                            model = t.model ?: model,
+                            input = (lastIn - lastCached).coerceAtLeast(0).toInt(),
+                            cacheRead = lastCached.toInt(),
+                            cacheWrite = (last.long("cacheWriteInputTokens") ?: 0).toInt(),
+                            output = (last.long("outputTokens") ?: 0).toInt(),
+                            reasoning = last.long("reasoningOutputTokens")?.toInt(),
+                            toolIds = toolIds
+                        )
+                    }
+                }
                 t.usage = TokenUsage(
                     promptTokens = (input - cached).coerceAtLeast(0).toInt(),
                     outputTokens = d("outputTokens").toInt(),
                     cachedTokens = cached.toInt(),
                     cacheCreationTokens = d("cacheWriteInputTokens").toInt(),
                     totalTokens = d("totalTokens").toInt(),
-                    model = t.model ?: model
+                    model = t.model ?: model,
+                    calls = calls
                 )
                 return false
             }
@@ -535,7 +559,9 @@ class CodexTranscript(var threadId: String = "") {
             thoughtText = thoughts.joinToString("\n\n").trim().takeIf { it.isNotBlank() },
             toolCalls = tools,
             isStreaming = streaming,
-            tokenUsage = if (!turnEnd || running || usage == null || usage.totalTokens == 0) null
+            // while it runs only the requests so far (the live usage graph; no totals, so no token pill yet)
+            tokenUsage = if (turnEnd && running && usage != null && usage.calls.isNotEmpty()) TokenUsage(calls = usage.calls, model = turnModel)
+            else if (!turnEnd || running || usage == null || usage.totalTokens == 0) null
             else usage.copy(durationMs = t.durationMs ?: usage.durationMs, model = turnModel),
             createdAt = started,
             modelId = turnModel
@@ -633,6 +659,8 @@ class CodexTranscript(var threadId: String = "") {
     companion object {
         private const val MAX_OUTPUT = 200_000
         private const val PLAN_TYPE = "__plan"
+        /** Items that are not tool calls (the rest are: their results go back to the model). */
+        private val NON_TOOL_ITEMS = setOf("userMessage", "agentMessage", "reasoning", "plan", "contextCompaction")
         private val USAGE_KEYS = listOf("totalTokens", "inputTokens", "cachedInputTokens", "cacheWriteInputTokens", "outputTokens", "reasoningOutputTokens")
         private val UNSAFE_ID = Regex("[^A-Za-z0-9_-]")
 

@@ -214,7 +214,9 @@ data class ClaudeStreamPayload(
     val index: Int? = null,
     val message: ClaudeApiMessage? = null,
     val content_block: ClaudeContentBlock? = null,
-    val delta: ClaudeStreamDelta? = null
+    val delta: ClaudeStreamDelta? = null,
+    /** `message_delta`: the request's final token counts (output_tokens is the full count here). */
+    val usage: ClaudeUsage? = null
 )
 
 @Serializable

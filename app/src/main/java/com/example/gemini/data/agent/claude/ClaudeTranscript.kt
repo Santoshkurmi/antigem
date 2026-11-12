@@ -83,6 +83,8 @@ class ClaudeTranscript {
         /** The model that wrote this reply, as the API reported it (`assistant.message.model`). */
         var model: String? = null
         var resultUsage: TokenUsage? = null
+        /** Each API request of this reply by message id, in order (the usage inspector's timeline). */
+        val calls = LinkedHashMap<String, com.example.gemini.domain.model.UsageCall>()
     }
 
     private sealed class Part {
@@ -285,7 +287,21 @@ class ClaudeTranscript {
                 ev.message?.usage?.let { recordCache(it, System.currentTimeMillis()) }
                 val turn = activeTurn ?: beginAssistantTurn()
                 turn.isStreaming = true
+                // the request shows on the timeline as soon as it starts (its context is known now, output later)
+                val id = ev.message?.id
+                val u = ev.message?.usage
+                if (id != null && u != null) recordCall(turn, id, u, System.currentTimeMillis(), ev.message.model, emptyList())
                 touch(turn)
+            }
+            "message_delta" -> {
+                val turn = activeTurn ?: return
+                val id = currentStreamMessageId ?: return
+                val u = ev.usage ?: return
+                val call = turn.calls[id] ?: return
+                if (u.output_tokens > call.output) {
+                    turn.calls[id] = call.copy(output = u.output_tokens, atMs = System.currentTimeMillis())
+                    touch(turn)
+                }
             }
             "content_block_start" -> {
                 val turn = activeTurn ?: beginAssistantTurn()
@@ -353,6 +369,9 @@ class ClaudeTranscript {
                 turn.lastMessageUsage = u
                 // history: no message_start events, so the cache timer comes from the stored timestamps
                 parseTime(e.timestamp)?.let { recordCache(u, it) }
+                // one request comes as one event per content block, all with the same id and usage
+                val toolIds = e.message.content.filter { it.type == "tool_use" }.mapNotNull { it.id }
+                recordCall(turn, msgId, u, parseTime(e.timestamp) ?: System.currentTimeMillis(), e.message.model, toolIds)
             }
         }
         for (block in e.message.content) {
@@ -523,6 +542,11 @@ class ClaudeTranscript {
                 resetsAt = o["resetsAt"]?.jsonPrimitive?.longOrNull
             )
         }.toMap()
+        // the usage inspector lines these readings up with the requests
+        val tracker = com.example.gemini.domain.usage.UsageLimitTracker
+        val claude = com.example.gemini.domain.model.AgentKind.CLAUDE
+        rateLimits["five_hour"]?.let { tracker.record(claude, "All models", tracker.FIVE_HOUR, it.utilization, it.resetsAt?.times(1000)) }
+        rateLimits["seven_day"]?.let { tracker.record(claude, "All models", tracker.WEEKLY, it.utilization, it.resetsAt?.times(1000)) }
     }
 
     private fun onControlRequest(c: ClaudeControlRequestEvent) {
@@ -551,6 +575,22 @@ class ClaudeTranscript {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** Adds or updates request [id] of [turn]: the largest output seen wins (later events carry the final count). */
+    private fun recordCall(turn: AssistantTurn, id: String, u: ClaudeUsage, atMs: Long, model: String?, toolIds: List<String>) {
+        val prev = turn.calls[id]
+        turn.calls[id] = com.example.gemini.domain.model.UsageCall(
+            id = id,
+            atMs = maxOf(prev?.atMs ?: 0L, atMs),
+            model = model ?: prev?.model,
+            input = u.input_tokens,
+            cacheRead = u.cache_read_input_tokens,
+            cacheWrite = u.cache_creation_input_tokens,
+            cacheWrite1h = u.cache_creation?.ephemeral_1h_input_tokens ?: 0,
+            output = maxOf(prev?.output ?: 0, u.output_tokens),
+            toolIds = ((prev?.toolIds ?: emptyList()) + toolIds).distinct()
+        )
+    }
 
     private fun recordCache(u: ClaudeUsage, atMs: Long) {
         val cached = u.cache_read_input_tokens + u.cache_creation_input_tokens
@@ -704,7 +744,8 @@ class ClaudeTranscript {
                 }
             }
         }
-        val usage = (turn.resultUsage ?: turn.lastMessageUsage?.toTokenUsage())?.copy(model = turn.model)
+        val calls = turn.calls.values.toList()
+        val usage = (turn.resultUsage ?: turn.lastMessageUsage?.toTokenUsage())?.copy(model = turn.model, calls = calls)
         return ChatMessage(
             id = turn.id,
             conversationId = conversationId,
@@ -713,7 +754,8 @@ class ClaudeTranscript {
             thoughtText = thoughts.joinToString("\n\n").trim().takeIf { it.isNotBlank() },
             toolCalls = toolCalls,
             isStreaming = turn.isStreaming,
-            tokenUsage = if (turn.isStreaming) null else usage,
+            // while it streams only the requests so far (the live usage graph); the token pill waits for the end
+            tokenUsage = if (turn.isStreaming) TokenUsage(calls = calls, model = turn.model).takeIf { calls.isNotEmpty() } else usage,
             modelId = turn.model
         )
     }

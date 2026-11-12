@@ -2296,6 +2296,13 @@ class AgyChatBackend(
     fun applyQuotaSummary(summary: com.example.gemini.domain.model.QuotaSummaryResponse) {
         _quotaSummary.value = summary
         recomputeQuotas()
+        // each group's reading also goes to the usage inspector
+        val tracker = com.example.gemini.domain.usage.UsageLimitTracker
+        fun resetMs(iso: String?) = iso?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+        for (g in com.example.gemini.domain.model.AgyQuotaGroups.groups(summary)) {
+            g.fiveHour?.let { tracker.record(AgentKind.AGY, g.title, tracker.FIVE_HOUR, 1.0 - it.remaining, resetMs(it.resetIso)) }
+            g.weekly.firstOrNull()?.let { tracker.record(AgentKind.AGY, g.title, tracker.WEEKLY, 1.0 - it.remaining, resetMs(it.resetIso)) }
+        }
     }
 
     /**
