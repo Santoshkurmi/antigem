@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -194,16 +195,20 @@ func (m *Manager) Usage(refresh bool) (json.RawMessage, error) {
 	return resps[0], nil
 }
 
-// Info returns the `initialize` response of a throwaway process (models, commands, account), cached 10 minutes.
-func (m *Manager) Info(refresh bool) (json.RawMessage, error) {
+// Info returns the `initialize` response of a throwaway process run in cwd (models, commands and skills, account),
+// cached 10 minutes per folder.
+func (m *Manager) Info(refresh bool, cwd string) (json.RawMessage, error) {
+	// the commands and skills differ per project (its .claude/skills and .claude/commands): run it in that folder
+	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
+		cwd = m.HomeDir
+	}
 	m.infoMu.Lock()
-	if !refresh && m.infoCache != nil && time.Since(m.infoAt) < 10*time.Minute {
-		v := m.infoCache
+	if c, ok := m.infoCache[cwd]; ok && !refresh && time.Since(c.at) < 10*time.Minute {
 		m.infoMu.Unlock()
-		return v, nil
+		return c.value, nil
 	}
 	m.infoMu.Unlock()
-	p, err := m.startControlProc(m.HomeDir)
+	p, err := m.startControlProc(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -216,8 +221,11 @@ func (m *Manager) Info(refresh bool) (json.RawMessage, error) {
 		return nil, errors.New("empty initialize response")
 	}
 	m.infoMu.Lock()
-	m.infoCache = resp
-	m.infoAt = time.Now()
+	if refresh || m.infoCache == nil {
+		// a refresh means skills or plugins changed: every folder's copy is out of date
+		m.infoCache = map[string]cachedValue{}
+	}
+	m.infoCache[cwd] = cachedValue{resp, time.Now()}
 	m.infoMu.Unlock()
 	return resp, nil
 }

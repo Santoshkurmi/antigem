@@ -285,6 +285,9 @@ class ClaudeConfigManager(
     // the CLI changes one shared plugin config: actions run one after another
     private val pluginMutex = kotlinx.coroutines.sync.Mutex()
 
+    /** A plugin or marketplace changed: Claude's commands and skills (the "/" menu) are read again. */
+    var onPluginsChanged: () -> Unit = {}
+
     fun loadPlugins() {
         scope.launch {
             client.plugins()
@@ -303,6 +306,7 @@ class ClaudeConfigManager(
             pluginMutex.withLock {
                 client.pluginAction(action, body)
                     .onSuccess {
+                        if (it.success) onPluginsChanged()
                         if (it.success) _messages.tryEmit("${pluginActionDone(action)} $label")
                         else _messages.tryEmit("$label: " + (it.error?.lines()?.lastOrNull { l -> l.isNotBlank() } ?: "$action failed"))
                     }

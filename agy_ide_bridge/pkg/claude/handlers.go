@@ -416,7 +416,7 @@ func (m *Manager) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) handleInfo(w http.ResponseWriter, r *http.Request) {
-	info, err := m.Info(r.URL.Query().Get("refresh") == "1")
+	info, err := m.Info(r.URL.Query().Get("refresh") == "1", r.URL.Query().Get("cwd"))
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
 		return

@@ -817,16 +817,24 @@ fun ChatScreen(
     val pluginActionStatusMessage by viewModel.pluginActionStatusMessage.collectAsState()
     val pluginActionErrorMessage by viewModel.pluginActionErrorMessage.collectAsState()
 
-    var allSlashCommands by remember { mutableStateOf(com.example.gemini.data.remote.SlashCommandsCache.getCachedSync()) }
+    val allSlashCommands by com.example.gemini.data.remote.SlashCommandsCache.commands.collectAsState()
     val codexSlashCommands by codexBackend.slashCommands.collectAsState()
-    val effectiveSlashCommands = if (isClaudeChat) claudeSlashCommands else if (isCodexChat) codexSlashCommands else if (isOpenCodeChat) emptyList() else allSlashCommands
+    val openCodeSlashCommands by openCodeBackend.slashCommands.collectAsState()
+    // each agent's own list (what it really loads: the user's, the plugins' and the project's skills, its commands)
+    val effectiveSlashCommands = if (isClaudeChat) claudeSlashCommands else if (isCodexChat) codexSlashCommands else if (isOpenCodeChat) openCodeSlashCommands else allSlashCommands
+
+    // the "/" menu follows the open chat's project
+    LaunchedEffect(currentConv?.id, currentConv?.workspaceUri, currentConv?.agent) {
+        when {
+            isClaudeChat -> claudeBackend.refreshInfoForChat()
+            isCodexChat -> codexBackend.refreshSkills(force = false)
+            isOpenCodeChat -> openCodeBackend.refreshSlashCommands()
+        }
+    }
 
     LaunchedEffect(agyHubUrl, systemConnectionState) {
         if (systemConnectionState.isHubOnline) {
-            val fetched = com.example.gemini.data.remote.SlashCommandsCache.getCommands(agyHubUrl)
-            if (fetched.isNotEmpty()) {
-                allSlashCommands = fetched
-            }
+            com.example.gemini.data.remote.SlashCommandsCache.getCommands(agyHubUrl)
             val curId = currentConv?.id
             val isExisting = currentConv != null && currentConv?.title != "New Chat" && conversations.any { it.id == currentConv?.id }
             if (!curId.isNullOrBlank() && curId != "new" && isExisting && messages.isEmpty()) {
@@ -2419,6 +2427,21 @@ fun ChatScreen(
                     val slashIndex = slash?.index ?: -1
                     val isSlashActive = slash != null
                     val slashQuery = slash?.query ?: ""
+
+                    // opening the "/" menu reads the agent's skills again (at most every 10 s), so ones added meanwhile show
+                    var lastSlashRefresh by remember { mutableStateOf(0L) }
+                    LaunchedEffect(isSlashActive) {
+                        if (!isSlashActive) return@LaunchedEffect
+                        val now = System.currentTimeMillis()
+                        if (now - lastSlashRefresh < 10_000) return@LaunchedEffect
+                        lastSlashRefresh = now
+                        when {
+                            isClaudeChat -> claudeBackend.refreshInfoForChat()
+                            isCodexChat -> codexBackend.refreshSkills()
+                            isOpenCodeChat -> openCodeBackend.refreshSlashCommands()
+                            systemConnectionState.isHubOnline -> com.example.gemini.data.remote.SlashCommandsCache.refresh(agyHubUrl)
+                        }
+                    }
 
                     // `/plu:` browses custom AntiGem plugins and their skills; custom commands join the normal list
                     val customCommands = com.example.gemini.data.remote.CustomSlashCommands.commands.toList()

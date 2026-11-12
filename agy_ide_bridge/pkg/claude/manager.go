@@ -63,8 +63,7 @@ type Manager struct {
 	sessions map[string]*Session
 
 	infoMu     sync.Mutex
-	infoCache  json.RawMessage
-	infoAt     time.Time
+	infoCache  map[string]cachedValue // `initialize` by the folder it ran in (its project's skills and commands)
 	usageCache cachedValue
 
 	logins loginRegistry

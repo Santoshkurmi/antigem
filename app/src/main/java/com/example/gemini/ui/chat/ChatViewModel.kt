@@ -1442,6 +1442,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             claudeBackend.refreshInfo(force = true)
             claudeBackend.loadChatDefaults()
         }
+        // the "/" menus follow skill and plugin changes (Settings → each agent's Skills and Plugins pages)
+        claudeConfig.onPluginsChanged = { claudeBackend.refreshInfo(force = true) }
+        viewModelScope.launch {
+            com.example.gemini.data.skills.AgentSkillsClient.changes.collect { agent ->
+                when (agent) {
+                    AgentKind.CLAUDE -> claudeBackend.refreshInfo(force = true)
+                    AgentKind.CODEX -> codexBackend.refreshSkills()
+                    AgentKind.AGY -> com.example.gemini.data.remote.SlashCommandsCache.refresh()
+                    AgentKind.OPENCODE -> openCodeBackend.refreshSlashCommands()
+                }
+            }
+        }
         claudeConfig.onCliChanged = {
             claudeAccount.refreshStatus()
             claudeBackend.refreshInfo(force = true)

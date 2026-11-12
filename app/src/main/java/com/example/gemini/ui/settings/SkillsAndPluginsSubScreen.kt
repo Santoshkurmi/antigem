@@ -34,6 +34,8 @@ import com.example.gemini.data.remote.dto.InstalledPluginDto
 import com.example.gemini.data.remote.dto.SkillDefinitionDto
 import com.example.gemini.theme.*
 import com.example.gemini.ui.components.MarkdownContent
+import com.example.gemini.domain.model.AgentKind
+import com.example.gemini.ui.components.AgyAccent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +63,8 @@ fun SkillsAndPluginsSubScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Skills, 1: Installed Plugins, 2: Google Marketplace
     var selectedSkillForDetail by remember { mutableStateOf<SkillDefinitionDto?>(null) }
+    var showSkillsFromGitHub by remember { mutableStateOf(false) }
+    var showPluginFromGitHub by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         onRefreshSkills()
@@ -163,27 +167,39 @@ fun SkillsAndPluginsSubScreen(
 
             // Tab Content
             when (selectedTab) {
-                0 -> SkillsTabView(
-                    skills = skills,
-                    isLoading = isSkillsLoading,
-                    filterScope = skillsFilterScope,
-                    onSetScope = onSetSkillsFilterScope,
-                    onRefresh = onRefreshSkills,
-                    onSkillClick = { selectedSkillForDetail = it }
-                )
-                1 -> InstalledPluginsTabView(
-                    plugins = installedPlugins,
-                    isLoading = isInstalledPluginsLoading,
-                    deletingPluginId = deletingPluginId,
-                    onRefresh = onRefreshInstalledPlugins,
-                    onDeletePlugin = onDeletePlugin,
-                    onSkillClick = { skillName ->
-                        val matching = skills.find { it.name.equals(skillName, ignoreCase = true) }
-                        if (matching != null) {
-                            selectedSkillForDetail = matching
+                0 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GitHubActionRow(
+                        "Add skills from GitHub", "Pick skills from any repository; update or remove the ones you added",
+                        "From GitHub", AgyAccent
+                    ) { showSkillsFromGitHub = true }
+                    SkillsTabView(
+                        skills = skills,
+                        isLoading = isSkillsLoading,
+                        filterScope = skillsFilterScope,
+                        onSetScope = onSetSkillsFilterScope,
+                        onRefresh = onRefreshSkills,
+                        onSkillClick = { selectedSkillForDetail = it }
+                    )
+                }
+                1 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GitHubActionRow(
+                        "Install a plugin from GitHub", "Antigravity or Claude Code plugins, with agy's own installer",
+                        "From GitHub", AgyAccent
+                    ) { showPluginFromGitHub = true }
+                    InstalledPluginsTabView(
+                        plugins = installedPlugins,
+                        isLoading = isInstalledPluginsLoading,
+                        deletingPluginId = deletingPluginId,
+                        onRefresh = onRefreshInstalledPlugins,
+                        onDeletePlugin = onDeletePlugin,
+                        onSkillClick = { skillName ->
+                            val matching = skills.find { it.name.equals(skillName, ignoreCase = true) }
+                            if (matching != null) {
+                                selectedSkillForDetail = matching
+                            }
                         }
-                    }
-                )
+                    )
+                }
                 2 -> GooglePluginsStoreTabView(
                     catalog = googlePlugins,
                     isLoading = isGooglePluginsLoading,
@@ -194,6 +210,20 @@ fun SkillsAndPluginsSubScreen(
                 )
             }
         }
+    }
+
+    if (showSkillsFromGitHub) {
+        AgentSkillsDialog(AgentKind.AGY, AgyAccent, "Antigravity skills") {
+            showSkillsFromGitHub = false
+            onRefreshSkills()
+        }
+    }
+    if (showPluginFromGitHub) {
+        AgyGitHubPluginDialog(
+            accent = AgyAccent,
+            onInstalled = { onRefreshInstalledPlugins(); onRefreshSkills() },
+            onDismiss = { showPluginFromGitHub = false }
+        )
     }
 
     // Detail Dialog for Skill Markdown

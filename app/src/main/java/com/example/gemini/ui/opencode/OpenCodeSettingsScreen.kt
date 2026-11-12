@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -94,7 +95,8 @@ enum class OpenCodeSettingsPage(val title: String, val subtitle: String) {
     SERVER("Server & install", "Install, update and restart OpenCode"),
     DEFAULTS("Permissions", "What OpenCode asks before acting, and the agent of new chats"),
     PROVIDERS("Custom providers", "Sign in or add an API key, or add any OpenAI- or Anthropic-compatible API manually"),
-    MCP("MCP servers", "Tools OpenCode can call: presets and your own servers")
+    MCP("MCP servers", "Tools OpenCode can call: presets and your own servers"),
+    SKILLS("Skills", "Add skills from GitHub, update or remove them")
 }
 
 /** Settings → OpenCode: one row per page, each with its current state. */
@@ -125,7 +127,8 @@ fun OpenCodeSettingsGroup(backend: OpenCodeChatBackend, cardBg: Color, onOpen: (
                 row(OpenCodeSettingsPage.DEFAULTS, Icons.Outlined.Tune, openCodeModeLabel(mode)),
                 row(OpenCodeSettingsPage.PROVIDERS, Icons.Outlined.Cloud,
                     (connected.size + (endpoints ?: 0)).takeIf { it > 0 }?.let { "$it connected" } ?: if (models.isNotEmpty()) "Free models" else null),
-                row(OpenCodeSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" })
+                row(OpenCodeSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" }),
+                row(OpenCodeSettingsPage.SKILLS, Icons.Outlined.Psychology)
             )
         )
     )
@@ -139,6 +142,15 @@ fun OpenCodeSettingsScreen(
     onOpenRea: () -> Unit = {},
     onOpenReaGroups: () -> Unit = {}
 ) {
+    if (page == OpenCodeSettingsPage.SKILLS) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            com.example.gemini.ui.settings.AgentSkillsPanel(com.example.gemini.domain.model.AgentKind.OPENCODE, OpenCodeAccent)
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     val state by backend.state.collectAsState()
     val status by backend.status.collectAsState()

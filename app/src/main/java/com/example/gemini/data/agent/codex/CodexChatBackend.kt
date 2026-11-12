@@ -977,12 +977,20 @@ class CodexChatBackend(
         else -> null
     }
 
-    /** Codex's skills (`skills/list`) for the "/" menu. */
-    fun refreshSkills() {
-        backendScope.launch {
-            val cwd = workspacePath(store.currentConversation.value ?: return@launch)
+    private var skillsJob: Job? = null
+
+    /**
+     * Codex's skills (`skills/list`) for the "/" menu: the user's, the plugins' and the open chat's project ones (else the
+     * active project's). [force] makes Codex read the skill folders again (a skill was added, or the menu opened).
+     */
+    fun refreshSkills(force: Boolean = true) {
+        skillsJob?.cancel()
+        skillsJob = backendScope.launch {
+            val cwd = store.currentConversation.value?.takeIf { it.agent == AgentKind.CODEX }?.let { workspacePath(it) }
+                ?: com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path?.removePrefix("file://")?.takeIf { it.startsWith("/") }
             val res = client.rpc("skills/list", buildJsonObject {
                 cwd?.let { put("cwds", JsonArray(listOf(JsonPrimitive(it)))) }
+                if (force) put("forceReload", true)
             }).getOrNull() ?: return@launch
             val skills = res.obj().a("data").orEmpty().mapNotNull { it.obj() }.flatMap { e -> e.a("skills").orEmpty().mapNotNull { it.obj() } }
                 .filter { it.str("enabled") != "false" }
@@ -1399,6 +1407,7 @@ class CodexChatBackend(
                 }
             }
             "thread/started", "thread/archived", "thread/unarchived", "thread/deleted" -> scheduleRefresh()
+            "skills/changed" -> refreshSkills(force = false)
             "thread/name/updated" -> if (tid != null) p.str("threadName")?.let { applyTitle(tid, it) }
             "account/rateLimits/updated" -> limitsOf(p.o("rateLimits"))?.let { _rateLimits.value = it }
             "account/updated" -> backendScope.launch { refreshAccount() }

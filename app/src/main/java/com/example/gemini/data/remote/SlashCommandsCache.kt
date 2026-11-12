@@ -35,18 +35,11 @@ object SlashCommandsCache {
         SlashCommandItem("terminal", "/terminal", "Open terminal session or execute local shell commands", "command"),
         SlashCommandItem("ide", "/ide", "Open the code editor IDE", "command")
     )
+    private val BUILTIN_COMMANDS_SORTED get() = BUILTIN_COMMANDS.sortedBy { it.name.lowercase() }
 
-    // Fallback known skills
-    val DEFAULT_SKILLS = listOf(
-        SlashCommandItem("android-cli", "/android-cli", "Android CLI tools, emulator, SDK management, APK building", "skill", "android-cli-plugin"),
-        SlashCommandItem("chrome-extensions", "/chrome-extensions", "Build and publish Chrome Extensions using Manifest V3 best practices", "skill", "modern-web-guidance-plugin"),
-        SlashCommandItem("modern-web-guidance", "/modern-web-guidance", "Search tool for modern web development best practices (HTML/CSS/JS/React/Vue)", "skill", "modern-web-guidance-plugin"),
-        SlashCommandItem("agy-customizations", "/agy-customizations", "Comprehensive guide for skills, rules, plugins, hooks, MCP servers", "skill"),
-        SlashCommandItem("antigravity-guide", "/antigravity-guide", "Comprehensive guide and quick reference for Google Antigravity (AGY CLI, 2.0, IDE, SDK)", "skill"),
-        SlashCommandItem("generative_ui", "/generative_ui", "Render rich interactive HTML widgets inline in chat or as artifacts", "skill"),
-        SlashCommandItem("migrate-workflows", "/migrate-workflows", "Automatically migrate legacy workflows to modern skills", "skill"),
-        SlashCommandItem("permissioned-github", "/permissioned-github", "GitHub integration, PRs, issues, repository operations", "skill")
-    )
+    private val _commands = kotlinx.coroutines.flow.MutableStateFlow(BUILTIN_COMMANDS_SORTED)
+    /** Antigravity's "/" menu: its skills (from the hub) and built-in commands; updated by every fetch. */
+    val commands: kotlinx.coroutines.flow.StateFlow<List<SlashCommandItem>> = _commands
 
     /**
      * Returns cached slash commands & skills immediately from RAM.
@@ -69,12 +62,14 @@ object SlashCommandsCache {
 
             val items = mutableListOf<SlashCommandItem>()
             val seenNames = mutableSetOf<String>()
+            var fetched = false
 
             // 1. Fetch live skills from AGY Hub gRPC API (GetAllSkills)
             try {
                 val skillResult = AgyProjectService.instance.fetchAllSkills(hubUrl)
                 if (skillResult.isSuccess) {
                     val hubSkills = skillResult.getOrThrow()
+                    fetched = true
                     for (s in hubSkills) {
                         if (seenNames.add(s.name.lowercase())) {
                             val cleanDesc = s.description.trim().lines().firstOrNull { it.isNotBlank() } ?: s.description.trim()
@@ -95,14 +90,7 @@ object SlashCommandsCache {
                 Log.w(TAG, "GetAllSkills RPC failed: ${e.message}")
             }
 
-            // 2. Add default fallback skills if not already found
-            for (s in DEFAULT_SKILLS) {
-                if (seenNames.add(s.name.lowercase())) {
-                    items.add(s)
-                }
-            }
-
-            // 3. Add built-in slash commands
+            // 2. Add built-in slash commands (only skills the hub reports are listed: none are made up)
             for (cmd in BUILTIN_COMMANDS) {
                 if (seenNames.add(cmd.name.lowercase())) {
                     items.add(cmd)
@@ -110,13 +98,18 @@ object SlashCommandsCache {
             }
 
             items.sortBy { it.name.lowercase() }
-            inMemoryCache = items
+            // a failed fetch is not kept, so the next one asks the hub again
+            if (fetched) inMemoryCache = items
+            _commands.value = items
             items
         }
     }
 
+    /** Asks the hub again (skills or plugins were added or removed, or the "/" menu opened). */
+    suspend fun refresh(hubUrl: String = AuthPreferences.currentHubUrl): List<SlashCommandItem> = getCommands(hubUrl, forceRefresh = true)
+
     fun getCachedSync(): List<SlashCommandItem> {
-        return inMemoryCache ?: (DEFAULT_SKILLS + BUILTIN_COMMANDS).sortedBy { it.name.lowercase() }
+        return inMemoryCache ?: BUILTIN_COMMANDS_SORTED
     }
 
     fun clearCache() {

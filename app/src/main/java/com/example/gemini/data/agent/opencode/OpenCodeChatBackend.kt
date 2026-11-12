@@ -164,6 +164,54 @@ class OpenCodeChatBackend(
     // retries counted for chats that are not open (the open one counts in its transcript)
     private val retriesBySession = HashMap<String, Int>()
 
+    // ------------------------------------------------------------------ "/" menu: OpenCode's commands and skills
+
+    private val _slashCommands = MutableStateFlow<List<com.example.gemini.data.remote.SlashCommandItem>>(emptyList())
+    /** OpenCode's commands (/init, /review…) and skills for the "/" menu, of the open chat's folder. */
+    val slashCommands: StateFlow<List<com.example.gemini.data.remote.SlashCommandItem>> = _slashCommands.asStateFlow()
+    @Volatile private var commandNames: Set<String> = emptySet()
+    @Volatile private var skillIds: Set<String> = emptySet()
+    private var slashJob: Job? = null
+
+    /**
+     * Reads OpenCode's commands and skills for the open chat's folder (else the active project). OpenCode builds its skill
+     * list a few seconds after it starts, so an empty answer is asked again.
+     */
+    fun refreshSlashCommands() {
+        slashJob?.cancel()
+        slashJob = backendScope.launch {
+            delay(300) // a burst of skill.updated / command.updated events makes one read
+            val dir = store.currentConversation.value?.takeIf { it.agent == AgentKind.OPENCODE }?.let { workspacePath(it) }
+                ?: defaultWorkspaceUri().removePrefix("file://").takeIf { it.startsWith("/") }
+            val q = dir?.let { "?directory=" + java.net.URLEncoder.encode(it, "UTF-8") }.orEmpty()
+            for (attempt in 0 until 4) {
+                val commands = client.get("/command$q").getOrNull()?.obj()?.a("data").orEmpty().mapNotNull { it.obj() }
+                val skills = client.get("/skill$q").getOrNull()?.obj()?.a("data").orEmpty().mapNotNull { it.obj() }
+                if (skills.isEmpty() && attempt < 3) {
+                    delay(3_000)
+                    continue
+                }
+                val cmdItems = commands.mapNotNull { c ->
+                    val n = c.str("name") ?: return@mapNotNull null
+                    com.example.gemini.data.remote.SlashCommandItem(n, "/$n", c.str("description").orEmpty(), type = "command")
+                }
+                val skillItems = skills.mapNotNull { sk ->
+                    val id = sk.str("id") ?: return@mapNotNull null
+                    if (cmdItems.any { it.name == id }) return@mapNotNull null
+                    com.example.gemini.data.remote.SlashCommandItem(
+                        id, "/$id",
+                        (sk.str("description").orEmpty()).lines().firstOrNull { it.isNotBlank() }.orEmpty(),
+                        type = "skill", argumentHint = "what to do"
+                    )
+                }
+                commandNames = cmdItems.map { it.name }.toSet()
+                skillIds = skillItems.map { it.name }.toSet()
+                _slashCommands.value = cmdItems + skillItems.sortedBy { it.name.lowercase() }
+                break
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ lifecycle
 
     /** OpenCode is enabled: check the server, load models and chats, follow the event stream. */
@@ -173,6 +221,7 @@ class OpenCodeChatBackend(
             refreshStatus()
             refreshModels()
             refreshAgents()
+            refreshSlashCommands()
             while (isActive) {
                 refreshSessions()
                 delay(if (_state.value == OpenCodeState.READY) 60_000 else 15_000)
@@ -651,10 +700,29 @@ class OpenCodeChatBackend(
             val notes = mutableListOf<String>()
             for (a in atts) attachmentPart(a, files, notes)
             val promptText = (listOf(text) + notes).filter { it.isNotBlank() }.joinToString("\n\n")
+            // "/name …" picked from the "/" menu: one of OpenCode's commands runs through its command call (OpenCode
+            // stores the command's own prompt as the message, so the typed one is dropped); a skill is attached
+            val typed = com.example.gemini.data.remote.PromptExpansion.collapse(text).trim()
+            val slashName = Regex("^/([A-Za-z0-9_.:-]+)(\\s|$)").find(typed)?.groupValues?.get(1)
+            if (slashName != null && slashName in commandNames) {
+                val args = typed.removePrefix("/$slashName").trim()
+                val r = client.post("/session/${conv.id}/command", buildJsonObject {
+                    put("name", slashName)
+                    put("text", (listOf(args) + notes).filter { it.isNotBlank() }.joinToString("\n\n"))
+                    if (files.isNotEmpty()) put("files", JsonArray(files))
+                })
+                if (r.isFailure) fail(msgId, "OpenCode did not run /$slashName", r.exceptionOrNull())
+                else {
+                    transcript.dropLocal(msgId)
+                    emitNow()
+                }
+                return@launch
+            }
             val r = client.post("/session/${conv.id}/prompt", buildJsonObject {
                 put("id", msgId)
                 put("text", promptText.ifBlank { "See the attached file." })
                 if (files.isNotEmpty()) put("files", JsonArray(files))
+                if (slashName != null && slashName in skillIds) put("skills", buildJsonArray { add(buildJsonObject { put("id", slashName) }) })
             })
             if (r.isFailure) fail(msgId, "OpenCode did not take the message", r.exceptionOrNull())
         }
@@ -1024,6 +1092,7 @@ class OpenCodeChatBackend(
         val sid = d.str("sessionID") ?: d.o("form").str("sessionID")
         when (type) {
             "server.connected" -> return
+            "skill.updated", "command.updated" -> refreshSlashCommands()
             "session.created", "session.deleted", "session.forked", "session.archived", "session.unarchived", "session.moved" -> scheduleRefresh()
             "session.execution.started" -> sid?.let {
                 retriesBySession.remove(it)

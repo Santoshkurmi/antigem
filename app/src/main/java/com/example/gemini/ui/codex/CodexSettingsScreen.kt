@@ -21,7 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
@@ -67,6 +69,8 @@ enum class CodexSettingsPage(val title: String, val subtitle: String) {
     USAGE("Usage limits", "How much of your plan's limits is used, and when they reset"),
     PERMISSIONS("Permissions", "What Codex asks before acting in new chats"),
     MCP("MCP servers", "Tools Codex can call: presets and your own servers"),
+    PLUGINS("Plugins", "Install plugins from Codex' catalog or any GitHub marketplace"),
+    SKILLS("Skills", "Add skills from GitHub, update or remove them"),
     SERVER("Server & install", "Install, update and restart Codex")
 }
 
@@ -97,7 +101,9 @@ fun CodexSettingsGroup(backend: CodexChatBackend, cardBg: Color, onOpen: (CodexS
             ),
             listOf(
                 row(CodexSettingsPage.PERMISSIONS, Icons.Outlined.Tune, codexModeLabel(mode)),
-                row(CodexSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" })
+                row(CodexSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" }),
+                row(CodexSettingsPage.PLUGINS, Icons.Outlined.Extension),
+                row(CodexSettingsPage.SKILLS, Icons.Outlined.Psychology)
             ),
             listOf(
                 row(CodexSettingsPage.SERVER, Icons.Outlined.Dns,
@@ -118,6 +124,19 @@ fun CodexSettingsScreen(
 ) {
     if (page == CodexSettingsPage.MCP) {
         CodexMcpPage(backend, onOpenRea, onOpenReaGroups)
+        return
+    }
+    if (page == CodexSettingsPage.PLUGINS) {
+        CodexPluginsPage(backend)
+        return
+    }
+    if (page == CodexSettingsPage.SKILLS) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            com.example.gemini.ui.settings.AgentSkillsPanel(com.example.gemini.domain.model.AgentKind.CODEX, CodexAccent)
+        }
         return
     }
     val scope = rememberCoroutineScope()

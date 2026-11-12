@@ -173,6 +173,8 @@ class AgyPluginsManager(
                     loadAllInstalledPlugins()
                     loadAllSkills()
                     loadMcpServers()
+                    // the plugin's skills join (or leave) the "/" menu
+                    com.example.gemini.data.remote.SlashCommandsCache.refresh()
                 } else {
                     _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: "Failed to install $pluginName"
                 }
@@ -197,6 +199,8 @@ class AgyPluginsManager(
                     loadAllInstalledPlugins()
                     loadAllSkills()
                     loadMcpServers()
+                    // the plugin's skills join (or leave) the "/" menu
+                    com.example.gemini.data.remote.SlashCommandsCache.refresh()
                 } else {
                     _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: "Failed to delete $pluginName"
                 }

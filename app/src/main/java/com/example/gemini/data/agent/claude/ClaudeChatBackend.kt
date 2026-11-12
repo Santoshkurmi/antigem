@@ -919,13 +919,31 @@ class ClaudeChatBackend(
 
     // ------------------------------------------------------------------ models / sessions / info
 
+    /** The folder whose skills and commands the "/" menu shows: the open Claude chat's project, else the active project. */
+    private fun slashCwd(): String? =
+        store.currentConversation.value?.takeIf { it.agent == AgentKind.CLAUDE }?.workspaceUri?.removePrefix("file://")?.takeIf { it.startsWith("/") }
+            ?: defaultWorkspaceUri().removePrefix("file://").takeIf { it.startsWith("/") }
+
+    /** The folder the commands on show were read in; the latest request (an older answer arriving late is dropped). */
+    @Volatile private var infoCwd: String? = null
+    private val infoRequests = java.util.concurrent.atomic.AtomicInteger()
+
+    /** The "/" menu follows the open chat's project: reads its commands and skills when the project is another one. */
+    fun refreshInfoForChat() {
+        if (slashCwd() != infoCwd) refreshInfo(force = false)
+    }
+
     fun refreshInfo(force: Boolean = true) {
+        val cwd = slashCwd()
+        val request = infoRequests.incrementAndGet()
         backendScope.launch {
             _isRefreshingModels.value = true
-            client.info(refresh = force)
+            client.info(refresh = force, cwd = cwd)
                 .onSuccess { resp ->
                     val info = resp.info
+                    if (request != infoRequests.get()) return@onSuccess
                     if (resp.success && info != null) {
+                        infoCwd = cwd
                         applyInfo(info)
                         prefs.saveInfo(info)
                         _modelsError.value = null

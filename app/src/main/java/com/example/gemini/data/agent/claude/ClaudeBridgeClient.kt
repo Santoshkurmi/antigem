@@ -61,7 +61,14 @@ class ClaudeBridgeClient(
 
     suspend fun status(): Result<ClaudeCliStatus> = call(Request.Builder().url(url("/status")).get().build(), slowClient)
 
-    suspend fun info(refresh: Boolean = false): Result<ClaudeInfoResponse> = get(if (refresh) "/info?refresh=1" else "/info")
+    /** Models, commands and skills; [cwd]: the project whose own skills and commands to include (default: the home folder). */
+    suspend fun info(refresh: Boolean = false, cwd: String? = null): Result<ClaudeInfoResponse> {
+        val q = listOfNotNull(
+            if (refresh) "refresh=1" else null,
+            cwd?.takeIf { it.isNotBlank() }?.let { "cwd=" + java.net.URLEncoder.encode(it, "UTF-8") }
+        ).joinToString("&")
+        return get(if (q.isEmpty()) "/info" else "/info?$q")
+    }
 
     suspend fun logout(): Result<BridgeSimpleResponse> = post("/auth/logout")
 

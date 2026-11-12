@@ -373,7 +373,18 @@ func main() {
 	}
 
 	// Custom AntiGem plugins on disk: list, install (ZIP or GitHub repository), update, remove, export
-	mux.Handle("/api/custom-plugins/", plugins.NewManager(cfg.HomeDir))
+	pluginMgr := plugins.NewManager(cfg.HomeDir)
+	mux.Handle("/api/custom-plugins/", pluginMgr)
+
+	// Each agent's own skills folder (add from GitHub, update, remove) and Antigravity plugins from GitHub
+	mux.Handle("/api/agent-skills/", plugins.NewAgentSkills(pluginMgr, cfg.HomeDir, func() string {
+		if hubMgr != nil {
+			if p := hubMgr.GetAgyBin(); p != "" {
+				return p
+			}
+		}
+		return hub.InstallerAgyPath()
+	}))
 
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)

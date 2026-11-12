@@ -257,6 +257,11 @@ class OpenCodeTranscript(var sessionId: String = "") {
         retries = 0
     }
 
+    /** Removes a prompt shown before OpenCode had it (a command: OpenCode adds its own message for it). */
+    fun dropLocal(id: String) {
+        if (messages[id]?.local == true) messages.remove(id)
+    }
+
     /** Retries OpenCode scheduled in the current turn (provider busy / rate limited). */
     var retries = 0
         private set
