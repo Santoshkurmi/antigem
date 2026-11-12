@@ -755,6 +755,16 @@ fun ChatScreen(
                 if (value.text.isNotEmpty()) viewModel.onUserStartedTyping()
             }
     }
+    // Run panel → "Send to chat": a run's command and output land in the message box (added after any draft), not sent
+    if (!isInFloatingWindow) {
+        val runHandoff by com.example.gemini.data.run.RunPanel.chatHandoff.collectAsState()
+        LaunchedEffect(runHandoff) {
+            val text = runHandoff ?: return@LaunchedEffect
+            val current = inputState.text.toString()
+            inputState.setTextAndPlaceCursorAtEnd(if (current.isBlank()) text else current.trimEnd() + "\n\n" + text)
+            com.example.gemini.data.run.RunPanel.chatHandoff.value = null
+        }
+    }
     // The `/` and `@` popups depend only on the command / mention being typed, so ordinary typing doesn't redraw this screen
     val slashTrigger by remember {
         derivedStateOf {
@@ -1784,9 +1794,13 @@ fun ChatScreen(
                                     "newchat", "ide", "terminal", "browser" -> true
                                     "notes" -> onNavigateToNotes != null
                                     "files" -> onNavigateToFiles != null
+                                    // the Run panel lives in the main window, not in the floating chat
+                                    "run" -> !isInFloatingWindow
                                     else -> false
                                 }
                             }
+                            val runsGoing by com.example.gemini.data.run.RunManager.runs.collectAsState()
+                            val anyRunGoing = runsGoing.any { it.status == com.example.gemini.data.run.RunStatus.RUNNING }
                             if (headerShortcuts.isNotEmpty()) Spacer(modifier = Modifier.width(4.dp))
                             headerShortcuts.forEach { id ->
                                 Box(
@@ -1808,6 +1822,7 @@ fun ChatScreen(
                                                 "browser" -> onNavigateToBrowser()
                                                 "notes" -> onNavigateToNotes?.invoke()
                                                 "files" -> onNavigateToFiles?.invoke()
+                                                "run" -> com.example.gemini.data.run.RunPanel.show()
                                                 "terminal" -> {
                                                     // like the floating switcher: needs SSH, server mode or the local Linux tools
                                                     val ready = useSshTerminal || AuthPreferences.currentRemoteMode ||
@@ -1825,8 +1840,17 @@ fun ChatScreen(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
+                                    // a command running: a ring around the Run icon
+                                    if (id == "run" && anyRunGoing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(30.dp),
+                                            strokeWidth = 2.dp,
+                                            color = ClaudeTerracotta
+                                        )
+                                    }
                                     Icon(
                                         imageVector = when (id) {
+                                            "run" -> Icons.Outlined.PlayCircle
                                             "ide" -> Icons.Outlined.Code
                                             "terminal" -> Icons.Outlined.Terminal
                                             "browser" -> Icons.Outlined.Language
@@ -1840,9 +1864,10 @@ fun ChatScreen(
                                             "browser" -> "Open Browser"
                                             "notes" -> "Open Notes"
                                             "files" -> "Open Files"
+                                            "run" -> if (anyRunGoing) "Run (a command is running)" else "Open Run panel"
                                             else -> "New chat"
                                         },
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        tint = if (id == "run" && anyRunGoing) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }

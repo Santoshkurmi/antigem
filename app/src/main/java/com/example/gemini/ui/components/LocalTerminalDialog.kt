@@ -90,7 +90,13 @@ fun LocalTerminalContent(
     isMaximized: Boolean = true,
     onToggleMaximize: (() -> Unit)? = null,
     onDragDelta: ((Float) -> Unit)? = null,
-    onRetry: (() -> Unit)? = null
+    onRetry: (() -> Unit)? = null,
+    /** The title / retry / close bar above a [customSession]; off where the screen shows its own (the Run screen). */
+    showSessionHeader: Boolean = true,
+    /** The screen whose keyboard focus this terminal takes; null = none (the Run screen's terminal). */
+    focusScreenMode: com.example.gemini.AppViewMode? = com.example.gemini.AppViewMode.TERMINAL,
+    /** Focus the terminal and open the keyboard when it appears; off for the Run screen (a build log, maybe off screen). */
+    showKeyboardOnOpen: Boolean = true
 ) {
     val context = LocalContext.current
 
@@ -188,9 +194,10 @@ fun LocalTerminalContent(
     val focusCoordinator = LocalAppFocusCoordinator.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
-    DisposableEffect(focusCoordinator, currentTerminalView) {
+    DisposableEffect(focusCoordinator, currentTerminalView, focusScreenMode) {
+        if (focusScreenMode == null) return@DisposableEffect onDispose {}
         focusCoordinator.registerScreen(
-            mode = com.example.gemini.AppViewMode.TERMINAL,
+            mode = focusScreenMode,
             onRequestFocus = {
                 val tv = currentTerminalView
                 if (tv != null) {
@@ -205,7 +212,7 @@ fun LocalTerminalContent(
             }
         )
         onDispose {
-            focusCoordinator.unregisterScreen(com.example.gemini.AppViewMode.TERMINAL)
+            focusCoordinator.unregisterScreen(focusScreenMode)
         }
     }
 
@@ -298,7 +305,7 @@ fun LocalTerminalContent(
                 .fillMaxSize()
                 .background(backgroundColor)
         ) {
-            if (customSession != null) {
+            if (customSession != null && showSessionHeader) {
                 val isSessExited by activeSession.isExited.collectAsState()
                 val activeTitle by activeSession.title.collectAsState()
                 val currentOnDragDelta by rememberUpdatedState(onDragDelta)
@@ -596,7 +603,7 @@ fun LocalTerminalContent(
                                 attachSession(activeSession.terminalSession)
                                 activeSession.terminalSession.emulator?.setCursorStyle()
                                 currentTerminalView = this
-                                post {
+                                if (showKeyboardOnOpen) post {
                                     requestFocus()
                                     val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                                     imm.showSoftInput(this, 0)

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
@@ -77,6 +78,7 @@ fun FloatingSwitcherWidget(
     onNavigateToTerminal: () -> Unit,
     onNavigateToNotes: () -> Unit = {},
     onNavigateToFiles: () -> Unit = {},
+    onNavigateToRun: () -> Unit = {},
     onNavigateBack: () -> Unit = {},
     onPositionSaved: (Float, Float) -> Unit,
     onOrientationChange: (String) -> Unit = {},
@@ -132,6 +134,7 @@ fun FloatingSwitcherWidget(
             "terminal" -> onNavigateToTerminal()
             "notes" -> onNavigateToNotes()
             "files" -> onNavigateToFiles()
+            "run" -> onNavigateToRun()
         }
     }
     // The gesture handler lives in a long-running pointerInput(Unit); always call the latest callback.
@@ -283,6 +286,7 @@ fun FloatingSwitcherWidget(
                     "terminal" -> currentViewMode == AppViewMode.TERMINAL
                     "notes" -> currentViewMode == AppViewMode.NOTES
                     "files" -> currentViewMode == AppViewMode.FILES
+                    "run" -> currentViewMode == AppViewMode.RUN
                     else -> false
                 }
                 val iconVector: ImageVector = when (id) {
@@ -292,6 +296,7 @@ fun FloatingSwitcherWidget(
                     "browser" -> Icons.Outlined.Language
                     "notes" -> Icons.Outlined.EditNote
                     "files" -> Icons.Outlined.FolderOpen
+                    "run" -> Icons.Outlined.PlayCircle
                     else -> Icons.Outlined.ChatBubbleOutline
                 }
                 val contentDesc = when (id) {
@@ -301,6 +306,7 @@ fun FloatingSwitcherWidget(
                     "browser" -> "Browser"
                     "notes" -> "Notes"
                     "files" -> "Files"
+                    "run" -> "Run"
                     else -> itemId
                 }
                 FloatingSwitcherItemButton(

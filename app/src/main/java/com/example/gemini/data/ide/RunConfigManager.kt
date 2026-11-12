@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Serializable
 data class RunConfiguration(
@@ -27,43 +29,51 @@ data class LaunchConfigFile(
 object RunConfigManager {
     private const val TAG = "RunConfigManager"
 
+    /** The project's run commands, shared by the IDE's Run button, the Run panel and the agents. */
+    const val PROJECT_FILE = ".antigem/run.json"
+    /** Where the IDE kept them before; still read when a project has no [PROJECT_FILE] yet. */
+    const val LEGACY_FILE = ".ide/launch.json"
+    /** Commands for any folder (Run panel → Global), in the Termux home. */
+    const val GLOBAL_FILE = ".antigem/global-run.json"
+
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
         isLenient = true
         encodeDefaults = true
+        // run.json is edited by people and agents: leave unset fields out instead of writing "file": null
+        explicitNulls = false
     }
 
+    fun parseConfigurations(text: String): List<RunConfiguration> =
+        json.decodeFromString<LaunchConfigFile>(text).configurations
+
+    fun encodeConfigurations(configs: List<RunConfiguration>): String =
+        json.encodeToString(LaunchConfigFile(version = "1.0", configurations = configs))
+
     fun getLaunchFile(projectPath: String): File {
-        val ideDir = File(projectPath, ".ide")
-        if (!ideDir.exists()) {
-            ideDir.mkdirs()
-        }
-        return File(ideDir, "launch.json")
+        val file = File(projectPath, PROJECT_FILE)
+        file.parentFile?.let { if (!it.exists()) it.mkdirs() }
+        return file
     }
 
     fun loadConfigurations(projectPath: String): List<RunConfiguration> {
-        val file = File(projectPath, ".ide/launch.json")
-        if (!file.exists() || !file.isFile) return emptyList()
+        val file = listOf(File(projectPath, PROJECT_FILE), File(projectPath, LEGACY_FILE)).firstOrNull { it.isFile }
+            ?: return emptyList()
         return try {
-            val content = file.readText()
-            val parsed = json.decodeFromString<LaunchConfigFile>(content)
-            parsed.configurations
+            parseConfigurations(file.readText())
         } catch (e: Exception) {
-            Log.e(TAG, "Failed parsing .ide/launch.json in $projectPath: ${e.message}", e)
+            Log.e(TAG, "Failed parsing ${file.path}: ${e.message}", e)
             emptyList()
         }
     }
 
     fun saveConfigurations(projectPath: String, configs: List<RunConfiguration>): Boolean {
         return try {
-            val file = getLaunchFile(projectPath)
-            val configObj = LaunchConfigFile(version = "1.0", configurations = configs)
-            val jsonStr = json.encodeToString(configObj)
-            file.writeText(jsonStr)
+            getLaunchFile(projectPath).writeText(encodeConfigurations(configs))
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed saving .ide/launch.json in $projectPath: ${e.message}", e)
+            Log.e(TAG, "Failed saving $PROJECT_FILE in $projectPath: ${e.message}", e)
             false
         }
     }
@@ -78,6 +88,9 @@ object RunConfigManager {
     fun getOrCreateLaunchJson(projectPath: String, activeFilePath: String? = null): File {
         val file = getLaunchFile(projectPath)
         if (!file.exists()) {
+            // A project that still has the IDE's old file: carry its commands over instead of starting from a sample
+            val legacy = File(projectPath, LEGACY_FILE)
+            if (legacy.isFile && runCatching { file.writeText(legacy.readText()) }.isSuccess) return file
             val sampleConfigs = mutableListOf<RunConfiguration>()
             if (activeFilePath != null) {
                 val defaultRunner = getDefaultRunnerForFile(activeFilePath, projectPath)
@@ -98,6 +111,51 @@ object RunConfigManager {
             saveConfigurations(projectPath, sampleConfigs)
         }
         return file
+    }
+
+    // ---- Run panel: the files may live on the server (server mode / a PC), read through the bridge there ----
+
+    private val filesAreRemote: Boolean get() = com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode
+
+    /** A text file's content, or null when it doesn't exist (or can't be read). */
+    suspend fun readText(path: String): String? = withContext(Dispatchers.IO) {
+        if (filesAreRemote) {
+            com.example.gemini.data.daemon.IdeApiClient.readFile(path)
+        } else {
+            runCatching { File(path).takeIf { it.isFile }?.readText() }.getOrNull()
+        }
+    }
+
+    suspend fun writeText(path: String, text: String): Boolean = withContext(Dispatchers.IO) {
+        if (filesAreRemote) {
+            val parent = path.substringBeforeLast('/', "")
+            if (parent.isNotEmpty()) com.example.gemini.data.daemon.IdeApiClient.createFileOrDir(parent, isDir = true)
+            com.example.gemini.data.daemon.IdeApiClient.saveFileDetailed(path, text, force = true) is
+                com.example.gemini.data.daemon.FileSaveResult.Success
+        } else {
+            runCatching { File(path).apply { parentFile?.mkdirs() }.writeText(text) }.isSuccess
+        }
+    }
+
+    /** The project's commands for the Run panel ([PROJECT_FILE], else the IDE's old file). Null = the file is broken. */
+    suspend fun loadProject(projectPath: String): List<RunConfiguration>? {
+        val text = readText("$projectPath/$PROJECT_FILE") ?: readText("$projectPath/$LEGACY_FILE") ?: return emptyList()
+        return runCatching { parseConfigurations(text) }.getOrNull()
+    }
+
+    suspend fun saveProject(projectPath: String, configs: List<RunConfiguration>): Boolean =
+        writeText("$projectPath/$PROJECT_FILE", encodeConfigurations(configs))
+
+    private fun globalFile(context: android.content.Context) =
+        File(com.example.gemini.data.local.LocalEnvironmentManager.getHomeDir(context), GLOBAL_FILE)
+
+    suspend fun loadGlobal(context: android.content.Context): List<RunConfiguration> = withContext(Dispatchers.IO) {
+        val file = globalFile(context)
+        if (!file.isFile) emptyList() else runCatching { parseConfigurations(file.readText()) }.getOrDefault(emptyList())
+    }
+
+    suspend fun saveGlobal(context: android.content.Context, configs: List<RunConfiguration>): Boolean = withContext(Dispatchers.IO) {
+        runCatching { globalFile(context).apply { parentFile?.mkdirs() }.writeText(encodeConfigurations(configs)) }.isSuccess
     }
 
     fun resolveVariables(template: String, activeFilePath: String?, projectPath: String?): String {

@@ -32,7 +32,9 @@ enum class AppViewMode {
     TERMINAL,
     BROWSER,
     NOTES,
-    FILES
+    FILES,
+    /** The Run screen: a folder's commands and their live output (runs keep going on other screens) */
+    RUN
 }
 
 class MainActivity : ComponentActivity() {
@@ -104,6 +106,7 @@ class MainActivity : ComponentActivity() {
                     "BROWSER" -> AppViewMode.BROWSER
                     "NOTES" -> AppViewMode.NOTES
                     "FILES" -> AppViewMode.FILES
+                    "RUN" -> AppViewMode.RUN
                     else -> AppViewMode.CHAT
                 }
             }
@@ -141,6 +144,11 @@ class MainActivity : ComponentActivity() {
                         "FILES" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.FILES
+                        }
+
+                        "RUN" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.RUN
                         }
                     }
                     chatViewModel.consumeRequestedViewMode()
@@ -454,6 +462,45 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
+                                // Persistent Run Screen (a folder's commands and their live output; runs keep going on other screens)
+                                var hasEverOpenedRun by remember { mutableStateOf(false) }
+                                if (currentViewMode == AppViewMode.RUN) hasEverOpenedRun = true
+                                LaunchedEffect(currentViewMode) {
+                                    com.example.gemini.data.run.RunPanel.setVisible(currentViewMode == AppViewMode.RUN)
+                                }
+                                // the chat header's Run icon, the IDE's "Open Run panel" and the bubble ask for it
+                                LaunchedEffect(Unit) {
+                                    com.example.gemini.data.run.RunPanel.openRequests.collect {
+                                        if (currentViewMode != AppViewMode.RUN) {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.RUN
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.RUN
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                ) {
+                                    if (hasEverOpenedRun) {
+                                        com.example.gemini.ui.run.RunScreen(
+                                            isVisible = currentViewMode == AppViewMode.RUN,
+                                            onClose = {
+                                                currentViewMode =
+                                                    if (previousViewMode == AppViewMode.RUN) AppViewMode.CHAT else previousViewMode
+                                            },
+                                            onSendToChat = {
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.CHAT
+                                            }
+                                        )
+                                    }
+                                }
+
                                 // Floating App Switcher Across Whole App (always on; renders on top of Chat, IDE, Terminal, Browser)
                                 // Its Terminal needs a shell: SSH, server mode, or the local Linux tools (turned on here when
                                 // installed but off); without any, it offers to install the Linux tools instead.
@@ -517,6 +564,10 @@ class MainActivity : ComponentActivity() {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.FILES
                                     },
+                                    onNavigateToRun = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.RUN
+                                    },
                                     onNavigateBack = {
                                         val target = switcherBackTarget
                                         when {
@@ -544,6 +595,9 @@ class MainActivity : ComponentActivity() {
                                         onDismiss = { showSwitcherToolsInstall = false }
                                     )
                                 }
+
+                                // Commands running: the screen stays on, and on other screens a bubble shows them (tap → Run)
+                                com.example.gemini.ui.run.RunBubbleHost(isRunScreen = currentViewMode == AppViewMode.RUN)
 
                                 // the built-in video player, full screen (from chat videos, tapped paths and Files)
                                 com.example.gemini.ui.components.FullscreenVideoHost()

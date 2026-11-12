@@ -50,6 +50,8 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var currentSessionCount: Int = 0
+    /** Run panel / IDE commands still running (they keep this service, and so the app, alive). */
+    private var currentRunCount: Int = 0
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -150,8 +152,14 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
 
     private fun observeTerminalSessions() {
         serviceScope.launch {
-            LocalTerminalManager.sessions.collect { sessions ->
-                currentSessionCount = sessions.size
+            kotlinx.coroutines.flow.combine(
+                LocalTerminalManager.sessions,
+                com.example.gemini.data.run.RunManager.runs
+            ) { sessions, runs ->
+                sessions.size to runs.count { it.status == com.example.gemini.data.run.RunStatus.RUNNING }
+            }.collect { (sessions, running) ->
+                currentSessionCount = sessions
+                currentRunCount = running
                 updateNotification()
             }
         }
@@ -184,7 +192,8 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
     private fun buildNotification(): Notification {
         val wakeLockHeld = wakeLock != null
 
-        val sessionText = "$currentSessionCount " + if (currentSessionCount == 1) "session" else "sessions"
+        val sessionText = "$currentSessionCount " + (if (currentSessionCount == 1) "session" else "sessions") +
+            (if (currentRunCount > 0) " · $currentRunCount running" else "")
         val notificationText = if (wakeLockHeld) "$sessionText (wake lock held)" else sessionText
 
         val launchIntent = Intent(this, MainActivity::class.java).apply {

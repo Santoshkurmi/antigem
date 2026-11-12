@@ -66,7 +66,9 @@ class LocalPtySession(
     initialCols: Int = 80,
     initialRows: Int = 24,
     initialWidthPx: Int = 800,
-    initialHeightPx: Int = 480
+    initialHeightPx: Int = 480,
+    /** False for one-off runs (the Run panel): they show their own status, so no "Press Enter to close tab" line. */
+    val showExitNotice: Boolean = true
 ) : TerminalSessionClient {
     private val TAG = "AntiGemTerminal"
 
@@ -967,6 +969,10 @@ class LocalPtySession(
         _isExited.value = true
         Log.d(TAG, "[$id] notifySessionClosed: reason=$reason")
         val why = if (reason.isNullOrBlank()) "" else "\r\n\r\n\u001b[1;31m$reason\u001b[0m"
+        if (!showExitNotice) {
+            if (why.isNotEmpty()) writeToEmulator("$why\r\n")
+            return
+        }
         val msg = "$why\r\n\r\n\u001b[1;33m[Process completed - Press Enter to close tab]\u001b[0m\r\n"
         writeToEmulator(msg)
     }

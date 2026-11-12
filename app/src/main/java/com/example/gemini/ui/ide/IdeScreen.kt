@@ -120,7 +120,14 @@ fun IdeScreen(
     var showAddProfileDialog by remember { mutableStateOf(false) }
     var selectedProfileName by remember { mutableStateOf<String?>(null) }
     var runConfigurations by remember { mutableStateOf<List<RunConfiguration>>(emptyList()) }
-    var runnerSession by remember { mutableStateOf<LocalPtySession?>(null) }
+    // The IDE's run goes through RunManager (so the Run panel shows it too); closing the runner here still stops it
+    var ideRunId by remember { mutableStateOf<String?>(null) }
+    val allRuns by com.example.gemini.data.run.RunManager.runs.collectAsState()
+    val runnerSession: LocalPtySession? = allRuns.find { it.id == ideRunId }?.session
+    fun closeIdeRun() {
+        ideRunId?.let { com.example.gemini.data.run.RunManager.remove(it) }
+        ideRunId = null
+    }
     var runnerHeightFraction by remember { mutableFloatStateOf(0.5f) }
     var isRunnerMaximized by remember { mutableStateOf(true) }
     var lastExecutedProfile by remember { mutableStateOf<RunConfiguration?>(null) }
@@ -138,6 +145,14 @@ fun IdeScreen(
         refreshRunConfigurations()
     }
 
+    // Ready-made commands for the project's kind (Flutter, React Native, Gradle, npm…), as in the Run panel's Suggested
+    var suggestedRuns by remember { mutableStateOf<List<Pair<String, com.example.gemini.data.run.RunTemplate>>>(emptyList()) }
+    LaunchedEffect(activeProject?.path) {
+        val path = activeProject?.path
+        suggestedRuns = if (path.isNullOrBlank()) emptyList() else
+            com.example.gemini.data.run.RunTemplates.detect(context, path).flatMap { g -> g.templates.map { g.kind to it } }
+    }
+
     fun executeRun(profile: RunConfiguration) {
         lastExecutedProfile = profile
         val projectPath = activeProject?.path ?: ""
@@ -150,19 +165,10 @@ fun IdeScreen(
         }
         val resolvedCwd = RunConfigManager.resolveWorkingDir(profile.cwd, activeTabPath, projectPath)
 
-        val escapedCmd = resolvedCmd.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
-        val wrappedCmd = "echo -e \"\\033[1;32m▶ $escapedCmd\\033[0m\"; $resolvedCmd"
-
-        runnerSession?.close()
-        runnerSession = LocalPtySession(
-            id = "ide_run_${UUID.randomUUID()}",
-            initialTitle = profile.name,
-            context = context,
-            forceShell = "bash",
-            initialWorkingDir = resolvedCwd,
-            initialCommand = wrappedCmd,
-            execShellAfterCommand = false
-        )
+        closeIdeRun()
+        ideRunId = com.example.gemini.data.run.RunManager.start(
+            context, profile.name, resolvedCmd, resolvedCwd.orEmpty(), origin = "ide"
+        ).id
     }
 
     val findFocusRequester = remember { FocusRequester() }
@@ -198,8 +204,7 @@ fun IdeScreen(
     }
 
     androidx.activity.compose.BackHandler(enabled = isVisible && runnerSession != null) {
-        runnerSession?.close()
-        runnerSession = null
+        closeIdeRun()
     }
 
     androidx.activity.compose.BackHandler(enabled = isVisible && showFindBar && runnerSession == null) {
@@ -836,7 +841,53 @@ fun IdeScreen(
                                     )
                                 }
 
+                                if (suggestedRuns.isNotEmpty()) {
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    Text(
+                                        text = "SUGGESTED FOR THIS PROJECT",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                    )
+                                    suggestedRuns.take(8).forEach { (kind, template) ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(template.name, fontSize = 13.sp)
+                                                    Text(
+                                                        text = "$kind · ${template.command}",
+                                                        fontSize = 10.5.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            },
+                                            onClick = {
+                                                showRunMenu = false
+                                                // a sub-folder of the project (React Native's android/) is relative to the project
+                                                executeRun(template.toConfig().copy(cwd = template.cwd?.let { "\${workspaceFolder}/$it" } ?: "\${workspaceFolder}"))
+                                            }
+                                        )
+                                    }
+                                }
+
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                DropdownMenuItem(
+                                    text = { Text("Open Run screen", fontSize = 13.sp) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    },
+                                    onClick = {
+                                        showRunMenu = false
+                                        com.example.gemini.data.run.RunPanel.show(folder = activeProject?.path)
+                                    }
+                                )
 
                                 DropdownMenuItem(
                                     text = { Text("Add Run Configuration...", fontSize = 13.sp) },
@@ -855,7 +906,7 @@ fun IdeScreen(
                                 )
 
                                 DropdownMenuItem(
-                                    text = { Text("Edit launch.json in Editor", fontSize = 13.sp) },
+                                    text = { Text("Edit run.json in Editor", fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
                                     },
@@ -867,7 +918,7 @@ fun IdeScreen(
                                         } else {
                                             val file = RunConfigManager.getOrCreateLaunchJson(projectPath, activeTabPath)
                                             val content = try { file.readText() } catch (_: Exception) { "{}" }
-                                            TermuxDaemonManager.openOrSelectTab(file.absolutePath, "launch.json", content)
+                                            TermuxDaemonManager.openOrSelectTab(file.absolutePath, "run.json", content)
                                         }
                                     }
                                 )
@@ -1743,13 +1794,11 @@ fun IdeScreen(
                                 }
                             },
                             onRetry = {
-                                session.close()
-                                runnerSession = null
+                                closeIdeRun()
                                 lastExecutedProfile?.let { executeRun(it) }
                             },
                             onClose = {
-                                session.close()
-                                runnerSession = null
+                                closeIdeRun()
                             }
                         )
                     }
@@ -1803,7 +1852,7 @@ private fun AddRunProfileDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Saved into .ide/launch.json in your workspace root.",
+                    text = "Saved into .antigem/run.json in your workspace root.",
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

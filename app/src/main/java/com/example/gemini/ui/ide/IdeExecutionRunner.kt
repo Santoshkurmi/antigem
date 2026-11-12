@@ -456,30 +456,8 @@ fun IdeExecutionRunnerSheet(
     }
 }
 
-/**
- * LocalPtySession.close() only kills the shell, so anything the command started (servers, background jobs) would keep
- * running. The process tree is read from /proc before the shell dies, since its children are re-parented after.
- */
-private fun closeWithChildren(session: LocalPtySession) {
-    val rootPid = runCatching { session.terminalSession.pid }.getOrDefault(0)
-    if (rootPid > 0) {
-        val children = mutableMapOf<Int, MutableList<Int>>()
-        java.io.File("/proc").listFiles()?.forEach { dir ->
-            val pid = dir.name.toIntOrNull() ?: return@forEach
-            val stat = runCatching { java.io.File(dir, "stat").readText() }.getOrNull() ?: return@forEach
-            val ppid = stat.substringAfterLast(')').trim().split(' ').getOrNull(1)?.toIntOrNull() ?: return@forEach
-            children.getOrPut(ppid) { mutableListOf() }.add(pid)
-        }
-        val queue = ArrayDeque(listOf(rootPid))
-        while (queue.isNotEmpty()) {
-            children[queue.removeFirst()]?.forEach { pid ->
-                runCatching { android.os.Process.sendSignal(pid, 9) }
-                queue.addLast(pid)
-            }
-        }
-    }
-    session.close()
-}
+/** Kills the command and everything it started (see RunManager.killTree). */
+private fun closeWithChildren(session: LocalPtySession) = com.example.gemini.data.run.RunManager.killTree(session)
 
 @Composable
 private fun IdeTermKey(
