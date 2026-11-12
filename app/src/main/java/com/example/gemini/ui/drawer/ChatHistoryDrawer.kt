@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Unarchive
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -1249,6 +1250,22 @@ fun ChatHistoryDrawer(
                             modifier = Modifier.padding(8.dp).size(20.dp)
                         )
                     }
+                }
+
+                // Mini Apps: the grid of on-device apps in ~/mini-apps
+                val miniAppsContext = androidx.compose.ui.platform.LocalContext.current
+                Surface(
+                    onClick = { miniAppsContext.startActivity(android.content.Intent(miniAppsContext, com.example.gemini.ui.miniapps.MiniAppsActivity::class.java)) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Transparent,
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Apps,
+                        contentDescription = "Mini Apps",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(8.dp).size(20.dp)
+                    )
                 }
 
                 // Connect to PC: which PC is in use, switch, add one

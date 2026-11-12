@@ -19,6 +19,9 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- mini app reminders and exact-time background tasks (Android 14+ makes alarms inexact without it) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!-- Signature-level private permissions to protect internal Termux and API receivers/services -->
@@ -307,7 +310,7 @@
         </service>
 
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="com.example.gemini.data.files.AntiGemFileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
@@ -315,6 +318,141 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Mini Apps: the launcher grid, each app's root page (its own task / Recents card, one per app id via the
+             data URI) and pushed pages (same task as their root) -->
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppsActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AntiGem.MiniApp"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
+        <!-- "Get apps": the mini apps of AntiGem's GitHub catalog -->
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppStoreActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AntiGem.MiniApp"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
+        <!-- The mini app installer (like Android's for .apk): opening an .agapp from any app (WhatsApp, Telegram, Gmail,
+             Files, a browser's downloads, AntiGem's file explorer) shows the install / update screen over that app -->
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppInstallActivity"
+            android:exported="true"
+            android:label="Mini app installer"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden">
+            <!-- the package type (AntiGem shares packages with it, servers can send it) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/vnd.antigem.agapp" />
+            </intent-filter>
+            <!-- any type, when the name ends in .agapp. pathPattern stops at the first match of each dot, hence one
+                 pattern per number of dots before ".agapp"; pathAdvancedPattern (Android 12+) is a real regex -->
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathAdvancedPattern=".*\\.agapp" tools:targetApi="31" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.agapp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.agapp" />
+            </intent-filter>
+            <!-- chat apps that hide the file name and only know "some file": offered in "Open with", the contents decide -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppActivity"
+            android:exported="true"
+            android:documentLaunchMode="intoExisting"
+            android:theme="@style/Theme.AntiGem.MiniApp"
+            android:windowSoftInputMode="stateHidden|adjustResize"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|density|fontScale" />
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppPageActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AntiGem.MiniApp"
+            android:windowSoftInputMode="stateHidden|adjustResize"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|density|fontScale" />
+        <!-- Mini app home-screen shortcuts and notification taps: bring the app forward as it was (or start it) -->
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppLaunchActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <!-- links into mini apps: antigem-miniapp://app/<id>/<path>?… -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="antigem-miniapp" android:host="app" />
+            </intent-filter>
+        </activity>
+        <!-- "Mini app" in Android's share sheet: send text, links and files to a mini app that accepts them -->
+        <activity
+            android:name="com.example.gemini.ui.miniapps.MiniAppShareActivity"
+            android:exported="true"
+            android:label="Mini app"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+        <!-- Mini app notification buttons that don't open the app, inline replies, swipe-away -->
+        <receiver
+            android:name="com.example.gemini.data.miniapps.MiniAppNotificationReceiver"
+            android:exported="false" />
+        <!-- Mini app reminders and exact-time background tasks -->
+        <receiver
+            android:name="com.example.gemini.data.miniapps.MiniAppAlarmReceiver"
+            android:exported="false" />
+        <!-- Android drops alarms on reboot (and shifts them on clock / time-zone changes): set them again -->
+        <receiver
+            android:name="com.example.gemini.data.miniapps.MiniAppBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Manage Space Activity (Clear Storage Interceptor) -->
         <activity

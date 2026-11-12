@@ -33,7 +33,8 @@ class AndroidLocalBridgeServer private constructor() {
         ANDROID("android_automation_mcp"),
         NOTES("notes_mcp"),
         JARVIS("jarvis_mcp"),
-        THEME("theme_mcp")
+        THEME("theme_mcp"),
+        MINI_APP_DEVELOPER("mini_app_developer_mcp")
     }
 
     companion object {
@@ -44,6 +45,7 @@ class AndroidLocalBridgeServer private constructor() {
         const val NOTES_MCP_NAME = "notes_mcp"
         const val JARVIS_MCP_NAME = "jarvis_mcp"
         const val THEME_MCP_NAME = "theme_mcp"
+        const val MINI_APP_DEVELOPER_MCP_NAME = "mini_app_developer_mcp"
         fun isDeveloperMcpName(name: String) = name == DEVELOPER_MCP_NAME || name == LEGACY_DEVELOPER_MCP_NAME
         private const val TAG = "AndroidBridgeServer"
         private const val MAX_HEADER_BYTES = 64 * 1024
@@ -261,6 +263,7 @@ class AndroidLocalBridgeServer private constructor() {
                     path == "/notes" -> handleMcpHttp(McpEndpoint.NOTES, method, body, out)
                     path == "/jarvis" -> handleMcpHttp(McpEndpoint.JARVIS, method, body, out, headers["mcp-session-id"])
                     path == "/theme" -> handleMcpHttp(McpEndpoint.THEME, method, body, out)
+                    path == "/mini_app_developer" -> handleMcpHttp(McpEndpoint.MINI_APP_DEVELOPER, method, body, out)
                     path == "/api/health" -> {
                         val res = JSONObject().apply {
                             put("status", "ok")
@@ -289,7 +292,7 @@ class AndroidLocalBridgeServer private constructor() {
             if (out != null && req != null && !out.used) {
                 runCatching {
                     val path = req.rawPath.substringBefore("?")
-                    if (path == "/browser" || path == "/terminal" || path == "/google_flow" || path == "/extension_developer" || path == "/android" || path == "/notes" || path == "/jarvis" || path == "/theme") {
+                    if (path == "/browser" || path == "/terminal" || path == "/google_flow" || path == "/extension_developer" || path == "/android" || path == "/notes" || path == "/jarvis" || path == "/theme" || path == "/mini_app_developer") {
                         val id = runCatching { JSONObject(req.body).opt("id") }.getOrNull()
                         sendResponse(out, 200, "application/json", jsonRpcError(id, -32603, "Internal error: ${t.message ?: t.javaClass.simpleName}").toString())
                     } else {
@@ -365,6 +368,19 @@ class AndroidLocalBridgeServer private constructor() {
     }
 
     /** One JSON-RPC request; a failure becomes a JSON-RPC error instead of a dropped connection. */
+    /**
+     * Runs one MCP JSON-RPC request in-process for a mini app (no HTTP, no device ID handed out).
+     * Null when [serverName] is not one of this server's endpoints. Jarvis needs a session, so it is not offered.
+     */
+    suspend fun callMcpInProcess(context: Context, serverName: String, request: JSONObject): JSONObject? {
+        // Jarvis needs a session; the developer servers install plugins or script other apps: never for a mini app
+        val endpoint = McpEndpoint.entries.firstOrNull {
+            it.serverName == serverName && it != McpEndpoint.JARVIS && it != McpEndpoint.MINI_APP_DEVELOPER && it != McpEndpoint.EXTENSION_DEVELOPER
+        } ?: return null
+        if (appContext == null) start(context)
+        return runMcpRequest(request, endpoint)
+    }
+
     private suspend fun runMcpRequest(req: JSONObject, endpoint: McpEndpoint): JSONObject = try {
         handleMcpJsonRpc(req.toString(), endpoint)
     } catch (e: CancellationException) {
@@ -444,6 +460,7 @@ class AndroidLocalBridgeServer private constructor() {
                     if (endpoint == McpEndpoint.NOTES) put("instructions", com.example.gemini.data.notes.NotesMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.JARVIS) put("instructions", com.example.gemini.data.jarvis.JarvisMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.THEME) put("instructions", com.example.gemini.theme.ThemeMcp.INSTRUCTIONS)
+                    if (endpoint == McpEndpoint.MINI_APP_DEVELOPER) put("instructions", com.example.gemini.ui.miniapps.MiniAppDevMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.BROWSER) put("instructions", com.example.gemini.ui.browser.mcp.BrowserMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.EXTENSION_DEVELOPER) put("instructions", "Start with webview_extension_docs. Read developer-mcp.md and the required API references, create a draft, write files, install or update, discover tools with webview_extension_test, and inspect logs to fix failures. No app source or manual ZIP handling is needed.")
                     put("capabilities", JSONObject().apply {
@@ -497,6 +514,7 @@ class AndroidLocalBridgeServer private constructor() {
         if (endpoint == McpEndpoint.NOTES) return com.example.gemini.data.notes.NotesMcp.tools()
         if (endpoint == McpEndpoint.JARVIS) return com.example.gemini.data.jarvis.JarvisMcp.tools()
         if (endpoint == McpEndpoint.THEME) return com.example.gemini.theme.ThemeMcp.tools()
+        if (endpoint == McpEndpoint.MINI_APP_DEVELOPER) return com.example.gemini.ui.miniapps.MiniAppDevMcp.tools()
         if (endpoint == McpEndpoint.BROWSER) return com.example.gemini.ui.browser.mcp.BrowserMcp.tools()
         val tools = JSONArray()
         val terminalEnabled = endpoint == McpEndpoint.TERMINAL
@@ -607,6 +625,7 @@ class AndroidLocalBridgeServer private constructor() {
         if (toolName.startsWith("notes_")) return com.example.gemini.data.notes.NotesMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("jarvis_")) return com.example.gemini.data.jarvis.JarvisMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("theme_")) return com.example.gemini.theme.ThemeMcp.call(toolName, args)
+        if (toolName.startsWith("miniapp_")) return com.example.gemini.ui.miniapps.MiniAppDevMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("browser_")) return com.example.gemini.ui.browser.mcp.BrowserMcp.call(appContext!!, toolName, args)
 
         if (toolName.startsWith("flow_")) {

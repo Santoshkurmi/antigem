@@ -42,6 +42,21 @@ object CustomSlashCommands {
             """.trimIndent()
         ),
         CustomSlashCommand(
+            name = "mini_app",
+            description = "Build a mini app (an app inside AntiGem) with the Mini App Developer MCP",
+            expansion = """
+                The user wants a mini app: a small app that runs inside AntiGem (HTML/CSS/JS with AntiGem's native SDK for storage, files, network, notifications and more), with its own icon and Recents card. What it should do: ${'$'}ARGUMENTS
+                If that is empty or unclear, first ask what the app should do, then continue.
+
+                1. Check that you have the Mini App Developer MCP: its tools start with miniapp_ (server mini_app_developer_mcp). If you don't have them, stop and tell the user to open this agent's MCP settings, add the "Mini App Developer" preset, then reload tools or start a new chat and send this command again.
+                2. Read the guide first with miniapp_guide: README, getting-started, manifest, permissions, and the API pages for what the app uses (api-reference lists everything). Use only documented APIs; ask for the fewest permissions.
+                3. Create it with miniapp_create, write the files with miniapp_write_files (a real square icon.png too), and run miniapp_validate until it has no errors.
+                4. Run it with miniapp_open. Check it with miniapp_screenshot, miniapp_console and miniapp_eval (click through the main flows, check stored data); fix and repeat. If a permission prompt is on screen, ask the user to answer it.
+                5. If the user wants to share or install it: miniapp_key_status (create a key with miniapp_key_create if needed; if it isn't backed up, call miniapp_key_backup and ask the user to save it on the phone; never ask for the password), then miniapp_sign, and tell them where the .agapp is and that they can share it from App info.
+                6. Finish with what the app does, its permissions, what you tested, and where it is (Mini Apps, the Apps icon in the chat drawer).
+            """.trimIndent()
+        ),
+        CustomSlashCommand(
             name = "browser_mcp",
             description = "Do a task in AntiGem's built-in browser with the Browser Automation MCP",
             expansion = """

@@ -55,6 +55,8 @@ object FileOpener {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             clipData = ClipData.newRawUri(name, uri)
+            // a mini app package: straight to AntiGem's own installer, the way a file manager hands an .apk to Android's
+            if (mime == com.example.gemini.data.miniapps.MiniAppSigning.MIME && !forceChooser) setClassName(context, "com.example.gemini.ui.miniapps.MiniAppInstallActivity")
         }
         return try {
             val start = if (forceChooser) Intent.createChooser(intent, "Open \"$name\" with").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) else intent

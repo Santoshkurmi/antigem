@@ -327,6 +327,14 @@ val bundleExtensionDocs by tasks.registering(Sync::class) {
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/extensionDocAssets").get().asFile)
 tasks.named("preBuild").configure { dependsOn(bundleExtensionDocs) }
 
+// The mini app guide: served by the Mini App Developer MCP (miniapp_guide) and copied to ~/mini-apps/docs on the phone.
+val bundleMiniAppDocs by tasks.registering(Sync::class) {
+    from(rootProject.file("mini_app_docs"))
+    into(layout.buildDirectory.dir("generated/miniAppDocAssets/mini-app-docs"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/miniAppDocAssets").get().asFile)
+tasks.named("preBuild").configure { dependsOn(bundleMiniAppDocs) }
+
 // Changelog: the app's "What's new" page is built from the git history of version.json, one entry per version_code
 // (the newest commit of each wins, dated by that commit). The version.json being built is used for its own version, so
 // an uncommitted bump shows up too. Needs the full history: CI checks out with fetch-depth 0. Without git (or with a

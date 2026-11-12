@@ -90,6 +90,7 @@ object FileKinds {
 
     fun mimeOf(name: String): String {
         val ext = extOf(name)
+        if (ext == "agapp") return com.example.gemini.data.miniapps.MiniAppSigning.MIME
         MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)?.let { return it }
         return when (of(name)) {
             FileKind.CODE, FileKind.TEXT -> "text/plain"

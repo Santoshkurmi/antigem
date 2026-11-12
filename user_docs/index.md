@@ -257,3 +257,19 @@ Install Kotlin / Java (Jetpack Compose), Flutter and React Native tooling in the
 - 📱 5. Installing on this phone
 - 🗑️ 6. Freeing space and removing
 - 🛠️ Troubleshooting
+
+### [18 — Mini Apps](18-mini-apps.md)
+Small apps that run inside AntiGem like real Android apps: building them with an agent, running them, App info and permissions, installing and sharing `.agapp` packages, Developer mode, and backing up your developer key.
+
+- 🚀 Quick start
+- 🧭 1. The Mini Apps screen
+- 🤖 2. Asking an agent to build an app
+- 📱 3. Running apps
+- ℹ️ 4. App info
+- 🔐 5. Permission prompts
+- 📦 6. Installing and updating apps
+- 📤 7. Sharing apps
+- 🛠️ 8. Developer mode
+- 🔑 9. Your developer key and its backup
+- 🗑️ 10. Removing apps
+- 🛠️ Troubleshooting

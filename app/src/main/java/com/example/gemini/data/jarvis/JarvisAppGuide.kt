@@ -43,7 +43,7 @@ are there too. MCP servers, skills and Google plugins are in Settings → Antigr
 MCP servers give the agents tools. Antigravity: Settings → Antigravity → MCP Servers. Claude Code: Settings → Claude Code → MCP. Both have
 one-tap presets for the built-in servers: Browser (open pages, click, type, read, screenshots), Terminal (sessions, commands,
 output), Android (see and control the phone; must be allowed in Settings → Android Automation), Notes & To-dos, Custom Plugin,
-Plugin Developer, Stitch, and Jarvis (this voice control). The Jarvis server must be added to the agent that runs Jarvis:
+Plugin Developer, Mini App Developer (build, test and sign mini apps), Theme, Stitch, and Jarvis (this voice control). The Jarvis server must be added to the agent that runs Jarvis:
 Settings → Jarvis → Setup has a one-tap Add button.
 """.trim()),
             Entry("plugins", listOf("plugin", "extension", "skill", "install plugin", "/plu"), """

@@ -43,6 +43,9 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         com.example.gemini.theme.ThemeManager.init(this)
         UpdateCheckWorker.schedule(this)
         PluginUpdateCheckWorker.schedule(this)
+        // mini app reminders and exact-time tasks: alarms again (Android may have dropped them), off the main thread
+        com.example.gemini.data.miniapps.MiniAppScheduler.rearmAsync(this)
+        Thread { com.example.gemini.ui.miniapps.MiniAppShortcuts.migrate(this) }.start()
         // Reconnects adb when Wireless debugging turns back on (it gets a new port every time)
         AdbConnectManager.init(this)
         com.example.gemini.data.ssh.SshSessionFactory.init(this)

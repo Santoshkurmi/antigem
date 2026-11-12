@@ -694,6 +694,12 @@ class MainActivity : ComponentActivity() {
                 chatViewModel.loadSharedConversationFromUri(this, item.uri!!)
                 return
             }
+            // a mini app package opened with / shared to "AntiGem" instead of "Mini app installer": install it
+            if (lower.endsWith(".agapp") || intent.type == com.example.gemini.data.miniapps.MiniAppSigning.MIME) {
+                startActivity(Intent(this, com.example.gemini.ui.miniapps.MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW)
+                    .setDataAndType(item.uri, com.example.gemini.data.miniapps.MiniAppSigning.MIME).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                return
+            }
             // exported trajectories can arrive without the .antigem name: peek at the header
             val kind = item.kind
             if (kind == com.example.gemini.data.files.FileKind.DATA || kind == com.example.gemini.data.files.FileKind.TEXT ||

@@ -225,9 +225,11 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean, content
         k == FileKind.IMAGE || k == FileKind.VIDEO -> null
         else -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "Code editor", "Not a text file: it may not display or save correctly", recommended = false, warn = true)
     }
+    // a mini app package goes to AntiGem's own installer (FileOpener), like an .apk to Android's
+    val agapp = entry.name.endsWith(".agapp", ignoreCase = true)
     val external = OpenOption(
         OpenChoice.EXTERNAL,
-        when (k) {
+        if (agapp) Icons.Outlined.InstallMobile else when (k) {
             FileKind.VIDEO -> Icons.Outlined.PlayCircle
             FileKind.AUDIO -> Icons.Outlined.MusicNote
             FileKind.IMAGE -> Icons.Outlined.PhotoLibrary
@@ -235,7 +237,7 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean, content
             FileKind.APK -> Icons.Outlined.InstallMobile
             else -> Icons.AutoMirrored.Outlined.OpenInNew
         },
-        when (k) {
+        if (agapp) "Install mini app" else when (k) {
             FileKind.VIDEO -> "Play in video player"
             FileKind.AUDIO -> "Play in music player"
             FileKind.IMAGE -> "Open in gallery"
@@ -244,7 +246,7 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean, content
             FileKind.DOCUMENT -> "Open in document app"
             else -> "Open in another app"
         },
-        "Pick any app installed on this phone",
+        if (agapp) "Check the developer's signature, then install or update" else "Pick any app installed on this phone",
         recommended = !textual
     )
     val preview = when {
