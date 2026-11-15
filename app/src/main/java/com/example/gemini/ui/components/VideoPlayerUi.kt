@@ -458,16 +458,20 @@ private fun VideoOverlay(
                                 onClick = { menuOpen = false; c.toggleMute() }
                             )
                             HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Download") },
-                                leadingIcon = { Icon(Icons.Filled.Download, null) },
-                                onClick = { menuOpen = false; ImageDownloadHelper.downloadVideo(context, c.source, title, scope) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share") },
-                                leadingIcon = { Icon(Icons.Filled.Share, null) },
-                                onClick = { menuOpen = false; c.share() }
-                            )
+                            // A stream (.m3u8) is a playlist of pieces, not one file: saving or sharing it would only
+                            // give the playlist text. Other players can still open it.
+                            if (!c.isStream) {
+                                DropdownMenuItem(
+                                    text = { Text("Download") },
+                                    leadingIcon = { Icon(Icons.Filled.Download, null) },
+                                    onClick = { menuOpen = false; ImageDownloadHelper.downloadVideo(context, c.source, title, scope) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share") },
+                                    leadingIcon = { Icon(Icons.Filled.Share, null) },
+                                    onClick = { menuOpen = false; c.share() }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Open in another app") },
                                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },

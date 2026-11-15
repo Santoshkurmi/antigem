@@ -1644,7 +1644,7 @@ fun MarkdownImageView(
 }
 
 /**
- * Renders a local or remote video file (mp4/webm/mov) inline: thumbnail and length first, then a player with seek,
+ * Renders a local or remote video file (mp4/webm/mov) or HLS stream (m3u8) inline: thumbnail and length first, then a player with seek,
  * double-tap skip, full screen, speed, download and share (see [ChatVideoPlayer]).
  */
 @Composable
@@ -3170,8 +3170,9 @@ fun parseMarkdownBlocks(
             continue
         }
 
-        // 5a-2. Video files: ![alt](path.mp4) plays; a link [alt](path.mp4) stays a link (models often write both)
-        val videoMatch = Regex("^\\s*!\\[(.*?)\\]\\(([^\\s)]+\\.(?:mp4|webm|mov|m4v|3gp)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
+        // 5a-2. Video files: ![alt](path.mp4) plays; a link [alt](path.mp4) stays a link (models often write both).
+        // .m3u8 = an HLS stream (e.g. a ClipPolish preview that plays while it renders); Android's player streams it.
+        val videoMatch = Regex("^\\s*!\\[(.*?)\\]\\(([^\\s)]+\\.(?:mp4|webm|mov|m4v|3gp|m3u8)(?:\\?[^\\s)]*)?)\\)\\s*$", RegexOption.IGNORE_CASE).find(line)
         if (videoMatch != null) {
             result.add(MarkdownBlock.Video(alt = videoMatch.groupValues[1], url = videoMatch.groupValues[2]))
             i++

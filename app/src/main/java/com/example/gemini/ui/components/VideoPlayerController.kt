@@ -67,6 +67,9 @@ class VideoPlayerController(context: Context, val source: String) {
 
     val name: String = HubMediaResolver.displayNameOf(source)
 
+    /** An HLS stream (.m3u8) rather than a single file. */
+    val isStream: Boolean = source.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
+
     /** Where the thumbnail is read from (the original source, even after a fallback download). */
     val previewStream: HubMediaResolver.MediaStream = HubMediaResolver.mediaStreamFor(source)
     private var stream = previewStream
