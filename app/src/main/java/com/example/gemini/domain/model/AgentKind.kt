@@ -5,5 +5,6 @@ enum class AgentKind {
     AGY,
     CLAUDE,
     OPENCODE,
-    CODEX
+    CODEX,
+    DSH
 }

@@ -42,6 +42,7 @@ object JarvisDriver {
                 vm.openCodeBackend.conversations.value.any { it.id == id && it.isRunning }
             AgentKind.CODEX -> codex[id]?.isCurrentChatActivelyRunning?.value == true ||
                 vm.codexBackend.conversations.value.any { it.id == id && it.isRunning }
+            AgentKind.DSH -> vm.dshBackend.conversations.value.any { it.id == id && it.isRunning }
             AgentKind.AGY -> {
                 val c = vm.agyBackend.conversations.value.find { it.id == id }
                 c != null && vm.systemConnectionState.value.isHubOnline && (c.isRunning || c.notFullyIdle)
@@ -56,7 +57,7 @@ object JarvisDriver {
             AgentKind.CLAUDE -> claude.getOrPut(id) { newClaude().also { it.selectConversation(id) } }
             AgentKind.OPENCODE -> openCode.getOrPut(id) { newOpenCode().also { it.selectConversation(id) } }
             AgentKind.CODEX -> codex.getOrPut(id) { newCodex().also { it.selectConversation(id) } }
-            AgentKind.AGY -> Unit
+            AgentKind.AGY, AgentKind.DSH -> Unit
         }
     }
 
@@ -121,6 +122,7 @@ object JarvisDriver {
                 if (fresh) delay(900) else if (b.currentConversation.value?.id != id) { b.selectConversation(id); delay(900) }
                 b.sendMessage(text)
             }
+            AgentKind.DSH -> if (screenFree) vm.dshBackend.sendMessage(text) else error("Jarvis cannot send to a DeepSeek Harness chat that is not on screen.")
         }
     }
 
@@ -139,6 +141,7 @@ object JarvisDriver {
             AgentKind.OPENCODE -> (openCode[id] ?: vm.openCodeBackend).interrupt(id)
             AgentKind.CODEX -> (codex[id] ?: vm.codexBackend).interrupt(id)
             AgentKind.AGY -> hub.cancelCascadeInvocation(id)
+            AgentKind.DSH -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.DSH) vm.dshBackend.stopStreaming()
         }
     }
 
@@ -148,6 +151,7 @@ object JarvisDriver {
         AgentKind.OPENCODE -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.OPENCODE) vm.openCodeBackend.messages.value else openCode[id]?.messages?.value
         AgentKind.CODEX -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.CODEX) vm.codexBackend.messages.value else codex[id]?.messages?.value
         AgentKind.AGY -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.AGY) vm.messages.value else null
+        AgentKind.DSH -> if (onScreen(id) && vm.currentConversation.value?.agent == AgentKind.DSH) vm.dshBackend.messages.value else null
     }
 
     /** The tool the chat's current reply is running, if any. */

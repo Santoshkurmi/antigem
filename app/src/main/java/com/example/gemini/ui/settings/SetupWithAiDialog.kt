@@ -62,6 +62,7 @@ private fun agentName(agent: AgentKind) = when (agent) {
     AgentKind.CODEX -> "Codex"
     AgentKind.AGY -> "Antigravity (agy)"
     AgentKind.OPENCODE -> "OpenCode"
+    AgentKind.DSH -> "DeepSeek Harness (dsh)"
 }
 
 private fun agentAccent(agent: AgentKind) = when (agent) {
@@ -69,6 +70,7 @@ private fun agentAccent(agent: AgentKind) = when (agent) {
     AgentKind.CODEX -> CodexAccent
     AgentKind.AGY -> AgyAccent
     AgentKind.OPENCODE -> OpenCodeAccent
+    AgentKind.DSH -> com.example.gemini.ui.components.DshAccent
 }
 
 /** owner/repo, owner/repo@branch or a GitHub link → a link any agent can open. */
@@ -99,6 +101,7 @@ fun repoSetupPrompt(source: String, agent: AgentKind, kind: RepoSetupKind): Stri
         AgentKind.CODEX -> "copy each skill folder (the folder holding SKILL.md, with all its files) to ~/.codex/skills/<skill-name>/"
         AgentKind.AGY -> "copy each skill folder (the folder holding SKILL.md, with all its files) to ~/.gemini/antigravity/skills/<skill-name>/"
         AgentKind.OPENCODE -> "copy each skill folder (the folder holding SKILL.md, with all its files) to ~/.config/opencode/skills/<skill-name>/"
+        AgentKind.DSH -> "copy each skill folder (the folder holding SKILL.md, with all its files) to ~/.dsh/skills/<skill-name>/"
     }
     val plugins = when (agent) {
         AgentKind.CLAUDE -> listOf(
@@ -119,12 +122,16 @@ fun repoSetupPrompt(source: String, agent: AgentKind, kind: RepoSetupKind): Stri
             "OpenCode plugins are JavaScript packages: `opencode plugin add <npm package or git link>`.",
             "OpenCode can't load Claude Code, Codex or Antigravity plugin bundles: install their skills (their skills/ folders) and MCP servers separately instead."
         )
+        AgentKind.DSH -> listOf(
+            "DeepSeek Harness has no plugin installs here: install a plugin's skills (its skills/ folders) and MCP servers separately instead."
+        )
     }
     val mcp = when (agent) {
         AgentKind.CLAUDE -> "`claude mcp add --scope user <name> -- <command> [args]`, or `claude mcp add --scope user --transport http <name> <url>`; check with `claude mcp list`"
         AgentKind.CODEX -> "`codex mcp add <name> -- <command> [args]`, or `codex mcp add <name> --url <url>`; check with `codex mcp list`"
         AgentKind.AGY -> "`agy mcp add <name> <command> [args]` (flags go before the name), or `agy mcp add <name> <url>`; check with `agy mcp list`"
         AgentKind.OPENCODE -> "`opencode mcp add --global <name> -- <command> [args]`, or `opencode mcp add --global <name> --url <url>`; check with `opencode mcp list`"
+        AgentKind.DSH -> "DeepSeek Harness' MCP servers are set in the app (Settings → DeepSeek Harness → MCP servers): tell the user the name, command and arguments (or URL) to add there"
     }
     return buildString {
         appendLine("Set up this GitHub repository for $name: $url")

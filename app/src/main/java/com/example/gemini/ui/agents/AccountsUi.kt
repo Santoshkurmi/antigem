@@ -128,9 +128,10 @@ fun AccountsButton(
     modifier: Modifier = Modifier,
     openCode: AgentStatusEntry? = null,
     codex: AgentStatusEntry? = null,
-    codexEmail: String? = null
+    codexEmail: String? = null,
+    dsh: AgentStatusEntry? = null
 ) {
-    val entries = listOfNotNull(agy, claude, openCode, codex)
+    val entries = listOfNotNull(agy, claude, openCode, codex, dsh)
     val needsSignIn = entries.any { it.isSignedOut }
     val single = entries.singleOrNull()
     Surface(
@@ -146,6 +147,7 @@ fun AccountsButton(
                 claude?.let { AccountAvatar(AgentKind.CLAUDE, it, claudeStatus?.auth?.email?.firstOrNull()) }
                 openCode?.let { AccountAvatar(AgentKind.OPENCODE, it, null) }
                 codex?.let { AccountAvatar(AgentKind.CODEX, it, codexEmail?.firstOrNull()) }
+                dsh?.let { AccountAvatar(AgentKind.DSH, it, null) }
             }
             Spacer(Modifier.width(7.dp))
             val text = when {
@@ -154,6 +156,7 @@ fun AccountsButton(
                 single?.agent == AgentKind.CLAUDE && single.isReady -> claudeStatus?.auth?.email?.substringBefore('@') ?: "Account"
                 single?.agent == AgentKind.OPENCODE && single.isReady -> "OpenCode"
                 single?.agent == AgentKind.CODEX && single.isReady -> codexEmail?.substringBefore('@') ?: "Codex"
+                single?.agent == AgentKind.DSH && single.isReady -> "DeepSeek"
                 single != null -> single.label
                 else -> "Accounts"
             }
@@ -192,7 +195,11 @@ fun AccountsDialog(
     /** Plan, version, usage. */
     codexFacts: List<String> = emptyList(),
     onCodexSignOut: () -> Unit = {},
-    onCodexSettings: () -> Unit = {}
+    onCodexSettings: () -> Unit = {},
+    dsh: AgentStatusEntry? = null,
+    /** Version, provider, model. */
+    dshFacts: List<String> = emptyList(),
+    onDshSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     // `agy --version`, asked from the bridge (this phone's or the server's) each time the dialog opens
@@ -304,6 +311,11 @@ fun AccountsDialog(
                     if (agy != null || claude != null || openCode != null) Spacer(Modifier.height(12.dp))
                     CodexAccountSection(entry, codexEmail, codexFacts, onCodexSignOut, onCodexSettings, onDismiss)
                 }
+
+                dsh?.let { entry ->
+                    if (agy != null || claude != null || openCode != null || codex != null) Spacer(Modifier.height(12.dp))
+                    DshAccountSection(entry, dshFacts, onDshSettings, onDismiss)
+                }
             }
         }
     }
@@ -362,6 +374,28 @@ private fun OpenCodeAccountSection(entry: AgentStatusEntry, facts: List<String>,
             }
         }
         SectionButton(if (entry.isReady) "Providers & settings" else "OpenCode settings", Icons.Outlined.Settings) {
+            onSettings()
+            onDismiss()
+        }
+    }
+}
+
+@Composable
+private fun DshAccountSection(entry: AgentStatusEntry, facts: List<String>, onSettings: () -> Unit, onDismiss: () -> Unit) {
+    AccountSection(
+        entry = entry,
+        avatar = { AccountAvatar(AgentKind.DSH, entry, null, size = 44.dp) },
+        title = AgentKind.DSH.label(),
+        subtitle = if (entry.isReady) "No sign-in: the provider's API key is kept on the server." else entry.detail,
+        facts = facts
+    ) {
+        if (!entry.isReady) entry.action?.let {
+            SectionButton(it.label, primary = AgentKind.DSH.accent()) {
+                it.onClick()
+                onDismiss()
+            }
+        }
+        SectionButton(if (entry.isReady) "Provider & settings" else "DeepSeek Harness settings", Icons.Outlined.Settings) {
             onSettings()
             onDismiss()
         }

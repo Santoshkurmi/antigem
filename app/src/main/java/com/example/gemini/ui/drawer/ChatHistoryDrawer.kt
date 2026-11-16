@@ -840,6 +840,7 @@ fun ChatHistoryDrawer(
                                 com.example.gemini.domain.model.AgentKind.CLAUDE -> "Claude"
                                 com.example.gemini.domain.model.AgentKind.OPENCODE -> "OpenCode"
                                 com.example.gemini.domain.model.AgentKind.CODEX -> "Codex"
+                                com.example.gemini.domain.model.AgentKind.DSH -> "DeepSeek"
                             }
                             add(agent to label)
                         }
@@ -1594,17 +1595,19 @@ private fun ChatHistoryItemRow(
                 val isClaudeChat = conv.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
                 val isOpenCodeChat = conv.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
                 val isCodexChat = conv.agent == com.example.gemini.domain.model.AgentKind.CODEX
+                val isDshChat = conv.agent == com.example.gemini.domain.model.AgentKind.DSH
                 if (isJarvis) {
                     com.example.gemini.ui.jarvis.JarvisBotIcon(19.dp, com.example.gemini.ui.jarvis.Cyan.copy(alpha = if (isSelected) 1f else 0.85f))
                 } else Icon(
                     // an Antigravity cloud chat (Remote Agents) shows a cloud
                     imageVector = if (conv.isCloud) Icons.Outlined.Cloud else Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = if (conv.isCloud) "Cloud chat" else if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else if (isCodexChat) "Codex chat" else null,
+                    contentDescription = if (conv.isCloud) "Cloud chat" else if (isClaudeChat) "Claude Code chat" else if (isOpenCodeChat) "OpenCode chat" else if (isCodexChat) "Codex chat" else if (isDshChat) "DeepSeek Harness chat" else null,
                     tint = when {
                         conv.isCloud -> com.example.gemini.theme.GeminiBlue.copy(alpha = if (isSelected) 1f else 0.85f)
                         isClaudeChat -> com.example.gemini.ui.components.ClaudeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isOpenCodeChat -> com.example.gemini.ui.components.OpenCodeAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isCodexChat -> com.example.gemini.ui.components.CodexAccent.copy(alpha = if (isSelected) 1f else 0.85f)
+                        isDshChat -> com.example.gemini.ui.components.DshAccent.copy(alpha = if (isSelected) 1f else 0.85f)
                         isSelected -> ClaudeTerracotta
                         else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     },
@@ -1797,7 +1800,8 @@ private fun ChatHistoryItemRow(
                         AppToastHelper.showToast("Conversation ID copied", ChatToastType.SUCCESS)
                     }
                 )
-                DropdownMenuItem(
+                // DeepSeek Harness chats cannot be copied
+                if (conv.agent != com.example.gemini.domain.model.AgentKind.DSH) DropdownMenuItem(
                     text = { Text("Fork Conversation", fontSize = 13.5.sp) },
                     leadingIcon = {
                         Icon(

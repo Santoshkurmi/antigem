@@ -178,6 +178,7 @@ object JarvisTasks {
         val hiddenNote = listOfNotNull(brief?.takeIf { it.isNotBlank() }, com.example.gemini.data.context.GlobalContext.taskBody()).joinToString("\n\n")
         val prompt = (if (hiddenNote.isNotBlank()) PromptExpansion.hidden(hiddenNote) else "") + PromptExpansion.expand(text)
         val id = when (agent) {
+            AgentKind.DSH -> error("Jarvis tasks cannot run on DeepSeek Harness yet.")
             AgentKind.CODEX -> {
                 val b = newCodexBackend()
                 if (b.state.value.isBlocking) b.refreshStatus()
@@ -327,6 +328,7 @@ object JarvisTasks {
                     b.sendMessage(outgoing)
                 }
             }
+            AgentKind.DSH -> return "Jarvis tasks cannot run on DeepSeek Harness yet."
         }
         val now = System.currentTimeMillis()
         put(t.copy(state = State.STARTING, turnAt = now, updatedAt = now, progressAt = now, seenRunning = false,
@@ -345,6 +347,7 @@ object JarvisTasks {
             AgentKind.AGY -> hub.cancelCascadeInvocation(t.id).onFailure { return "Could not stop: ${it.message}" }
             AgentKind.OPENCODE -> (openCodeBackends[t.id] ?: vm.openCodeBackend).interrupt(t.id).onFailure { return "Could not stop: ${it.message}" }
             AgentKind.CODEX -> (codexBackends[t.id] ?: vm.codexBackend).interrupt(t.id).onFailure { return "Could not stop: ${it.message}" }
+            AgentKind.DSH -> return "Jarvis tasks cannot run on DeepSeek Harness yet."
         }
         if (!quiet) put(t.copy(state = State.STOPPED, updatedAt = System.currentTimeMillis(), note = "Stopped", reported = true))
         return "Stopped."
@@ -381,6 +384,7 @@ object JarvisTasks {
             AgentKind.OPENCODE -> openCodeBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
             AgentKind.CODEX -> codexBackends[t.id]?.messages?.value?.takeIf { it.isNotEmpty() } ?: runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
             AgentKind.AGY -> runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
+            AgentKind.DSH -> runCatching { JarvisController.readChat(t.id) }.getOrDefault(emptyList())
         }
         val text = msgs.lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content.orEmpty()
         return JarvisText.report(text)
@@ -470,6 +474,7 @@ object JarvisTasks {
         AgentKind.CODEX -> codexBackends[t.id]?.isCurrentChatActivelyRunning?.value == true ||
             (vm.currentConversation.value?.id == t.id && vm.codexBackend.isCurrentChatActivelyRunning.value) ||
             vm.codexBackend.conversations.value.any { it.id == t.id && it.isRunning }
+        AgentKind.DSH -> vm.dshBackend.conversations.value.any { it.id == t.id && it.isRunning }
     }
 
     private fun agyBusy(id: String): Boolean {
@@ -543,6 +548,12 @@ object JarvisTasks {
                 error = b.conversationError.value ?: last?.takeIf { !running && it.role == MessageRole.ASSISTANT && it.content.contains("<!-- error -->") }
                     ?.let { m -> Regex("\"userMessage\":\"((?:[^\"\\\\]|\\\\.)*)\"").find(m.content)?.groupValues?.get(1) ?: "Codex failed" }
                 sig = "${msgs.size}:${last?.content?.length}:${last?.toolCalls?.size}:${last?.toolCalls?.lastOrNull()?.status}"
+            }
+            // Jarvis does not run tasks on DeepSeek Harness: only its chat list is read
+            AgentKind.DSH -> {
+                val c = vm.dshBackend.conversations.value.find { it.id == t.id }
+                running = c?.isRunning == true
+                sig = "${c?.updatedAt}"
             }
         }
         if (progressSig.put(t.id, sig) != sig) t = t.copy(progressAt = now)

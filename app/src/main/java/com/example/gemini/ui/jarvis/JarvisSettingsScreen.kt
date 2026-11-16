@@ -153,6 +153,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
         AgentKind.AGY -> "Antigravity"
         AgentKind.OPENCODE -> "OpenCode"
         AgentKind.CODEX -> "Codex"
+        AgentKind.DSH -> "DeepSeek Harness"
         null -> "the agent"
     }
 

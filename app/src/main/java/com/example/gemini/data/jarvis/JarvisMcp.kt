@@ -795,7 +795,7 @@ object JarvisMcp {
         return if (owner != caller) "That chat is a task of ${JarvisManagers.nameOf(owner)}: only that Jarvis chat directs it." else null
     }
 
-    private fun agentName(agent: AgentKind) = when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.CODEX -> "Codex"; AgentKind.AGY -> "Antigravity" }
+    private fun agentName(agent: AgentKind) = when (agent) { AgentKind.CLAUDE -> "Claude Code"; AgentKind.OPENCODE -> "OpenCode"; AgentKind.CODEX -> "Codex"; AgentKind.AGY -> "Antigravity"; AgentKind.DSH -> "DeepSeek Harness" }
 
     /** Hidden in front of every task's goal: how a sub-agent of Jarvis works and reports, and its team's role. */
     private fun subAgentBrief(team: JarvisManagers.Team?): String = buildString {
@@ -1322,6 +1322,8 @@ object JarvisMcp {
         AgentKind.OPENCODE -> vm.openCodeBackend.availableModels.value
         AgentKind.CODEX -> vm.codexBackend.availableModels.value
         AgentKind.AGY -> vm.agyBackend.enabledModels.value
+        // Jarvis does not drive DeepSeek Harness chats
+        AgentKind.DSH -> emptyList()
     }
 
     private fun findModel(text: String, models: List<AiModel>): AiModel? {

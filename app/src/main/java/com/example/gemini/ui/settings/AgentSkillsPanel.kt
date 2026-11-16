@@ -85,6 +85,7 @@ private fun pluginHint(agent: AgentKind, kinds: List<String>): String? {
         AgentKind.CODEX -> if ("codex-plugin" in kinds || "claude-marketplace" in kinds) "This repository is a plugin marketplace: add it in Plugins → Marketplaces." else null
         AgentKind.AGY -> if ("agy-plugin" in kinds || "claude-plugin" in kinds || "claude-marketplace" in kinds) "This repository is a plugin: install it from the Plugins tab (From GitHub)." else null
         AgentKind.OPENCODE -> null
+        AgentKind.DSH -> null
     }
 }
 

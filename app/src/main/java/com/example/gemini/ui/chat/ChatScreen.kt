@@ -198,8 +198,9 @@ fun ChatScreen(
     val isClaudeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.CLAUDE
     val isOpenCodeChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.OPENCODE
     val isCodexChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.CODEX
+    val isDshChat = currentConv?.agent == com.example.gemini.domain.model.AgentKind.DSH
     /** The chat on screen is Antigravity's (its hub, bridge banners and sign-in apply). */
-    val isAgyChat = !isClaudeChat && !isOpenCodeChat && !isCodexChat
+    val isAgyChat = !isClaudeChat && !isOpenCodeChat && !isCodexChat && !isDshChat
     val openCodeBackend = viewModel.openCodeBackend
     val openCodePending by openCodeBackend.pendingPermissions.collectAsState()
     val openCodeState by openCodeBackend.state.collectAsState()
@@ -227,6 +228,20 @@ fun ChatScreen(
     var codexSettingsPage by remember { mutableStateOf<com.example.gemini.ui.codex.CodexSettingsPage?>(null) }
     LaunchedEffect(Unit) {
         codexBackend.toasts.collect {
+            com.example.gemini.ui.components.AppToastHelper.showToast(it, com.example.gemini.ui.components.ChatToastType.INFO)
+        }
+    }
+    val dshBackend = viewModel.dshBackend
+    val dshPending by dshBackend.pendingApprovals.collectAsState()
+    val dshState by dshBackend.state.collectAsState()
+    val dshStatus by dshBackend.status.collectAsState()
+    val dshConfig by dshBackend.config.collectAsState()
+    val dshIsRefreshingModels by dshBackend.isRefreshingModels.collectAsState()
+    var openDshSettings by remember { mutableStateOf(false) }
+    // the DeepSeek Harness page Settings opens on (Server & install for Install, Provider for a missing key, MCP for /mcp)
+    var dshSettingsPage by remember { mutableStateOf<com.example.gemini.ui.dsh.DshSettingsPage?>(null) }
+    LaunchedEffect(Unit) {
+        dshBackend.toasts.collect {
             com.example.gemini.ui.components.AppToastHelper.showToast(it, com.example.gemini.ui.components.ChatToastType.INFO)
         }
     }
@@ -609,7 +624,39 @@ fun ChatScreen(
             onRetry = { codexBackend.retryConnections() }
         )
     } else null
-    val agentEntries = listOfNotNull(agyEntry, claudeEntry, openCodeEntry, codexEntry)
+    val dshEntry = if (com.example.gemini.domain.model.AgentKind.DSH in enabledAgents) {
+        com.example.gemini.ui.agents.dshStatusEntry(
+            state = dshState,
+            status = dshStatus,
+            serverRestarting = serverRestarting,
+            // installs right away; Settings → DeepSeek Harness shows the progress
+            onSetup = {
+                dshBackend.startCliJob("install")
+                dshSettingsPage = com.example.gemini.ui.dsh.DshSettingsPage.SERVER
+                showSettingsDialog = true
+            },
+            onAddKey = {
+                dshSettingsPage = com.example.gemini.ui.dsh.DshSettingsPage.PROVIDER
+                showSettingsDialog = true
+            },
+            onRestartServer = restartLocalServer,
+            onRetry = { dshBackend.controlServer("restart") }
+        )
+    } else null
+    val agentEntries = listOfNotNull(agyEntry, claudeEntry, openCodeEntry, codexEntry, dshEntry)
+
+    // DeepSeek Harness' "/" commands that open a screen of the app instead of going to dsh
+    val handleDshCommand: (com.example.gemini.data.agent.dsh.DshChatBackend.AppCommand) -> Unit = { cmd ->
+        when (cmd) {
+            com.example.gemini.data.agent.dsh.DshChatBackend.AppCommand.MODEL_PICKER -> showModelSelector = true
+            com.example.gemini.data.agent.dsh.DshChatBackend.AppCommand.SETTINGS -> { openDshSettings = true; showSettingsDialog = true }
+            com.example.gemini.data.agent.dsh.DshChatBackend.AppCommand.MCP -> {
+                dshSettingsPage = com.example.gemini.ui.dsh.DshSettingsPage.MCP
+                showSettingsDialog = true
+            }
+            com.example.gemini.data.agent.dsh.DshChatBackend.AppCommand.NEW_CHAT -> viewModel.startNewChat(com.example.gemini.domain.model.AgentKind.DSH)
+        }
+    }
 
     // Codex's "/" commands that open a screen of the app instead of going to Codex
     val handleCodexCommand: (com.example.gemini.data.agent.codex.CodexChatBackend.AppCommand) -> Unit = { cmd ->
@@ -839,8 +886,9 @@ fun ChatScreen(
     val allSlashCommands by com.example.gemini.data.remote.SlashCommandsCache.commands.collectAsState()
     val codexSlashCommands by codexBackend.slashCommands.collectAsState()
     val openCodeSlashCommands by openCodeBackend.slashCommands.collectAsState()
+    val dshSlashCommands by dshBackend.slashCommands.collectAsState()
     // each agent's own list (what it really loads: the user's, the plugins' and the project's skills, its commands)
-    val effectiveSlashCommands = if (isClaudeChat) claudeSlashCommands else if (isCodexChat) codexSlashCommands else if (isOpenCodeChat) openCodeSlashCommands else allSlashCommands
+    val effectiveSlashCommands = if (isClaudeChat) claudeSlashCommands else if (isCodexChat) codexSlashCommands else if (isOpenCodeChat) openCodeSlashCommands else if (isDshChat) dshSlashCommands else allSlashCommands
 
     // the "/" menu follows the open chat's project
     LaunchedEffect(currentConv?.id, currentConv?.workspaceUri, currentConv?.agent) {
@@ -848,6 +896,7 @@ fun ChatScreen(
             isClaudeChat -> claudeBackend.refreshInfoForChat()
             isCodexChat -> codexBackend.refreshSkills(force = false)
             isOpenCodeChat -> openCodeBackend.refreshSlashCommands()
+            isDshChat -> dshBackend.refreshSkills()
         }
     }
 
@@ -1131,7 +1180,7 @@ fun ChatScreen(
 
     // The Claude Code-style working row: under the reply for as long as the agent works, but not while it waits for
     // the user (an approval or a question)
-    val waitingForUser = (isClaudeChat && claudePending.isNotEmpty()) || (isOpenCodeChat && openCodePending.isNotEmpty()) || (isCodexChat && codexPending.isNotEmpty()) ||
+    val waitingForUser = (isClaudeChat && claudePending.isNotEmpty()) || (isOpenCodeChat && openCodePending.isNotEmpty()) || (isCodexChat && codexPending.isNotEmpty()) || (isDshChat && dshPending.isNotEmpty()) ||
         lastToolCalls.any { it.status == "PENDING_APPROVAL" || it.status == "AWAITING_CHOICE" }
     val showWorkingRow = (isRunningOrStreaming || holdingTail) && !waitingForUser && !footerShown
 
@@ -1163,6 +1212,17 @@ fun ChatScreen(
                 codexModelsError != null -> "No models"
                 selectedModelId.isNotBlank() -> selectedModelId
                 else -> "Choose model"
+            },
+            family = com.example.gemini.domain.model.ModelFamily.OTHER
+        )
+    } else if (isDshChat) {
+        // the list needs dsh running: the chat's model is known without it
+        enabledModels.find { it.id == selectedModelId } ?: AiModel(
+            id = selectedModelId.ifBlank { "default" },
+            displayName = when {
+                selectedModelId.isNotBlank() -> selectedModelId.substringAfter('/')
+                dshIsRefreshingModels -> "Loading models…"
+                else -> dshConfig?.model?.takeIf { it.isNotBlank() } ?: "Choose model"
             },
             family = com.example.gemini.domain.model.ModelFamily.OTHER
         )
@@ -1443,7 +1503,8 @@ fun ChatScreen(
                         onClick = { showAccountsDialog = true },
                         openCode = openCodeEntry,
                         codex = codexEntry,
-                        codexEmail = codexAccount?.email
+                        codexEmail = codexAccount?.email,
+                        dsh = dshEntry
                     )
                 },
                 claudeActions = remember(viewModel) {
@@ -1451,6 +1512,7 @@ fun ChatScreen(
                         loadMessages = { id ->
                             if (viewModel.openCodeBackend.conversations.value.any { it.id == id }) viewModel.loadOpenCodeMessages(id)
                             else if (viewModel.codexBackend.conversations.value.any { it.id == id }) viewModel.loadCodexMessages(id)
+                            else if (viewModel.dshBackend.conversations.value.any { it.id == id }) viewModel.loadDshMessages(id)
                             else viewModel.loadClaudeMessages(id)
                         },
                         rename = { id, title -> viewModel.renameConversation(id, title) },
@@ -2165,7 +2227,25 @@ fun ChatScreen(
                                         secondaryLabel = if (codexState == com.example.gemini.data.agent.codex.CodexState.CHECKING) null else "Server logs",
                                         onSecondary = { showLocalServerOutputDialog = true }
                                     )
-                                } else when (if (isClaudeChat || isOpenCodeChat || isCodexChat) null else systemConnectionState.status) {
+                                } else if (isDshChat && dshState != com.example.gemini.data.agent.dsh.DshState.READY) {
+                                    com.example.gemini.ui.agents.AgentSetupPrompt(
+                                        agent = com.example.gemini.domain.model.AgentKind.DSH,
+                                        title = when (dshState) {
+                                            com.example.gemini.data.agent.dsh.DshState.CHECKING -> "Starting DeepSeek Harness…"
+                                            com.example.gemini.data.agent.dsh.DshState.NOT_INSTALLED -> "DeepSeek Harness is not installed"
+                                            com.example.gemini.data.agent.dsh.DshState.NO_KEY -> "Add an API key"
+                                            else -> "DeepSeek Harness is unavailable"
+                                        },
+                                        message = if (dshState == com.example.gemini.data.agent.dsh.DshState.CHECKING)
+                                            "Waiting for the server to come up. This takes a few seconds after the app opens."
+                                        else dshEntry?.detail ?: dshState.label,
+                                        statusColor = dshEntry?.color,
+                                        actionLabel = dshEntry?.action?.label,
+                                        onAction = { dshEntry?.action?.onClick?.invoke() },
+                                        secondaryLabel = if (dshState == com.example.gemini.data.agent.dsh.DshState.CHECKING) null else "Server logs",
+                                        onSecondary = { showLocalServerOutputDialog = true }
+                                    )
+                                } else when (if (isClaudeChat || isOpenCodeChat || isCodexChat || isDshChat) null else systemConnectionState.status) {
                                     com.example.gemini.data.remote.SystemStatus.CHECKING_AUTH -> {
                                         com.example.gemini.ui.components.NewChatCheckingAuthPromptCard()
                                     }
@@ -2264,7 +2344,7 @@ fun ChatScreen(
                                                 message = feedItem.message,
                                                 isLastUserMessage = true,
                                                 isDevModeEnabled = isDevModeEnabled,
-                                                canEdit = !isReadOnlyChat,
+                                                canEdit = !isReadOnlyChat && !isDshChat,
                                                 onEdit = { targetMsg ->
                                                     if (willDeleteOutput) {
                                                         pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
@@ -2334,7 +2414,7 @@ fun ChatScreen(
                                                 // fades in where the working row fades out (no pop-in at the end of a turn)
                                                 modifier = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = null, fadeOutSpec = null),
                                                 isDevModeEnabled = isDevModeEnabled,
-                                                canRetry = !isReadOnlyChat,
+                                                canRetry = !isReadOnlyChat && !isDshChat,
                                                 onRetry = { targetMsg ->
                                                     viewModel.retryMessage(targetMsg.id)
                                                     userSentMessageTrigger++
@@ -2382,7 +2462,7 @@ fun ChatScreen(
                                     if (showWorkingRow) {
                                         item(key = "working_spinner", contentType = "working_spinner") {
                                             com.example.gemini.ui.components.AgentWorkingSpinner(
-                                                color = if (isClaudeChat) com.example.gemini.ui.components.ClaudeAccent else if (isOpenCodeChat) com.example.gemini.ui.components.OpenCodeAccent else if (isCodexChat) com.example.gemini.ui.components.CodexAccent else com.example.gemini.ui.components.AgyAccent,
+                                                color = if (isClaudeChat) com.example.gemini.ui.components.ClaudeAccent else if (isOpenCodeChat) com.example.gemini.ui.components.OpenCodeAccent else if (isCodexChat) com.example.gemini.ui.components.CodexAccent else if (isDshChat) com.example.gemini.ui.components.DshAccent else com.example.gemini.ui.components.AgyAccent,
                                                 compacting = isClaudeChat && claudeCompacting,
                                                 // leaves in the frame the reply's footer arrives, which fades in in its place
                                                 modifier = Modifier.animateItem(fadeInSpec = tween(180), placementSpec = null, fadeOutSpec = null)
@@ -2462,6 +2542,7 @@ fun ChatScreen(
                             isClaudeChat -> claudeBackend.refreshInfoForChat()
                             isCodexChat -> codexBackend.refreshSkills()
                             isOpenCodeChat -> openCodeBackend.refreshSlashCommands()
+                            isDshChat -> dshBackend.refreshSkills()
                             systemConnectionState.isHubOnline -> com.example.gemini.data.remote.SlashCommandsCache.refresh(agyHubUrl)
                         }
                     }
@@ -2484,7 +2565,7 @@ fun ChatScreen(
 
                     // a Claude command that needs no argument runs on tap (when nothing else is typed and no turn runs)
                     val slashRunsOnTap: (com.example.gemini.data.remote.SlashCommandItem) -> Boolean = { item ->
-                        (isClaudeChat || (isCodexChat && item.type == "command")) && item.type != "app" && item.type != "plugin" && item.type != "custom" && item.argumentHint.isBlank() &&
+                        (isClaudeChat || (isCodexChat && item.type == "command") || (isDshChat && item.type == "command")) && item.type != "app" && item.type != "plugin" && item.type != "custom" && item.argumentHint.isBlank() &&
                             (slash == null || slash.nothingBefore) && !isActivelyRunning && attachments.isEmpty()
                     }
                     androidx.compose.animation.AnimatedVisibility(
@@ -2503,12 +2584,19 @@ fun ChatScreen(
                                 val before = inputState.text.substring(0, slashIndex)
                                 val appCmd = if (isClaudeChat && item.type == "app") claudeBackend.appCommand(item.command) else null
                                 val codexCmd = if (isCodexChat && item.type == "app") codexBackend.appCommand(item.command) else null
+                                val dshCmd = if (isDshChat && item.type == "app") dshBackend.appCommand(item.command) else null
                                 when {
                                     codexCmd != null -> {
                                         inputState.setTextAndPlaceCursorAtEnd(before)
                                         focusManager.clearFocus(force = true)
                                         keyboardController?.hide()
                                         handleCodexCommand(codexCmd)
+                                    }
+                                    dshCmd != null -> {
+                                        inputState.setTextAndPlaceCursorAtEnd(before)
+                                        focusManager.clearFocus(force = true)
+                                        keyboardController?.hide()
+                                        handleDshCommand(dshCmd)
                                     }
                                     appCmd != null -> {
                                         inputState.setTextAndPlaceCursorAtEnd(before)
@@ -2719,8 +2807,10 @@ fun ChatScreen(
                 }
 
                 // Agent prompts docked above the input (both agents): permission requests, then questions
-                val approvalItems = remember(pendingApprovals, claudePending, openCodePending, codexPending, isClaudeChat, isOpenCodeChat, isCodexChat) {
-                    if (isCodexChat) {
+                val approvalItems = remember(pendingApprovals, claudePending, openCodePending, codexPending, dshPending, isClaudeChat, isOpenCodeChat, isCodexChat, isDshChat) {
+                    if (isDshChat) {
+                        com.example.gemini.ui.dsh.dshApprovalItems(dshPending, dshBackend, messages)
+                    } else if (isCodexChat) {
                         com.example.gemini.ui.codex.codexApprovalItems(codexPending, codexBackend, messages)
                     } else if (isOpenCodeChat) {
                         com.example.gemini.ui.opencode.openCodeApprovalItems(openCodePending, openCodeBackend)
@@ -2744,7 +2834,9 @@ fun ChatScreen(
                 ) {
                     com.example.gemini.ui.agents.AgentApprovalPanel(
                         items = approvalItems.ifEmpty { lastApprovalItems[0] },
-                        onAllowAll = if (isCodexChat) {
+                        onAllowAll = if (isDshChat) {
+                            { dshPending.forEach { dshBackend.approve(it.key) } }
+                        } else if (isCodexChat) {
                             { codexPending.forEach { codexBackend.approve(it.key) } }
                         } else if (isOpenCodeChat) {
                             { openCodePending.forEach { openCodeBackend.replyPermission(it.id, "once") } }
@@ -2753,7 +2845,9 @@ fun ChatScreen(
                         } else {
                             { viewModel.approveAllPendingTools(pendingApprovals) }
                         },
-                        onDenyAll = if (isCodexChat) {
+                        onDenyAll = if (isDshChat) {
+                            { dshPending.forEach { dshBackend.deny(it.key) } }
+                        } else if (isCodexChat) {
                             { codexPending.forEach { codexBackend.deny(it.key) } }
                         } else if (isOpenCodeChat) {
                             { openCodePending.forEach { openCodeBackend.replyPermission(it.id, "reject") } }
@@ -2817,6 +2911,9 @@ fun ChatScreen(
                 if (isCodexChat) {
                     com.example.gemini.ui.codex.CodexControlsStrip(codexBackend)
                 }
+                if (isDshChat && !isReadOnlyChat) {
+                    com.example.gemini.ui.dsh.DshControlsStrip(dshBackend)
+                }
 
                 // Jarvis chat: its command strip (mission, teams' tasks, voice replies, autopilot)
                 if (jarvisEnabled && currentConv != null && (isJarvisTextChat || jarvisConversations.any { it.id == currentConv?.id })) {
@@ -2853,10 +2950,16 @@ fun ChatScreen(
 
                 // Chat Input Bar with Bottom Model & Thinking Selector Pills (Claude Android Style)
                 if (!isReadOnlyChat) ChatInputBar(
-                    isOnline = if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.OFFLINE && codexState != com.example.gemini.data.agent.codex.CodexState.NOT_INSTALLED && codexState != com.example.gemini.data.agent.codex.CodexState.DISABLED && codexState != com.example.gemini.data.agent.codex.CodexState.OUTDATED
+                    isOnline = if (isDshChat) dshState != com.example.gemini.data.agent.dsh.DshState.OFFLINE && dshState != com.example.gemini.data.agent.dsh.DshState.NOT_INSTALLED && dshState != com.example.gemini.data.agent.dsh.DshState.DISABLED && dshState != com.example.gemini.data.agent.dsh.DshState.OUTDATED
+                        else if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.OFFLINE && codexState != com.example.gemini.data.agent.codex.CodexState.NOT_INSTALLED && codexState != com.example.gemini.data.agent.codex.CodexState.DISABLED && codexState != com.example.gemini.data.agent.codex.CodexState.OUTDATED
                         else if (isOpenCodeChat) !openCodeState.isBlocking else if (isClaudeChat) !claudeState.isBlocking else systemConnectionState.canSend,
-                    isAuth = if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.SIGNED_OUT else if (isOpenCodeChat) true else if (isClaudeChat) claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNED_OUT && claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNING_IN else systemConnectionState.isAuth,
-                    offlineMessage = if (isCodexChat) when (codexState) {
+                    isAuth = if (isDshChat) dshState != com.example.gemini.data.agent.dsh.DshState.NO_KEY else if (isCodexChat) codexState != com.example.gemini.data.agent.codex.CodexState.SIGNED_OUT else if (isOpenCodeChat) true else if (isClaudeChat) claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNED_OUT && claudeChatState != com.example.gemini.data.agent.claude.ClaudeStatus.SIGNING_IN else systemConnectionState.isAuth,
+                    offlineMessage = if (isDshChat) when (dshState) {
+                        com.example.gemini.data.agent.dsh.DshState.NOT_INSTALLED -> "DeepSeek Harness is not installed on the server. See Settings → DeepSeek Harness."
+                        com.example.gemini.data.agent.dsh.DshState.DISABLED, com.example.gemini.data.agent.dsh.DshState.OUTDATED -> "Restart the server to use DeepSeek Harness."
+                        com.example.gemini.data.agent.dsh.DshState.NO_KEY -> "Add an API key in Settings → DeepSeek Harness → Provider & model."
+                        else -> "The server is offline. Start it to send messages."
+                    } else if (isCodexChat) when (codexState) {
                         com.example.gemini.data.agent.codex.CodexState.NOT_INSTALLED -> "Codex is not installed on the server. See Settings → Codex."
                         com.example.gemini.data.agent.codex.CodexState.DISABLED, com.example.gemini.data.agent.codex.CodexState.OUTDATED -> "Restart the server to use Codex."
                         else -> "The server is offline. Start it to send messages."
@@ -2890,6 +2993,13 @@ fun ChatScreen(
                         val codexCmd = if (isCodexChat && attachments.isEmpty()) codexBackend.appCommand(text) else null
                         if (codexCmd != null) {
                             handleCodexCommand(codexCmd)
+                            viewModel.clearDraft(activeConversationKey)
+                            inputState.clearText()
+                            return@ChatInputBar
+                        }
+                        val dshCmd = if (isDshChat && attachments.isEmpty()) dshBackend.appCommand(text) else null
+                        if (dshCmd != null) {
+                            handleDshCommand(dshCmd)
                             viewModel.clearDraft(activeConversationKey)
                             inputState.clearText()
                             return@ChatInputBar
@@ -2928,7 +3038,7 @@ fun ChatScreen(
                     speechManager = if (isClaudeChat) viewModel.claudeVoice else if (isCodexChat) viewModel.codexVoice else viewModel.speechManager,
                     // Claude and Codex cannot take audio: a voice note becomes text
                     voiceNotesAsText = isClaudeChat || isCodexChat,
-                    voiceEnabled = !isOpenCodeChat,
+                    voiceEnabled = !isOpenCodeChat && !isDshChat,
                     cascadeId = activeConversationKey,
                     focusRequester = chatInputFocusRequester,
                     queuedMessages = queuedMessages,
@@ -3011,6 +3121,11 @@ fun ChatScreen(
         com.example.gemini.ui.codex.CodexModelSheet(
             codexBackend,
             onOpenSettings = { openCodexSettings = true; showSettingsDialog = true }
+        ) { showModelSelector = false }
+    } else if (showModelSelector && isDshChat) {
+        com.example.gemini.ui.dsh.DshModelSheet(
+            dshBackend,
+            onOpenSettings = { dshSettingsPage = com.example.gemini.ui.dsh.DshSettingsPage.PROVIDER; showSettingsDialog = true }
         ) { showModelSelector = false }
     } else if (showModelSelector && isOpenCodeChat) {
         com.example.gemini.ui.opencode.OpenCodeModelSheet(
@@ -3192,9 +3307,12 @@ fun ChatScreen(
             initialOpenCodePage = openCodeSettingsPage,
             codex = viewModel.codexBackend,
             initialCodexPage = codexSettingsPage,
+            dsh = viewModel.dshBackend,
+            initialDshPage = dshSettingsPage,
             initialSection = requestedSettingsSection
                 ?: if (openOpenCodeSettings) com.example.gemini.ui.settings.SettingsSection.OPENCODE
-                else if (openCodexSettings) com.example.gemini.ui.settings.SettingsSection.CODEX else null,
+                else if (openCodexSettings) com.example.gemini.ui.settings.SettingsSection.CODEX
+                else if (openDshSettings) com.example.gemini.ui.settings.SettingsSection.DSH else null,
             enabledAgents = enabledAgents,
             isApplyingAgents = isApplyingAgents,
             onApplyAgents = { viewModel.applyAgents(it) },
@@ -3210,6 +3328,8 @@ fun ChatScreen(
                 openCodeSettingsPage = null
                 openCodexSettings = false
                 codexSettingsPage = null
+                openDshSettings = false
+                dshSettingsPage = null
             }
         )
     }
@@ -3278,6 +3398,17 @@ fun ChatScreen(
                 scope.launch { drawerState.close() }
                 openCodexSettings = true
                 showSettingsDialog = true
+            },
+            dsh = dshEntry,
+            dshFacts = listOfNotNull(
+                dshStatus?.version?.let { "dsh $it" },
+                dshConfig?.let { c -> c.providers.firstOrNull { it.id == c.provider }?.name ?: c.provider.ifBlank { null } },
+                dshConfig?.model?.takeIf { it.isNotBlank() }
+            ),
+            onDshSettings = {
+                scope.launch { drawerState.close() }
+                dshSettingsPage = com.example.gemini.ui.dsh.DshSettingsPage.PROVIDER
+                showSettingsDialog = true
             }
         )
     }
@@ -3294,7 +3425,7 @@ fun ChatScreen(
                 projectPath = path,
                 checkpoint = cp,
                 onDismiss = { restoreSheetFor = null },
-                onRestoreChat = if (isReadOnlyChat) null else {
+                onRestoreChat = if (isReadOnlyChat || isDshChat) null else {
                     {
                         viewModel.revertAndEditLastUserMessage(msg) { restoredText ->
                             inputState.setTextAndPlaceCursorAtEnd(restoredText)

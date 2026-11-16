@@ -24,7 +24,7 @@ import (
 // with agy's own installer. Repositories are downloaded file by file (or as one archive when the GitHub API is
 // out of requests), so git is not needed.
 //
-//	GET  /?agent=claude|codex|agy|opencode       → {dir, skills:[{id, name, description, path, kind, source?}]}
+//	GET  /?agent=claude|codex|agy|opencode|dsh   → {dir, skills:[{id, name, description, path, kind, source?}]}
 //	POST /inspect {source, agent?}               → {repo, ref, subpath, skills:[{path, id, name, description, exists, same_source}], plugin_kinds}
 //	POST /install {agent, source, paths, replace} → {installed:[id], replaced:[id]}   (paths empty = every skill found)
 //	POST /update  {agent, id}                    → {id}   (downloads it again from where it came from)
@@ -97,6 +97,12 @@ func (a *AgentSkills) skillsDir(agent string) (string, error) {
 			return filepath.Join(d, "opencode", "skills"), nil
 		}
 		return filepath.Join(a.home, ".config", "opencode", "skills"), nil
+	case "dsh":
+		// DeepSeek Harness also reads ~/.agents/skills; its own user root is <DSH_HOME>/skills
+		if d := os.Getenv("DSH_HOME"); d != "" {
+			return filepath.Join(d, "skills"), nil
+		}
+		return filepath.Join(a.home, ".dsh", "skills"), nil
 	}
 	return "", fmt.Errorf("Unknown agent %q", agent)
 }

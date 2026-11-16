@@ -52,6 +52,7 @@ import com.example.gemini.data.agent.claude.ClaudeCliStatus
 import com.example.gemini.data.agent.claude.ClaudeStatus
 import com.example.gemini.data.agent.opencode.OpenCodeState
 import com.example.gemini.data.agent.codex.CodexState
+import com.example.gemini.data.agent.dsh.DshState
 import com.example.gemini.data.remote.AgyHubClient
 import com.example.gemini.data.remote.SystemConnectionState
 import com.example.gemini.data.remote.SystemStatus
@@ -236,6 +237,49 @@ fun codexStatusEntry(
     }
 }
 
+fun dshStatusEntry(
+    state: com.example.gemini.data.agent.dsh.DshState,
+    status: com.example.gemini.data.agent.dsh.DshStatus?,
+    serverRestarting: Boolean,
+    onSetup: () -> Unit,
+    onAddKey: () -> Unit,
+    onRestartServer: () -> Unit,
+    onRetry: () -> Unit
+): AgentStatusEntry {
+    val color = when (state) {
+        DshState.READY -> SystemStatus.READY.dotColor
+        DshState.CHECKING -> SystemStatus.STARTING.dotColor
+        DshState.NO_KEY -> ClaudeStatus.SIGNED_OUT.dotColor
+        DshState.OFFLINE, DshState.DISABLED, DshState.OUTDATED -> SystemStatus.OFFLINE.dotColor
+        else -> ClaudeStatus.ERROR.dotColor
+    }
+    if (serverRestarting) {
+        return AgentStatusEntry(AgentKind.DSH, "Restarting…", SystemStatus.STARTING.dotColor, "The local server is restarting.", pending = true)
+    }
+    fun entry(detail: String? = null, action: AgentStatusAction? = null) = AgentStatusEntry(
+        AgentKind.DSH, state.label, color, detail, action,
+        pending = state == DshState.CHECKING || status?.starting == true,
+        isReady = state == DshState.READY,
+        isSignedOut = state == DshState.NO_KEY
+    )
+    return when (state) {
+        DshState.CHECKING -> entry("Starting… waiting for the server.")
+        DshState.READY -> entry(
+            listOfNotNull(
+                status?.version?.let { "dsh $it" },
+                status?.model?.takeIf { it.isNotBlank() },
+                if (status?.running == true) "running" else if (status?.starting == true) "starting…" else "starts with the first message"
+            ).joinToString(" · ")
+        )
+        DshState.NO_KEY -> entry("Add an API key for ${status?.provider ?: "the provider"} to use DeepSeek Harness.", AgentStatusAction("Add key", onAddKey))
+        DshState.NOT_INSTALLED -> entry("DeepSeek Harness is not installed yet. The app can install it for you (about 1 GB).", AgentStatusAction("Install", onSetup))
+        DshState.DISABLED -> entry("The server was started with DeepSeek Harness off.", AgentStatusAction("Restart", onRestartServer))
+        DshState.OUTDATED -> entry("This server has no DeepSeek Harness support yet. Update it.", AgentStatusAction("Restart", onRestartServer))
+        DshState.OFFLINE -> entry("The server is not running.", AgentStatusAction("Start", onRestartServer))
+        DshState.ERROR -> entry(status?.error, AgentStatusAction("Retry", onRetry))
+    }
+}
+
 fun claudePlanLabel(raw: String): String = when (raw.lowercase()) {
     "pro" -> "Pro"
     "max" -> "Max"
@@ -294,6 +338,7 @@ fun AgentMark(agent: AgentKind, modifier: Modifier = Modifier, size: Dp = 32.dp,
                 AgentKind.CLAUDE -> Text("✻", color = accent, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.5f).sp)
                 AgentKind.OPENCODE -> Text("</>", color = accent, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.3f).sp, maxLines = 1)
                 AgentKind.CODEX -> Text(">_", color = accent, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.36f).sp, maxLines = 1)
+                AgentKind.DSH -> Text("DS", color = accent, fontWeight = FontWeight.Bold, fontSize = (size.value * 0.34f).sp, maxLines = 1)
             }
         }
         if (statusColor != null) {
@@ -377,8 +422,9 @@ fun AgentStatusIndicator(
     val claude = entries.find { it.agent == AgentKind.CLAUDE }
     val openCode = entries.find { it.agent == AgentKind.OPENCODE }
     val codex = entries.find { it.agent == AgentKind.CODEX }
+    val dsh = entries.find { it.agent == AgentKind.DSH }
     // one slice per enabled agent
-    val colors = listOfNotNull(agy, claude, openCode, codex).map { it.color }
+    val colors = listOfNotNull(agy, claude, openCode, codex, dsh).map { it.color }
     Box(
         modifier = modifier.size(36.dp).clip(CircleShape).clickable { open = true },
         contentAlignment = Alignment.Center
