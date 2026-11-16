@@ -438,7 +438,8 @@ class CodexTranscript(var threadId: String = "") {
         for (lp in localPrompts.values) {
             val (text, files) = com.example.gemini.data.files.AttachedFiles.extract(lp.text, "local_" + lp.clientId)
             out.add(ChatMessage(id = "local_" + lp.clientId, conversationId = conversationId, role = MessageRole.USER,
-                content = text + attachmentsSuffix(lp.attachmentNames), attachments = lp.images + files, createdAt = lp.created))
+                content = text + attachmentsSuffix(lp.attachmentNames), attachments = lp.images + files, createdAt = lp.created,
+                checkpointKey = lp.clientId))
         }
         for ((at, e) in errorCards) {
             out.add(ChatMessage(id = "err_$at", conversationId = conversationId, role = MessageRole.ASSISTANT,
@@ -484,7 +485,8 @@ class CodexTranscript(var threadId: String = "") {
             }
         }
         return ChatMessage(id = item.id, conversationId = conversationId, role = MessageRole.USER,
-            content = text + attachmentsSuffix(names), attachments = images + files, createdAt = item.startedAt ?: t.startedAt ?: 0L)
+            content = text + attachmentsSuffix(names), attachments = images + files, createdAt = item.startedAt ?: t.startedAt ?: 0L,
+            checkpointKey = t.id)
     }
 
     private fun assistantMessage(conversationId: String, t: Turn, items: List<Item>, turnEnd: Boolean, awaiting: Set<String>, question: Question?): ChatMessage {

@@ -280,6 +280,9 @@ class OpenCodeChatBackend(
         }
     }
 
+    override fun checkpointKey(message: ChatMessage): String? =
+        message.id.takeIf { message.role == com.example.gemini.domain.model.MessageRole.USER && it.isNotBlank() }
+
     override fun onAppForegrounded() {
         backendScope.launch {
             if (_state.value != OpenCodeState.READY) refreshStatus()
@@ -668,6 +671,8 @@ class OpenCodeChatBackend(
                 attachedId = conv.id
                 transcript.reset(conv.id)
             }
+            // OpenCode was still replying in this chat: the message waits in its queue (its checkpoint is mid-turn)
+            val busy = transcript.isTurnActive
             // images show as previews, other files sent by the app by name; files by path come from the text's list
             val images = atts.filter { it.isImage && !it.base64.isNullOrBlank() }
             transcript.addLocalPrompt(msgId, text, atts.filter { !it.reference && it !in images }.map { it.name }, images)
@@ -696,6 +701,9 @@ class OpenCodeChatBackend(
                 running.add(conv.id)
                 publishConversations()
             }
+            // project checkpoint (when on): the files right before OpenCode gets the message
+            if (busy) com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurnInBackground(AgentKind.OPENCODE, conv.id, updated.workspaceUri, msgId, text)
+            else com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurn(AgentKind.OPENCODE, conv.id, updated.workspaceUri, msgId, text)
             val files = mutableListOf<JsonObject>()
             val notes = mutableListOf<String>()
             for (a in atts) attachmentPart(a, files, notes)

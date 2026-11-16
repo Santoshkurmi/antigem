@@ -763,6 +763,62 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Messages of the chat on screen, from the agent that owns it. */
     val messages: StateFlow<List<ChatMessage>> = byAgent(_messages, claudeBackend.messages, openCodeBackend.messages, codexBackend.messages)
 
+    // ==================== PROJECT CHECKPOINTS ====================
+
+    private fun backendOf(agent: AgentKind?): com.example.gemini.data.agent.AgentChatBackend = when (agent) {
+        AgentKind.CLAUDE -> claudeBackend
+        AgentKind.OPENCODE -> openCodeBackend
+        AgentKind.CODEX -> codexBackend
+        else -> agyBackend
+    }
+
+    /** Project checkpoints of the open chat's messages, by message id (empty while checkpoints are off). */
+    val messageCheckpoints: StateFlow<Map<String, com.example.gemini.data.checkpoint.CheckpointSummary>> =
+        combine(store.currentConversation, messages, com.example.gemini.data.checkpoint.ProjectCheckpoints.byKey) { conv, msgs, byKey ->
+            if (conv == null || byKey.isEmpty()) emptyMap()
+            else {
+                val backend = backendOf(conv.agent)
+                buildMap {
+                    for (m in msgs) {
+                        if (m.role != MessageRole.USER) continue
+                        val cp = backend.checkpointKey(m)?.let { byKey[it] } ?: continue
+                        put(m.id, cp)
+                    }
+                }
+            }
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Other chats (any agent) still running in the project at [path]. */
+    fun runningChatsInProject(path: String): Int {
+        val open = store.currentConversation.value?.id
+        return allConversations.value.count {
+            it.id != open && (it.isRunning || it.notFullyIdle) && com.example.gemini.data.checkpoint.ProjectCheckpoints.pathOf(it.workspaceUri) == path
+        }
+    }
+
+    init {
+        // the open chat's checkpoints are looked up whenever its messages (or the checkpoints) change
+        viewModelScope.launch(Dispatchers.Default) {
+            com.example.gemini.data.checkpoint.ProjectCheckpoints.refreshSettings()
+            combine(
+                store.currentConversation, messages,
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.settings,
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.changes
+            ) { conv, msgs, settings, changes ->
+                if (conv == null || conv.isCloud || settings?.isOn != true) null
+                else {
+                    val backend = backendOf(conv.agent)
+                    Triple(conv.workspaceUri, msgs.mapNotNullTo(LinkedHashSet()) { m -> m.takeIf { it.role == MessageRole.USER }?.let { backend.checkpointKey(it) } }, changes)
+                }
+            }.distinctUntilChanged().collectLatest { req ->
+                if (req == null) return@collectLatest
+                delay(300)
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.warm(req.first)
+                if (req.second.isNotEmpty()) com.example.gemini.data.checkpoint.ProjectCheckpoints.lookup(req.first, req.second)
+            }
+        }
+    }
+
     private val _thinkingPreference = MutableStateFlow(com.example.gemini.domain.model.ThinkingPreference())
     val thinkingPreference: StateFlow<com.example.gemini.domain.model.ThinkingPreference> = _thinkingPreference.asStateFlow()
 

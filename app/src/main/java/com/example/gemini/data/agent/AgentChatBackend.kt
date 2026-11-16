@@ -23,4 +23,10 @@ interface AgentChatBackend {
     fun forkConversation(id: String)
     fun retryConnections()
     fun onAppForegrounded()
+
+    /**
+     * The id a project checkpoint of this user [message] was saved under (see ProjectCheckpoints.beforeTurn), or null
+     * when the message has none.
+     */
+    fun checkpointKey(message: ChatMessage): String? = message.checkpointKey
 }

@@ -245,7 +245,6 @@ fun ChatScreen(
     val claudeSlashCommands by claudeBackend.slashCommands.collectAsState()
     var showClaudeLogin by remember { mutableStateOf(false) }
     var claudeSettingsPage by remember { mutableStateOf<com.example.gemini.ui.claude.ClaudeSettingsPage?>(null) }
-    var restoreCodeOnEdit by remember { mutableStateOf(false) }
     val claudeSettingsDeps = remember(viewModel) {
         com.example.gemini.ui.claude.ClaudeSettingsDeps(viewModel.claudeAccount, viewModel.claudeConfig, viewModel.claudeBackend, viewModel.claudePrefs)
     }
@@ -786,6 +785,26 @@ fun ChatScreen(
         }
     }
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
+    // Project checkpoints: the open chat's restore points, the "go back" sheet, and the one-time "track this project?"
+    val messageCheckpoints by viewModel.messageCheckpoints.collectAsState()
+    val checkpointSettings by com.example.gemini.data.checkpoint.ProjectCheckpoints.settings.collectAsState()
+    var restoreSheetFor by remember { mutableStateOf<Pair<ChatMessage, com.example.gemini.data.checkpoint.CheckpointSummary>?>(null) }
+    var trackProjectAsk by remember { mutableStateOf<com.example.gemini.data.checkpoint.CheckpointProjectState?>(null) }
+    val askedTrackProjects = remember { mutableSetOf<String>() }
+    val newChatProjectPath = com.example.gemini.data.checkpoint.ProjectCheckpoints.pathOf(currentConv?.workspaceUri)
+    val newChatEmpty = messages.isEmpty()
+    LaunchedEffect(newChatProjectPath, newChatEmpty, checkpointSettings?.mode, currentConv?.isCloud) {
+        val path = newChatProjectPath ?: return@LaunchedEffect
+        if (!newChatEmpty || currentConv?.isCloud == true) return@LaunchedEffect
+        if (checkpointSettings?.mode != com.example.gemini.data.checkpoint.CheckpointSettings.MODE_SELECTED) return@LaunchedEffect
+        if (path in askedTrackProjects) return@LaunchedEffect
+        delay(400) // the project picker closes first
+        val st = com.example.gemini.data.checkpoint.ProjectCheckpoints.projectState(path).getOrNull() ?: return@LaunchedEffect
+        if (st.shouldAsk) {
+            askedTrackProjects.add(path)
+            trackProjectAsk = st
+        }
+    }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
     val isConversationsLoading by viewModel.isConversationsLoading.collectAsState()
@@ -2257,6 +2276,10 @@ fun ChatScreen(
                                                 },
                                                 onViewRawPayload = { payloadJson ->
                                                     showRawPayloadDialog = payloadJson
+                                                },
+                                                checkpoint = messageCheckpoints[feedItem.message.id],
+                                                onRestoreCheckpoint = { msg ->
+                                                    messageCheckpoints[msg.id]?.let { restoreSheetFor = msg to it }
                                                 }
                                             )
                                         }
@@ -3261,6 +3284,35 @@ fun ChatScreen(
 
 
 
+    // Project checkpoints: go back to before a message (files, chat, or both), with a preview
+    restoreSheetFor?.let { (msg, cp) ->
+        val path = com.example.gemini.data.checkpoint.ProjectCheckpoints.pathOf(currentConv?.workspaceUri)
+        if (path == null) {
+            restoreSheetFor = null
+        } else {
+            com.example.gemini.ui.checkpoint.CheckpointRestoreSheet(
+                projectPath = path,
+                checkpoint = cp,
+                onDismiss = { restoreSheetFor = null },
+                onRestoreChat = if (isReadOnlyChat) null else {
+                    {
+                        viewModel.revertAndEditLastUserMessage(msg) { restoredText ->
+                            inputState.setTextAndPlaceCursorAtEnd(restoredText)
+                        }
+                    }
+                },
+                agentBusy = isActivelyRunning,
+                otherRunningChats = remember(path) { viewModel.runningChatsInProject(path) }
+            )
+        }
+    }
+    trackProjectAsk?.let { st ->
+        com.example.gemini.ui.checkpoint.TrackProjectDialog(st) { answer ->
+            trackProjectAsk = null
+            if (answer != null) scope.launch { com.example.gemini.data.checkpoint.ProjectCheckpoints.setDecision(st.path, answer) }
+        }
+    }
+
     // Confirmation Dialog for Edit / Retry when deleting subsequent output
     pendingMessageAction?.let { action ->
         AlertDialog(
@@ -3278,10 +3330,8 @@ fun ChatScreen(
                 Column {
                     Text(
                         text = when {
-                            isCodexChat && action.type == MessageActionType.EDIT ->
-                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat. Files Codex changed stay as they are."
-                            (isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT ->
-                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat."
+                            (isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT ->
+                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat. Files stay as they are."
                             isClaudeChat || isOpenCodeChat || isCodexChat ->
                                 "This chat goes back to right before this reply and ${if (isOpenCodeChat) "OpenCode" else if (isCodexChat) "Codex" else "Claude"} answers the same message again. The current reply is removed from the chat."
                             action.type == MessageActionType.EDIT ->
@@ -3293,15 +3343,23 @@ fun ChatScreen(
                         lineHeight = 21.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                     )
-                    if ((isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT) {
+                    // files go back only through the message's restore point (Settings → Project checkpoints)
+                    val cp = messageCheckpoints[action.message.id]
+                    if (action.type == MessageActionType.EDIT && cp != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .padding(top = 10.dp)
-                                .clickable { restoreCodeOnEdit = !restoreCodeOnEdit }
+                                .padding(top = 12.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    restoreSheetFor = action.message to cp
+                                    pendingMessageAction = null
+                                }
+                                .padding(horizontal = 6.dp, vertical = 6.dp)
                         ) {
-                            androidx.compose.material3.Checkbox(checked = restoreCodeOnEdit, onCheckedChange = { restoreCodeOnEdit = it })
-                            Text("Also restore files ${if (isOpenCodeChat) "OpenCode" else "Claude"} changed after this message", fontSize = 13.5.sp)
+                            Icon(androidx.compose.material.icons.Icons.Outlined.History, null, tint = com.example.gemini.theme.AppColors.info, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Put files back too? Use this message's restore point", fontSize = 13.5.sp, color = com.example.gemini.theme.AppColors.info)
                         }
                     }
                 }
@@ -3311,10 +3369,9 @@ fun ChatScreen(
                     onClick = {
                         val target = action.message
                         if ((isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT) {
-                            viewModel.editClaudeMessage(target, restoreCodeOnEdit) { restoredText ->
+                            viewModel.editClaudeMessage(target, restoreCode = false) { restoredText ->
                                 inputState.setTextAndPlaceCursorAtEnd(restoredText)
                             }
-                            restoreCodeOnEdit = false
                         } else if (action.type == MessageActionType.EDIT) {
                             viewModel.revertAndEditLastUserMessage(target) { restoredText ->
                                 inputState.setTextAndPlaceCursorAtEnd(restoredText)
