@@ -75,13 +75,17 @@ EXTRA_TEX=(
   pgfcirclabel.tex pgfcircmonopoles.tex pgfcircmultipoles.tex pgfcircpath.tex pgfcircquadpoles.tex
   pgfcircshapes.tex pgfcirctripoles.tex pgfcircutils.tex pgfcircvoltage.tex
   chemfig.sty chemfig.tex t-chemfig.tex
+  simplekv.sty simplekv.tex   # chemfig reads its options with simplekv
 )
 for f in "${EXTRA_TEX[@]}"; do
-  curl -fsSL -o "$STAGE/tikzjax/tex_files/$f.gz" \
+  # jsDelivr serves the same commit's files (raw.githubusercontent.com is very slow for many small files)
+  curl -fsSL --retry 3 -o "$STAGE/tikzjax/tex_files/$f.gz" \
+    "https://cdn.jsdelivr.net/gh/artisticat1/tikzjax@${EXTRA_TEX_COMMIT}/tex_files/$f.gz" ||
+  curl -fsSL --retry 3 -o "$STAGE/tikzjax/tex_files/$f.gz" \
     "https://raw.githubusercontent.com/artisticat1/tikzjax/${EXTRA_TEX_COMMIT}/tex_files/$f.gz"
   gzip -t "$STAGE/tikzjax/tex_files/$f.gz"
 done
-printf 'circuitikz 1.0 and chemfig 1.4 (LPPL), from https://github.com/artisticat1/tikzjax/tree/%s/tex_files\n' "$EXTRA_TEX_COMMIT" \
+printf 'circuitikz 1.0, chemfig 1.4 and simplekv 0.1 (LPPL), from https://github.com/artisticat1/tikzjax/tree/%s/tex_files\n' "$EXTRA_TEX_COMMIT" \
   >> "$STAGE/tikzjax/LICENSE.txt"
 
 cat > "$STAGE/manifest.json" <<EOF

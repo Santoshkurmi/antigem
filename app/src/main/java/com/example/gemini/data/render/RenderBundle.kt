@@ -60,9 +60,9 @@ object RenderBundle {
     private const val ZIP_NAME = "antigem-render-bundle-v1.zip"
     const val BUNDLE_URL = "https://github.com/Santoshkurmi/antigem/releases/download/$BUNDLE_TAG/$ZIP_NAME"
     /** SHA-256 of [ZIP_NAME] as built by scripts/render_bundle/build_render_bundle.sh: anything else is refused. */
-    private const val BUNDLE_SHA256 = "47546bbca678172883dc4088cba2176f7e7d894ac97f4cbe61903569372e214c"
+    private const val BUNDLE_SHA256 = "c5e97bbeba24d2970c8c4a7ad502ac8c4292b9ef3db5eac64287913ce954f34a"
     /** Its size in bytes (progress when the server sends no length, and shown before downloading). */
-    const val BUNDLE_SIZE = 9_731_181L
+    const val BUNDLE_SIZE = 9_736_582L
     /** What the TikZ bundle adds to TikZJax's own packages. */
     const val TIKZ_EXTRAS = "circuitikz 1.0, pgfplots 1.18.1, chemfig 1.4, tikz-cd 1.0, amsmath, amssymb"
     /** Mermaid from the internet when the bundled copy isn't used: pinned to the bundle's version, so agents are told one exact version. */
