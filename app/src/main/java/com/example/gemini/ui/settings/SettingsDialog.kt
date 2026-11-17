@@ -87,6 +87,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     THEMES("Themes", "Light and dark mode, and the theme gallery"),
     APPEARANCE("Appearance", "Chat text size, chat list, header icons and the app switcher"),
+    STEM_RENDERING("STEM & diagrams", "Chemistry, graphs, geometry, simulations, circuits and offline Mermaid in chats"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     CONNECT_PC("Connect to PC", "Use the agents on your PC (AntiGem in VS Code) from this phone"),
     WEBVIEW_EXTENSIONS("Custom AntiGem Plugins", "Install and manage plugins: MCP tools and skills"),
@@ -633,6 +634,7 @@ fun SettingsDialog(
                         onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT }
                     )
                     SettingsSection.GLOBAL_CONTEXT -> GlobalContextScreen()
+                    SettingsSection.STEM_RENDERING -> StemRenderingScreen()
                     SettingsSection.JARVIS -> com.example.gemini.ui.jarvis.JarvisSettingsScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
@@ -835,6 +837,13 @@ private fun MainSettingsMenu(
         when { !pcEnabled -> "Off"; pcInUse != null -> pcInUse.name; else -> "On" },
         if (pcInUse != null) QuotaGreen else null)
 
+    // STEM & diagrams: whether the render bundle is installed
+    val stemContext = LocalContext.current
+    remember { com.example.gemini.data.render.RenderBundle.init(stemContext) }
+    val stemInstalled by com.example.gemini.data.render.RenderBundle.installed.collectAsState()
+    val stemRow = row(SettingsSection.STEM_RENDERING, Icons.Outlined.Science, c.accentTeal,
+        if (stemInstalled) "Installed" else null, if (stemInstalled) QuotaGreen else null)
+
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
     var claudeColor: Color? = null
@@ -858,6 +867,7 @@ private fun MainSettingsMenu(
             listOf(
                 row(SettingsSection.THEMES, Icons.Outlined.Palette, c.accentPink, com.example.gemini.theme.ThemeManager.current.name),
                 row(SettingsSection.APPEARANCE, Icons.Outlined.Tune, c.accentAlt),
+                stemRow,
                 row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info, serverValue, serverColor),
                 pcRow
             ),

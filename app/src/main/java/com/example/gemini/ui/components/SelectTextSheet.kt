@@ -102,6 +102,7 @@ private fun SelectableBlock(block: MarkdownBlock) {
         is MarkdownBlock.Video -> "[Video${block.alt.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}]"
         is MarkdownBlock.YouTubeVideo -> "[YouTube: ${block.originalUrl}]"
         is MarkdownBlock.Mermaid -> "[Diagram]"
+        is MarkdownBlock.Stem -> "[Diagram]"
         is MarkdownBlock.InteractiveUi -> "[${block.title}]"
         is MarkdownBlock.AgentTool, is MarkdownBlock.AgentThought, is MarkdownBlock.AgentError -> return
         is MarkdownBlock.Math -> {
