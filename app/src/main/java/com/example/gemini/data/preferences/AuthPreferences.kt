@@ -178,7 +178,7 @@ class AuthPreferences(private val context: Context) {
         val currentFramedHeader: String
             get() = buildFramedHeader(currentSecurityToken)
 
-        // per app (see the build flavors): com.antigem uses other ports than com.termux so both can run together
+        // per app (see the build flavors): ai.antigem uses other ports than com.termux so both can run together
         val DEFAULT_HUB_URL = "http://127.0.0.1:${com.example.gemini.BuildConfig.HUB_PORT}"
         val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:${com.example.gemini.BuildConfig.BRIDGE_PORT}"
 
@@ -1072,10 +1072,10 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultBridgeBinaryPath(): String =
-        if (context.packageName == "com.termux") DEFAULT_BRIDGE_BINARY_PATH else DEFAULT_UBUNTU_BRIDGE_BINARY_PATH
+        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_BRIDGE_BINARY_PATH else DEFAULT_UBUNTU_BRIDGE_BINARY_PATH
 
     fun getDefaultAgyBinaryPath(): String =
-        if (context.packageName == "com.termux") DEFAULT_AGY_BINARY_PATH else DEFAULT_UBUNTU_AGY_BINARY_PATH
+        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_AGY_BINARY_PATH else DEFAULT_UBUNTU_AGY_BINARY_PATH
 
     val agyBridgeBinaryPath: Flow<String> = context.dataStore.data.map {
         it[AGY_BRIDGE_BINARY_PATH] ?: getAgyBridgeBinaryPathSync()
@@ -1104,7 +1104,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultClaudeBinaryPath(): String =
-        if (context.packageName == "com.termux") DEFAULT_CLAUDE_BINARY_PATH else DEFAULT_UBUNTU_CLAUDE_BINARY_PATH
+        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_CLAUDE_BINARY_PATH else DEFAULT_UBUNTU_CLAUDE_BINARY_PATH
 
     fun getClaudeBinaryPathSync(): String =
         syncPrefs.getString("claude_binary_path", getDefaultClaudeBinaryPath()) ?: getDefaultClaudeBinaryPath()
@@ -1116,7 +1116,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultOpenCodeBinaryPath(): String =
-        if (context.packageName == "com.termux") DEFAULT_OPENCODE_BINARY_PATH else DEFAULT_UBUNTU_OPENCODE_BINARY_PATH
+        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_OPENCODE_BINARY_PATH else DEFAULT_UBUNTU_OPENCODE_BINARY_PATH
 
     fun getOpenCodeBinaryPathSync(): String =
         syncPrefs.getString("opencode_binary_path", getDefaultOpenCodeBinaryPath()) ?: getDefaultOpenCodeBinaryPath()
@@ -1126,7 +1126,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultCodexBinaryPath(): String =
-        if (context.packageName == "com.termux") DEFAULT_CODEX_BINARY_PATH else DEFAULT_UBUNTU_CODEX_BINARY_PATH
+        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_CODEX_BINARY_PATH else DEFAULT_UBUNTU_CODEX_BINARY_PATH
 
     fun getCodexBinaryPathSync(): String =
         syncPrefs.getString("codex_binary_path", getDefaultCodexBinaryPath()) ?: getDefaultCodexBinaryPath()

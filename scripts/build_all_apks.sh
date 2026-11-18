@@ -3,7 +3,7 @@ set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # AntiGem Multi-Package APK Build & Output Packager
-# Builds standard (com.antigem) and termux (com.termux) flavors.
+# Builds standard (ai.antigem) and termux (com.termux) flavors.
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -50,7 +50,7 @@ object ReaManager {
     const val CONTAINER = "ubuntu"
     const val REA_HOMEPAGE = "https://github.com/morluto/rea"
 
-    private const val TERMUX = "/data/data/com.termux/files"
+    private const val TERMUX = "/data/data/${BuildConfig.APPLICATION_ID}/files"
     const val LAUNCHER = "$TERMUX/usr/bin/rea-mcp"
     private const val JAVA_BIN = "usr/lib/jvm/java-21-openjdk-arm64/bin/java"
     private const val JADX_JAR = "root/tools/jadx-headless-mcp-0.7.1-all.jar"

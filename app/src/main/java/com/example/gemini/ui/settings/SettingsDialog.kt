@@ -5105,7 +5105,7 @@ private fun ProjectsBackupRestoreDialog(
         val normHome = normalizeProjectPath(homeDir, homeDir)
         allProjects.filter { proj ->
             val p = normalizeProjectPath(proj.path, normHome)
-            p.isNotBlank() && p != normHome && p != "/" && p != "/data/data/com.termux/files" && p != "/data/data/com.termux"
+            p.isNotBlank() && p != normHome && p != "/" && p != "/data/data/${BuildConfig.APPLICATION_ID}/files" && p != "/data/data/${BuildConfig.APPLICATION_ID}"
         }.distinctBy { normalizeProjectPath(it.path, normHome) }
     }
 
@@ -5871,7 +5871,7 @@ private fun ProjectsBackupRestoreDialog(
                                 value = customRestoreDir,
                                 onValueChange = { customRestoreDir = it },
                                 label = { Text("Custom Restore Directory") },
-                                placeholder = { Text("/data/data/com.termux/files/home/restored_projects") },
+                                placeholder = { Text("/data/data/${BuildConfig.APPLICATION_ID}/files/home/restored_projects") },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )

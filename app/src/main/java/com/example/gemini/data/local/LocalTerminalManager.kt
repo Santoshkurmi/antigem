@@ -268,6 +268,7 @@ class LocalPtySession(
                 LocalEnvironmentManager.ensureGlibcEnvironment(context)
                 LocalEnvironmentManager.ensureClaudeWrapper(context)
                 LocalEnvironmentManager.ensureTermuxApiDispatcher(context)
+                TermuxRelocation.ensureAptHook(context)
 
                 val loginShellBinaries = arrayOf("login", "bash", "zsh", "fish", "sh")
 
@@ -1245,9 +1246,7 @@ object LocalTerminalManager {
     }
 
     fun autoLaunchServerIfReady(context: Context) {
-        val pkg = context.packageName
-        val isTermux = pkg == "com.termux" || pkg.contains("termux")
-        if (!isTermux) return
+        if (!LocalEnvironmentManager.isTermuxPackage(context)) return
 
         if (!LocalEnvironmentManager.isInstalled(context)) {
             Log.d(TAG, "[AutoLaunch] Bootstrap is not installed yet, skipping auto-launch")

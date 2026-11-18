@@ -172,7 +172,9 @@ object LocalEnvironmentManager {
     fun getHomeDir(context: Context): File = File(context.filesDir, "home")
     fun getProjectsDir(context: Context): File = File(getHomeDir(context), "projects")
     fun getUbuntuRootDir(context: Context): File = File(context.filesDir, "ubuntu")
-    fun isTermuxPackage(context: Context): Boolean = context.packageName == "com.termux"
+    /** com.termux, or ai.antigem which runs the same Termux packages rewritten for its name (see [TermuxRelocation]). */
+    fun isTermuxPackage(context: Context): Boolean =
+        context.packageName == "com.termux" || TermuxRelocation.targetPackage(context) != null
 
     fun ensureProotExtracted(context: Context): String {
         val binDir = File(context.filesDir, "bin")
@@ -612,7 +614,7 @@ object LocalEnvironmentManager {
             if (!libexecDir.exists()) libexecDir.mkdirs()
             val dispatcherFile = File(libexecDir, "termux-api")
             val scriptContent = """
-                #!/data/data/com.termux/files/usr/bin/bash
+                #!/data/data/${context.packageName}/files/usr/bin/bash
                 METHOD="${'$'}1"
                 shift
 
@@ -624,13 +626,13 @@ object LocalEnvironmentManager {
                     fi
                 fi
 
-                TMP_DIR="${'$'}{TMPDIR:-/data/data/com.termux/files/usr/tmp}"
+                TMP_DIR="${'$'}{TMPDIR:-/data/data/${context.packageName}/files/usr/tmp}"
                 mkdir -p "${'$'}TMP_DIR"
                 TMP_OUT="${'$'}TMP_DIR/api_out.${'$'}${'$'}"
 
                 am broadcast --user 0 \
                     -a "com.termux.api" \
-                    -n "com.termux/com.example.gemini.data.receiver.TermuxApiReceiver" \
+                    -n "${context.packageName}/com.example.gemini.data.receiver.TermuxApiReceiver" \
                     --es "api_method" "${'$'}METHOD" \
                     --es "socket_output" "${'$'}TMP_OUT" \
                     "${'$'}{EXTRA_ARGS[@]}" \
@@ -1669,6 +1671,25 @@ object LocalEnvironmentManager {
                 }
             }
 
+            // Termux files are built for com.termux: rewrite them for this app's package name (same length)
+            TermuxRelocation.targetPackage(appContext)?.let { pkg ->
+                log("Adapting Termux files for $pkg...")
+                _installerState.value = LocalInstallerState.Configuring(
+                    stepDescription = "Adapting Termux files for $pkg...",
+                    progressFraction = 0.88f
+                )
+                updateInstallNotification(appContext, "Adapting Linux Environment", "Rewriting com.termux paths for $pkg...", -1, force = true)
+                val onProgress: (Int) -> Unit = { n ->
+                    _installerState.value = LocalInstallerState.Configuring(
+                        stepDescription = "Adapting Termux files for $pkg ($n files checked)...",
+                        progressFraction = 0.88f
+                    )
+                }
+                val usr = TermuxRelocation.relocateTree(prefixDir, pkg, onProgress)
+                val home = TermuxRelocation.relocateTree(homeDir, pkg, onProgress)
+                log("✓ Adapted ${usr.patchedFiles + home.patchedFiles} files and ${usr.links + home.links} symlinks (${usr.files + home.files} files checked)")
+            }
+
             // Clean up downloaded zip
             tempZipFile.delete()
 
@@ -1876,6 +1897,7 @@ object LocalEnvironmentManager {
                 }
             }
             log("✓ Successfully unpacked bundled Glibc runtime ($extractedFiles files) from $assetName into ${glibcDir.absolutePath}")
+            TermuxRelocation.relocateIfNeeded(context, glibcDir)
             true
         } catch (e: Exception) {
             val err = "❌ Failed extracting glibc-min asset: ${e.localizedMessage ?: e.message}"
@@ -2326,6 +2348,8 @@ All files created here persist inside the application.
                 Log.w(TAG, "Failed to run ssh-keygen -A: ${e.message}")
             }
         }
+
+        TermuxRelocation.ensureAptHook(context)
     }
 
     suspend fun executeCommand(

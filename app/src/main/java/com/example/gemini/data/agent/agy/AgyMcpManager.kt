@@ -292,10 +292,10 @@ class AgyMcpManager(
                             // A server runs the MCP on its own Linux: those Termux paths would break it there.
                             if (!AuthPreferences.currentRemoteMode) {
                                 if (!envMap.containsKey("LD_PRELOAD")) {
-                                    envMap["LD_PRELOAD"] = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+                                    envMap["LD_PRELOAD"] = "/data/data/${com.example.gemini.BuildConfig.APPLICATION_ID}/files/usr/lib/libtermux-exec.so"
                                 }
                                 if (!envMap.containsKey("PATH")) {
-                                    envMap["PATH"] = "/data/data/com.termux/files/home/.local/bin:/data/data/com.termux/files/usr/bin:/system/bin"
+                                    envMap["PATH"] = "/data/data/${com.example.gemini.BuildConfig.APPLICATION_ID}/files/home/.local/bin:/data/data/${com.example.gemini.BuildConfig.APPLICATION_ID}/files/usr/bin:/system/bin"
                                 }
                             }
                             if (envMap.isNotEmpty()) {

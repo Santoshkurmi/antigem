@@ -77,8 +77,8 @@ The USER will send you requests, which you must always prioritize addressing. Us
 <user_information>
 The USER's OS version is linux.
 The user has active workspace:
-${workspaceDir ?: "/data/data/com.termux/files/home/projects/gemini"}
-App Data Directory: /data/data/com.termux/files/home/.gemini/antigravity-cli
+${workspaceDir ?: "/data/data/${com.example.gemini.BuildConfig.APPLICATION_ID}/files/home/projects/gemini"}
+App Data Directory: /data/data/${com.example.gemini.BuildConfig.APPLICATION_ID}/files/home/.gemini/antigravity-cli
 Conversation ID: ${conversationId ?: "active"}
 </user_information>
 

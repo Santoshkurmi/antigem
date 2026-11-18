@@ -40,7 +40,7 @@ object GlobalContext {
     private const val MAX_REMEMBERED_CHATS = 600
 
     private var sp: SharedPreferences? = null
-    private var filesDir: String = "/data/data/com.termux/files"
+    private var filesDir: String = "/data/data/${BuildConfig.APPLICATION_ID}/files"
 
     private val _builtInEnabled = MutableStateFlow(true)
     val builtInEnabled: StateFlow<Boolean> = _builtInEnabled.asStateFlow()
@@ -110,7 +110,9 @@ object GlobalContext {
 
     /** Termux build with the bridge on this phone: the agent runs in Termux, not on a server. */
     val runsInTermux: Boolean
-        get() = BuildConfig.FLAVOR.startsWith("termux") && !AuthPreferences.isRemoteEndpoint()
+        get() = (BuildConfig.FLAVOR.startsWith("termux") ||
+            BuildConfig.APPLICATION_ID == com.example.gemini.data.local.TermuxRelocation.RELOCATED_PACKAGE) &&
+            !AuthPreferences.isRemoteEndpoint()
 
     /** The built-in context for the current setup (Settings shows exactly this). [h]: the heading level of its sections. */
     fun builtInText(h: String = "##"): String = buildString {

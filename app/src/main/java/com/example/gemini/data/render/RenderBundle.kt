@@ -139,7 +139,7 @@ object RenderBundle {
         _active.value = _enabled.value.filter { !it.fromBundle || _installed.value }.toSet()
     }
 
-    private fun root(): File = File(filesDir ?: File("/data/data/com.termux/files"), "render-bundle")
+    private fun root(): File = File(filesDir ?: File("/data/data/${com.example.gemini.BuildConfig.APPLICATION_ID}/files"), "render-bundle")
     /** Where the current bundle is extracted. */
     fun bundleDir(): File = File(root(), BUNDLE_TAG)
     /** Compiled TikZ pictures (SVG), kept across bundle updates until cleared. */
