@@ -29,6 +29,7 @@ import (
 	"gemini-server/pkg/memory"
 	"gemini-server/pkg/opencode"
 	"gemini-server/pkg/plugins"
+	"gemini-server/pkg/relocate"
 	"gemini-server/pkg/runlog"
 	"gemini-server/pkg/security"
 	"gemini-server/pkg/ws"
@@ -133,6 +134,12 @@ func formatHumanCrash(p interface{}, rawStack []byte) (reason string, location s
 }
 
 func main() {
+	// `agy_ide_bridge relocate-debs …`: AntiGem's apt hook and dpkg wrapper rewrite Termux .debs with it (see
+	// pkg/relocate); nothing of the bridge itself starts
+	if len(os.Args) > 1 && os.Args[1] == "relocate-debs" {
+		os.Exit(relocate.Main(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
+
 	cfg := config.LoadConfig()
 
 	var unpatchOnly bool

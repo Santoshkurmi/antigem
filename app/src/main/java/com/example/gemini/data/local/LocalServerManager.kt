@@ -93,7 +93,12 @@ object LocalServerManager {
         }
     }
 
-    private fun ensureBridgeBinary(context: Context) {
+    /** Unpacks the IDE bridge (and the helper scripts) after an app update. Also called by TermuxRelocation: the bridge holds the fast .deb relocator its hooks run. */
+    private val bridgeUnpackLock = Any()
+
+    internal fun ensureBridgeBinary(context: Context) = synchronized(bridgeUnpackLock) { unpackBridgeIfNeeded(context) }
+
+    private fun unpackBridgeIfNeeded(context: Context) {
         val binDir = LocalEnvironmentManager.getBinDir(context)
         val bridgeFile = File(binDir, "agy_ide_bridge")
         val backupFile = File(binDir, "backup_bootstrap")

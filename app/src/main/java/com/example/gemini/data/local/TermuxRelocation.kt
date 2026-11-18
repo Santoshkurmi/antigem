@@ -38,6 +38,8 @@ object TermuxRelocation {
     private val KEPT_SUFFIXES: List<ByteArray> = listOf(".termuxam", ".x11.").map { it.toByteArray(Charsets.US_ASCII) }
     private val LOOKAHEAD = KEPT_SUFFIXES.maxOf { it.size }
     private const val CHUNK = 256 * 1024
+    /** The bridge's relocate-debs marker (Capability in agy_ide_bridge/pkg/relocate): the hook runs it only when found. */
+    private const val FAST_RELOCATOR_MARKER = "antigem-relocate-debs/1"
     private const val SLASH = '/'.code.toByte()
 
     data class Stats(var files: Int = 0, var patchedFiles: Int = 0, var links: Int = 0)
@@ -212,6 +214,13 @@ object TermuxRelocation {
         val prefix = "/data/data/$pkg/files/usr"
         val relocator = "$prefix/libexec/antigem/relocate-debs"
         try {
+            // the bridge holds the fast .deb relocator (relocate-debs) these hooks run: unpacked here too, so it always
+            // comes from the same app version as them
+            LocalServerManager.ensureBridgeBinary(context)
+        } catch (e: Exception) {
+            Log.w(TAG, "bridge unpack failed (the shell relocator is used): ${e.message}")
+        }
+        try {
             writeIfChanged(File(prefixDir, "libexec/antigem/relocate-debs"), relocateScript(prefix, pkg), executable = true)
             writeIfChanged(
                 File(prefixDir, "etc/apt/apt.conf.d/99antigem-relocate"),
@@ -346,6 +355,8 @@ object TermuxRelocation {
     /** relocate-debs: rewrites the .debs whose paths it reads on stdin, in place (used by the apt hook and the dpkg wrapper). */
     internal fun relocateScript(prefix: String, pkg: String): String {
         val skipped = SKIPPED_EXTENSIONS.joinToString("|") { "*.$it" }
+        val fastKeep = KEPT_SUFFIXES.joinToString(" ") { "--keep '${String(it, Charsets.US_ASCII)}'" }
+        val fastSkip = SKIPPED_EXTENSIONS.joinToString(",")
         val oldRegex = TERMUX_PACKAGE.replace(".", "\\.")
         // [KEPT_SUFFIXES] become "\x01om.termux<suffix>" (same length) first, and back after the rewrite
         val placeholder = "\\x01" + TERMUX_PACKAGE.drop(1)
@@ -367,6 +378,13 @@ object TermuxRelocation {
             |umask 022
             |TMP="${'$'}{TMPDIR:-$prefix/tmp}"
             |SED_PROG='$sedProg'
+            |# The fast relocator (the IDE bridge's relocate-debs: one pass per package, several packages at once) when this
+            |# bridge has it: its marker text is in the file (an older bridge is never run, it would start its server).
+            |# This script's own code below is the fallback.
+            |FAST='$prefix/bin/agy_ide_bridge'
+            |if [ -x "${'$'}FAST" ] && grep -qa '$FAST_RELOCATOR_MARKER' "${'$'}FAST" 2>/dev/null; then
+            |    exec "${'$'}FAST" relocate-debs --from "${'$'}OLD" --to "${'$'}NEW" $fastKeep --skip-ext '$fastSkip' "${'$'}@"
+            |fi
             |APT_MODE=0
             |[ "${'$'}{1:-}" = "--apt" ] && APT_MODE=1
             |
@@ -432,26 +450,34 @@ object TermuxRelocation {
         |#!$prefix/bin/sh
         |# Written by AntiGem (edits are overwritten). The real dpkg is dpkg.distrib (moved there with dpkg-divert, so
         |# dpkg upgrades keep it there). Termux .debs are built for /data/data/$TERMUX_PACKAGE: when dpkg installs .deb
-        |# files given by hand (dpkg -i x.deb), copies of them are rewritten for this app first; the files themselves stay.
-        |# apt (which holds the frontend lock) has rewritten the .debs it downloaded already (apt.conf.d/99antigem-relocate):
-        |# of its calls only a .deb of the user's (apt install ./x.deb) gets a rewritten copy.
+        |# files given by hand (dpkg -i x.deb, dpkg -R folder), copies of them are rewritten for this app first; the
+        |# files themselves stay. apt (which holds the frontend lock) has rewritten the .debs it downloaded already
+        |# (apt.conf.d/99antigem-relocate) and passes them by path, or, when they are many, as symlinks in a folder of its
+        |# own (dpkg --recursive): those go through untouched; only a .deb of the user's (apt install ./x.deb) gets a copy.
         |REAL='$prefix/bin/dpkg.distrib'
         |locked=0
         |[ -n "${'$'}{DPKG_FRONTEND_LOCKED:-}" ] && locked=1
         |
-        |# whether ${'$'}1 is a .deb to adapt
+        |# whether ${'$'}1 is a .deb to adapt (symlinks followed)
         |needs() {
         |    [ -f "${'$'}1" ] || return 1
         |    case "${'$'}1" in *.deb) ;; *) return 1 ;; esac
         |    if [ "${'$'}locked" = 1 ]; then
-        |        case "${'$'}1" in */cache/apt/archives/*) return 1 ;; esac
+        |        target=${'$'}(readlink -f "${'$'}1" 2>/dev/null || printf '%s' "${'$'}1")
+        |        case "${'$'}target" in */cache/apt/archives/*) return 1 ;; esac
         |    fi
         |    return 0
         |}
         |
+        |# whether the folder ${'$'}1 (dpkg --recursive) holds a .deb to adapt
+        |dir_needs() {
+        |    find -L "${'$'}1" -type f -name '*.deb' 2>/dev/null | while IFS= read -r d; do
+        |        if needs "${'$'}d"; then echo yes; break; fi
+        |    done | grep -q yes
+        |}
+        |
         |install=0
         |recursive=0
-        |found=0
         |for a in "${'$'}@"; do
         |    case "${'$'}a" in
         |        --install|--unpack|--record-avail) install=1 ;;
@@ -462,9 +488,16 @@ object TermuxRelocation {
         |            case "${'$'}a" in *R*) recursive=1 ;; esac
         |            ;;
         |    esac
-        |    if needs "${'$'}a" || [ -d "${'$'}a" ]; then found=1; fi
         |done
-        |[ "${'$'}install" = 1 ] && [ "${'$'}found" = 1 ] || exec "${'$'}REAL" "${'$'}@"
+        |found=0
+        |if [ "${'$'}install" = 1 ]; then
+        |    for a in "${'$'}@"; do
+        |        if needs "${'$'}a"; then found=1; break; fi
+        |        if [ "${'$'}recursive" = 1 ] && [ -d "${'$'}a" ] && dir_needs "${'$'}a"; then found=1; break; fi
+        |    done
+        |fi
+        |# nothing to adapt (always so for apt's own .debs): dpkg as it was called
+        |[ "${'$'}found" = 1 ] || exec "${'$'}REAL" "${'$'}@"
         |
         |TMP="${'$'}{TMPDIR:-$prefix/tmp}"
         |work=${'$'}(mktemp -d "${'$'}TMP/antigem-dpkg.XXXXXX") || exit 1
@@ -487,13 +520,19 @@ object TermuxRelocation {
         |    if needs "${'$'}a"; then
         |        adapt "${'$'}a" || { echo "dpkg (AntiGem): could not adapt ${'$'}a" >&2; exit 1; }
         |        a=${'$'}adapted
-        |    elif [ "${'$'}recursive" = 1 ] && [ -d "${'$'}a" ]; then
+        |    elif [ "${'$'}recursive" = 1 ] && [ -d "${'$'}a" ] && dir_needs "${'$'}a"; then
+        |        # a folder with the same .debs: adapted copies of those that need it, links to the others
         |        dir="${'$'}work/dir${'$'}i"
         |        mkdir -p "${'$'}dir"
-        |        find "${'$'}a" -type f -name '*.deb' > "${'$'}work/list${'$'}i"
+        |        find -L "${'$'}a" -type f -name '*.deb' > "${'$'}work/list${'$'}i"
         |        while IFS= read -r d; do
-        |            adapt "${'$'}d" || { echo "dpkg (AntiGem): could not adapt ${'$'}d" >&2; exit 1; }
-        |            mv "${'$'}adapted" "${'$'}dir/"
+        |            if needs "${'$'}d"; then
+        |                adapt "${'$'}d" || { echo "dpkg (AntiGem): could not adapt ${'$'}d" >&2; exit 1; }
+        |                mv "${'$'}adapted" "${'$'}dir/"
+        |            else
+        |                n=${'$'}((n + 1))
+        |                ln -s "${'$'}(readlink -f "${'$'}d")" "${'$'}dir/${'$'}n-${'$'}{d##*/}"
+        |            fi
         |        done < "${'$'}work/list${'$'}i"
         |        a=${'$'}dir
         |    fi

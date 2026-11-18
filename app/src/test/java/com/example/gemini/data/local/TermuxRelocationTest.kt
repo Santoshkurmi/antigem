@@ -111,6 +111,73 @@ class TermuxRelocationTest {
         }
     }
 
+    /** The dpkg wrapper, run in sh with a fake dpkg (records its arguments) and a fake relocator (records its input). */
+    private class WrapperRun(val dir: File) {
+        val prefix = File(dir, "usr").apply { File(this, "bin").mkdirs(); File(this, "tmp").mkdirs() }
+        val log = File(dir, "log.txt")
+        val wrapper = File(dir, "dpkg-wrapper")
+
+        init {
+            File(prefix, "bin/dpkg.distrib").apply {
+                writeText("#!/bin/sh\necho \"ARGS: \$*\" >> \"\$LOG\"\nfor a in \"\$@\"; do [ -d \"\$a\" ] && ls \"\$a\" | sed 's/^/  in-dir: /' >> \"\$LOG\"; done\nexit 0\n")
+                setExecutable(true)
+            }
+            val relocator = File(dir, "relocate").apply {
+                writeText("#!/bin/sh\nwhile IFS= read -r p; do echo \"RELOCATE \${p##*/}\" >> \"\$LOG\"; done\n")
+                setExecutable(true)
+            }
+            wrapper.writeText(TermuxRelocation.dpkgWrapper(prefix.absolutePath, relocator.absolutePath))
+        }
+
+        fun run(locked: Boolean, vararg args: String): String {
+            log.delete()
+            val pb = ProcessBuilder(listOf("sh", wrapper.absolutePath) + args).redirectErrorStream(true)
+            pb.environment()["LOG"] = log.absolutePath
+            pb.environment()["TMPDIR"] = File(prefix, "tmp").absolutePath
+            if (locked) pb.environment()["DPKG_FRONTEND_LOCKED"] = "true" else pb.environment().remove("DPKG_FRONTEND_LOCKED")
+            val p = pb.start()
+            p.inputStream.readBytes()
+            assertEquals(0, p.waitFor())
+            return if (log.exists()) log.readText() else ""
+        }
+    }
+
+    @Test
+    fun dpkgWrapperLetsAptsOwnPackagesThroughAndAdaptsTheUsers() {
+        val dir = java.nio.file.Files.createTempDirectory("wrapper").toFile()
+        try {
+            val w = WrapperRun(dir)
+            val archives = File(dir, "cache/apt/archives").apply { mkdirs() }
+            val debs = (1..6).map { File(archives, "pkg$it.deb").apply { writeText("x") } }
+            // apt with many packages: a folder of symlinks to its (already adapted) .debs, dpkg --recursive
+            val aptDir = File(dir, "usr/tmp/apt-dpkg-install-abc").apply { mkdirs() }
+            debs.forEachIndexed { i, d -> java.nio.file.Files.createSymbolicLink(File(aptDir, "00$i-${d.name}").toPath(), d.toPath()) }
+            var log = w.run(true, "--status-fd", "3", "--unpack", "--recursive", aptDir.absolutePath)
+            assertEquals("ARGS: --status-fd 3 --unpack --recursive ${aptDir.absolutePath}", log.lines().first())
+            assertEquals(6, log.lines().count { it.startsWith("  in-dir: ") })
+            assertEquals(false, log.contains("RELOCATE"))
+            // apt with few packages: their paths
+            log = w.run(true, "--unpack", debs[0].absolutePath, debs[1].absolutePath)
+            assertEquals("ARGS: --unpack ${debs[0].absolutePath} ${debs[1].absolutePath}\n", log)
+            // apt install ./mine.deb: a rewritten copy of the user's file, the file itself untouched
+            val mine = File(dir, "home/mine.deb").apply { parentFile.mkdirs(); writeText("y") }
+            log = w.run(true, "--unpack", mine.absolutePath)
+            assertEquals(true, log.contains("RELOCATE 1-mine.deb"))
+            assertEquals(false, log.contains(mine.absolutePath))
+            // dpkg -R -i by hand: a folder of the user's .debs, every one adapted
+            val own = File(dir, "home/debs").apply { mkdirs() }
+            File(own, "a.deb").writeText("a"); File(own, "b.deb").writeText("b")
+            log = w.run(false, "-R", "-i", own.absolutePath)
+            assertEquals(2, log.lines().count { it.startsWith("RELOCATE ") })
+            assertEquals(false, log.contains("ARGS: -R -i ${own.absolutePath}"))
+            assertEquals(2, log.lines().count { it.startsWith("  in-dir: ") })
+            // not an install: as it is
+            assertEquals("ARGS: -l\n", w.run(false, "-l"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
     @Test
     fun rewriteChangesOnlyTheMatchedBytes() {
         val bytes = "x/com.termux y com.termux.termuxam z com.termux".toByteArray()
