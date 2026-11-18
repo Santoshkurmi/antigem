@@ -37,6 +37,10 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        // a crash opens the crash screen (with the report) instead of the app just vanishing
+        com.example.gemini.crash.CrashHandler.install(this)
+        // the crash screen's own process needs none of the startup below
+        if (com.example.gemini.crash.CrashHandler.isCrashProcess(this)) return
         // loads the saved server addresses, Remote mode and the SSH key into memory before anything connects
         com.example.gemini.data.preferences.AuthPreferences(this)
         // the chosen light / dark themes and the custom ones, before the first screen draws
