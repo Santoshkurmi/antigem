@@ -148,7 +148,9 @@ object ReaManager {
         val defaultSelection: List<String> = emptyList(),
         val doctorLog: List<String> = emptyList(),
         val pluginInstalled: Boolean = false,
-        val pluginVersion: String? = null
+        val pluginVersion: String? = null,
+        /** Website analysis on: the "web" tool group exists and agents are told to use REA on the browser's tabs. */
+        val webEnabled: Boolean = false
     ) {
         val filesReady: Boolean get() = filesVersion != null
         val requiredDone: Boolean get() = Component.entries.filter { it.required }.all { it in installed }
@@ -229,7 +231,7 @@ object ReaManager {
     fun init(context: Context) {
         if (::appContext.isInitialized) return
         appContext = context.applicationContext
-        _state.update { it.copy(source = prefs.getString("source", null) ?: DEFAULT_SOURCE) }
+        _state.update { it.copy(source = prefs.getString("source", null) ?: DEFAULT_SOURCE, webEnabled = prefs.getBoolean(WEB_PREF, false)) }
     }
 
     fun clearMessage() = _state.update { it.copy(message = null, isError = false) }
@@ -268,8 +270,13 @@ object ReaManager {
         val filesVersion = runCatching { JSONObject(File(shareDir, "files.json").readText()).optString("version").ifBlank { null } }
             .getOrNull()?.takeIf { File(shareDir, "rea-setup.sh").exists() }
         val (defaults, selection) = readDefaultGroups()
-        val groups = readGroups(defaults)
         val catalog = readTools()
+        var groups = readGroups(defaults)
+        // Website analysis keeps its group (it comes back after "Reset all groups"; turning the setting off removes it)
+        if (_state.value.webEnabled && groups.isNotEmpty() && groups.none { it.id == WEB_GROUP }) {
+            groups = groups + webGroup(catalog.tools)
+            runCatching { writeGroups(groups, removedBuiltins()) }
+        }
         val plugin = BrowserExtensionManager.instance.extensions.firstOrNull { it.id == PLUGIN_ID }
         _state.update {
             it.copy(
@@ -553,6 +560,67 @@ object ReaManager {
             return
         }
         saveGroups(defaults, emptyList())
+    }
+
+    // ---------------- websites (the browser's tabs through ReaWebBridge) ----------------
+
+    const val WEB_GROUP = "web"
+    private const val WEB_PREF = "web_enabled"
+
+    /** REA's tools for live pages in a Chromium browser and for what they capture (REA 6.8). */
+    private val WEB_TOOLS = listOf(
+        "list_browser_targets", "inspect_web_page", "analyze_web_bundle", "capture_web_screenshot", "observe_web_session",
+        "inspect_web_event_listeners", "discover_webmcp_tools", "observe_web_execution", "compare_web_captures",
+        "compare_web_screenshots", "export_web_scripts", "trace_web_module_imports", "trace_web_source_location",
+        "inspect_web_network_capture"
+    )
+
+    /** What agents read about the group (rea_tools {group: "web"}): the endpoint and how to work with the browser. */
+    private val WEB_DESCRIPTION =
+        "Websites open in AntiGem's browser, through its DevTools endpoint http://127.0.0.1:${ReaWebBridge.DEFAULT_PORT} " +
+            "(the cdp_endpoint argument). Do the analysis with these tools first, screenshots included " +
+            "(capture_web_screenshot works for background tabs too): list_browser_targets finds the tab's target id, then " +
+            "inspect_web_page (DOM, accessibility, scripts, resources, network, console, storage), analyze_web_bundle " +
+            "(routes, API endpoints, libraries), observe_web_session while the page is used. Open pages, click and type with " +
+            "AntiGem's browser MCP tools (REA only observes), and use them for anything these tools could not do. If the " +
+            "endpoint is unreachable, ask the user to turn on Settings → REA → Websites → Browser connection."
+
+    private fun webGroup(catalog: List<Tool>): Group {
+        val known = catalog.map { it.name }.toSet()
+        val tools = if (known.isEmpty()) WEB_TOOLS else WEB_TOOLS.filter { it in known }
+        return Group(WEB_GROUP, "Websites", WEB_DESCRIPTION, builtin = false, tools = tools)
+    }
+
+    /** Turns website analysis on (adds the "web" tool group) or off (removes it and stops the browser connection). */
+    fun setWebEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(WEB_PREF, enabled).apply()
+        _state.update { it.copy(webEnabled = enabled) }
+        val groups = _state.value.groups
+        if (enabled) {
+            val web = webGroup(_state.value.tools)
+            saveGroups(if (groups.any { it.id == WEB_GROUP }) groups.map { if (it.id == WEB_GROUP) web else it } else groups + web)
+        } else {
+            ReaWebBridge.stop()
+            if (groups.any { it.id == WEB_GROUP }) saveGroups(groups.filter { it.id != WEB_GROUP })
+        }
+    }
+
+    /** Starts or stops the loopback DevTools bridge REA connects to. */
+    fun setBrowserConnection(context: Context, on: Boolean) {
+        if (on) ReaWebBridge.start(context) else ReaWebBridge.stop()
+    }
+
+    /**
+     * A sentence for the browser MCP's instructions while website analysis is on: analyze with REA first. Reads the
+     * setting directly, so it works before the REA page was opened.
+     */
+    fun browserMcpNote(context: Context): String {
+        val on = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(WEB_PREF, false)
+        if (!on) return ""
+        return " Website analysis with REA is on: to analyze a website (structure, scripts, network, technologies, " +
+            "accessibility, screenshots…), open it with these tools, then use REA's website tools (tool group \"web\", " +
+            "DevTools endpoint http://127.0.0.1:${ReaWebBridge.DEFAULT_PORT}) for the analysis, screenshots included. " +
+            "Use these browser tools to open pages and act on them, and for anything REA could not do."
     }
 
     // ---------------- MCP server settings (agent-neutral) ----------------
