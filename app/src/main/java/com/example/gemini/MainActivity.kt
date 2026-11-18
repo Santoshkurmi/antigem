@@ -233,6 +233,15 @@ class MainActivity : ComponentActivity() {
             val showFullScreenInstaller = !isInstalledState && !hasSkippedInstaller &&
                 !com.example.gemini.data.preferences.AuthPreferences.currentRemoteMode
 
+            // The last com.termux release: AntiGem moved to its own package, ai.antigem. The notice shows on every app
+            // launch; while the foreground service keeps running, reopening the app doesn't show it again.
+            var showMoveNotice by androidx.compose.runtime.saveable.rememberSaveable {
+                mutableStateOf(
+                    isTermuxPackage && !(com.example.gemini.data.service.TermuxService.isRunning &&
+                        com.example.gemini.data.service.TermuxService.moveNoticeShown)
+                )
+            }
+
             GeminiTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -676,6 +685,15 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+
+                    if (showMoveNotice && !showPermissionsDialog) {
+                        com.example.gemini.ui.notice.MovedToAntigemNotice(
+                            onClose = {
+                                com.example.gemini.data.service.TermuxService.moveNoticeShown = true
+                                showMoveNotice = false
+                            }
+                        )
                     }
                 }
             }

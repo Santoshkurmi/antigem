@@ -64,6 +64,18 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         const val ACTION_WAKE_UNLOCK = "com.termux.service_wake_unlock"
         const val ACTION_STOP_SERVICE = "com.termux.service_stop"
 
+        /** True from the service's onCreate to its onDestroy. */
+        @Volatile
+        var isRunning = false
+            private set
+
+        /**
+         * The "AntiGem moved to ai.antigem" notice was closed while this service runs: leaving and reopening the app
+         * doesn't show it again. Cleared when the service stops, so the next app start shows it again.
+         */
+        @Volatile
+        var moveNoticeShown = false
+
         fun start(context: Context) {
             val intent = Intent(context, com.termux.app.TermuxService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -96,6 +108,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
@@ -133,6 +146,8 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        isRunning = false
+        moveNoticeShown = false
         serviceScope.cancel()
         actionReleaseWakeLock()
 
