@@ -1,0 +1,129 @@
+name: 🤖 Agent / model problem
+description: An agent (Antigravity, Claude Code, OpenCode, Codex), a model, sign-in, quota or an API provider does not work.
+title: "[Agent]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Many agent problems come from the provider, not from AntiGem (an expired key, no quota, a model the provider removed, a region block).
+        Please check that your account / key works **outside AntiGem** first, and tell us below.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the [existing issues](https://github.com/Santoshkurmi/antigem/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I removed every API key, token and password from what I paste here.
+          required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options:
+        - Antigravity (agy)
+        - Claude Code
+        - OpenCode
+        - Codex
+    validations:
+      required: true
+
+  - type: input
+    id: agent_version
+    attributes:
+      label: Agent CLI version
+      description: "From the agent's settings page, or the terminal: `agy --version`, `claude --version`, `opencode --version`, `codex --version`"
+      placeholder: "claude 2.1.40"
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App version
+      description: "**Settings → About & Info**"
+      placeholder: "1.2.0 (129)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: account
+    attributes:
+      label: Account / provider
+      options:
+        - Google account (Antigravity)
+        - Claude subscription (Pro / Max)
+        - Anthropic Console API key
+        - ChatGPT account (Codex)
+        - OpenRouter
+        - Another third-party provider with my own key
+        - Local model (Ollama, LM Studio, vLLM…)
+        - OpenCode free models / Zen / Go
+        - GitHub Copilot
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: "deepseek-chat via OpenRouter / gemini-3-pro / claude-sonnet-…"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Where the agents run
+      options:
+        - On this phone (default)
+        - Server mode (SSH tunnel or domain)
+        - Connected to a PC (AntiGem for VS Code)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: works_elsewhere
+    attributes:
+      label: Does the same account / key / model work outside AntiGem?
+      description: For example the same CLI on a PC, the provider's website, or a curl request.
+      options:
+        - Yes, it works on PC / elsewhere, only AntiGem fails
+        - No, it fails there too
+        - I haven't tested it outside AntiGem
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Exact error text (copy it), and what you were doing.
+      placeholder: |
+        Every message in Antigravity shows "Model unavailable" since yesterday.
+        Other models in the picker work. Quota shows 100%.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Settings → Claude Code → Providers → add DeepSeek with my key
+        2. Test connection: OK
+        3. New chat, pick deepseek-chat, send "hi"
+        4. Error: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: "**Settings → Diagnostics** (daemon logs), or the agent's error in the chat. ⚠️ No keys or tokens."
+      render: shell

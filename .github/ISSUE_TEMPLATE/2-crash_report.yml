@@ -1,0 +1,67 @@
+name: 💥 Crash
+description: The app closed by itself or showed the "AntiGem stopped" crash screen.
+title: "Crash: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        When the app crashes it shows a crash screen with **Report on GitHub**, **Copy** and **Share**.
+        Tap **Copy** and paste the full report below. **A crash issue without the crash report can't be fixed.**
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the [existing issues](https://github.com/Santoshkurmi/antigem/issues?q=is%3Aissue+crash) for this crash.
+          required: true
+
+  - type: textarea
+    id: what_doing
+    attributes:
+      label: What were you doing when it crashed?
+      description: The exact screen and action. "I was using the app" is not enough.
+      placeholder: "Typing a long message in an OpenCode chat, then I switched to the terminal tab and it closed."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Can you make it crash again? How?
+      placeholder: |
+        1. Open the file explorer
+        2. Open a 20 MB .log file
+        3. Crash
+        (or: "No, it happened only once")
+    validations:
+      required: true
+
+  - type: textarea
+    id: crash_report
+    attributes:
+      label: Crash report
+      description: Paste the whole report from the crash screen (tap **Copy**). It already has the app version, Android version and device.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it crash?
+      options:
+        - Every time I do the steps above
+        - Often
+        - Sometimes
+        - Happened once
+        - Every time I open the app (it can't start)
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Did it start after an update or a reboot? Screen recording? Free storage / RAM if it was low?

@@ -1,0 +1,152 @@
+name: 🧩 New feature / integration request
+description: A new agent, model, provider, MCP server, tool, library or feature. You must have used it yourself.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ⚠️ Read this first: we only add things that people really use
+
+        Every new feature has to be built, tested on phones and **maintained forever**. So we only consider requests from people who have
+        **used the thing themselves, for real work**, and can explain what it gives them that AntiGem can't do today.
+
+        **Requests like these will be closed:**
+        - "Add X" when you have **never used X** yourself (on PC, in another app, anywhere).
+        - "X has 99% on a benchmark / 10k GitHub stars, please add it". **Benchmarks and stars are not use.** Try it on your own code first.
+        - "Add a native agent for provider Y" when **OpenCode already supports 200+ providers** and any OpenAI-compatible API, and **Claude Code** already runs on OpenRouter, Kimi, DeepSeek, Z.ai and any Anthropic-compatible API. Use those.
+        - A new tool or MCP that you can **already add yourself** in **Settings → MCP Servers** or as an [AntiGem plugin](https://github.com/Santoshkurmi/antigem/blob/master/extension_docs/README.md).
+
+        **Haven't used it yet?** Install it on your PC (or in AntiGem's terminal, or set it up with OpenCode / Claude Code / MCP Servers) and use it for a while.
+        If it is still worth it after that, come back and fill this in with what you learned.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirm all of these (required)
+      options:
+        - label: I searched the [existing issues](https://github.com/Santoshkurmi/antigem/issues?q=is%3Aissue) and this has not been asked yet.
+          required: true
+        - label: I have **personally used** what I am asking for (on PC, in another app or in AntiGem's terminal), for real work, not only read about it.
+          required: true
+        - label: If it needs an account or API key, **I have one** and I use it.
+          required: true
+        - label: I checked that it **can't already be done** in AntiGem (OpenCode providers, Claude Code third-party providers, Settings → MCP Servers, plugins, the terminal).
+          required: true
+        - label: I understand that a request without real use, or that only cites benchmarks / stars, will be closed.
+          required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of request is it?
+      options:
+        - New agent / agent harness
+        - New model or AI provider
+        - New MCP server or tool for the agents
+        - Library / renderer in the chat (diagrams, math, charts…)
+        - New feature in the app (UI, editor, terminal, browser…)
+        - Integration with another app or service
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: name
+    attributes:
+      label: Name and link
+      description: The tool / project / provider you want, with its official link.
+      placeholder: "context-mode — https://github.com/mksglu/context-mode"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage_time
+    attributes:
+      label: How long have you used it yourself?
+      options:
+        - More than 3 months
+        - 1–3 months
+        - 1–4 weeks
+        - Less than a week
+        - I haven't used it (this request will be closed)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage_where
+    attributes:
+      label: Where did you use it?
+      multiple: true
+      options:
+        - On my PC (terminal / VS Code / another IDE)
+        - In another app or website
+        - In AntiGem (terminal, MCP Servers, OpenCode / Claude Code provider, plugin)
+        - On a server
+        - I haven't used it
+    validations:
+      required: true
+
+  - type: textarea
+    id: real_use
+    attributes:
+      label: Tell us how YOU used it
+      description: |
+        A real example from your own work: what you did with it, on which project, and what the result was.
+        Copied descriptions from the project's README or marketing page don't count.
+      placeholder: |
+        I've used context-mode with Claude Code on my PC for 6 weeks on a 40k-line TypeScript repo.
+        Typical session: refactor the API layer. Without it the context filled after ~25 turns; with it ~60 turns.
+        Downsides I noticed: it sometimes hides file contents the model needs, so I turn it off for debugging.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compared
+    attributes:
+      label: Compared with what AntiGem has today
+      description: |
+        Which AntiGem agent / feature did you compare it with, on the same kind of task, and what was better or worse?
+        If you are asking for a new agent or provider: why isn't OpenCode (200+ providers) or Claude Code with a third-party provider enough?
+      placeholder: "I tried DeepSeek through OpenCode in AntiGem: it works, but ... / I tried the same refactor with Claude Code in AntiGem and ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve for you?
+      description: The problem in your own work, not "it would be nice to have".
+    validations:
+      required: true
+
+  - type: textarea
+    id: why_builtin
+    attributes:
+      label: Why must it be built into AntiGem?
+      description: Why can't you just use it through the terminal, Settings → MCP Servers, an OpenCode / Claude Code provider, or a plugin?
+    validations:
+      required: true
+
+  - type: textarea
+    id: downsides
+    attributes:
+      label: Downsides and limits you noticed while using it
+      description: Every tool has some (cost, speed, worse results on some tasks, setup, size on the phone…). If you used it, you know them.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proof
+    attributes:
+      label: Screenshots or logs of you using it (recommended)
+      description: A screenshot of your own session, your usage page, a terminal log… Requests with proof of real use get looked at first.
+
+  - type: dropdown
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - I can test it on my phone when it is ready
+        - I can write a plugin / pull request myself
+        - I can't help, just requesting
