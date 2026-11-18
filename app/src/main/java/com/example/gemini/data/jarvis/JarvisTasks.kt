@@ -245,7 +245,7 @@ object JarvisTasks {
                 val id = UUID.randomUUID().toString()
                 val chosen = modelId?.takeIf { it.isNotBlank() } ?: vm.agyBackend.selectedModelId.value
                 val enum = AgyHubClient.resolveModelEnum(chosen)
-                val ws = projectPath ?: (com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+                val ws = projectPath ?: (com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path
                     ?: com.example.gemini.data.local.LocalEnvironmentManager.getHomeDir(app).absolutePath)
                 hub.startCascade(id, enum, if (ws.startsWith("file://")) ws else "file://$ws").getOrThrow()
                 vm.agyBackend.rememberChatModel(id, chosen)

@@ -247,7 +247,7 @@ object AdbConnectManager {
             // Termux is rolling-release: installing only android-tools can leave older libraries (libprotobuf…) that the new
             // adb can't link against, so refresh the package lists and bring its direct dependencies up to date too
             val keepConfigs = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
-            val pkg = if (LocalEnvironmentManager.isTermuxPackage(appContext)) "android-tools" else "adb"
+            val pkg = "android-tools"
             val command = "apt-get update && apt-get install -y $keepConfigs $pkg && " +
                 "apt-get install -y $keepConfigs ${'$'}(apt-cache depends $pkg | awk '/Depends:/ && ${'$'}2 !~ /^</ {print ${'$'}2}')"
             appendInstallLog("$ $command")

@@ -108,17 +108,15 @@ object GlobalContext {
 
     // ------------------------------------------------------------------ the built-in text
 
-    /** Termux build with the bridge on this phone: the agent runs in Termux, not on a server. */
-    val runsInTermux: Boolean
-        get() = (BuildConfig.FLAVOR.startsWith("termux") ||
-            BuildConfig.APPLICATION_ID == com.example.gemini.data.local.TermuxRelocation.RELOCATED_PACKAGE) &&
-            !AuthPreferences.isRemoteEndpoint()
+    /** The bridge on this phone: the agent runs in the app's Linux system (Termux packages), not on a server. */
+    val runsOnPhone: Boolean
+        get() = !AuthPreferences.isRemoteEndpoint()
 
     /** The built-in context for the current setup (Settings shows exactly this). [h]: the heading level of its sections. */
     fun builtInText(h: String = "##"): String = buildString {
-        if (runsInTermux) {
+        if (runsOnPhone) {
             append("$h Where you run\n")
-            append("- Android, inside Termux (the AntiGem app): no root, no sudo; /tmp, /usr, /etc are not usable.\n")
+            append("- Android, in the AntiGem app's Linux system (Termux packages): no root, no sudo; /tmp, /usr, /etc are not usable.\n")
             append("- Temporary files: use \$TMPDIR ($filesDir/usr/tmp), never /tmp. Install packages with `pkg install <name>`.\n")
             append("- Home is \$HOME ($filesDir/home); phone storage is /sdcard.\n\n")
         }
@@ -141,7 +139,7 @@ object GlobalContext {
         val parts = mutableListOf<String>()
         if (_builtInEnabled.value) parts += builtInText()
         // Settings → STEM & diagrams: the extra blocks this chat renders (normal chats only, not Jarvis)
-        com.example.gemini.data.render.RenderBundle.promptSection(canReadFiles = runsInTermux)?.let { parts += it }
+        com.example.gemini.data.render.RenderBundle.promptSection(canReadFiles = runsOnPhone)?.let { parts += it }
         val own = active().filter { !it.everyMessage }
         if (own.isNotEmpty()) parts += "## The user's own instructions\n" + entriesBlock(own)
         return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")

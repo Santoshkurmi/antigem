@@ -31,6 +31,14 @@ import java.util.Locale
 class TermuxApiReceiver : BroadcastReceiver() {
 
     companion object {
+        /**
+         * The termux-api methods handled in [onReceive] (the names the termux-* commands send). The dispatcher script
+         * (LocalEnvironmentManager.ensureTermuxApiDispatcher) sends only these here: keep both in step.
+         */
+        val BUILT_IN_METHODS = listOf(
+            "Toast", "Vibrate", "Clipboard", "Torch", "TextToSpeech", "Notification", "NotificationRemove", "Volume", "BatteryStatus"
+        )
+
         private const val TAG = "TermuxApiReceiver"
         private const val API_NOTIFICATION_CHANNEL_ID = "antigem_termux_api_notifications"
         private var ttsInstance: TextToSpeech? = null

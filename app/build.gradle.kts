@@ -35,6 +35,11 @@ android {
         targetSdk = 28
         versionCode = appVersionCode
         versionName = appVersionName
+        // Local ports differ from the old com.termux build (1234/1235/8765), so both apps can run side by side
+        // while users move their data over
+        buildConfigField("int", "BRIDGE_PORT", "1236")
+        buildConfigField("int", "HUB_PORT", "1237")
+        buildConfigField("int", "BROWSER_MCP_PORT", "8767")
         // The local environment (glibc, proot, IDE bridge, bootstrap) is arm64 only, but armeabi-v7a is kept so 32-bit
         // ARM phones can install the app and use server mode (bridge on a PC). x86/x86_64 copies of dependency
         // libraries stay out of the APK
@@ -47,36 +52,6 @@ android {
             storePassword = "123456"
             keyAlias = "antigem"
             keyPassword = "123456"
-        }
-    }
-
-    flavorDimensions += "mode"
-    productFlavors {
-        // Local ports differ per app so ai.antigem and com.termux can be installed and run side by side
-        // (ai.antigem: +2, so its bridge port never equals com.termux's hub port).
-        create("standard") {
-            dimension = "mode"
-            applicationId = "ai.antigem"
-            buildConfigField("int", "BRIDGE_PORT", "1236")
-            buildConfigField("int", "HUB_PORT", "1237")
-            buildConfigField("int", "BROWSER_MCP_PORT", "8767")
-            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
-        }
-        create("termux") {
-            dimension = "mode"
-            applicationId = "com.termux"
-            buildConfigField("int", "BRIDGE_PORT", "1234")
-            buildConfigField("int", "HUB_PORT", "1235")
-            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
-            buildConfigField("boolean", "IS_SHARED_USER_ID", "false")
-        }
-        create("termuxShared") {
-            dimension = "mode"
-            applicationId = "com.termux"
-            buildConfigField("int", "BRIDGE_PORT", "1234")
-            buildConfigField("int", "HUB_PORT", "1235")
-            buildConfigField("int", "BROWSER_MCP_PORT", "8765")
-            buildConfigField("boolean", "IS_SHARED_USER_ID", "true")
         }
     }
 
@@ -293,9 +268,6 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
   from(layout.projectDirectory.file("../scripts/restore_projects.sh")) {
     rename { "restore_projects" }
   }
-  from(layout.projectDirectory.file("../scripts/backup_proot_ubuntu.sh")) {
-    rename { "backup_proot_ubuntu" }
-  }
   from(layout.projectDirectory.file("../scripts/git_clone.sh")) {
     rename { "git_clone" }
   }
@@ -334,6 +306,31 @@ val bundleMiniAppDocs by tasks.registering(Sync::class) {
 }
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/miniAppDocAssets").get().asFile)
 tasks.named("preBuild").configure { dependsOn(bundleMiniAppDocs) }
+
+/**
+ * am.apk: the Java code of the Linux system's `am` command (termux-am), built from the termux-am submodule
+ * (termux/TermuxAm, see termux-am-build/build.gradle.kts) so that it sends intents as ai.antigem. Termux's own one says
+ * com.termux, which Android refuses for this app; TermuxRelocation puts ours in place of it. Each app variant gets the
+ * same build type of it (debug app: debug am.apk, release app: release am.apk) as assets/bin/am.apk, from its own
+ * generated folder so variants built together can't mix them up.
+ */
+abstract class TermuxAmAssetTask : DefaultTask() {
+    @get:InputFiles
+    abstract val apkDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val apk = apkDir.get().asFile.listFiles { f -> f.extension == "apk" }?.singleOrNull()
+            ?: throw GradleException("termux-am: no single .apk in ${apkDir.get().asFile}")
+        val bin = outputDir.get().asFile.resolve("bin")
+        bin.deleteRecursively()
+        bin.mkdirs()
+        apk.copyTo(File(bin, "am.apk"), overwrite = true)
+    }
+}
 
 // Changelog: the app's "What's new" page is built from the git history of version.json, one entry per version_code
 // (the newest commit of each wins, dated by that commit). The version.json being built is used for its own version, so
@@ -434,5 +431,12 @@ val generateChangelog = tasks.register<GenerateChangelogTask>("generateChangelog
 androidComponents {
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateChangelog, GenerateChangelogTask::outputDir)
+
+        val amBuildType = if (variant.buildType == "release") "release" else "debug"
+        val termuxAm = tasks.register<TermuxAmAssetTask>("termuxAm${variant.name.replaceFirstChar { it.uppercase() }}") {
+            dependsOn(":termux-am:assemble${amBuildType.replaceFirstChar { it.uppercase() }}")
+            apkDir.set(project(":termux-am").layout.buildDirectory.dir("outputs/apk/$amBuildType"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(termuxAm, TermuxAmAssetTask::outputDir)
     }
 }

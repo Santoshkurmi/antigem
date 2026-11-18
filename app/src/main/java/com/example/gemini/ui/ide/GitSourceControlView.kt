@@ -742,7 +742,7 @@ fun GitSourceControlView(
                                 val projPath = activeProject?.path ?: return@CommitLogRow
                                 scope.launch {
                                     val diffText = GitApiClient.getCommitFileDiff(projPath, commit.hash, filePath) ?: ""
-                                    TermuxDaemonManager.openDiffTab(filePath, diffText, false, commit.hash)
+                                    IdeDaemonManager.openDiffTab(filePath, diffText, false, commit.hash)
                                 }
                             }
                         )

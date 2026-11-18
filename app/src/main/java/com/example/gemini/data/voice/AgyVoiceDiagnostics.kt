@@ -82,7 +82,7 @@ internal object AgyVoiceDiagnostics {
         if (f.closeCode != 0 || !f.closeReason.isNullOrBlank()) out += "Hub closed the link: code ${f.closeCode}${f.closeReason?.let { " ($it)" } ?: ""}"
         if (f.linkRetries > 0) out += "Reconnects before the failure: ${f.linkRetries}"
         out += "Call: chat ${f.conversationId.ifBlank { "(none yet)" }}, voice ${f.voice}, language ${AgyVoicePreferences.acceptLanguage(f.language)}, plan model ${f.planModel}"
-        out += "App: ${BuildConfig.VERSION_NAME} (${BuildConfig.FLAVOR} ${BuildConfig.BUILD_TYPE})"
+        out += "App: ${BuildConfig.VERSION_NAME} (${BuildConfig.APPLICATION_ID} ${BuildConfig.BUILD_TYPE})"
         out += "Phone: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.SUPPORTED_ABIS.joinToString("/")}"
         out += "agy: ${BridgeInfo.agyCli.value?.version?.ifBlank { null } ?: "unknown"}"
         out += "Server: " + serverKind()

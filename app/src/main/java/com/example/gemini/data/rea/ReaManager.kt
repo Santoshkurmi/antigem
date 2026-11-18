@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Settings → REA: sets up REA (Reverse Engineer Anything, github.com/morluto/rea), an MCP server that lets agents
  * take apart APKs, Flutter and React Native apps and native code, in a proot-distro Ubuntu container of the
- * terminal (com.termux builds only).
+ * terminal.
  *
  * Nothing of REA ships in the APK: the setup scripts live in the antigem_plugins repository
  * (rea/skills/rea/scripts) and are downloaded into $PREFIX/share/antigem-rea when the user asks for them. Every
@@ -115,7 +115,6 @@ object ReaManager {
 
     data class State(
         val ready: Boolean = false,
-        val termuxBuild: Boolean = true,
         val bootstrapInstalled: Boolean = false,
         val source: String = DEFAULT_SOURCE,
         /** Version of the downloaded setup files, null when not downloaded. */
@@ -245,7 +244,6 @@ object ReaManager {
 
     private fun refreshNow() {
         val ctx = appContext
-        val termux = LocalEnvironmentManager.isTermuxPackage(ctx)
         val root = rootfs()
         val bin = File(prefix, "bin")
         val installed = buildSet {
@@ -281,7 +279,6 @@ object ReaManager {
         _state.update {
             it.copy(
                 ready = true,
-                termuxBuild = termux,
                 bootstrapInstalled = LocalEnvironmentManager.isInstalled(ctx),
                 filesVersion = filesVersion,
                 filesUpdate = it.filesUpdate?.takeIf { v -> v != filesVersion },

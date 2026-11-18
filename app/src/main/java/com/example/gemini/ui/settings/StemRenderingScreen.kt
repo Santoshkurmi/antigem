@@ -194,7 +194,7 @@ fun StemRenderingScreen() {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "A short list of the blocks that work here, with their exact versions, so agents use them in their answers" +
-                        (if (GlobalContext.runsInTermux) ", and where the full guide is on this phone (they read it only when needed)" else "") +
+                        (if (GlobalContext.runsOnPhone) ", and where the full guide is on this phone (they read it only when needed)" else "") +
                         ". Chats get it again when it changes. Jarvis doesn't get it.",
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
@@ -204,7 +204,7 @@ fun StemRenderingScreen() {
                 if (showPrompt) {
                     val text = remember(active, tellAgents, installed) {
                         if (!tellAgents) "(off: nothing is sent)"
-                        else RenderBundle.promptSection(canReadFiles = GlobalContext.runsInTermux) ?: "(nothing switched on)"
+                        else RenderBundle.promptSection(canReadFiles = GlobalContext.runsOnPhone) ?: "(nothing switched on)"
                     }
                     SelectionContainer {
                         Text(

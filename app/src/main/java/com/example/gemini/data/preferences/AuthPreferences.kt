@@ -100,18 +100,13 @@ class AuthPreferences(private val context: Context) {
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
 
         const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
-        const val DEFAULT_UBUNTU_BRIDGE_BINARY_PATH = "/antigem/bin/agy_ide_bridge"
         const val DEFAULT_AGY_BINARY_PATH = "~/.local/bin/agy"
-        const val DEFAULT_UBUNTU_AGY_BINARY_PATH = "/root/.local/bin/agy"
         /** The app's Claude Code launcher (glibc loader); Claude's updater never touches it. */
         const val DEFAULT_CLAUDE_BINARY_PATH = "~/../usr/bin/claude"
-        const val DEFAULT_UBUNTU_CLAUDE_BINARY_PATH = "/root/.local/bin/claude"
         /** Where the official OpenCode installer (and the app's own installer) puts it. */
         const val DEFAULT_OPENCODE_BINARY_PATH = "~/.opencode/bin/opencode"
-        const val DEFAULT_UBUNTU_OPENCODE_BINARY_PATH = "/root/.opencode/bin/opencode"
-        /** Codex: the Termux package (`pkg install codex`) on com.termux; the official build's ~/.local/bin in Ubuntu. */
+        /** Codex: the Termux package (`pkg install codex`). */
         const val DEFAULT_CODEX_BINARY_PATH = "~/../usr/bin/codex"
-        const val DEFAULT_UBUNTU_CODEX_BINARY_PATH = "/root/.local/bin/codex"
 
         const val TOKEN_PREFIX = "x-ag"
         const val TOKEN_SUFFIX = "_9qx"
@@ -178,7 +173,7 @@ class AuthPreferences(private val context: Context) {
         val currentFramedHeader: String
             get() = buildFramedHeader(currentSecurityToken)
 
-        // per app (see the build flavors): ai.antigem uses other ports than com.termux so both can run together
+        // ai.antigem uses other ports than the old com.termux build (see build.gradle.kts) so both can run together
         val DEFAULT_HUB_URL = "http://127.0.0.1:${com.example.gemini.BuildConfig.HUB_PORT}"
         val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:${com.example.gemini.BuildConfig.BRIDGE_PORT}"
 
@@ -1072,10 +1067,10 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultBridgeBinaryPath(): String =
-        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_BRIDGE_BINARY_PATH else DEFAULT_UBUNTU_BRIDGE_BINARY_PATH
+        DEFAULT_BRIDGE_BINARY_PATH
 
     fun getDefaultAgyBinaryPath(): String =
-        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_AGY_BINARY_PATH else DEFAULT_UBUNTU_AGY_BINARY_PATH
+        DEFAULT_AGY_BINARY_PATH
 
     val agyBridgeBinaryPath: Flow<String> = context.dataStore.data.map {
         it[AGY_BRIDGE_BINARY_PATH] ?: getAgyBridgeBinaryPathSync()
@@ -1104,7 +1099,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultClaudeBinaryPath(): String =
-        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_CLAUDE_BINARY_PATH else DEFAULT_UBUNTU_CLAUDE_BINARY_PATH
+        DEFAULT_CLAUDE_BINARY_PATH
 
     fun getClaudeBinaryPathSync(): String =
         syncPrefs.getString("claude_binary_path", getDefaultClaudeBinaryPath()) ?: getDefaultClaudeBinaryPath()
@@ -1116,7 +1111,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultOpenCodeBinaryPath(): String =
-        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_OPENCODE_BINARY_PATH else DEFAULT_UBUNTU_OPENCODE_BINARY_PATH
+        DEFAULT_OPENCODE_BINARY_PATH
 
     fun getOpenCodeBinaryPathSync(): String =
         syncPrefs.getString("opencode_binary_path", getDefaultOpenCodeBinaryPath()) ?: getDefaultOpenCodeBinaryPath()
@@ -1126,7 +1121,7 @@ class AuthPreferences(private val context: Context) {
     }
 
     fun getDefaultCodexBinaryPath(): String =
-        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) DEFAULT_CODEX_BINARY_PATH else DEFAULT_UBUNTU_CODEX_BINARY_PATH
+        DEFAULT_CODEX_BINARY_PATH
 
     fun getCodexBinaryPathSync(): String =
         syncPrefs.getString("codex_binary_path", getDefaultCodexBinaryPath()) ?: getDefaultCodexBinaryPath()

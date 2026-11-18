@@ -51,7 +51,7 @@ class AndroidLocalBridgeServer private constructor() {
         private const val MAX_HEADER_BYTES = 64 * 1024
         /** Uploads arrive as base64 in JSON: allow large bodies, but not unbounded ones. */
         private const val MAX_BODY_BYTES = 512L * 1024 * 1024
-        /** Per app (build flavor) so ai.antigem and com.termux do not collide. */
+        /** Differs from the old com.termux build's port so both apps can run together. */
         val DEFAULT_PORT = com.example.gemini.BuildConfig.BROWSER_MCP_PORT
         val instance: AndroidLocalBridgeServer by lazy { AndroidLocalBridgeServer() }
     }

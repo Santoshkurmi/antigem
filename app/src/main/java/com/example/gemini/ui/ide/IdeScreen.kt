@@ -47,7 +47,7 @@ import com.example.gemini.data.daemon.GitApiClient
 import com.example.gemini.data.daemon.IdeApiClient
 import com.example.gemini.data.daemon.OpenTab
 import com.example.gemini.data.daemon.ProjectItem
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import com.example.gemini.theme.ClaudeTerracotta
 import com.example.gemini.ui.components.LocalTerminalContent
 import com.example.gemini.data.local.LocalPtySession
@@ -93,10 +93,10 @@ fun IdeScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val conversations by (viewModel?.conversations ?: MutableStateFlow(emptyList())).collectAsState()
-    val allProjects by TermuxDaemonManager.projects.collectAsState()
-    val activeProject by TermuxDaemonManager.activeProject.collectAsState()
-    val openTabs by TermuxDaemonManager.openTabs.collectAsState()
-    val activeTabPath by TermuxDaemonManager.activeTabPath.collectAsState()
+    val allProjects by IdeDaemonManager.projects.collectAsState()
+    val activeProject by IdeDaemonManager.activeProject.collectAsState()
+    val openTabs by IdeDaemonManager.openTabs.collectAsState()
+    val activeTabPath by IdeDaemonManager.activeTabPath.collectAsState()
 
     var fileTree by remember { mutableStateOf<List<FileNode>>(emptyList()) }
     var isWordWrap by remember { mutableStateOf(false) }
@@ -228,12 +228,12 @@ fun IdeScreen(
 
     fun refreshProjectsAndTree() {
         coroutineScope.launch {
-            val projs = TermuxDaemonManager.loadProjects(conversations)
-            val current = TermuxDaemonManager.activeProject.value
+            val projs = IdeDaemonManager.loadProjects(conversations)
+            val current = IdeDaemonManager.activeProject.value
             if (current != null) {
                 fileTree = IdeApiClient.getFileTree(current.path)
             } else if (projs.isNotEmpty()) {
-                TermuxDaemonManager.setActiveProject(projs.first())
+                IdeDaemonManager.setActiveProject(projs.first())
                 fileTree = IdeApiClient.getFileTree(projs.first().path)
             }
         }
@@ -248,7 +248,7 @@ fun IdeScreen(
 
     // React immediately whenever daemon reconnects in the background
     LaunchedEffect(Unit) {
-        TermuxDaemonManager.serverReconnectedEvent.collect {
+        IdeDaemonManager.serverReconnectedEvent.collect {
             refreshProjectsAndTree()
         }
     }
@@ -258,11 +258,11 @@ fun IdeScreen(
         if (isVisible) {
             while (true) {
                 if (activeTabPath != null) {
-                    val currentTab = TermuxDaemonManager.openTabs.value.find { it.path == activeTabPath }
+                    val currentTab = IdeDaemonManager.openTabs.value.find { it.path == activeTabPath }
                     if (currentTab != null && !currentTab.isDiff) {
                         val diskContent = IdeApiClient.readFile(currentTab.path)
                         if (diskContent != null) {
-                            val res = TermuxDaemonManager.updateTabFromDisk(currentTab.path, diskContent)
+                            val res = IdeDaemonManager.updateTabFromDisk(currentTab.path, diskContent)
                             if (res == TabDiskUpdateResult.AUTO_UPDATED) {
                                 autoUpdateNotification = "${currentTab.name} reloaded from disk"
                             }
@@ -334,7 +334,7 @@ fun IdeScreen(
                     fileTree = fileTree,
                     activeFilePath = activeTabPath,
                     onSelectProject = { proj ->
-                        TermuxDaemonManager.setActiveProject(proj)
+                        IdeDaemonManager.setActiveProject(proj)
                         viewModel?.onProjectChanged(proj.path)
                     },
                     onOpenFileManager = {
@@ -369,7 +369,7 @@ fun IdeScreen(
                                         mimeType = res.mimeType
                                     )
                                 } else {
-                                    TermuxDaemonManager.openOrSelectTab(node.path, node.name, res.content)
+                                    IdeDaemonManager.openOrSelectTab(node.path, node.name, res.content)
                                     drawerState.close()
                                 }
                             }
@@ -380,7 +380,7 @@ fun IdeScreen(
                             val projPath = activeProject?.path ?: return@launch
                             val diffRes = GitApiClient.getDiff(projPath, filePath, isStaged)
                             val diffContent = diffRes?.diff ?: ""
-                            TermuxDaemonManager.openDiffTab(filePath, diffContent, isStaged)
+                            IdeDaemonManager.openDiffTab(filePath, diffContent, isStaged)
                             drawerState.close()
                         }
                     },
@@ -400,7 +400,7 @@ fun IdeScreen(
                             val ok = IdeApiClient.renameFileOrDir(oldPath, newPath)
                             if (ok) {
                                 val newName = File(newPath).name
-                                TermuxDaemonManager.renameTab(oldPath, newPath, newName)
+                                IdeDaemonManager.renameTab(oldPath, newPath, newName)
                                 fileTree = IdeApiClient.getFileTree(activeProject?.path)
                                 Toast.makeText(context, "Renamed to '$newName'", Toast.LENGTH_SHORT).show()
                             } else {
@@ -412,7 +412,7 @@ fun IdeScreen(
                         coroutineScope.launch {
                             val ok = IdeApiClient.deleteFileOrDir(path)
                             if (ok) {
-                                TermuxDaemonManager.closeTab(path)
+                                IdeDaemonManager.closeTab(path)
                                 fileTree = IdeApiClient.getFileTree(activeProject?.path)
                                 Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
                             } else {
@@ -595,7 +595,7 @@ fun IdeScreen(
                                             )
                                             when (result) {
                                                 is FileSaveResult.Success -> {
-                                                    TermuxDaemonManager.markTabSaved(activeTab.path, result.hash)
+                                                    IdeDaemonManager.markTabSaved(activeTab.path, result.hash)
                                                     Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
                                                 }
                                                 is FileSaveResult.Conflict -> {
@@ -918,7 +918,7 @@ fun IdeScreen(
                                         } else {
                                             val file = RunConfigManager.getOrCreateLaunchJson(projectPath, activeTabPath)
                                             val content = try { file.readText() } catch (_: Exception) { "{}" }
-                                            TermuxDaemonManager.openOrSelectTab(file.absolutePath, "run.json", content)
+                                            IdeDaemonManager.openOrSelectTab(file.absolutePath, "run.json", content)
                                         }
                                     }
                                 )
@@ -976,7 +976,7 @@ fun IdeScreen(
                                 modifier = Modifier
                                     .height(38.dp)
                                     .background(if (isSelected) com.example.gemini.theme.AppColors.editorBg else com.example.gemini.theme.AppColors.editorLine)
-                                    .clickable { TermuxDaemonManager.setActiveTabPath(tab.path) }
+                                    .clickable { IdeDaemonManager.setActiveTabPath(tab.path) }
                                     .padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1014,7 +1014,7 @@ fun IdeScreen(
                                             if (tab.isModified) {
                                                 tabToClose = tab
                                             } else {
-                                                TermuxDaemonManager.closeTab(tab.path)
+                                                IdeDaemonManager.closeTab(tab.path)
                                             }
                                         }
                                 )
@@ -1329,7 +1329,7 @@ fun IdeScreen(
                                         rawFilePath
                                     }
                                     val content = IdeApiClient.readFile(fullFilePath) ?: ""
-                                    TermuxDaemonManager.openOrSelectTab(
+                                    IdeDaemonManager.openOrSelectTab(
                                         path = fullFilePath,
                                         name = File(fullFilePath).name,
                                         content = content,
@@ -1356,7 +1356,7 @@ fun IdeScreen(
                                         val content = GitApiClient.getCommitFileContent(projPath, commitHash, relPath) ?: ""
                                         val tabPath = "commit:$commitHash:$fullFilePath"
                                         val tabName = "${File(fullFilePath).name} (${commitHash.take(7)})"
-                                        TermuxDaemonManager.openOrSelectTab(
+                                        IdeDaemonManager.openOrSelectTab(
                                             path = tabPath,
                                             name = tabName,
                                             content = content,
@@ -1366,7 +1366,7 @@ fun IdeScreen(
                                         val content = GitApiClient.getCommitFileContent(projPath, "HEAD", relPath) ?: (IdeApiClient.readFile(fullFilePath) ?: "")
                                         val tabPath = "revision:HEAD:$fullFilePath"
                                         val tabName = "${File(fullFilePath).name} (HEAD)"
-                                        TermuxDaemonManager.openOrSelectTab(
+                                        IdeDaemonManager.openOrSelectTab(
                                             path = tabPath,
                                             name = tabName,
                                             content = content,
@@ -1376,7 +1376,7 @@ fun IdeScreen(
                                 }
                             },
                             onClose = {
-                                TermuxDaemonManager.closeTab(activeTab.path)
+                                IdeDaemonManager.closeTab(activeTab.path)
                             },
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1404,7 +1404,7 @@ fun IdeScreen(
                                         setFile(activeTab.name, activeTab.content)
                                         onContentChangeListener = { newText ->
                                             if (!activeTab.isReadOnly) {
-                                                TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                                IdeDaemonManager.updateTabContent(activeTab.path, newText)
                                             }
                                         }
                                         onUndoRedoStateListener = { u, r ->
@@ -1435,7 +1435,7 @@ fun IdeScreen(
                                     canRedo = view.canRedo()
                                     view.onContentChangeListener = { newText ->
                                         if (!activeTab.isReadOnly) {
-                                            TermuxDaemonManager.updateTabContent(activeTab.path, newText)
+                                            IdeDaemonManager.updateTabContent(activeTab.path, newText)
                                         }
                                     }
                                     view.onUndoRedoStateListener = { u, r ->
@@ -1508,7 +1508,7 @@ fun IdeScreen(
                                         force = false
                                     )
                                     if (res is FileSaveResult.Success) {
-                                        TermuxDaemonManager.closeTab(target.path)
+                                        IdeDaemonManager.closeTab(target.path)
                                         Toast.makeText(context, "Saved and closed", Toast.LENGTH_SHORT).show()
                                     } else if (res is FileSaveResult.Conflict) {
                                         conflictDialogTab = target.copy(diskConflict = true, diskContentOnConflict = res.diskContent)
@@ -1527,7 +1527,7 @@ fun IdeScreen(
                             onClick = {
                                 val target = tabToClose ?: return@TextButton
                                 tabToClose = null
-                                TermuxDaemonManager.closeTab(target.path)
+                                IdeDaemonManager.closeTab(target.path)
                             }
                         ) {
                             Text("Don't Save", color = com.example.gemini.theme.AppColors.danger)
@@ -1566,7 +1566,7 @@ fun IdeScreen(
                                         force = true
                                     )
                                     if (res is FileSaveResult.Success) {
-                                        TermuxDaemonManager.markTabSaved(target.path, res.hash)
+                                        IdeDaemonManager.markTabSaved(target.path, res.hash)
                                         Toast.makeText(context, "Saved (Overwritten)", Toast.LENGTH_SHORT).show()
                                     } else {
                                         Toast.makeText(context, "Failed to overwrite disk", Toast.LENGTH_SHORT).show()
@@ -1583,7 +1583,7 @@ fun IdeScreen(
                             onClick = {
                                 val target = conflictDialogTab ?: return@TextButton
                                 conflictDialogTab = null
-                                TermuxDaemonManager.resolveTabConflict(target.path, keepMine = false)
+                                IdeDaemonManager.resolveTabConflict(target.path, keepMine = false)
                                 Toast.makeText(context, "Reverted to disk version", Toast.LENGTH_SHORT).show()
                             }
                         ) {
@@ -1610,20 +1610,20 @@ fun IdeScreen(
                     onConfirmFolder = { folder ->
                         showFileManager = false
                         val proj = ProjectItem(java.io.File(folder).name.ifBlank { folder }, folder)
-                        TermuxDaemonManager.setActiveProject(proj)
+                        IdeDaemonManager.setActiveProject(proj)
                         viewModel?.onProjectChanged(proj.path)
                         refreshProjectsAndTree()
                     },
                     onOpenFolderInIde = { folder ->
                         showFileManager = false
                         val proj = ProjectItem(java.io.File(folder).name.ifBlank { folder }, folder)
-                        TermuxDaemonManager.setActiveProject(proj)
+                        IdeDaemonManager.setActiveProject(proj)
                         viewModel?.onProjectChanged(proj.path)
                         refreshProjectsAndTree()
                     },
                     onProjectCreated = { proj ->
                         showFileManager = false
-                        TermuxDaemonManager.setActiveProject(proj)
+                        IdeDaemonManager.setActiveProject(proj)
                         viewModel?.onProjectChanged(proj.path)
                         refreshProjectsAndTree()
                     },
@@ -1650,7 +1650,7 @@ fun IdeScreen(
                             "$cleanFolder/$cleanFileName"
                         }
                         val contentToSave = currentEditorView?.getText()
-                            ?: TermuxDaemonManager.openTabs.value.find { it.path == tabToSave.path }?.content
+                            ?: IdeDaemonManager.openTabs.value.find { it.path == tabToSave.path }?.content
                             ?: tabToSave.content
 
                         android.util.Log.d("IdeScreen", "[SaveAs] Saving external file: targetFullPath='$fullPath', folder='$cleanFolder', file='$cleanFileName', contentLength=${contentToSave.length}")
@@ -1663,9 +1663,9 @@ fun IdeScreen(
                                 force = true
                             )
                             if (res is FileSaveResult.Success) {
-                                TermuxDaemonManager.closeTab(tabToSave.path)
-                                TermuxDaemonManager.openOrSelectTab(fullPath, cleanFileName, contentToSave, res.hash)
-                                TermuxDaemonManager.markTabSaved(fullPath, res.hash)
+                                IdeDaemonManager.closeTab(tabToSave.path)
+                                IdeDaemonManager.openOrSelectTab(fullPath, cleanFileName, contentToSave, res.hash)
+                                IdeDaemonManager.markTabSaved(fullPath, res.hash)
                                 saveAsDialogTab = null
                                 refreshProjectsAndTree()
                                 Toast.makeText(context, "Saved to $fullPath", Toast.LENGTH_SHORT).show()
@@ -1710,7 +1710,7 @@ fun IdeScreen(
                     confirmButton = {
                         Button(
                             onClick = {
-                                TermuxDaemonManager.openOrSelectTab(tabInfo.path, tabInfo.name, tabInfo.content)
+                                IdeDaemonManager.openOrSelectTab(tabInfo.path, tabInfo.name, tabInfo.content)
                                 binaryWarningDialog = null
                                 coroutineScope.launch { drawerState.close() }
                             },

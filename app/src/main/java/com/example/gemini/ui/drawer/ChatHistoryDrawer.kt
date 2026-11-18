@@ -493,7 +493,7 @@ fun ChatHistoryDrawer(
                     onClick = {
                         showExitConfirmDialog = false
                         try {
-                            com.example.gemini.data.service.TermuxService.stop(context)
+                            com.example.gemini.data.service.AntiGemService.stop(context)
                         } catch (e: Exception) {
                             Log.e("ChatHistoryDrawer", "Error stopping service", e)
                             try {

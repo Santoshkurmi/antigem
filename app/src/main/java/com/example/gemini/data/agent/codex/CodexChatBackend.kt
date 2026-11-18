@@ -995,7 +995,7 @@ class CodexChatBackend(
         skillsJob?.cancel()
         skillsJob = backendScope.launch {
             val cwd = store.currentConversation.value?.takeIf { it.agent == AgentKind.CODEX }?.let { workspacePath(it) }
-                ?: com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path?.removePrefix("file://")?.takeIf { it.startsWith("/") }
+                ?: com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path?.removePrefix("file://")?.takeIf { it.startsWith("/") }
             val res = client.rpc("skills/list", buildJsonObject {
                 cwd?.let { put("cwds", JsonArray(listOf(JsonPrimitive(it)))) }
                 if (force) put("forceReload", true)
@@ -1613,7 +1613,7 @@ class CodexChatBackend(
     }
 
     private fun defaultWorkspaceUri(): String {
-        val path = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path.orEmpty()
+        val path = com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path.orEmpty()
         return if (path.isBlank()) "" else if (path.startsWith("file://")) path else "file://$path"
     }
 

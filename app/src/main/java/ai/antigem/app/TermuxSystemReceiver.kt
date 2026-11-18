@@ -1,8 +1,8 @@
-package com.termux.app
+package ai.antigem.app
 
 import com.example.gemini.data.receiver.TermuxSystemReceiver as CoreSystemReceiver
 
 /**
- * Direct com.termux.app.TermuxSystemReceiver implementation for storage and style reloads.
+ * Direct ai.antigem.app.TermuxSystemReceiver implementation for storage and style reloads.
  */
 class TermuxSystemReceiver : CoreSystemReceiver()

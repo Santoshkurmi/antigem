@@ -1,0 +1,21 @@
+[submodule "termux-am"]
+	path = termux-am
+	url = https://github.com/termux/TermuxAm.git
+[submodule "termux-api"]
+	path = termux-api
+	url = https://github.com/Santoshkurmi/termux-api.git
+[submodule "termux-x11"]
+	path = termux-x11
+	url = https://github.com/Santoshkurmi/termux-x11.git
+[submodule "antigem-vscode"]
+	path = antigem-vscode
+	url = https://github.com/Santoshkurmi/antigem_vscode_extension.git
+[submodule "antigem-chrome-extension"]
+	path = antigem-chrome-extension
+	url = https://github.com/Santoshkurmi/antigem-browser-extension.git
+[submodule "antigem_mini_apps"]
+	path = antigem_mini_apps
+	url = https://github.com/Santoshkurmi/antigem_mini_apps
+[submodule "antigem_plugins"]
+	path = antigem_plugins
+	url = https://github.com/Santoshkurmi/antigem_plugins

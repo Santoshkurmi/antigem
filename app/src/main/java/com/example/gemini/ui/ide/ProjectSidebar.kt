@@ -76,7 +76,7 @@ fun ProjectSidebar(
     var showDeleteDialog by remember { mutableStateOf<FileNode?>(null) }
     var showDetailsDialog by remember { mutableStateOf<FileNode?>(null) }
     var expandedPaths by remember { mutableStateOf(setOf<String>()) }
-    val daemonStatus by com.example.gemini.data.daemon.TermuxDaemonManager.status.collectAsState()
+    val daemonStatus by com.example.gemini.data.daemon.IdeDaemonManager.status.collectAsState()
 
     Column(
         modifier = modifier

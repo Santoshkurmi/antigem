@@ -12,13 +12,13 @@ object TerminalLauncherManager {
     private const val TAG = "TerminalLauncherMgr"
 
     fun getAntiTermComponent(context: Context): ComponentName =
-        ComponentName(context.packageName, "com.example.gemini.TermuxAntiTermAlias")
+        ComponentName(context.packageName, "com.example.gemini.AntiTermAlias")
 
-    fun getTermuxClassicComponent(context: Context): ComponentName =
-        ComponentName(context.packageName, "com.example.gemini.TermuxClassicAlias")
+    fun getClassicTermComponent(context: Context): ComponentName =
+        ComponentName(context.packageName, "com.example.gemini.ClassicTermAlias")
 
     fun getDirectActivityComponent(context: Context): ComponentName =
-        ComponentName(context.packageName, "com.example.gemini.TermuxActivity")
+        ComponentName(context.packageName, "com.example.gemini.TerminalActivity")
 
     /**
      * Inspects the Android PackageManager directly to determine if any standalone terminal launcher alias/activity is enabled.
@@ -27,10 +27,10 @@ object TerminalLauncherManager {
         return try {
             val pm = context.packageManager
             val antiTermState = pm.getComponentEnabledSetting(getAntiTermComponent(context))
-            val classicState = pm.getComponentEnabledSetting(getTermuxClassicComponent(context))
+            val classicState = pm.getComponentEnabledSetting(getClassicTermComponent(context))
 
             // both aliases are disabled in the manifest, so only an explicit "enabled" from Settings shows an icon
-            // (TermuxActivity itself has no launcher entry, so it never adds one)
+            // (TerminalActivity itself has no launcher entry, so it never adds one)
             val isAntiTermActive = antiTermState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
             val isClassicActive = classicState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
 
@@ -46,7 +46,7 @@ object TerminalLauncherManager {
     fun getLauncherStyle(context: Context): String {
         return try {
             val pm = context.packageManager
-            val classicState = pm.getComponentEnabledSetting(getTermuxClassicComponent(context))
+            val classicState = pm.getComponentEnabledSetting(getClassicTermComponent(context))
             if (classicState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
                 STYLE_TERMUX
             } else {
@@ -67,7 +67,7 @@ object TerminalLauncherManager {
     fun applyLauncherSetting(context: Context, enabled: Boolean, style: String) {
         val pm = context.packageManager
         val antiTerm = getAntiTermComponent(context)
-        val classic = getTermuxClassicComponent(context)
+        val classic = getClassicTermComponent(context)
         val direct = getDirectActivityComponent(context)
 
         try {

@@ -1,10 +1,10 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/data/data/ai.antigem/files/usr/bin/bash
 # If invoked by a different shell or missing shebang interpreter, auto-detect and switch to bash
 if [ -z "${BASH_VERSION:-}" ]; then
     if [ -n "${PREFIX:-}" ] && [ -x "$PREFIX/bin/bash" ]; then
         exec "$PREFIX/bin/bash" "$0" "$@"
-    elif [ -x "/data/data/com.termux/files/usr/bin/bash" ]; then
-        exec "/data/data/com.termux/files/usr/bin/bash" "$0" "$@"
+    elif [ -x "/data/data/ai.antigem/files/usr/bin/bash" ]; then
+        exec "/data/data/ai.antigem/files/usr/bin/bash" "$0" "$@"
     elif command -v bash >/dev/null 2>&1; then
         exec bash "$0" "$@"
     fi
@@ -15,8 +15,8 @@ fi
 # ==============================================================================
 set -euo pipefail
 
-PREFIX_DIR="${PREFIX:-/data/data/com.termux/files/usr}"
-HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
+PREFIX_DIR="${PREFIX:-/data/data/ai.antigem/files/usr}"
+HOME_DIR="${HOME:-/data/data/ai.antigem/files/home}"
 TMP_ROOT="${TMPDIR:-${PREFIX_DIR}/tmp}"
 mkdir -p "$TMP_ROOT"
 

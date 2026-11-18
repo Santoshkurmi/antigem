@@ -1706,7 +1706,7 @@ object JarvisController {
     }
 
     private fun defaultWorkspace(): String {
-        val p = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+        val p = com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path
             ?: com.example.gemini.data.local.LocalEnvironmentManager.getHomeDir(app).absolutePath
         return if (p.startsWith("file://")) p else "file://$p"
     }

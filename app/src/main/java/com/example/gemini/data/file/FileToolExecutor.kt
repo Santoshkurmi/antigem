@@ -1,7 +1,7 @@
 package com.example.gemini.data.file
 
 import android.util.Log
-import com.example.gemini.data.ssh.TermuxSshManager
+import com.example.gemini.data.ssh.SshSessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -58,7 +58,7 @@ object FileToolExecutor {
         cmd: String,
         host: String, port: Int, user: String, pass: String
     ): Pair<String, Int> {
-        val result = TermuxSshManager.executeCommand(
+        val result = SshSessionManager.executeCommand(
             command = cmd,
             host = host, port = port, user = user, pass = pass,
             targetTabId = "primary"

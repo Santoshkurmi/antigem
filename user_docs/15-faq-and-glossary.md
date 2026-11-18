@@ -10,7 +10,7 @@ This guide answers the most frequently asked questions about AntiGem and provide
 **A:** Yes, for local coding and terminal tasks! The built-in Linux environment, code editor, terminal, file manager, and notes work 100% offline. If you want AI assistance while offline, you can connect AntiGem to an offline local model (e.g. Ollama running on your local network) using OpenCode. Cloud models require an active internet connection.
 
 ### Q: Where are my code files actually stored on my phone?
-**A:** Your files live in AntiGem’s secure internal storage directory (`/data/user/0/com.termux/files/home/antigem` or `~/projects`). You can also link AntiGem directly to your phone's public `Downloads` or `Documents` folder by running `termux-setup-storage` in the terminal.
+**A:** Your files live in AntiGem’s secure internal storage directory (`/data/user/0/ai.antigem/files/home/antigem` or `~/projects`). You can also link AntiGem directly to your phone's public `Downloads` or `Documents` folder by running `termux-setup-storage` in the terminal.
 
 ### Q: Will AntiGem drain my phone's battery?
 **A:** Normal chatting, editing code, and browsing use very little battery—comparable to reading a web page. However, running heavy build scripts (like compiling C++ or building large projects) will use more CPU power. If battery life is a concern, use **Remote Server Mode** (see [Guide 12](12-server-mode-and-remote-access.md)) to let your computer do the heavy lifting while your phone stays cool.

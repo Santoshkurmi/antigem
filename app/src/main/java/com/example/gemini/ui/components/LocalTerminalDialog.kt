@@ -665,25 +665,25 @@ fun LocalTerminalContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    TermuxKey(label = "ESC", modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "ESC", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_ESCAPE, "\u001B")
                     }
-                    TermuxKey(label = "/", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "/", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_SLASH, "/")
                     }
-                    TermuxKey(label = "-", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "-", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_MINUS, "-")
                     }
-                    TermuxKey(label = "HOME", modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "HOME", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_HOME, "\u0001")
                     }
-                    TermuxKey(label = "↑", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "↑", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_UP, "\u001B[A")
                     }
-                    TermuxKey(label = "END", modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "END", modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u0005")
                     }
-                    TermuxKey(label = "PGUP", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "PGUP", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_UP, "\u001B[5~")
                     }
                 }
@@ -693,10 +693,10 @@ fun LocalTerminalContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    TermuxKey(label = "↹", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "↹", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
                     }
-                    TermuxKey(
+                    ExtraKey(
                         label = "CTRL",
                         isActive = ctrlState != ModifierState.OFF,
                         isLocked = ctrlState == ModifierState.LOCKED,
@@ -708,7 +708,7 @@ fun LocalTerminalContent(
                             ctrlState = if (ctrlState == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED
                         }
                     )
-                    TermuxKey(
+                    ExtraKey(
                         label = "ALT",
                         isActive = altState != ModifierState.OFF,
                         isLocked = altState == ModifierState.LOCKED,
@@ -720,16 +720,16 @@ fun LocalTerminalContent(
                             altState = if (altState == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED
                         }
                     )
-                    TermuxKey(label = "←", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "←", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_LEFT, "\u001B[D")
                     }
-                    TermuxKey(label = "↓", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "↓", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_DOWN, "\u001B[B")
                     }
-                    TermuxKey(label = "→", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "→", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_RIGHT, "\u001B[C")
                     }
-                    TermuxKey(label = "PGDN", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                    ExtraKey(label = "PGDN", enableRepeat = true, modifier = Modifier.weight(1f)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_DOWN, "\u001B[6~")
                     }
                 }
@@ -1002,7 +1002,7 @@ fun LocalTerminalContent(
 }
 
 @Composable
-private fun TermuxKey(
+private fun ExtraKey(
     label: String,
     isActive: Boolean = false,
     isLocked: Boolean = false,

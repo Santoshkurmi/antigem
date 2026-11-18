@@ -153,10 +153,8 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
         CodexMcpPreset("Theme", "Create & switch app themes", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentAlt, local(bridge.THEME_MCP_NAME, "/theme")),
         CodexMcpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, com.example.gemini.theme.AppColors.accentPink,
             McpDraft(name = "stitch", url = "https://stitch.googleapis.com/mcp", headers = "X-Goog-Api-Key: ")),
-        // REA runs in the terminal's proot-distro Ubuntu: com.termux builds only; its tile picks the tool groups
-        if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context))
-            CodexMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null)
-        else null,
+        // REA runs in the terminal's proot-distro Ubuntu; its tile picks the tool groups
+        CodexMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null),
         CodexMcpPreset("Custom server", "Any remote (HTTP) or local (command) server", Icons.Outlined.Add, CodexAccent, McpDraft())
     ).filterNotNull()
     // REA servers: local servers running the rea-mcp launcher (name → env)

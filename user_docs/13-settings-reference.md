@@ -397,7 +397,6 @@ Enable or disable individual agent engines. If only one agent is selected, the t
 
 ## 19. GitHub (`GITHUB`)
 *Subtitle: "Sign in with the GitHub CLI, your repositories and git credentials"*
-- **Visibility Rule**: The GitHub settings page only appears in the `com.termux` package build (`LocalEnvironmentManager.isTermuxPackage`). In a standalone build, the GitHub settings page is not shown at all.
 - **Status & Installation**: Checks if `gh` and `git` are installed; includes **Install gh** and **Set up git** buttons.
 - **Sign In with Browser**: Generates a one-time code and provides **Copy code & open GitHub** (`github.com/login/device`).
 - **Use a personal access token instead**: Token input field supporting `ghp_…` or `github_pat_…` tokens.
@@ -448,7 +447,6 @@ Allows AI agents to interact with your phone's Android operating system (inspect
 
 ## 22. Termux Support (`TERMUX_SUPPORT`)
 *Subtitle: "Termux:API and the X11 desktop"*
-- **Visibility Rule**: Appears only in the `com.termux` package build. If the installed build is not the Shared UID build, the row displays **"Standalone"** with a warning badge.
 - Hub page grouping Termux:API and X11 Desktop features.
 
 ---
@@ -457,21 +455,19 @@ Allows AI agents to interact with your phone's Android operating system (inspect
 *Subtitle: "How termux-api commands are handled"*
 ### What it is:
 Bridges Android hardware capabilities (battery level, camera, clipboard, notifications, vibrate, location) to command-line shell scripts.
-### Provider Options:
-1. **Built-in (Zero-setup)** (Default):
-   - Lightweight native handlers for clipboard, toast, torch, vibration, TTS, battery, volume, and notifications inside AntiGem without requiring an external companion app.
-2. **The external Termux:API app**:
-   - Forwards commands to the standalone external Termux:API companion app.
-   - *Requirement*: Requires the Shared UID build (`termuxBuild`). On a standalone build, this option is disabled with a requirement card.
-### Interactive Command Testers:
-Tap the built-in test buttons to test `termux-toast`, `termux-clipboard-get`, and `termux-battery-status` live.
+### Modes (one at a time):
+1. **Built-in** (Default, *No app needed*): AntiGem handles clipboard, toast, torch, vibration, text to speech, battery, volume and notifications. Other commands (location, camera, sensors, SMS, …) say they need AntiGem's Termux:API app.
+2. **AntiGem's Termux:API app**: every `termux-*` command goes to the app (`ai.antigem.api`, built for AntiGem and sharing its Linux user). It can be chosen once the app is installed; if it is removed later, the commands say so until it is installed again or Built-in is chosen.
+### Status:
+- **termux-api package**: the `termux-*` commands themselves. AntiGem installs it during setup (or on the next start of an older install); **Install** runs `pkg install termux-api` when it is missing.
+- **AntiGem's Termux:API app**: installed or not; **Get the app** opens its releases page.
 
 ---
 
 ## 24. X11 Desktop (`X11_DESKTOP`)
 *Subtitle: "Linux desktop apps with Termux:X11"*
 ### What it is:
-Enables running graphical Linux desktop applications directly on your phone screen via **Linux desktop** powered by Termux:X11. *(Note: Needs the Shared UID build `termuxBuild` to run Termux:X11 at full speed).*
+Enables running graphical Linux desktop applications directly on your phone screen via **Linux desktop** powered by Termux:X11. *(AntiGem's Termux:X11 build shares AntiGem's Linux user, so it runs at full speed.)*
 ### Step-by-Step Setup:
 1. **Step 1: Termux:X11 app**: Tap **Download & install** to install AntiGem's own build of the Termux:X11 companion app. (You can also tap **Open the download page**).
 2. **Step 2: termux-x11 command**: Tap **Install termux-x11-nightly** (or companion package) to install the command that starts the X server.
@@ -494,7 +490,7 @@ An interactive timeline of every release of AntiGem. Changes are organized by ve
 
 ## 26. About & Info (`ABOUT`)
 *Subtitle: "App version, package details, and bridge export"*
-- **App Branding & Version**: Displays the current version number, build flavor (e.g. `termuxBuild`), and Git commit hash.
+- **App Branding & Version**: Displays the current version number and Git commit hash.
 - **Check for Updates**: Queries GitHub releases for new APK versions.
 - **Export Bridge Binary**: Exports the `agy_ide_bridge` binary directly into your phone's public `Downloads` directory so you can easily copy it to an external server or PC.
 - **System Information**: Displays device architecture (e.g. `aarch64`), Android API level, and package details.
@@ -503,7 +499,7 @@ An interactive timeline of every release of AntiGem. Changes are organized by ve
 ## 27. REA · Reverse Engineering (`REA`) and REA Tool Groups (`REA_GROUPS`)
 *Subtitle: "Let agents analyze APKs, Flutter, React Native and native code"*
 ### What it is:
-Sets up **REA**, an MCP server for static reverse engineering, in a proot-distro Ubuntu container of the terminal. Any agent can use it: it is connected with the REA preset in each agent's MCP settings. Shown on com.termux builds only; the main-page row shows *Partly set up*, *Installing…* or REA's version. Full guide: [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md).
+Sets up **REA**, an MCP server for static reverse engineering, in a proot-distro Ubuntu container of the terminal. Any agent can use it: it is connected with the REA preset in each agent's MCP settings. The main-page row shows *Partly set up*, *Installing…* or REA's version. Full guide: [16 — Reverse Engineering with REA](16-reverse-engineering-rea.md).
 ### Steps on the page:
 1. **Setup files**: **Get setup files** downloads the setup scripts (not shipped in the app); **Update to vX** when newer ones exist; **Change** sets the source repository.
 2. **Install**: tick parts and tap **Install selected (N)**, or use a part's own **Install** / **Reinstall** / **Update**. **Stop** ends a running part. The screen stays on while installing.
@@ -518,7 +514,7 @@ Sets up **REA**, an MCP server for static reverse engineering, in a proot-distro
 ## 28. Android Development (`ANDROID_DEV`)
 *Subtitle: "Build Kotlin / Compose, Flutter and React Native apps on this phone"*
 ### What it is:
-Installs Gradle, the Android SDK, Flutter and Node.js in the proot-distro Ubuntu container of the terminal (the one REA uses), so agents and you can build Android apps on the phone with the `adev` command. Agent-neutral: nothing is added to any agent's MCP settings. Shown on com.termux builds only; the main-page row shows *Partly set up*, *Working…* or what is ready (*Kotlin · Flutter · RN*). Full guide: [17 — Building Android Apps on the Phone](17-android-development.md).
+Installs Gradle, the Android SDK, Flutter and Node.js in the proot-distro Ubuntu container of the terminal (the one REA uses), so agents and you can build Android apps on the phone with the `adev` command. Agent-neutral: nothing is added to any agent's MCP settings. The main-page row shows *Partly set up*, *Working…* or what is ready (*Kotlin · Flutter · RN*). Full guide: [17 — Building Android Apps on the Phone](17-android-development.md).
 ### Steps on the page:
 1. **Setup files**: **Get setup files**, **Update to vX**, **Change** (source repository).
 2. **Install**: tick *Kotlin / Java · Jetpack Compose*, *Flutter*, *React Native* and *Extras* (adb, CMake & Ninja), then **Install selected (N)**; **All parts** lists every part with its own **Install** / **Reinstall** / **Update**. **Stop** ends a running part. The screen stays on while installing.
@@ -534,8 +530,6 @@ Installs Gradle, the Android SDK, Flutter and Node.js in the proot-distro Ubuntu
 
 ### ❌ Symptom: A settings page I read about is missing.
 - **What to check**: Check your installed app build type and active operating mode:
-  - **GitHub**: Only appears in the `com.termux` package build (`LocalEnvironmentManager.isTermuxPackage`). In a standalone build, the GitHub settings page is not shown at all.
-  - **Termux Support (Termux:API & X11 Desktop)**: Only appears in the `com.termux` package build. If the build is not the Shared UID build, the row shows *"Standalone"* with a warning, and external Termux:API is disabled.
   - **Backups & Restore**: Only appears when local Linux tools are installed AND you are in local mode. In remote/server mode, Backups is hidden because backups apply to the phone's local environment.
   - **Utilities**: Does not exist as a page in the UI because its former tools (GitHub, ADB Connect, and Android Automation) now each have their own prominent top-level rows.
   - **Terminal Row**: Shows *"SSH"* when SSH mode or remote server mode is on, and *"Local"* otherwise.

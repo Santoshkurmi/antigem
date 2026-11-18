@@ -1687,7 +1687,7 @@ class ClaudeChatBackend(
     }
 
     private fun defaultWorkspaceUri(): String {
-        val path = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path.orEmpty()
+        val path = com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path.orEmpty()
         return if (path.isBlank()) "" else if (path.startsWith("file://")) path else "file://$path"
     }
 

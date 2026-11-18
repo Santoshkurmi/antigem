@@ -71,7 +71,7 @@ import androidx.compose.runtime.collectAsState
 import com.example.gemini.data.daemon.FileNode
 import com.example.gemini.data.daemon.IdeApiClient
 import com.example.gemini.data.daemon.ProjectItem
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import com.example.gemini.domain.model.AiModel
 import com.example.gemini.domain.model.ChatMessage
 import com.example.gemini.domain.model.MessageRole
@@ -1169,17 +1169,17 @@ fun ChatScreen(
     } else AiModel.findInList(enabledModels, selectedModelId, preferredModelName)
     val currentQuota = quotas.find { it.modelId == selectedModelId }
 
-    val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()
-    val usedProjects by TermuxDaemonManager.projects.collectAsState()
+    val activeChatProject by IdeDaemonManager.activeProject.collectAsState()
+    val usedProjects by IdeDaemonManager.projects.collectAsState()
     var showProjectDropdown by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        TermuxDaemonManager.loadProjects(conversations)
+        IdeDaemonManager.loadProjects(conversations)
     }
 
     LaunchedEffect(Unit) {
-        TermuxDaemonManager.serverReconnectedEvent.collect {
-            TermuxDaemonManager.loadProjects(conversations)
+        IdeDaemonManager.serverReconnectedEvent.collect {
+            IdeDaemonManager.loadProjects(conversations)
         }
     }
 
@@ -3201,7 +3201,7 @@ fun ChatScreen(
             isApplyingAgents = isApplyingAgents,
             onApplyAgents = { viewModel.applyAgents(it) },
             onOpenProject = { project ->
-                TermuxDaemonManager.setActiveProject(project)
+                IdeDaemonManager.setActiveProject(project)
                 viewModel.onProjectChanged(project.path)
             },
             onDismiss = {
@@ -3673,7 +3673,7 @@ fun ChatScreen(
                 activeMarkdownDoc = null
                 scope.launch {
                     val content = try { File(path).readText() } catch (e: Exception) { docContent }
-                    TermuxDaemonManager.openOrSelectTab(path, File(path).name, content)
+                    IdeDaemonManager.openOrSelectTab(path, File(path).name, content)
                     onNavigateToIde()
                 }
             }
@@ -3690,7 +3690,7 @@ fun ChatScreen(
                 viewModel.dismissIncomingMarkdownPreview()
                 scope.launch {
                     val content = try { File(path).readText() } catch (e: Exception) { docContent }
-                    TermuxDaemonManager.openOrSelectTab(path, File(path).name, content)
+                    IdeDaemonManager.openOrSelectTab(path, File(path).name, content)
                     onNavigateToIde()
                 }
             }
@@ -3764,7 +3764,7 @@ fun ChatScreen(
             activeProject = if (chatCloudId != null) null else activeProj,
             onSelectProject = { proj ->
                 if (isAgyChat) viewModel.agyBackend.setNewChatCloudProject(null)
-                TermuxDaemonManager.setActiveProject(proj)
+                IdeDaemonManager.setActiveProject(proj)
                 viewModel.onProjectChanged(proj?.path ?: "")
                 showProjectPickerDialog = false
             },
@@ -3781,7 +3781,7 @@ fun ChatScreen(
             },
             onRefresh = {
                 scope.launch {
-                    TermuxDaemonManager.loadProjects(conversations)
+                    IdeDaemonManager.loadProjects(conversations)
                 }
             },
             onDismiss = { showProjectPickerDialog = false }
@@ -3792,7 +3792,7 @@ fun ChatScreen(
         com.example.gemini.ui.components.GitCloneDialog(
             onCloned = { clonedProj ->
                 showGitCloneDialog = false
-                TermuxDaemonManager.setActiveProject(clonedProj)
+                IdeDaemonManager.setActiveProject(clonedProj)
                 viewModel.onProjectChanged(clonedProj.path)
             },
             onDismiss = { showGitCloneDialog = false }
@@ -3807,7 +3807,7 @@ fun ChatScreen(
             onConfirmFolder = { folder ->
                 showWorkspaceFolderBrowserDialog = false
                 val selectedProj = ProjectItem(File(folder).name.ifBlank { folder }, folder)
-                TermuxDaemonManager.setActiveProject(selectedProj)
+                IdeDaemonManager.setActiveProject(selectedProj)
                 viewModel.onProjectChanged(selectedProj.path)
             },
             onOpenedInIde = {
@@ -3816,7 +3816,7 @@ fun ChatScreen(
             },
             onProjectCreated = { created ->
                 showWorkspaceFolderBrowserDialog = false
-                TermuxDaemonManager.setActiveProject(created)
+                IdeDaemonManager.setActiveProject(created)
                 viewModel.onProjectChanged(created.path)
             },
             onDismiss = { showWorkspaceFolderBrowserDialog = false }

@@ -49,9 +49,9 @@ fun FloatingTerminalInspector(
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val tabs by TermuxSshManager.tabs.collectAsState()
-    val activeTabId by TermuxSshManager.activeTabId.collectAsState()
-    val connectionStatus by TermuxSshManager.connectionStatus.collectAsState()
+    val tabs by SshSessionManager.tabs.collectAsState()
+    val activeTabId by SshSessionManager.activeTabId.collectAsState()
+    val connectionStatus by SshSessionManager.connectionStatus.collectAsState()
     var isInspectorOpen by remember { mutableStateOf(false) }
 
     val isTerminalEnabled by authPreferences.isTerminalToolEnabled.collectAsState(initial = false)
@@ -148,8 +148,8 @@ fun TerminalInspectorDialog(
     authPreferences: AuthPreferences,
     onDismiss: () -> Unit
 ) {
-    val tabs by TermuxSshManager.tabs.collectAsState()
-    val activeTabId by TermuxSshManager.activeTabId.collectAsState()
+    val tabs by SshSessionManager.tabs.collectAsState()
+    val activeTabId by SshSessionManager.activeTabId.collectAsState()
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -159,10 +159,10 @@ fun TerminalInspectorDialog(
             tabs = tabs,
             activeTabId = activeTabId,
             authPreferences = authPreferences,
-            onSelectTab = { TermuxSshManager.selectTab(it) },
-            onCreateTab = { TermuxSshManager.createTab() },
-            onCloseTab = { TermuxSshManager.closeTab(it) },
-            onClearTab = { TermuxSshManager.clearTabCommands(it) },
+            onSelectTab = { SshSessionManager.selectTab(it) },
+            onCreateTab = { SshSessionManager.createTab() },
+            onCloseTab = { SshSessionManager.closeTab(it) },
+            onClearTab = { SshSessionManager.clearTabCommands(it) },
             onDismiss = onDismiss
         )
     }
@@ -418,7 +418,7 @@ private fun TerminalInspectorDialogContent(
                         items(activeTab.commands, key = { it.id }) { cmd ->
                             TerminalCommandCard(
                                 command = cmd,
-                                onKill = { TermuxSshManager.killCommand(cmd.id) }
+                                onKill = { SshSessionManager.killCommand(cmd.id) }
                             )
                         }
                     }
@@ -476,7 +476,7 @@ private fun TerminalInspectorDialogContent(
                                     val pass = authPreferences.termuxSshPass.firstOrNull() ?: "root"
 
                                     commandInput = ""
-                                    TermuxSshManager.executeCommand(
+                                    SshSessionManager.executeCommand(
                                         command = cmd,
                                         host = host,
                                         port = port,

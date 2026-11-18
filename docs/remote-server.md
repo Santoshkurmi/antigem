@@ -72,8 +72,8 @@ phone (AntiGem app)                              server
 * **Only this app on this phone can use it.** A desktop browser or a second device cannot reach the bridge unless you
   open your own `ssh -L` tunnel there.
 * **The ports must be free on the phone.** The tunnel opens the bridge and hub ports on the phone's `127.0.0.1`. If
-  something else on the phone already uses them (for example the local bridge of the other AntiGem variant on the same
-  ports), the tunnel cannot open: use other ports in the addresses.
+  something else on the phone already uses them (for example the local bridge of the old `com.termux` build of AntiGem on
+  the same ports), the tunnel cannot open: use other ports in the addresses.
 * **The SSH key is the master key.** Whoever has it has the bridge too (in Server mode they have a shell anyway, so this
   is no worse, but protect the key).
 
@@ -345,8 +345,7 @@ The rest of section 6 is about **Server mode**.
 | Bridge | **1234** | REST + WebSocket: files, git, chats relay, Claude, plugins |
 | Hub (`agy`) | **1235** | gRPC over HTTP/2: Antigravity chats |
 
-The AntiGem build you installed decides the default ports: the `com.termux` build uses 1234 / 1235, the `com.antigem`
-build uses **1236 / 1237**. The app shows the numbers under the address boxes and as placeholders in *Ports on the
+AntiGem (`ai.antigem`) uses **1236 / 1237** by default; the old `com.termux` build used 1234 / 1235. The app shows the numbers under the address boxes and as placeholders in *Ports on the
 server*. Use those numbers wherever this guide says 1234 / 1235.
 
 How the app starts the services depends on the address you type:

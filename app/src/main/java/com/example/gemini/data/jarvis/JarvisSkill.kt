@@ -1,7 +1,7 @@
 package com.example.gemini.data.jarvis
 
 import com.example.gemini.data.daemon.IdeApiClient
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import com.example.gemini.domain.model.AgentKind
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -354,8 +354,8 @@ You direct only your own tasks: other Jarvis chats' tasks (and those chats thems
         val lines = ArrayList<String>()
         val time = SimpleDateFormat("EEE d MMM yyyy, HH:mm", Locale.getDefault()).format(Date())
         lines += "now: $time · screen: ${JarvisController.screen.value}" + (heardVia?.let { " · heard_via: $it" } ?: "")
-        val project = TermuxDaemonManager.activeProject.value
-        val file = TermuxDaemonManager.activeTabPath.value
+        val project = IdeDaemonManager.activeProject.value
+        val file = IdeDaemonManager.activeTabPath.value
         if (project != null || file != null) {
             lines += "ide: " + listOfNotNull(project?.let { "project ${it.name} (${it.path})" }, file?.let { "open file ${it.substringAfterLast('/')}" }).joinToString(" · ")
         }

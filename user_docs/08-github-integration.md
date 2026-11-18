@@ -6,7 +6,6 @@ GitHub is the world's most popular platform for hosting and sharing code. AntiGe
 
 ## 🧭 Overview & Environment Detection
 
-> ℹ️ **Build Requirement**: The GitHub settings page appears only in the `com.termux` package build (`LocalEnvironmentManager.isTermuxPackage`). In standalone builds, the GitHub page is hidden from settings.
 
 When you navigate to **Settings → GitHub**, AntiGem checks whether the GitHub CLI is available:
 - **Checking**: You will see *"Checking the terminal for the GitHub CLI…"* (or *"Checking the server for the GitHub CLI…"* when connected in Server mode).

@@ -33,17 +33,18 @@ import java.util.concurrent.TimeUnit
  * Settings → X11 Desktop: sets up Termux:X11 (the app that shows the desktop, its companion
  * termux package with the `termux-x11` command, and a desktop such as XFCE) and starts/stops it.
  *
- * Only for the Shared UID com.termux build: it uses AntiGem's own Termux:X11 build
- * (github.com/Santoshkurmi/termux-x11), signed with AntiGem's key. That app joins AntiGem's UID and
- * process, so Android keeps the desktop at full speed while it is on screen. Its companion package is
- * antigem-termux-x11 from the same release; the official termux-x11-nightly's loader only starts the
- * official Termux:X11, so it is replaced when found.
+ * It uses AntiGem's own Termux:X11 build (github.com/Santoshkurmi/termux-x11), package ai.antigem.x11, signed
+ * with AntiGem's key. That app joins AntiGem's UID (sharedUserId ai.antigem) and process, so Android keeps the
+ * desktop at full speed while it is on screen. Its companion package is antigem-termux-x11 from the same
+ * release; the official termux-x11-nightly's loader only starts the official Termux:X11, so it is replaced when
+ * found. The fork keeps its Java names (com.termux.x11.*): its intent actions below are those.
  */
 object X11DesktopManager {
     private const val TAG = "X11Desktop"
     private const val PREFS = "x11_desktop"
 
-    const val X11_PACKAGE = "com.termux.x11"
+    /** AntiGem's Termux:X11: this app's package name + ".x11". */
+    const val X11_PACKAGE = "${BuildConfig.APPLICATION_ID}.x11"
     const val COMPANION_ANTIGEM = "antigem-termux-x11"
     const val COMPANION_OFFICIAL = "termux-x11-nightly"
 
@@ -195,7 +196,7 @@ object X11DesktopManager {
     }
 
     /**
-     * The X server's processes. `termux-x11` starts it with app_process --nice-name="termux-x11 com.termux.x11 …",
+     * The X server's processes. `termux-x11` starts it with app_process --nice-name="termux-x11 ai.antigem.x11 …",
      * and it runs under AntiGem's UID (it is a child of the terminal), so /proc shows it to us.
      */
     private fun xServerPids(): List<Int> = File("/proc").listFiles().orEmpty().mapNotNull { dir ->
@@ -321,6 +322,7 @@ object X11DesktopManager {
     /** Closes the Termux:X11 window and stops the X server; the desktop's programs exit with it. */
     fun stop(context: Context) = scope.launch {
         runCatching {
+            // the fork's own action name (its Java code keeps com.termux.x11), sent to its package ai.antigem.x11
             context.sendBroadcast(Intent("com.termux.x11.ACTION_STOP").setPackage(X11_PACKAGE))
         }
         // SIGTERM (not SIGKILL) so the X server removes its lock file and socket

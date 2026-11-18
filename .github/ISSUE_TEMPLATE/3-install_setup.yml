@@ -7,8 +7,7 @@ body:
     attributes:
       value: |
         Please read these first, they solve most install problems:
-        - The `termux` build uses the package name **`com.termux`**: it **can't be installed next to the official Termux app**. Uninstall Termux first.
-        - You **can't update** from the Standalone build to the Shared UID build (or the other way) on top: Android shows `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`. Back up, uninstall, install the other one.
+        - AntiGem's package name is **`ai.antigem`**: it installs next to Termux and next to the old `com.termux` build of AntiGem. To move your files from the old build, back up there (Settings → Backups & Restore → Back up environment) and pick that zip in the new app's setup (From a ZIP file).
         - Builds are for **arm64** phones.
 
         "Not installing" with no details will be **closed**. Write the **exact** error message.
@@ -46,7 +45,7 @@ body:
     attributes:
       label: Which APK file did you install?
       description: The exact file name from the releases page.
-      placeholder: "antiGem-termux-shared-v1.2.0.apk"
+      placeholder: "AntiGem-v1.2.0.apk"
     validations:
       required: true
 
@@ -95,7 +94,7 @@ body:
       label: What did you do, step by step?
       placeholder: |
         1. Uninstalled the old version
-        2. Installed antiGem-termux-shared-v1.2.0.apk
+        2. Installed AntiGem-v1.2.0.apk
         3. Opened the app, chose Claude Code + OpenCode
         4. Setup stopped at "Verifying shell" with an error
     validations:

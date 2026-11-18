@@ -101,7 +101,6 @@ object LocalServerManager {
         val restoreChatsFile = File(binDir, "restore_chats")
         val backupProjectsFile = File(binDir, "backup_projects")
         val restoreProjectsFile = File(binDir, "restore_projects")
-        val backupProotUbuntuFile = File(binDir, "backup_proot_ubuntu")
         val gitCloneFile = File(binDir, "git_clone")
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -122,7 +121,7 @@ object LocalServerManager {
         val currentAppUpdateTime = packageInfo?.lastUpdateTime ?: 0L
 
         val needsCopy =
-            !bridgeFile.exists() || !backupFile.exists() || !backupChatsFile.exists() || !restoreChatsFile.exists() || !backupProjectsFile.exists() || !restoreProjectsFile.exists() || !backupProotUbuntuFile.exists() || !gitCloneFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
+            !bridgeFile.exists() || !backupFile.exists() || !backupChatsFile.exists() || !restoreChatsFile.exists() || !backupProjectsFile.exists() || !restoreProjectsFile.exists() || !gitCloneFile.exists() || (currentAppUpdateTime > 0L && currentAppUpdateTime != lastSavedUpdate)
 
         if (needsCopy) {
             try {
@@ -154,11 +153,6 @@ object LocalServerManager {
                     extractAssetToBin(context, binDir, "restore_projects")
                 } catch (e: Exception) {
                     Log.w(TAG, "restore_projects asset not extracted", e)
-                }
-                try {
-                    extractAssetToBin(context, binDir, "backup_proot_ubuntu")
-                } catch (e: Exception) {
-                    Log.w(TAG, "backup_proot_ubuntu asset not extracted", e)
                 }
                 try {
                     extractAssetToBin(context, binDir, "git_clone")
@@ -380,6 +374,11 @@ object LocalServerManager {
         // the bridge starts Claude Code through the app's launcher (--claude-bin)
         LocalEnvironmentManager.ensureGlibcEnvironment(appContext)
         LocalEnvironmentManager.ensureClaudeWrapper(appContext)
+        // after an app update the package hooks and the dpkg wrapper are refreshed here too, not only in a new terminal
+        TermuxRelocation.ensurePackageHooks(appContext)
+        // termux-* commands: AntiGem's dispatcher, and the termux-api package that provides the commands
+        LocalEnvironmentManager.ensureTermuxApiDispatcher(appContext)
+        LocalEnvironmentManager.ensureTermuxApiPackage(appContext)
 
         val command = resolveServerCommand(appContext)
         if (command == null) {

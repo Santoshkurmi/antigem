@@ -95,13 +95,13 @@ fun GlobalContextScreen() {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Tells the agent " + (if (GlobalContext.runsInTermux) "that it runs in Termux on Android (use \$TMPDIR, not /tmp; pkg, not sudo) and " else "") +
+                    "Tells the agent " + (if (GlobalContext.runsOnPhone) "that it runs in AntiGem's Linux system on Android (use \$TMPDIR, not /tmp; pkg, not sudo) and " else "") +
                         "how to show images, videos and files in this chat. Jarvis and the chats it starts get it too.",
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
-                if (!GlobalContext.runsInTermux) {
+                if (!GlobalContext.runsOnPhone) {
                     Spacer(Modifier.height(4.dp))
-                    Text("The Termux part is added only in the Termux build while the bridge runs on this phone.", fontSize = 11.5.sp, color = muted)
+                    Text("The Android part is added only while the bridge runs on this phone.", fontSize = 11.5.sp, color = muted)
                 }
                 TextButton(onClick = { showBuiltIn = !showBuiltIn }, contentPadding = PaddingValues(horizontal = 0.dp)) {
                     Text(if (showBuiltIn) "Hide the text" else "Show exactly what is sent")

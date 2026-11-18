@@ -70,10 +70,10 @@ class MainActivity : ComponentActivity() {
         }
 
         if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
-            com.example.gemini.data.service.TermuxService.start(this)
+            com.example.gemini.data.service.AntiGemService.start(this)
             com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
-        com.example.gemini.data.daemon.TermuxDaemonManager.init(this)
+        com.example.gemini.data.daemon.IdeDaemonManager.init(this)
         com.example.gemini.ui.browser.BrowserSessionManager.instance.init(this)
         com.example.gemini.data.local.LocalTerminalBridge.instance.init(this)
         com.example.gemini.data.notes.NotesRepository.init(this)
@@ -218,8 +218,6 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(!com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(context))
             }
 
-            val isTermuxPackage =
-                remember { com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context) }
             var isInstalledState by remember {
                 mutableStateOf(
                     com.example.gemini.data.local.LocalEnvironmentManager.isInstalled(
@@ -242,7 +240,7 @@ class MainActivity : ComponentActivity() {
                         com.example.gemini.ui.components.AppPermissionsDialog(
                             onDismissOrCompleted = {
                                 showPermissionsDialog = false
-                                com.example.gemini.data.service.TermuxService.start(context)
+                                com.example.gemini.data.service.AntiGemService.start(context)
                                 com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(context)
                             }
                         )
@@ -455,7 +453,7 @@ class MainActivity : ComponentActivity() {
                                                 currentViewMode = AppViewMode.IDE
                                             },
                                             onProjectCreated = { proj ->
-                                                com.example.gemini.data.daemon.TermuxDaemonManager.setActiveProject(proj)
+                                                com.example.gemini.data.daemon.IdeDaemonManager.setActiveProject(proj)
                                                 chatViewModel.onProjectChanged(proj.path)
                                                 previousViewMode = currentViewMode
                                                 currentViewMode = AppViewMode.IDE
@@ -687,7 +685,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         instanceRef = java.lang.ref.WeakReference(this)
         if (com.example.gemini.ui.components.PermissionUtils.hasNotificationPermission(this)) {
-            com.example.gemini.data.service.TermuxService.start(this)
+            com.example.gemini.data.service.AntiGemService.start(this)
             com.example.gemini.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
     }
@@ -784,7 +782,7 @@ class MainActivity : ComponentActivity() {
         val uri = item.uri
         when {
             item.text != null -> {
-                com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(
+                com.example.gemini.data.daemon.IdeDaemonManager.openOrSelectTab(
                     path = "shared-text:${System.currentTimeMillis()}/${item.name}",
                     name = item.name,
                     content = item.text,
@@ -799,7 +797,7 @@ class MainActivity : ComponentActivity() {
                     val dest = java.io.File(dir, item.name)
                     contentResolver.openInputStream(uri)?.use { input -> dest.outputStream().use { input.copyTo(it) } }
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(dest.absolutePath, item.name, "")
+                        com.example.gemini.data.daemon.IdeDaemonManager.openOrSelectTab(dest.absolutePath, item.name, "")
                         chatViewModel.requestViewMode("IDE")
                     }
                 } catch (e: Exception) {

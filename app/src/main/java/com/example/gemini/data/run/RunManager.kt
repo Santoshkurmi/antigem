@@ -40,7 +40,7 @@ data class RunEntry(
 
 /**
  * Owns every run, independent of any screen: the Run panel, its minimized bubble and the IDE only show these. A run
- * keeps going while the panel is hidden; the app's foreground service (TermuxService) keeps the process alive.
+ * keeps going while the panel is hidden; the app's foreground service (AntiGemService) keeps the process alive.
  *
  * Local runs execute `bash -c` in the command's folder and end with the command, so the session's exit status is
  * the command's. Remote runs (server mode / a PC that allows a shell) type the command into their own tmux session

@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">AntiGem</string>
-    <string name="anti_term_name">AntiTerm</string>
-    <string name="termux_name">Termux</string>
-</resources>

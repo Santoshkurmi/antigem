@@ -191,7 +191,7 @@ Each one is a one-tap preset in **Settings → MCP Servers**, for every agent.
 - Multiple sessions, themes, font sizes, quick keys and text selection.
 - Background service for long-running builds, servers and scripts.
 - **ADB Connect**: connects the terminal's `adb` to the same phone over Wireless debugging, with pairing from a notification and automatic reconnects.
-- **Linux desktop (X11)**: run an XFCE or LXQt desktop and Linux GUI apps through Termux:X11, set up from **Settings → Termux Support → X11 Desktop** (Shared UID build). See [X11 desktop](#x11-desktop).
+- **Linux desktop (X11)**: run an XFCE or LXQt desktop and Linux GUI apps through Termux:X11, set up from **Settings → Termux Support → X11 Desktop**. See [X11 desktop](#x11-desktop).
 
 ### Code editor and Git
 - Syntax highlighting for Python, Go, Kotlin, Java, JS/TS, Rust, C/C++, HTML/CSS, JSON, YAML, Markdown and more.
@@ -228,25 +228,23 @@ Use the agents running on your PC from your phone. [AntiGem for VS Code](https:/
 
 ## Download
 
-Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/releases). There are two build variants, and one extra **mode** that works with either of them:
+Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/releases). There is one app, with the package name `ai.antigem`. It sets up its own Linux environment from the Termux packages, so it doesn't need the Termux app, and it can be installed next to it.
 
-| Variant | Package name | Needs the Termux app? | Notes |
-| :--- | :--- | :---: | :--- |
-| **`termux`** (recommended) | `com.termux` | No | Self-contained: the app sets up its own Linux environment. This is the one published in releases. |
-| **`standard`** | `com.antigem` | Yes | You run `agy_ide_bridge` inside a separately installed Termux app, and AntiGem connects to it over localhost. Not published; build it yourself from source. |
-| **Server mode** (a mode, not a third build) | the same as the build you installed (`com.termux` or `com.antigem`) | No | The bridge, the agents (`agy`, Claude Code, OpenCode, Codex), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Servers**. Works with both variants. See [Server mode](#server-mode-run-it-on-a-vps) below. |
+**Server mode** (a mode, not another build): the bridge, the agents (`agy`, Claude Code, OpenCode, Codex), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Servers**. See [Server mode](#server-mode-run-it-on-a-vps) below.
 
 > [!NOTE]
-> The `standard` variant is not deprecated, but it gets little attention because almost nobody uses it. Some features, such as the Browser MCP, may not work in it right now, and it may be dropped in the future. Use the `termux` variant.
+> **Coming from the old `com.termux` build of AntiGem?** Android treats `ai.antigem` as a different app, so your files don't move over by themselves:
+> 1. In the old app, open **Settings → Backups & Restore → Back up environment**. Tick *Include SSH keys and sign-ins* to keep your logins (never share that file with anyone). The backup is saved to `Download/Antigem/backups/bootrapz_<time>.zip`.
+> 2. Install `ai.antigem`. On its setup screen, choose **From a ZIP file** and pick that backup.
+> 3. Once everything works, uninstall the old app, and delete the backup if it has your sign-ins.
 
-> [!IMPORTANT]
-> The `termux` variant uses the package name `com.termux`, so it cannot be installed on the same phone as the official Termux app. Uninstall Termux first, or use the `standard` variant.
+### How it runs Termux packages without being `com.termux`
 
-### Why the package name is `com.termux`
+Termux packages are compiled for the fixed path `/data/data/com.termux/files/usr`. Instead of faking that path with **proot** (which slows down every program) or rebuilding every package, AntiGem rewrites `com.termux` to `ai.antigem` in each package when it is installed: in file paths, file contents, symlinks and install scripts. Both names are 10 characters long, so the rewrite changes bytes in place and binaries keep their layout.
 
-Termux packages are compiled for the fixed path `/data/data/com.termux/files/usr`. An app with any other package name cannot run them directly. It would have to use **proot** to fake that path, and proot slows down every program, or rebuild every package for a new path.
+It happens by itself for the bootstrap, for restored backups, for `pkg install` / `apt install` (an apt hook) and for `dpkg -i` (a dpkg wrapper). One Termux file can't be rewritten that way: `am.apk`, the Java code of the `am` command, which Termux builds to send intents as `com.termux`. AntiGem builds it from Termux's own source (the `termux-am` submodule) for `ai.antigem` and puts it in place of Termux's. Everything runs at full native speed from the official Termux repositories. In your home folder only paths are rewritten, so your own files that mention `com.termux` stay as they are.
 
-With the package name `com.termux`, AntiGem can install the official Termux bootstrap and use the official Termux package repositories, and everything runs at full native speed. This is the only reason for the name.
+For a full Ubuntu, install it in the terminal: `pkg install proot-distro && proot-distro install ubuntu`.
 
 ### This is not a Termux fork
 
@@ -256,7 +254,7 @@ AntiGem is not a copy or modification of the Termux app. The app was written fro
 
 Packages, `apt`/`pkg`, the shell and almost everything else work as in Termux.
 
-AntiGem has essential Termux:API commands built in with zero setup:
+AntiGem has the common Termux:API commands built in. It installs Termux's `termux-api` package (the `termux-*` commands) during setup, so they work right away:
 
 | Command | Built in |
 | :--- | :---: |
@@ -276,19 +274,13 @@ For advanced hardware APIs (such as `termux-location`, `termux-camera-photo`, `t
 👉 **[Download AntiGem Termux:API Companion App](https://github.com/Santoshkurmi/termux-api/releases)**
 
 > [!IMPORTANT]
-> **AntiGem Variant Requirement for Termux:API:**
-> - To use the external Termux:API companion app, you **must install the Shared UID variant** (`antiGem-termux-shared-v...apk`). Both apps share the `com.termux` Linux UID to communicate via UNIX sockets.
-> - **Existing Users:** Android does not allow changing `sharedUserId` via an update (`INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`). If you currently have the Standalone build installed, you must **backup your files, uninstall the app, and install the Shared UID build**.
-> - You can check your current variant in AntiGem under **Settings → About & Info** (shows *Shared UID Build* or *Standalone Build*).
+> The companion app must be AntiGem's build for `ai.antigem`: it shares AntiGem's Linux user (`sharedUserId ai.antigem`) to talk to it over UNIX sockets. Companion apps made for the old `com.termux` build, or the official Termux:API, don't work with it.
 
-**How to enable:**
-1. Install the companion APK from the [releases page](https://github.com/Santoshkurmi/termux-api/releases).
-2. In AntiGem, go to **Settings → Termux Support → Termux:API** and select **External Termux:API App**.
-3. Tap **Reinstall Package Now** (or run `pkg reinstall termux-api` in the terminal) to restore the official dispatcher binary.
+**How to enable:** install the companion APK from the [releases page](https://github.com/Santoshkurmi/termux-api/releases), then choose **AntiGem's Termux:API app** in **Settings → Termux Support → Termux:API**. One handler is used at a time: *Built-in* (the default) or the app, which then handles every `termux-*` command. AntiGem's dispatcher and the package's own binary sit side by side (`dpkg-divert`), so switching needs no reinstall, and installing or updating `termux-api` never breaks either of them.
 
 #### X11 desktop
 
-AntiGem can run a Linux desktop (XFCE or LXQt) with [Termux:X11](https://github.com/termux/termux-x11). It uses AntiGem's own build of Termux:X11, signed to share the `com.termux` UID, so the desktop runs inside AntiGem's process and Android doesn't slow it down or stop it while you use it. This needs the **Shared UID build**.
+AntiGem can run a Linux desktop (XFCE or LXQt) with [Termux:X11](https://github.com/termux/termux-x11). It uses AntiGem's own build of Termux:X11, signed to share AntiGem's Linux user, so the desktop runs inside AntiGem's process and Android doesn't slow it down or stop it while you use it.
 
 Go to **Settings → Termux Support → X11 Desktop** and follow the steps: install the Termux:X11 app, the `termux-x11` command and a desktop, then tap **Start**.
 
@@ -419,7 +411,8 @@ antigem/
 │   │   ├── data/          # Agent backends (agy, claude, opencode, codex), terminal, ADB, automation, notes, updater
 │   │   ├── domain/        # Chat models and parsing
 │   │   └── ui/            # Compose screens: chat, IDE, browser, notes, settings
-│   ├── java/com/termux/   # Termux terminal-view widget and com.termux service entry points
+│   ├── java/com/termux/   # Termux terminal-view widget
+│   ├── java/ai/antigem/app/  # entry points the Termux tools call (termux-open, termux-wake-lock, …)
 │   └── assets/browser-runtime/  # Extension host and Chrome API for plugins
 ├── agy_ide_bridge/        # Go bridge: agy hub, Claude Code relay, Git, plugins
 ├── extensions/            # Bundled plugins

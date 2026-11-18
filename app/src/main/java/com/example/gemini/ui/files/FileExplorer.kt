@@ -49,7 +49,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.data.daemon.IdeApiClient
 import com.example.gemini.data.daemon.ProjectItem
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import com.example.gemini.data.files.*
 import com.example.gemini.ui.components.MarkdownDocViewerModal
 import kotlinx.coroutines.launch
@@ -207,7 +207,7 @@ fun FileExplorer(
     val focusManager = LocalFocusManager.current
     val snackbar = remember { SnackbarHostState() }
     val settings by ExplorerPrefs.settings.collectAsState()
-    val projects by TermuxDaemonManager.projects.collectAsState()
+    val projects by IdeDaemonManager.projects.collectAsState()
     // the IDE edits files on the bridge's machine: not this phone's (on the phone tab)
     val ideAvailable = onOpenedInIde != null && side == ExplorerSide.BRIDGE
 
@@ -1099,9 +1099,9 @@ fun FileExplorer(
                 val noun = if (targets.size == 1) "\"${targets.first().name}\"" else "${targets.size} items"
                 runOp("Deleting $noun…", { src().delete(targets.map { it.path }) }) { r ->
                     // close editor tabs of deleted files, including files inside deleted folders
-                    val gone = TermuxDaemonManager.openTabs.value.map { it.path }
+                    val gone = IdeDaemonManager.openTabs.value.map { it.path }
                         .filter { tab -> targets.any { t -> tab == t.path || (t.isDir && tab.startsWith(t.path.trimEnd('/') + "/")) } }
-                    gone.forEach { TermuxDaemonManager.closeTab(it) }
+                    gone.forEach { IdeDaemonManager.closeTab(it) }
                     ExplorerClipboard.entries.removeAll { c -> targets.any { c.path == it.path || c.path.startsWith(it.path + "/") } }
                     if (r.ok) snack("Deleted $noun")
                     else if (r.count > 0) snack("Deleted ${r.count}, ${r.failed} failed: ${r.error}")
@@ -1124,7 +1124,7 @@ fun FileExplorer(
                     if (r.ok) {
                         renameTarget = null
                         val newPath = r.path ?: "${parentOf(e.path)}/$name"
-                        if (!e.isDir) TermuxDaemonManager.renameTab(e.path, newPath, name)
+                        if (!e.isDir) IdeDaemonManager.renameTab(e.path, newPath, name)
                         reload()
                         snack("Renamed to $name")
                         null

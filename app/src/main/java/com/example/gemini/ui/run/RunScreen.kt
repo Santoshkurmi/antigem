@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import com.example.gemini.data.ide.RunConfigManager
 import com.example.gemini.data.ide.RunConfiguration
 import com.example.gemini.data.preferences.AuthPreferences
@@ -114,8 +114,8 @@ private fun RunScreenContent(runs: List<RunEntry>, onClose: () -> Unit, onSendTo
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { RunPanelPrefs(context) }
-    val activeProject by TermuxDaemonManager.activeProject.collectAsState()
-    val ideProjects by TermuxDaemonManager.projects.collectAsState()
+    val activeProject by IdeDaemonManager.activeProject.collectAsState()
+    val ideProjects by IdeDaemonManager.projects.collectAsState()
 
     var folder by remember { mutableStateOf(prefs.folder ?: activeProject?.path ?: "") }
     var filter by remember { mutableStateOf(CommandFilter.PROJECT) }

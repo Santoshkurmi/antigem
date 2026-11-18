@@ -848,7 +848,7 @@ class AgyChatBackend(
                             currentMap to sortedConvs
                         }
                         // cloud chats run in Google's VM: their folders are not projects on this machine
-                        com.example.gemini.data.daemon.TermuxDaemonManager.loadProjects(sortedConvs.filterNot { it.isCloud })
+                        com.example.gemini.data.daemon.IdeDaemonManager.loadProjects(sortedConvs.filterNot { it.isCloud })
 
                         // Automatically synchronize active conversation title and metadata from daemon
                         if (activeId != null) {
@@ -945,7 +945,7 @@ class AgyChatBackend(
         checkBridgeHealth()
         checkAgyAuthStatus()
         backendScope.launch {
-            com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = false)
+            com.example.gemini.data.daemon.IdeDaemonManager.checkHealthAndReconnect(isSilent = false)
         }
     }
 
@@ -971,7 +971,7 @@ class AgyChatBackend(
             if (!_agyAuthInfo.value.isLoggedIn || _agyAuthInfo.value.status == com.example.gemini.data.remote.AgyHubClient.AgyAuthStatus.CHECKING) {
                 checkAgyAuthStatus(userInitiated = false)
             }
-            com.example.gemini.data.daemon.TermuxDaemonManager.checkHealthAndReconnect(isSilent = true)
+            com.example.gemini.data.daemon.IdeDaemonManager.checkHealthAndReconnect(isSilent = true)
         }
     }
 
@@ -1028,7 +1028,7 @@ class AgyChatBackend(
         } else {
             (_enabledModels.value.firstOrNull()?.id ?: "")
         }
-        val defaultProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path ?: ""
+        val defaultProjPath = com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path ?: ""
         val defaultWorkspaceUri = if (defaultProjPath.isNotBlank()) {
             if (defaultProjPath.startsWith("file://")) defaultProjPath else "file://$defaultProjPath"
         } else ""
@@ -1880,7 +1880,7 @@ class AgyChatBackend(
             } else {
                 (_enabledModels.value.firstOrNull()?.id ?: "")
             }
-            val defaultProjPath = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path ?: ""
+            val defaultProjPath = com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path ?: ""
             val defaultWorkspaceUri = if (defaultProjPath.isNotBlank()) {
                 if (defaultProjPath.startsWith("file://")) defaultProjPath else "file://$defaultProjPath"
             } else ""

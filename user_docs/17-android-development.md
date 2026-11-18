@@ -4,7 +4,6 @@ AntiGem can build real Android apps **on the phone itself**: Kotlin or Java apps
 
 It is not tied to one agent: Antigravity, Claude Code and OpenCode all build apps the same way, with the `adev` command in the terminal. Nothing needs to be added to an agent's MCP settings.
 
-> Needs a **com.termux build** of AntiGem (it uses Termux packages). On other builds the page explains this and does nothing else.
 
 ---
 

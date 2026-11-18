@@ -95,7 +95,7 @@ class AgyPluginsManager(
             try {
                 val workspaceUris: List<String> = when (scope) {
                     "WORKSPACE", "ALL" -> {
-                        val currentWs = com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path
+                        val currentWs = com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path
                             ?: _currentConversation.value?.workspaceUri
                             ?: ""
                         if (currentWs.isNotBlank()) {

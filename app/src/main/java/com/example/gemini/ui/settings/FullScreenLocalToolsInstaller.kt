@@ -74,7 +74,6 @@ fun FullScreenLocalToolsInstaller(
     var selectedSourceType by remember { mutableStateOf(0) } // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
     var showLogs by remember { mutableStateOf(false) }
-    val isTermux = remember { LocalEnvironmentManager.isTermuxPackage(context) }
 
     val zipPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -140,7 +139,7 @@ fun FullScreenLocalToolsInstaller(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                InstallerHero(installerState, isTermux)
+                InstallerHero(installerState)
                 Spacer(modifier = Modifier.height(28.dp))
 
                 AnimatedContent(
@@ -150,7 +149,6 @@ fun FullScreenLocalToolsInstaller(
                 ) { _ ->
                     when (val state = installerState) {
                         is LocalInstallerState.Idle -> SourcePicker(
-                            isTermux = isTermux,
                             selected = selectedSourceType,
                             selectedFileName = selectedFileUri?.toString()?.substringAfterLast("/"),
                             onSelect = { selectedSourceType = it },
@@ -235,7 +233,7 @@ fun FullScreenLocalToolsInstaller(
                     is LocalInstallerState.Idle -> {
                         PrimaryButton(
                             text = when (selectedSourceType) {
-                                0 -> if (isTermux) "Install (~350 MB)" else "Install Ubuntu base"
+                                0 -> "Install (~350 MB)"
                                 1 -> "Install minimal (~33 MB)"
                                 else -> if (selectedFileUri != null) "Install from ZIP" else "Choose a ZIP file"
                             },
@@ -358,7 +356,7 @@ private fun UnsupportedDeviceScreen(onContinue: () -> Unit) {
 }
 
 @Composable
-private fun InstallerHero(state: LocalInstallerState, isTermux: Boolean) {
+private fun InstallerHero(state: LocalInstallerState) {
     val (icon, tint) = when (state) {
         is LocalInstallerState.Success -> Icons.Default.Check to QuotaGreen
         is LocalInstallerState.Error -> Icons.Default.ErrorOutline to AppColors.danger
@@ -379,7 +377,7 @@ private fun InstallerHero(state: LocalInstallerState, isTermux: Boolean) {
         text = when (state) {
             is LocalInstallerState.Success -> "You're all set"
             is LocalInstallerState.Error -> "Setup didn't finish"
-            is LocalInstallerState.Idle -> if (isTermux) "Set up your Linux environment" else "Set up the Ubuntu container"
+            is LocalInstallerState.Idle -> "Set up your Linux environment"
             is LocalInstallerState.Discovering -> "Finding the latest release"
             is LocalInstallerState.AwaitingConfirmation -> "Ready to install"
             is LocalInstallerState.Downloading,
@@ -395,7 +393,7 @@ private fun InstallerHero(state: LocalInstallerState, isTermux: Boolean) {
     Spacer(modifier = Modifier.height(8.dp))
     Text(
         text = when (state) {
-            is LocalInstallerState.Success -> if (isTermux) "The shell, core tools and AGY tools are installed." else "Ubuntu, bash, glibc and AGY tools are installed."
+            is LocalInstallerState.Success -> "The shell, core tools and AGY tools are installed."
             is LocalInstallerState.Error -> "You can try again, or install from a ZIP file instead."
             is LocalInstallerState.Idle -> "AntiGem runs its terminal, IDE and agents on a local Linux system. Choose how to install it."
             is LocalInstallerState.Discovering -> "Checking for the latest verified archive."
@@ -412,7 +410,6 @@ private fun InstallerHero(state: LocalInstallerState, isTermux: Boolean) {
 
 @Composable
 private fun SourcePicker(
-    isTermux: Boolean,
     selected: Int,
     selectedFileName: String?,
     onSelect: (Int) -> Unit,
@@ -421,29 +418,25 @@ private fun SourcePicker(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SourceOption(
             icon = Icons.Outlined.CloudDownload,
-            title = if (isTermux) "Full environment" else "Ubuntu ARM64 base",
-            tag = if (isTermux) "Recommended · ~350 MB" else "Recommended",
-            description = if (isTermux) "Verified rootfs with the tools and environment preconfigured."
-            else "Official minimal Ubuntu rootfs with glibc, bash and dev tools.",
+            title = "Full environment",
+            tag = "Recommended · ~350 MB",
+            description = "Verified rootfs with the tools and environment preconfigured.",
             selected = selected == 0,
             onClick = { onSelect(0) }
         )
-        if (isTermux) {
-            SourceOption(
-                icon = Icons.Outlined.Bolt,
-                title = "Minimal",
-                tag = "~33 MB",
-                description = "Clean Termux base for ${LocalEnvironmentManager.getBootstrapArch()}: core utilities and the package manager.",
-                selected = selected == 1,
-                onClick = { onSelect(1) }
-            )
-        }
+        SourceOption(
+            icon = Icons.Outlined.Bolt,
+            title = "Minimal",
+            tag = "~33 MB",
+            description = "Clean Termux base for ${LocalEnvironmentManager.getBootstrapArch()}: core utilities and the package manager.",
+            selected = selected == 1,
+            onClick = { onSelect(1) }
+        )
         SourceOption(
             icon = Icons.Outlined.FolderOpen,
             title = "From a ZIP file",
             tag = null,
-            description = if (isTermux) "A bootstrap backup or custom rootfs on this phone."
-            else "A container backup or custom rootfs (bootstraps.zip) on this phone.",
+            description = "A bootstrap backup or custom rootfs on this phone.",
             selected = selected == 2,
             onClick = { onSelect(2) }
         ) {

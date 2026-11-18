@@ -37,7 +37,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
@@ -56,16 +56,16 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     companion object {
-        private const val TAG = "TermuxService"
+        private const val TAG = "AntiGemService"
         private const val CHANNEL_ID = "antigem_termux_service_channel"
         private const val NOTIFICATION_ID = 1337
 
-        const val ACTION_WAKE_LOCK = "com.termux.service_wake_lock"
-        const val ACTION_WAKE_UNLOCK = "com.termux.service_wake_unlock"
-        const val ACTION_STOP_SERVICE = "com.termux.service_stop"
+        const val ACTION_WAKE_LOCK = "ai.antigem.service_wake_lock"
+        const val ACTION_WAKE_UNLOCK = "ai.antigem.service_wake_unlock"
+        const val ACTION_STOP_SERVICE = "ai.antigem.service_stop"
 
         fun start(context: Context) {
-            val intent = Intent(context, com.termux.app.TermuxService::class.java)
+            val intent = Intent(context, ai.antigem.app.TermuxService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -74,7 +74,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, com.termux.app.TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
+            val intent = Intent(context, ai.antigem.app.TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
             context.startService(intent)
         }
 
@@ -217,7 +217,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         )
 
         // Exit action
-        val exitIntent = Intent(this, com.termux.app.TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
+        val exitIntent = Intent(this, ai.antigem.app.TermuxService::class.java).setAction(ACTION_STOP_SERVICE)
         val exitPendingIntent = PendingIntent.getService(
             this, 1, exitIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -225,7 +225,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
 
         // WakeLock toggle action
         val wakeAction = if (wakeLockHeld) ACTION_WAKE_UNLOCK else ACTION_WAKE_LOCK
-        val toggleWakeLockIntent = Intent(this, com.termux.app.TermuxService::class.java).setAction(wakeAction)
+        val toggleWakeLockIntent = Intent(this, ai.antigem.app.TermuxService::class.java).setAction(wakeAction)
         val wakePendingIntent = PendingIntent.getService(
             this, 2, toggleWakeLockIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -281,7 +281,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         requestDisableBatteryOptimizations(this)
         updateNotification()
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(this@TermuxService, "Wake lock activated for 1 hour", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@AntiGemService, "Wake lock activated for 1 hour", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -312,7 +312,7 @@ open class TermuxService : Service(), LifecycleOwner, ViewModelStoreOwner, Saved
         updateNotification()
         Log.d(TAG, "WakeLocks released successfully")
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(this@TermuxService, "Wake lock released", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@AntiGemService, "Wake lock released", Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -17,7 +17,7 @@ AntiGem manages MCP configurations through the global `mcp_config.json` file and
 
 ## ⚡ 2. Quick Presets & Built-In Integrations
 
-In the **Quick Presets & Templates** section, AntiGem provides nine pre-configured, one-tap server templates, plus **REA** on com.termux builds:
+In the **Quick Presets & Templates** section, AntiGem provides nine pre-configured, one-tap server templates, plus **REA**:
 
 | Preset Name | Subtitle / Function | Transport & Connection |
 | :--- | :--- | :--- |

@@ -1,9 +1,9 @@
-package com.termux.app
+package ai.antigem.app
 
 import com.example.gemini.data.receiver.TermuxOpenActivity as CoreOpenActivity
 
 /**
- * Direct com.termux.app.TermuxOpenActivity and TermuxUrlOpenActivity implementations.
+ * Direct ai.antigem.app.TermuxOpenActivity and TermuxUrlOpenActivity implementations.
  */
 class TermuxOpenActivity : CoreOpenActivity()
 class TermuxUrlOpenActivity : CoreOpenActivity()

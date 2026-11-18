@@ -100,12 +100,6 @@ fun ReaScreen(
             Hint("Checking…")
             return@Column
         }
-        if (!state.termuxBuild) {
-            InfoCard("Needs a com.termux build", cardBg, BorderStroke(1.dp, Amber.copy(alpha = 0.5f))) {
-                Hint("REA runs in a proot-distro Ubuntu container installed with Termux packages, which only work in AntiGem's com.termux builds. Install one of those builds from AntiGem's releases to use REA.")
-            }
-            return@Column
-        }
         if (!state.bootstrapInstalled) {
             InfoCard("Install the terminal first", cardBg, cardBorder) {
                 Hint("REA installs into AntiGem's terminal. Install it in Settings → Terminal & Shell, then come back here.")

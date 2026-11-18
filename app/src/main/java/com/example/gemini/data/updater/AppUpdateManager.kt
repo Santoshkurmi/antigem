@@ -82,26 +82,8 @@ class AppUpdateManager(private val context: Context) {
             }
             val isCritical = json.optBoolean("is_critical", false) || (BuildConfig.VERSION_CODE < minSupportedCode)
 
-            // Auto-generate package-specific download URL based on remote version name and flavor
-            val currentPkg = context.packageName
-            val isSharedUser = try {
-                val pkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
-                } else {
-                    @Suppress("DEPRECATION")
-                    context.packageManager.getPackageInfo(context.packageName, 0)
-                }
-                !pkgInfo.sharedUserId.isNullOrEmpty()
-            } catch (_: Exception) {
-                BuildConfig.IS_SHARED_USER_ID
-            }
-
-            val flavorType = when {
-                currentPkg == "com.termux" && isSharedUser -> "termux-shared"
-                currentPkg == "com.termux" -> "termux"
-                else -> "standard"
-            }
-            val downloadUrl = "https://github.com/santoshkurmi/antigem/releases/download/v$remoteVersionName/antiGem-$flavorType-v$remoteVersionName-release.apk"
+            // each release (tag v<version>) has the app as AntiGem-v<version>.apk (scripts/build_all_apks.sh)
+            val downloadUrl = "https://github.com/santoshkurmi/antigem/releases/download/v$remoteVersionName/AntiGem-v$remoteVersionName.apk"
 
             if (remoteVersionCode > BuildConfig.VERSION_CODE && downloadUrl.isNotBlank()) {
                 // Verify that the APK asset is actually published and downloadable on GitHub
@@ -130,7 +112,7 @@ class AppUpdateManager(private val context: Context) {
                         versionName = remoteVersionName,
                         currentVersionCode = BuildConfig.VERSION_CODE,
                         currentVersionName = BuildConfig.VERSION_NAME,
-                        packageName = currentPkg,
+                        packageName = context.packageName,
                         downloadUrl = downloadUrl,
                         changelog = changelog,
                         isCritical = isCritical

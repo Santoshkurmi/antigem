@@ -12,14 +12,14 @@ import com.example.gemini.theme.GeminiTheme
 import com.example.gemini.theme.isSystemInDarkThemeRobust
 import com.example.gemini.ui.components.LocalTerminalDialog
 
-class TermuxActivity : ComponentActivity() {
+class TerminalActivity : ComponentActivity() {
 
     private val authPreferences: AuthPreferences by lazy { AuthPreferences(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        com.example.gemini.data.service.TermuxService.start(this)
+        com.example.gemini.data.service.AntiGemService.start(this)
 
         setContent {
             val initialThemeMode = remember { authPreferences.getThemeModeSync() }

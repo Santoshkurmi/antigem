@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- sharedUserId: AntiGem's own Termux:API and Termux:X11 apps (same signing key) share its files. Adding or removing it
+     later would force users to reinstall, so it stays. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    android:sharedUserId="ai.antigem">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -146,7 +149,7 @@
         </activity>
 
         <activity
-            android:name=".TermuxActivity"
+            android:name=".TerminalActivity"
             android:exported="true"
             android:label="@string/anti_term_name"
             android:icon="@mipmap/ic_launcher"
@@ -159,8 +162,8 @@
 
         <!-- AntiTerm Style Launcher Alias (off by default: turn it on in Settings > Appearance) -->
         <activity-alias
-            android:name=".TermuxAntiTermAlias"
-            android:targetActivity=".TermuxActivity"
+            android:name=".AntiTermAlias"
+            android:targetActivity=".TerminalActivity"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/anti_term_name"
@@ -175,8 +178,8 @@
 
         <!-- Classic Termux Style Launcher Alias -->
         <activity-alias
-            android:name=".TermuxClassicAlias"
-            android:targetActivity=".TermuxActivity"
+            android:name=".ClassicTermAlias"
+            android:targetActivity=".TerminalActivity"
             android:icon="@mipmap/ic_termux_launcher"
             android:roundIcon="@mipmap/ic_termux_launcher_round"
             android:label="@string/termux_name"
@@ -203,13 +206,13 @@
 
         <!-- Termux Open Activity (termux-open / termux-open-url / xdg-open activity intent targets) -->
         <activity
-            android:name="com.termux.app.TermuxOpenActivity"
+            android:name="ai.antigem.app.TermuxOpenActivity"
             android:exported="true"
             android:permission="${applicationId}.permission.RUN_COMMAND"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
-                <action android:name="com.termux.app.TermuxUrlOpenActivity" />
-                <action android:name="com.termux.app.TermuxOpenActivity" />
+                <action android:name="ai.antigem.app.TermuxUrlOpenActivity" />
+                <action android:name="ai.antigem.app.TermuxOpenActivity" />
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -218,22 +221,22 @@
 
         <!-- Termux System Receiver (termux-setup-storage, reload_style) -->
         <receiver
-            android:name="com.termux.app.TermuxSystemReceiver"
+            android:name="ai.antigem.app.TermuxSystemReceiver"
             android:exported="true"
             android:permission="${applicationId}.permission.RUN_COMMAND">
             <intent-filter>
-                <action android:name="com.termux.app.request_storage_permissions" />
-                <action android:name="com.termux.app.reload_style" />
+                <action android:name="ai.antigem.app.request_storage_permissions" />
+                <action android:name="ai.antigem.app.reload_style" />
             </intent-filter>
         </receiver>
 
         <!-- Termux Open Receiver (termux-open, termux-open-url, xdg-open) -->
         <receiver
-            android:name="com.termux.app.TermuxOpenReceiver"
+            android:name="ai.antigem.app.TermuxOpenReceiver"
             android:exported="true"
             android:permission="${applicationId}.permission.RUN_COMMAND">
             <intent-filter>
-                <action android:name="com.termux.app.TermuxOpenReceiver" />
+                <action android:name="ai.antigem.app.TermuxOpenReceiver" />
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -246,14 +249,14 @@
             android:exported="true"
             android:permission="${applicationId}.permission.API">
             <intent-filter>
-                <action android:name="com.termux.api.ACTION_API" />
-                <action android:name="com.termux.api" />
+                <action android:name="ai.antigem.api.ACTION_API" />
+                <action android:name="ai.antigem.api" />
             </intent-filter>
         </receiver>
 
         <!-- Termux Service (termux-wake-lock, termux-wake-unlock, termux-service-stop) -->
         <service
-            android:name="com.termux.app.TermuxService"
+            android:name="ai.antigem.app.TermuxService"
             android:enabled="true"
             android:exported="true"
             android:permission="${applicationId}.permission.RUN_COMMAND"
@@ -262,9 +265,9 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Background terminal and AI language server execution" />
             <intent-filter>
-                <action android:name="com.termux.service_wake_lock" />
-                <action android:name="com.termux.service_wake_unlock" />
-                <action android:name="com.termux.service_stop" />
+                <action android:name="ai.antigem.service_wake_lock" />
+                <action android:name="ai.antigem.service_wake_unlock" />
+                <action android:name="ai.antigem.service_stop" />
             </intent-filter>
         </service>
 

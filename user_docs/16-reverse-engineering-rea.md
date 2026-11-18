@@ -4,7 +4,6 @@
 
 AntiGem runs REA in an **Ubuntu container** (proot-distro) inside the terminal. REA is not tied to one agent: Antigravity, Claude Code and OpenCode all reach it the same way, as an MCP server you add in that agent's MCP settings.
 
-> REA needs a **com.termux build** of AntiGem (it uses Termux packages). On other builds the REA page explains this and does nothing else.
 
 Only analyze apps and files you own or are allowed to analyze.
 
@@ -195,7 +194,7 @@ Rules of thumb:
 6. **Full output schemas**: leave off.
 7. **Save**, then restart the server in the agent's MCP settings (or start a new chat).
 
-**Another agent, or by hand:** add a stdio (local command) MCP server with the command `/data/data/com.termux/files/usr/bin/rea-mcp` and the environment variables `REA_MODE=lazy` (on demand; `direct` for every tool) and `REA_GROUPS` (`all`, or group ids such as `core,android`). Step 4 on the REA page shows them with copy buttons.
+**Another agent, or by hand:** add a stdio (local command) MCP server with the command `/data/data/ai.antigem/files/usr/bin/rea-mcp` and the environment variables `REA_MODE=lazy` (on demand; `direct` for every tool) and `REA_GROUPS` (`all`, or group ids such as `core,android`). Step 4 on the REA page shows them with copy buttons.
 
 ---
 

@@ -44,9 +44,9 @@ enum class TabDiskUpdateResult {
     CONFLICT_DETECTED
 }
 
-object TermuxDaemonManager {
+object IdeDaemonManager {
 
-    private const val TAG = "TermuxDaemonManager"
+    private const val TAG = "IdeDaemonManager"
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     private val _status = MutableStateFlow(DaemonStatus.STOPPED)

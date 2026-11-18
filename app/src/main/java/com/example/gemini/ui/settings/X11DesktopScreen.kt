@@ -49,14 +49,13 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
     }
     val state by X11DesktopManager.state.collectAsState()
     val adb by AdbConnectManager.state.collectAsState()
-    val shared = BuildConfig.IS_SHARED_USER_ID
     val busy = state.task != null
 
     Column(
         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        IntroCard(shared, state.running, cardBg, cardBorder)
+        IntroCard(state.running, cardBg, cardBorder)
 
         state.message?.let { msg ->
             Surface(
@@ -70,10 +69,6 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
             }
         }
 
-        if (!shared) {
-            SharedUidRequiredCard("The X11 desktop", cardBg, cardBorder)
-            return@Column
-        }
         if (!state.ready) {
             Hint("Checking…")
             return@Column
@@ -281,7 +276,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
 }
 
 @Composable
-private fun IntroCard(shared: Boolean, running: Boolean, cardBg: Color, cardBorder: BorderStroke) {
+private fun IntroCard(running: Boolean, cardBg: Color, cardBorder: BorderStroke) {
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -291,12 +286,10 @@ private fun IntroCard(shared: Boolean, running: Boolean, cardBg: Color, cardBord
                 if (running) Pill("Running", QuotaGreen)
             }
             Hint("Run Linux desktop apps (a browser, an IDE, office apps) from AntiGem's terminal. Termux:X11 shows the desktop.")
-            if (shared) {
-                Text(
-                    "The desktop runs inside AntiGem, so Android won't slow it down or stop it while you use it.",
-                    fontSize = 12.sp, color = QuotaGreen
-                )
-            }
+            Text(
+                "The desktop runs inside AntiGem, so Android won't slow it down or stop it while you use it.",
+                fontSize = 12.sp, color = QuotaGreen
+            )
         }
     }
 }
@@ -345,45 +338,6 @@ private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderS
                 }
             }
             Hint("Don't install termux-x11-nightly from x11-repo: it only works with the official Termux:X11, not AntiGem's build.")
-        }
-    }
-}
-
-private const val ANTIGEM_RELEASES = "https://github.com/Santoshkurmi/antigem/releases/latest"
-private const val ANTIGEM_README_SHARED_UID = "https://github.com/Santoshkurmi/antigem#termux-compatibility"
-
-/**
- * Shown on the standalone com.termux build in place of a feature that needs a companion app sharing
- * AntiGem's UID: what the Shared UID build is and how to switch to it.
- */
-@Composable
-internal fun SharedUidRequiredCard(feature: String, cardBg: Color, cardBorder: BorderStroke) {
-    val context = LocalContext.current
-    Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = BorderStroke(1.dp, Amber.copy(alpha = 0.5f))) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Info, null, tint = Amber, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Needs the Shared UID build", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Pill("Standalone", Amber)
-            }
-            Text(
-                "This is the standalone build of AntiGem. $feature needs the Shared UID build, which shares AntiGem's Linux user with its companion app so they can work together.",
-                fontSize = 12.5.sp
-            )
-            Text("To switch:", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-            listOf(
-                "Back up what you want to keep (Settings → Backups & Restore). Uninstalling deletes AntiGem's data, including the terminal and its files.",
-                "Uninstall this AntiGem. Android can't switch an installed app to a shared UID with an update.",
-                "Download and install the Shared UID build (antiGem-termux-shared-….apk) from AntiGem's releases.",
-                "Read the README's Termux compatibility section for the details."
-            ).forEachIndexed { i, step -> Hint("${i + 1}. $step") }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { openUrl(context, ANTIGEM_RELEASES) }) {
-                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Releases")
-                }
-                OutlinedButton(onClick = { openUrl(context, ANTIGEM_README_SHARED_UID) }) { Text("Read the README") }
-            }
         }
     }
 }

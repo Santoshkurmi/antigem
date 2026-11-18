@@ -1812,7 +1812,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 val resolvedPath = if (uri.scheme == "file") uri.path ?: resolvedName else uri.toString()
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
 
-                com.example.gemini.data.daemon.TermuxDaemonManager.openOrSelectTab(
+                com.example.gemini.data.daemon.IdeDaemonManager.openOrSelectTab(
                     path = resolvedPath,
                     name = resolvedName,
                     content = content,

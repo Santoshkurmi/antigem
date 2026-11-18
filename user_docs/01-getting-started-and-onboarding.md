@@ -59,18 +59,14 @@ You can reconfigure your active agents at any time in **Settings → Agents**:
 
 AntiGem checks whether the local Linux runtime is installed on your phone.
 
-### Build-Dependent Titles & Options:
-- **In the Termux build (`com.termux`)**:
-  - Title: **Set up your Linux environment**
-  - Subtitle: *"AntiGem runs its terminal, IDE and agents on a local Linux system. Choose how to install it."*
-  - **Option 1: Full environment** (Tag: *"Recommended · ~350 MB"*): *"Verified rootfs with the tools and environment preconfigured."*
-  - **Option 2: Minimal** (Tag: *"~33 MB"*): *"Clean Termux base for your device architecture: core utilities and the package manager."* (This lightweight option exists **only** in the Termux build).
-  - **Option 3: From a ZIP file**: *"A bootstrap backup or custom rootfs on this phone."* (Tap **Choose file** / **Choose another file** to select an archive).
-- **In the Standalone build**:
-  - Title: **Set up the Ubuntu container**
-  - Subtitle: *"AntiGem runs its terminal, IDE and agents on a local Linux system. Choose how to install it."*
-  - **Option 1: Ubuntu ARM64 base** (Tag: *"Recommended"*): *"Official minimal Ubuntu rootfs with glibc, bash and dev tools."*
-  - **Option 2: From a ZIP file**: *"A container backup or custom rootfs (bootstraps.zip) on this phone."* (Tap **Choose file** / **Choose another file**).
+### Titles & Options:
+- Title: **Set up your Linux environment**
+- Subtitle: *"AntiGem runs its terminal, IDE and agents on a local Linux system. Choose how to install it."*
+- **Option 1: Full environment** (Tag: *"Recommended · ~350 MB"*): *"Verified rootfs with the tools and environment preconfigured."*
+- **Option 2: Minimal** (Tag: *"~33 MB"*): *"Clean Termux base for your device architecture: core utilities and the package manager."*
+- **Option 3: From a ZIP file**: *"A bootstrap backup or custom rootfs on this phone."* (Tap **Choose file** / **Choose another file** to select an archive). This is also how you move from the old `com.termux` build of AntiGem: restore the backup made there (Settings → Backups & Restore → Back up environment). Its `com.termux` paths are rewritten for `ai.antigem` while it is restored.
+
+The Linux system is made of Termux packages, rewritten for AntiGem's package name (`ai.antigem`) as they are installed. For a full Ubuntu, run `pkg install proot-distro && proot-distro install ubuntu` in the terminal.
 
 ### Installation Flow & Buttons:
 - Tap **Install (~350 MB)**, **Install minimal (~33 MB)**, **Install from ZIP**, or **Install Ubuntu base** (standalone).
@@ -166,10 +162,6 @@ When a newer version of AntiGem is released:
   2. Tick or untick your desired agents (**Antigravity**, **Claude Code**, or **OpenCode**).
   3. Tap **Apply and restart app**.
   4. Confirm the prompt: **Restart to apply?** by tapping **Restart app**. AntiGem will cleanly restart the internal servers with your new agent selection.
-
-### ❌ Symptom: The "Minimal" install option (~33 MB) is missing.
-- **What to check**: Check which APK build you have installed.
-- **Explanation**: The **Minimal (~33 MB)** option is exclusive to the Termux (`com.termux`) package build. If you installed the Standalone build, the installer provides the **Ubuntu ARM64 base** instead.
 
 ### ❌ Symptom: I skipped local tools setup by mistake.
 - **How to fix**:

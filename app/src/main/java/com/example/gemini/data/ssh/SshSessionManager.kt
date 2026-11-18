@@ -62,9 +62,9 @@ data class TerminalSessionTab(
  * High-performance Termux SSH Connection & Multi-Session Tab Manager.
  * Reuses a single persistent JSch SSH connection pool with working directory preservation across commands.
  */
-object TermuxSshManager {
+object SshSessionManager {
 
-    private const val TAG = "TermuxSshManager"
+    private const val TAG = "SshSessionManager"
     private val jsch = JSch()
 
     private var activeSshSession: Session? = null

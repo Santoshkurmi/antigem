@@ -2,7 +2,7 @@ package com.example.gemini.data.files
 
 import com.example.gemini.data.daemon.IdeApiClient
 import com.example.gemini.data.daemon.ProjectItem
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -41,7 +41,7 @@ object IdeFileLauncher {
         val res = IdeApiClient.readFileDetailed(path)
             ?: return Outcome.Failed("Cannot open $name. The IDE bridge is offline or the file is unreadable.")
         if (res.category == "binary" && !force && kind != FileKind.IMAGE) return Outcome.NeedsConfirm(res.mimeType)
-        TermuxDaemonManager.openOrSelectTab(path, name, res.content)
+        IdeDaemonManager.openOrSelectTab(path, name, res.content)
         return Outcome.Opened
     }
 
@@ -58,12 +58,12 @@ object IdeFileLauncher {
             withContext(Dispatchers.IO) { runCatching { File(path).readText() }.getOrNull() }
                 ?: return Outcome.Failed("Cannot read $name")
         }
-        TermuxDaemonManager.openOrSelectTab(path, name, content)
+        IdeDaemonManager.openOrSelectTab(path, name, content)
         return Outcome.Opened
     }
 
     fun openFolderAsProject(path: String) {
         val name = path.trimEnd('/').substringAfterLast('/').ifBlank { path }
-        TermuxDaemonManager.setActiveProject(ProjectItem(name = name, path = path))
+        IdeDaemonManager.setActiveProject(ProjectItem(name = name, path = path))
     }
 }

@@ -32,3 +32,6 @@ plugins {
 
 rootProject.name = "Gemini"
 include(":app")
+// am.apk (the `am` command's Java code) from the termux-am submodule (termux/TermuxAm), built for ai.antigem
+include(":termux-am")
+project(":termux-am").projectDir = file("termux-am-build")

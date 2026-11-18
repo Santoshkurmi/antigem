@@ -37,11 +37,10 @@ body:
     id: build
     attributes:
       label: Build
-      description: "**Settings → About & Info** shows Shared UID Build or Standalone Build."
+      description: "Which AntiGem app is installed."
       options:
-        - termux, Shared UID build
-        - termux, Standalone build
-        - standard (com.antigem, with the separate Termux app)
+        - ai.antigem (the current app)
+        - com.termux (the old build)
         - I built it from source myself
         - I don't know
     validations:

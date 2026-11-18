@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Settings → Android Development: sets up what agents (and the user) need to build Android apps on the phone:
  * Kotlin / Java / Jetpack Compose with Gradle, Flutter and React Native, in the proot-distro Ubuntu container of the
- * terminal (com.termux builds only). It is the same container REA uses, so Java 21 and Node.js are shared.
+ * terminal. It is the same container REA uses, so Java 21 and Node.js are shared.
  *
  * Nothing ships in the APK: the setup scripts live in the antigem_plugins repository
  * (android-dev/skills/android-dev/scripts) and are downloaded into $PREFIX/share/antigem-android when needed. Every
@@ -99,7 +99,6 @@ object AndroidDevManager {
 
     data class State(
         val ready: Boolean = false,
-        val termuxBuild: Boolean = true,
         val bootstrapInstalled: Boolean = false,
         val source: String = DEFAULT_SOURCE,
         /** Version of the downloaded setup files, null when not downloaded. */
@@ -201,7 +200,6 @@ object AndroidDevManager {
         _state.update {
             it.copy(
                 ready = true,
-                termuxBuild = LocalEnvironmentManager.isTermuxPackage(ctx),
                 bootstrapInstalled = LocalEnvironmentManager.isInstalled(ctx),
                 filesVersion = filesVersion,
                 filesUpdate = it.filesUpdate?.takeIf { v -> v != filesVersion },

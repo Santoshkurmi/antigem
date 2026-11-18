@@ -224,7 +224,7 @@ private fun Hint(text: String) {
 }
 
 private fun activeProjectPath(): String? =
-    com.example.gemini.data.daemon.TermuxDaemonManager.activeProject.value?.path?.removePrefix("file://")?.takeIf { it.isNotBlank() }
+    com.example.gemini.data.daemon.IdeDaemonManager.activeProject.value?.path?.removePrefix("file://")?.takeIf { it.isNotBlank() }
 
 // ======================================================================== Account & CLI
 
@@ -605,12 +605,8 @@ private fun McpPage(deps: ClaudeSettingsDeps, onOpenRea: () -> Unit, onOpenReaGr
     val tiles = listOf(
         ClaudeMcpPreset("Custom Plugin MCP", "Pick an installed plugin", Icons.Outlined.Extension, ClaudeTerracotta, null),
     ) + presets +
-        // REA runs in the terminal's proot-distro Ubuntu: com.termux builds only; its tile picks the tool groups
-        listOfNotNull(
-            if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context))
-                ClaudeMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null)
-            else null
-        ) +
+        // REA runs in the terminal's proot-distro Ubuntu; its tile picks the tool groups
+        ClaudeMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, com.example.gemini.theme.AppColors.accentPink, null) +
         ClaudeMcpPreset("Custom server", "Any stdio, HTTP or SSE server", Icons.Outlined.Add, ClaudeAccent, null)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         tiles.chunked(2).forEach { row ->

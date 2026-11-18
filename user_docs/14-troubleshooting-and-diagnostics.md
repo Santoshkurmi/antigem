@@ -91,8 +91,6 @@ Before troubleshooting, check the status indicators across the app:
 
 ### ❌ Symptom: A settings page I read about is missing.
 - **What to check**: Check your installed app build type and active operating mode:
-  - **GitHub**: Only appears in the `com.termux` package build (`LocalEnvironmentManager.isTermuxPackage`). In a standalone build, the GitHub settings page is not shown at all.
-  - **Termux Support (Termux:API & X11 Desktop)**: Only appears in the `com.termux` package build. If the build is not the Shared UID build, the row shows *"Standalone"* with a warning, and external Termux:API is disabled.
   - **Backups & Restore**: Only appears when local Linux tools are installed AND you are in local mode. In remote/server mode, Backups is hidden because backups apply to the phone's local environment.
   - **Utilities**: Does not exist as a page in the UI because its former tools (GitHub, ADB Connect, and Android Automation) now each have their own prominent top-level rows.
   - **Terminal Row**: Shows *"SSH"* when SSH mode or remote server mode is on, and *"Local"* otherwise.

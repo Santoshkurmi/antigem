@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gemini.data.daemon.DaemonStatus
-import com.example.gemini.data.daemon.TermuxDaemonManager
+import com.example.gemini.data.daemon.IdeDaemonManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,9 +30,9 @@ fun DaemonLogsDialog(
     onDismiss: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val status by TermuxDaemonManager.status.collectAsState()
-    val statusMessage by TermuxDaemonManager.statusMessage.collectAsState()
-    val logs by TermuxDaemonManager.logs.collectAsState()
+    val status by IdeDaemonManager.status.collectAsState()
+    val statusMessage by IdeDaemonManager.statusMessage.collectAsState()
+    val logs by IdeDaemonManager.logs.collectAsState()
     val listState = rememberLazyListState()
 
     // Auto scroll logs to bottom when new logs arrive
@@ -113,7 +113,7 @@ fun DaemonLogsDialog(
                         Button(
                             onClick = {
                                 coroutineScope.launch {
-                                    TermuxDaemonManager.ensureDaemonStarted()
+                                    IdeDaemonManager.ensureDaemonStarted()
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(

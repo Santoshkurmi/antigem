@@ -15,7 +15,7 @@ open class TermuxSystemReceiver : BroadcastReceiver() {
         val action = intent?.action ?: return
 
         when {
-            action.endsWith(".app.request_storage_permissions") || action == "com.termux.app.request_storage_permissions" -> {
+            action.endsWith(".app.request_storage_permissions") || action == "ai.antigem.app.request_storage_permissions" -> {
                 if (TermuxStorageSetupManager.hasStoragePermission(context)) {
                     CoroutineScope(Dispatchers.IO).launch {
                         val success = TermuxStorageSetupManager.setupStorageSymlinks(context)
@@ -31,7 +31,7 @@ open class TermuxSystemReceiver : BroadcastReceiver() {
                     TermuxStorageSetupManager.requestStoragePermission(context)
                 }
             }
-            action.endsWith(".app.reload_style") || action == "com.termux.app.reload_style" -> {
+            action.endsWith(".app.reload_style") || action == "ai.antigem.app.reload_style" -> {
                 if (TermuxStorageSetupManager.hasStoragePermission(context)) {
                     CoroutineScope(Dispatchers.IO).launch {
                         val success = TermuxStorageSetupManager.setupStorageSymlinks(context)

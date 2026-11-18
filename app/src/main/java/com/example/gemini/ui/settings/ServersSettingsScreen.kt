@@ -1013,20 +1013,18 @@ internal fun ServersSubScreen(
                         "• Passed to the bridge on launch (--bin for AGY, --claude-bin for Claude Code, --opencode-bin for OpenCode, --codex-bin for Codex) so auto-start executes the designated binary directly without interactive prompts.",
                         fontSize = 11.sp, color = subtle
                     )
-                    if (com.example.gemini.data.local.LocalEnvironmentManager.isTermuxPackage(context)) {
-                        Text(
-                            "• Claude Code: the default is AntiGem's launcher, which runs the newest official Claude version through the bundled glibc. Claude updates never replace it.",
-                            fontSize = 11.sp, color = subtle
-                        )
-                        Text(
-                            "• OpenCode: the default is where its installer (and Settings → OpenCode → Install) puts it. The bridge starts it through the bundled glibc, and finds it in the usual folders when this path is wrong.",
-                            fontSize = 11.sp, color = subtle
-                        )
-                        Text(
-                            "• Codex: the default is the Termux package (pkg install codex, also Settings → Codex → Install). The bridge finds it in the usual folders when this path is wrong.",
-                            fontSize = 11.sp, color = subtle
-                        )
-                    }
+                    Text(
+                        "• Claude Code: the default is AntiGem's launcher, which runs the newest official Claude version through the bundled glibc. Claude updates never replace it.",
+                        fontSize = 11.sp, color = subtle
+                    )
+                    Text(
+                        "• OpenCode: the default is where its installer (and Settings → OpenCode → Install) puts it. The bridge starts it through the bundled glibc, and finds it in the usual folders when this path is wrong.",
+                        fontSize = 11.sp, color = subtle
+                    )
+                    Text(
+                        "• Codex: the default is the Termux package (pkg install codex, also Settings → Codex → Install). The bridge finds it in the usual folders when this path is wrong.",
+                        fontSize = 11.sp, color = subtle
+                    )
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = {
