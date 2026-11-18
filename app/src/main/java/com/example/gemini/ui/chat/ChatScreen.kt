@@ -1172,7 +1172,6 @@ fun ChatScreen(
     val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()
     val usedProjects by TermuxDaemonManager.projects.collectAsState()
     var showProjectDropdown by remember { mutableStateOf(false) }
-    var chatProjectFiles by remember { mutableStateOf<List<com.example.gemini.data.daemon.FileNode>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         TermuxDaemonManager.loadProjects(conversations)
@@ -1181,15 +1180,6 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         TermuxDaemonManager.serverReconnectedEvent.collect {
             TermuxDaemonManager.loadProjects(conversations)
-        }
-    }
-
-    LaunchedEffect(activeChatProject) {
-        if (activeChatProject != null) {
-            scope.launch {
-                val tree = IdeApiClient.getFileTree(activeChatProject?.path)
-                chatProjectFiles = flattenFileNodes(tree)
-            }
         }
     }
 
@@ -2548,13 +2538,18 @@ fun ChatScreen(
                     val isAtMentioning = mention != null
                     val atQuery = mention?.query ?: ""
 
-                    val fileSuggestions = remember(atQuery, chatProjectFiles, isAtMentioning) {
-                        if (!isAtMentioning || chatProjectFiles.isEmpty()) emptyList()
-                        else {
-                            chatProjectFiles.filter { file ->
-                                !file.isDir && (atQuery.isBlank() || file.name.contains(atQuery, ignoreCase = true) || file.path.contains(atQuery, ignoreCase = true))
-                            }
+                    // Nothing is loaded before an @mention: the bridge searches the project's files and folders by name
+                    // (by path when the text has a "/") once something is typed. A new keystroke (or removing the @,
+                    // sending, leaving) cancels the running search.
+                    val mentionProjectPath = activeChatProject?.path
+                    var fileSuggestions by remember { mutableStateOf<List<com.example.gemini.data.files.ExplorerEntry>>(emptyList()) }
+                    LaunchedEffect(isAtMentioning, atQuery, mentionProjectPath) {
+                        if (!isAtMentioning || atQuery.isBlank() || mentionProjectPath.isNullOrBlank()) {
+                            fileSuggestions = emptyList()
+                            return@LaunchedEffect
                         }
+                        delay(250) // wait for a pause in typing
+                        fileSuggestions = com.example.gemini.data.files.FileExplorerApi.searchFileNames(mentionProjectPath, atQuery, filesOnly = false)
                     }
 
                     androidx.compose.animation.AnimatedVisibility(
@@ -2591,7 +2586,7 @@ fun ChatScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Description,
+                                            imageVector = if (file.isDir) Icons.Default.Folder else Icons.Default.Description,
                                             contentDescription = null,
                                             tint = ClaudeTerracotta,
                                             modifier = Modifier.size(16.dp)
@@ -4037,19 +4032,6 @@ private data class SlashTrigger(val index: Int, val query: String, val nothingBe
 
 /** An `@file` mention being typed (no space after it yet): where its `@` is and the text after it. */
 private data class MentionTrigger(val index: Int, val query: String)
-
-private fun flattenFileNodes(nodes: List<com.example.gemini.data.daemon.FileNode>): List<com.example.gemini.data.daemon.FileNode> {
-    val result = mutableListOf<com.example.gemini.data.daemon.FileNode>()
-    for (node in nodes) {
-        if (!node.isDir) {
-            result.add(node)
-        }
-        if (node.children.isNotEmpty()) {
-            result.addAll(flattenFileNodes(node.children))
-        }
-    }
-    return result
-}
 
 /**
  * A file link from a chat as a full path: a relative one ([Foo.kt](src/Foo.kt), as VS Code chats write them) is a file

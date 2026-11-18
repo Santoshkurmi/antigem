@@ -968,10 +968,40 @@ func (h *Handler) FsArchiveListHandler(w http.ResponseWriter, r *http.Request) {
 // ---------- /api/fs/search ----------
 
 // FsSearchHandler finds files and folders by name below a folder (case-insensitive, bounded in time and count).
+// Symlinked folders inside it are not walked into. files=1 returns files only. It stops as soon as the client
+// gives up (cancelled request), so a search replaced by a newer one does not keep walking.
 func (h *Handler) FsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	dir := fsResolve(h, r.URL.Query().Get("dir"))
 	includeHidden := r.URL.Query().Get("hidden") == "1"
+	filesOnly := r.URL.Query().Get("files") == "1"
+	ctx := r.Context()
+	// A folder that is itself a symlink is walked through its target; results keep the path the client asked for.
+	walkRoot := dir
+	if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			walkRoot = real
+		}
+	}
+	shown := func(p string) string {
+		if walkRoot == dir {
+			return p
+		}
+		if rel, err := filepath.Rel(walkRoot, p); err == nil {
+			return filepath.Join(dir, rel)
+		}
+		return p
+	}
+	// A query with a "/" (like "ui/chat") matches the path below the searched folder, so a folder narrows the
+	// search; a plain query matches the name only.
+	byPath := strings.Contains(q, "/")
+	matches := func(p, name string) bool {
+		if byPath {
+			rel, err := filepath.Rel(walkRoot, p)
+			return err == nil && strings.Contains(strings.ToLower(filepath.ToSlash(rel)), q)
+		}
+		return strings.Contains(strings.ToLower(name), q)
+	}
 	limit := 300
 	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 && n <= 2000 {
 		limit = n
@@ -984,14 +1014,17 @@ func (h *Handler) FsSearchHandler(w http.ResponseWriter, r *http.Request) {
 	skip := map[string]bool{"node_modules": true, ".git": true, ".gradle": true, "build": true, "proc": true, "sys": true}
 	deadline := time.Now().Add(8 * time.Second)
 	truncated := false
-	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
 		if err != nil {
 			if d != nil && d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if path == dir {
+		if path == walkRoot {
 			return nil
 		}
 		if time.Now().After(deadline) || len(items) >= limit {
@@ -1001,19 +1034,25 @@ func (h *Handler) FsSearchHandler(w http.ResponseWriter, r *http.Request) {
 		name := d.Name()
 		hidden := strings.HasPrefix(name, ".")
 		if d.IsDir() && (skip[name] || (hidden && !includeHidden)) {
-			if strings.Contains(strings.ToLower(name), q) && (!hidden || includeHidden) {
-				items = append(items, fsItemJSON(path, d))
+			if !filesOnly && matches(path, name) && (!hidden || includeHidden) {
+				items = append(items, fsItemJSON(shown(path), d))
 			}
 			return filepath.SkipDir
 		}
 		if hidden && !includeHidden {
 			return nil
 		}
-		if strings.Contains(strings.ToLower(name), q) {
-			items = append(items, fsItemJSON(path, d))
+		if matches(path, name) {
+			item := fsItemJSON(shown(path), d)
+			if !filesOnly || item["isDir"] != true {
+				items = append(items, item)
+			}
 		}
 		return nil
 	})
+	if ctx.Err() != nil {
+		return // the client is gone: nobody reads the reply
+	}
 	sortFsItems(items)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "items": items, "truncated": truncated})
 }

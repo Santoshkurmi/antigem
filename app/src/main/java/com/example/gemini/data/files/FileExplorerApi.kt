@@ -3,6 +3,7 @@ package com.example.gemini.data.files
 import android.util.Log
 import com.example.gemini.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -17,6 +18,7 @@ import java.io.File
 import java.io.InputStream
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 
 /** One file or folder as the Files screen shows it. */
 data class ExplorerEntry(
@@ -251,6 +253,42 @@ object FileExplorerApi {
         if (code != 200 || o == null || !o.optBoolean("success")) return Result.failure(Exception(o?.err(code) ?: "Search failed"))
         val arr = o.optJSONArray("items") ?: JSONArray()
         return Result.success((0 until arr.length()).map { parseEntry(arr.getJSONObject(it)) } to o.optBoolean("truncated"))
+    }
+
+    /**
+     * Files (and folders unless [filesOnly]) below [dir] whose name contains [query] (with a "/" in it: whose path
+     * below [dir] does), at most [limit]: for the chat's `@` suggestions and Jarvis. Hidden ones only when the query
+     * starts with ".". Cancelling the calling coroutine cancels the HTTP call (and the bridge then stops walking).
+     * Empty on any failure.
+     */
+    suspend fun searchFileNames(dir: String, query: String, limit: Int = 50, filesOnly: Boolean = true): List<ExplorerEntry> {
+        val hidden = if (query.startsWith(".")) 1 else 0
+        val files = if (filesOnly) 1 else 0
+        val call = client.newCall(
+            Request.Builder()
+                .url("$base/api/fs/search?dir=${enc(dir)}&q=${enc(query)}&hidden=$hidden&files=$files&limit=$limit")
+                .get().build()
+        )
+        return suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    if (!call.isCanceled()) Log.w(TAG, "File name search failed: ${e.message}")
+                    if (cont.isActive) cont.resume(emptyList())
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    val found = runCatching {
+                        response.use { resp ->
+                            if (!resp.isSuccessful) return@use emptyList()
+                            val arr = JSONObject(resp.body?.string().orEmpty()).optJSONArray("items") ?: JSONArray()
+                            (0 until arr.length()).map { parseEntry(arr.getJSONObject(it)) }.filter { !filesOnly || !it.isDir }
+                        }
+                    }.getOrDefault(emptyList())
+                    if (cont.isActive) cont.resume(found)
+                }
+            })
+        }
     }
 
     /**
