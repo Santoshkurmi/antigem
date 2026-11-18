@@ -1494,6 +1494,8 @@ class ClaudeChatBackend(
                             endCompactingNotice()
                             // the chat's first message (with the app's global context) was summarized away: resend it next time
                             com.example.gemini.data.context.GlobalContext.forget(attachedId ?: store.currentConversation.value?.id)
+                            // and the Agent memory text with it
+                            com.example.gemini.data.memory.AgentMemory.forget(attachedId ?: store.currentConversation.value?.id)
                         }
                     }
                 }

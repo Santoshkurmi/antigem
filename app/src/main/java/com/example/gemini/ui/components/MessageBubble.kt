@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -289,7 +290,7 @@ fun MessageBubble(
                             IconButton(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Copied Response", message.content)
+                                    val clip = ClipData.newPlainText("Copied Response", MemoryBlocks.strip(message.content))
                                     clipboard.setPrimaryClip(clip)
                                     Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
                                 },
@@ -374,6 +375,11 @@ fun UserMessageBubble(
     val context = LocalContext.current
     var showUserActions by remember { mutableStateOf(false) }
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
+    // the prompt as it was sent, hidden parts included (for debugging)
+    var showFullPrompt by remember { mutableStateOf(false) }
+    if (showFullPrompt) {
+        FullPromptDialog(prompt = fullPromptOf(message), attachmentCount = message.attachments.size, onDismiss = { showFullPrompt = false })
+    }
 
     if (previewImageUrl != null) {
         FullScreenImageDialog(
@@ -589,6 +595,23 @@ fun UserMessageBubble(
                     )
                 }
 
+                // The full prompt as sent, hidden parts included
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = {
+                        showFullPrompt = true
+                        showUserActions = false
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Visibility,
+                        contentDescription = "View full prompt",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
                 // Edit Prompt
                 if (canEdit) Spacer(modifier = Modifier.width(4.dp))
                 if (canEdit) IconButton(
@@ -686,7 +709,7 @@ fun AssistantMessageFooter(
             IconButton(
                 onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Copied Response", message.content)
+                    val clip = ClipData.newPlainText("Copied Response", MemoryBlocks.strip(message.content))
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
                 },

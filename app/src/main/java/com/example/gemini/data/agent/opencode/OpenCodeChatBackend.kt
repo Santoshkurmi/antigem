@@ -1253,7 +1253,9 @@ class OpenCodeChatBackend(
                     rule("websearch", "ask"),
                     rule("external_directory", "ask"),
                     // files the app copied for the chat (OpenCode's `*` also matches across folders; last match wins)
-                    rule("external_directory", "allow", "*/.antigem/uploads/*")
+                    rule("external_directory", "allow", "*/.antigem/uploads/*"),
+                    // Agent memory: memory files and past chats it reads when the app tells it about them
+                    rule("external_directory", "allow", "*/.antigem/memory/*")
                 ))
                 else -> null
             }

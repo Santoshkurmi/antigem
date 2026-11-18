@@ -395,6 +395,10 @@ func (s *Session) spawnLocked() error {
 		if uploads := filepath.Join(home, ".antigem", "uploads"); os.MkdirAll(uploads, 0o700) == nil {
 			args = append(args, "--add-dir", uploads)
 		}
+		// Agent memory: memory files and past chats Claude reads when the app tells it about them
+		if mem := filepath.Join(home, ".antigem", "memory"); os.MkdirAll(mem, 0o700) == nil {
+			args = append(args, "--add-dir", mem)
+		}
 	}
 
 	transcript := s.mgr.FindTranscript(s.ID)

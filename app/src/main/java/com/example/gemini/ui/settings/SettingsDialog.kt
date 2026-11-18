@@ -113,6 +113,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     CODEX_PAGE("Codex", "Account, usage limits, permissions, MCP, server & install"),
     AGENTS("Agents", "Run Antigravity, Claude Code, OpenCode, Codex or several"),
     GLOBAL_CONTEXT("Global context", "What every chat is told about this app, and your own instructions"),
+    AGENT_MEMORY("Agent memory & history", "Memories every agent keeps across chats, and past chats they can look up"),
+    AGENT_HISTORY("Saved chats", "The chat history the agents can look up: read, edit or remove it"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     JARVIS_AGENT("Jarvis · Agent", "Which agent and model Jarvis talks to"),
     JARVIS_PERSONALITY("Jarvis · Personality & you", "How Jarvis speaks, and what it should know about you"),
@@ -161,7 +163,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         CODEX_PAGE -> CODEX
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
         REA_GROUPS -> REA
-        GLOBAL_CONTEXT -> AGENTS
+        GLOBAL_CONTEXT, AGENT_MEMORY -> AGENTS
+        AGENT_HISTORY -> AGENT_MEMORY
         CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
@@ -631,9 +634,12 @@ fun SettingsDialog(
                         enabled = enabledAgents,
                         isApplying = isApplyingAgents,
                         onApply = onApplyAgents,
-                        onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT }
+                        onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT },
+                        onOpenAgentMemory = { currentSection = SettingsSection.AGENT_MEMORY }
                     )
                     SettingsSection.GLOBAL_CONTEXT -> GlobalContextScreen()
+                    SettingsSection.AGENT_MEMORY -> AgentMemoryScreen(onOpenHistory = { currentSection = SettingsSection.AGENT_HISTORY })
+                    SettingsSection.AGENT_HISTORY -> AgentHistoryScreen()
                     SettingsSection.STEM_RENDERING -> StemRenderingScreen()
                     SettingsSection.JARVIS -> com.example.gemini.ui.jarvis.JarvisSettingsScreen(
                         cardBg = cardBg,

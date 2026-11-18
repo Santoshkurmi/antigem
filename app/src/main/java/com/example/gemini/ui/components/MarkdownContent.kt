@@ -151,6 +151,9 @@ sealed class MarkdownBlock {
     data class Stem(val kind: StemKind, val code: String) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
+    /** An ```antigem-memory block (Agent memory): shown as a chip; [complete] once its closing fence arrived. */
+    @androidx.compose.runtime.Immutable
+    data class MemoryChip(val body: String, val complete: Boolean) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Image(val alt: String, val url: String) : MarkdownBlock()
 
@@ -211,6 +214,9 @@ fun MarkdownBlockView(
         }
         is MarkdownBlock.Mermaid -> {
             MermaidDiagramView(code = block.code, modifier = modifier)
+        }
+        is MarkdownBlock.MemoryChip -> {
+            MemoryChipView(body = block.body, complete = block.complete, modifier = modifier)
         }
         is MarkdownBlock.Stem -> {
             StemBlockView(kind = block.kind, code = block.code, modifier = modifier)
@@ -3120,6 +3126,9 @@ fun parseMarkdownBlocks(
             }
             if (lang.equals("math", ignoreCase = true) || lang.equals("latex", ignoreCase = true) || lang.equals("katex", ignoreCase = true)) {
                 result.add(MarkdownBlock.Math(latex = codeLines.joinToString("\n"), isDisplay = true))
+            } else if (lang.equals(MemoryBlocks.LANG, ignoreCase = true)) {
+                // Agent memory: the bridge saves it, the chat shows a chip
+                result.add(MarkdownBlock.MemoryChip(body = codeLines.joinToString("\n"), complete = i < lines.size))
             } else if (lang.equals("mermaid", ignoreCase = true)) {
                 result.add(MarkdownBlock.Mermaid(code = codeLines.joinToString("\n").trim()))
             } else if (StemKind.fromLang(lang) != null && i < lines.size) {
