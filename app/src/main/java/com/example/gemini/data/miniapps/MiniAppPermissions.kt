@@ -121,7 +121,10 @@ object MiniAppPermissions {
         // tools that run commands, drive the phone or read the browser
         if (name.startsWith("mcp:")) return MiniAppMcpAccess.isSensitive(name.removePrefix("mcp:").substringBefore('/'))
         val path = app.permissions[name]?.optString("path")?.takeIf { name.startsWith("storage:") } ?: return false
-        return isBroadFolder(context, runCatching { toFile(context, app, path) }.getOrNull() ?: return true)
+        val f = runCatching { toFile(context, app, path) }.getOrNull() ?: return true
+        // a hidden folder in home (keys, logins): the typed confirmation, except for the official apps
+        if (isHomeDotPath(context, f) && !MiniAppStore.isOfficial(app)) return true
+        return isBroadFolder(context, f)
     }
 
     fun isBroadFolder(context: Context, f: File): Boolean {
@@ -160,7 +163,10 @@ object MiniAppPermissions {
             name == "storage:all" -> Info("All files", "${accessText(spec.optString("access"))} everything in your shared storage and home folder", true)
             name.startsWith("storage:") -> {
                 val path = spec.optString("path")
-                Info("Folder $path", accessText(spec.optString("access")), spec.optString("access") != "read")
+                // a hidden folder in home (~/.gemini, ~/.ssh…): always flagged, even read only
+                val hidden = path.trim().let { it.startsWith("~/.") || it.contains("/home/.") }
+                if (hidden) Info("Hidden folder $path", accessText(spec.optString("access")) + " (it may hold logins or keys)", true)
+                else Info("Folder $path", accessText(spec.optString("access")), spec.optString("access") != "read")
             }
             name == "notifications" -> Info("Notifications", "Show notifications and reminders", false)
             name == "background" -> Info("Run in the background", "Do tasks while closed, up to ${MiniAppScheduler.MAX_RUNS_PER_DAY} times a day", false)
@@ -246,17 +252,29 @@ object MiniAppPermissions {
         return f.canonicalFile
     }
 
-    /** Never reachable, whatever was granted: other apps' data and code, and the dot folders in home (keys, logins). */
-    fun isProtected(context: Context, f: File): Boolean {
+    /** In a hidden folder directly in home (~/.gemini, ~/.ssh…), or that folder itself. */
+    fun isHomeDotPath(context: Context, f: File): Boolean {
+        val home = MiniApps.home(context).canonicalFile
+        if (!within(f, home) || f.path == home.path) return false
+        return f.path.removePrefix(home.path + File.separator).substringBefore(File.separator).startsWith(".")
+    }
+
+    /**
+     * Never reachable, whatever was granted: AntiGem's own folder ~/.antigem (every app's data, the browser profile,
+     * uploads), every app's code, and anything outside home and shared storage. The other dot folders in home (keys,
+     * logins) too, unless [allowDot]: [resolve] lets those through only for a manifest folder declared inside them.
+     */
+    fun isProtected(context: Context, f: File, allowDot: Boolean = false): Boolean {
         val home = MiniApps.home(context).canonicalFile
         if (within(f, MiniApps.dataRoot(context).canonicalFile)) return true
+        if (within(f, File(home, ".antigem").canonicalFile)) return true
         if (within(f, MiniApps.appsDir(context).canonicalFile)) return true
-        if (within(f, home) && f.path != home.path) {
-            val first = f.path.removePrefix(home.path + File.separator).substringBefore(File.separator)
-            if (first.startsWith(".")) return true
-        }
+        if (!allowDot && isHomeDotPath(context, f)) return true
         return !within(f, home) && !within(f, sharedRoot)
     }
+
+    /** A folder declared in the manifest (not "all files", not picked) that lies in a hidden home folder: it may open that part of it. */
+    private fun opensHidden(context: Context, g: Grant) = g.source == "manifest" && g.name != "storage:all" && isHomeDotPath(context, g.root)
 
     class Grant(val root: File, val access: String, val source: String, val name: String)
 
@@ -303,8 +321,14 @@ object MiniAppPermissions {
         // the data/ folder of an app in the same shared group: like its own (same developer, same trust)
         if (sharedOwner(context, app, f) != null) return f
         if (need != Need.WRITE && hasFileGrant(context, app, f)) return f
-        if (isProtected(context, f)) throw MiniAppError("NotAllowedError", "$raw is protected")
-        val inside = grants(context, app).filter { within(f, it.root) }
+        if (isProtected(context, f, allowDot = true)) throw MiniAppError("NotAllowedError", "$raw is protected")
+        // a hidden home folder: only a manifest folder declared inside it counts (not "all files", not a picked folder)
+        val hidden = isHomeDotPath(context, f)
+        if (hidden && app.permissions.none { (name, spec) ->
+                name.startsWith("storage:") && name != "storage:all" &&
+                    runCatching { toFile(context, app, spec.optString("path")) }.getOrNull()?.let { within(f, it) && isHomeDotPath(context, it) } == true
+            }) throw MiniAppError("NotAllowedError", "$raw is protected (declare its hidden folder in the manifest's storage folders)")
+        val inside = grants(context, app).filter { within(f, it.root) && (!hidden || opensHidden(context, it)) }
         if (inside.any { allows(it.access, need) }) return f
         throw MiniAppError("NotAllowedError", when {
             inside.isNotEmpty() -> "$raw: the app may only ${if (need == Need.WRITE) "read" else "write"} there"

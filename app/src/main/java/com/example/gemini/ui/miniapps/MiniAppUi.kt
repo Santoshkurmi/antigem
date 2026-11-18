@@ -277,6 +277,9 @@ fun TypedConfirmDialog(app: MiniApp, name: String, onResult: (Boolean) -> Unit) 
         "write" -> "change or delete"; "readwrite" -> "read, change or delete"; else -> "read"
     }
     val ok = typed.trim().equals(MiniAppPermissions.DANGER_PHRASE, ignoreCase = true)
+    // a hidden folder in home (~/.gemini, ~/.ssh…): logins and keys rather than photos and documents
+    val hidden = app.permissions[name]?.optString("path")?.trim()?.let { it.startsWith("~/.") || it.contains("/home/.") } == true
+    val what = if (hidden) "logins, keys, tokens and settings of other programs" else "photos, documents, downloads, other apps' exports"
     AlertDialog(
         onDismissRequest = { onResult(false) },
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(36.dp)) },
@@ -284,7 +287,7 @@ fun TypedConfirmDialog(app: MiniApp, name: String, onResult: (Boolean) -> Unit) 
         text = {
             Column {
                 Text(
-                    "${app.name} could $access $scope: photos, documents, downloads, other apps' exports, and could send them anywhere it can reach. " +
+                    "${app.name} could $access $scope: $what, and could send them anywhere it can reach. " +
                         "A mistake or a bad app can delete or leak them. Only continue if you trust this app completely.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
