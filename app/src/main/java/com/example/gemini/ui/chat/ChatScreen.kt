@@ -2208,9 +2208,14 @@ fun ChatScreen(
                             )
                         }
 
+                        // web views of this chat's blocks stay alive while the chat is open; all destroyed when it is left
+                        val chatWebViewCache = remember(currentConv?.id) { com.example.gemini.ui.components.ChatWebViewCache(context) }
+                        DisposableEffect(chatWebViewCache) { onDispose { chatWebViewCache.close() } }
+
                         CompositionLocalProvider(
                             androidx.compose.ui.platform.LocalDensity provides customDensity,
-                            com.example.gemini.ui.components.LocalQuestionPanelActive provides true
+                            com.example.gemini.ui.components.LocalQuestionPanelActive provides true,
+                            com.example.gemini.ui.components.LocalChatWebViewCache provides chatWebViewCache
                         ) {
                                 // iOS-style vertical bounce at the top and bottom (also for a short chat that cannot scroll);
                                 // only this list: code blocks and other sideways scrollers keep Android's own edge effect
@@ -2322,7 +2327,9 @@ fun ChatScreen(
                                                     is MarkdownBlock.Alert, is MarkdownBlock.Table -> true
                                                     else -> false
                                                 }
-                                                if (selectable) SelectionContainer { blockView() } else blockView()
+                                                CompositionLocalProvider(com.example.gemini.ui.components.LocalWebViewSlot provides feedItem.key) {
+                                                    if (selectable) SelectionContainer { blockView() } else blockView()
+                                                }
                                             }
                                         }
                                         // with the working animation on, the working row below replaces these dots

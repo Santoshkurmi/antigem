@@ -2,6 +2,7 @@ package com.example.gemini.data.render
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -312,6 +313,12 @@ object RenderBundle {
             intercept(request, allowNetwork)
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = !allowNetwork
+
+        // the renderer died (crash, or killed for memory): drop this view instead of letting the app crash
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            com.example.gemini.ui.components.ChatWebViewCache.onRendererGone(view)
+            return true
+        }
     }
 
     // ------------------------------------------------------------------ what agents are told

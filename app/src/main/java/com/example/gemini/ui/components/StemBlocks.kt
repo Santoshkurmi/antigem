@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.data.render.RenderBundle
@@ -203,9 +202,15 @@ private class StemBridge {
     @JavascriptInterface fun error(log: String) { main.post { onError?.invoke(log) } }
 }
 
+/** A block's web view with its bridge, so a view kept by [ChatWebViewCache] can be bound to the block again. */
+private class StemPageView(context: Context) : WebView(context) {
+    val bridge = StemBridge()
+}
+
 /**
  * A WebView for one block page, loaded on https://appassets.androidplatform.net/render/ so the bundle's files load
- * offline; everything else is blocked. Its height follows the page unless [fill].
+ * offline; everything else is blocked. Its height follows the page unless [fill]. In a chat it is kept alive while
+ * the chat is open ([KeptWebView]) unless [keep] is false (fullscreen pages are never kept).
  */
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
@@ -215,17 +220,24 @@ private fun StemWebView(
     reloadKey: Int = 0,
     interactive: Boolean = false,
     fill: Boolean = false,
+    keep: Boolean = true,
     onSvg: ((String) -> Unit)? = null,
     onError: ((String) -> Unit)? = null
 ) {
-    var heightDp by remember { mutableIntStateOf(200) }
-    val bridge = remember { StemBridge() }
-    bridge.onHeight = { px -> heightDp = px.coerceIn(48, 1200) }
-    bridge.onSvg = onSvg
-    bridge.onError = onError
-    AndroidView(
+    val kept = keep && !fill
+    val cache = LocalChatWebViewCache.current
+    val slot = if (kept) keptWebViewSlot("stem") else null
+    // a kept page comes back at its last height instead of 200dp
+    var heightDp by remember(slot) { mutableIntStateOf(slot?.let { cache?.height(it) } ?: 200) }
+    val onHeight: (Int) -> Unit = { px ->
+        heightDp = px.coerceIn(48, 1200)
+        if (slot != null) cache?.setHeight(slot, heightDp)
+    }
+    KeptWebView(
+        part = "stem",
+        keep = kept,
         factory = { ctx ->
-            WebView(ctx).apply {
+            StemPageView(ctx).apply {
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 isVerticalScrollBarEnabled = fill
                 isHorizontalScrollBarEnabled = fill
@@ -239,7 +251,7 @@ private fun StemWebView(
                     settings.displayZoomControls = false
                 }
                 webViewClient = RenderBundle.webViewClient(allowNetwork = false)
-                addJavascriptInterface(bridge, "AG")
+                addJavascriptInterface(this.bridge, "AG")
                 if (interactive && !fill) {
                     // dragging a point / body moves it instead of scrolling the chat
                     setOnTouchListener { v, ev ->
@@ -250,16 +262,16 @@ private fun StemWebView(
             }
         },
         update = { wv ->
+            (wv as? StemPageView)?.bridge?.let {
+                it.onHeight = onHeight
+                it.onSvg = onSvg
+                it.onError = onError
+            }
             val key = "$reloadKey:${html.hashCode()}:${html.length}"
             if (wv.tag != key) {
                 wv.tag = key
                 wv.loadDataWithBaseURL(RenderBundle.BASE_URL, html, "text/html", "UTF-8", null)
             }
-        },
-        onRelease = { wv ->
-            wv.stopLoading()
-            wv.loadUrl("about:blank")
-            wv.destroy()
         },
         modifier = if (fill) modifier.fillMaxSize() else modifier.fillMaxWidth().height(heightDp.dp)
     )
@@ -317,6 +329,7 @@ private fun TikzBody(code: String, isDark: Boolean, onSvg: (String) -> Unit) {
             val html = remember(prepared, isDark) { StemHtml.tikzCompilePage(prepared, isDark) }
             StemWebView(
                 html = html,
+                keep = false, // the TeX engine is heavy; only the finished picture is kept
                 onSvg = { result.complete(Result.success(it)) },
                 onError = { result.complete(Result.failure(IllegalStateException(it.ifBlank { "TeX failed without a log." }))) }
             )

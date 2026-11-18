@@ -848,7 +848,9 @@ fun MermaidDiagramView(
                         .heightIn(min = 180.dp, max = 420.dp)
                         .padding(6.dp)
                 ) {
-                    AndroidView(
+                    // kept alive while the chat is open (ChatWebViewCache), so scrolling back doesn't draw it again
+                    KeptWebView(
+                        part = "mermaid",
                         factory = { ctx ->
                             android.webkit.WebView(ctx).apply {
                                 layoutParams = android.view.ViewGroup.LayoutParams(
