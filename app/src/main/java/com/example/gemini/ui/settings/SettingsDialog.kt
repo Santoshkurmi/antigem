@@ -4466,6 +4466,9 @@ private fun BackupsSubScreen(
     var showServerRunningAlert by remember { mutableStateOf<String?>(null) }
 
     var showBackupChatsPasswordDialog by remember { mutableStateOf(false) }
+    // Linux environment backup: asks whether SSH keys and sign-ins go in too (off unless the user ticks it)
+    var showEnvBackupDialog by remember { mutableStateOf(false) }
+    var envBackupIncludeSecrets by remember { mutableStateOf(false) }
     var backupChatsPassword by remember { mutableStateOf("") }
     var showBackupPasswordText by remember { mutableStateOf(false) }
 
@@ -4586,7 +4589,7 @@ private fun BackupsSubScreen(
             icon = Icons.Outlined.Inventory2,
             title = "Linux environment",
             subtitle = "Installed packages, binaries and your home folder",
-            description = "A full, portable copy of the Linux system (/usr) and \$HOME dotfiles. Sockets, caches and auth tokens are left out.",
+            description = "A full, portable copy of the Linux system (/usr) and \$HOME. Sockets and caches are left out; SSH keys and sign-ins only if you choose. The file appears only once the backup is complete and checked.",
             savesTo = "Download/Antigem/backups/bootrapz_<time>.zip",
             cardBg = cardBg,
             cardBorder = cardBorder
@@ -4598,13 +4601,8 @@ private fun BackupsSubScreen(
                     if (isAnyServerRunning) {
                         showServerRunningAlert = "Backup Rootfs"
                     } else {
-                        requestStoragePermission {
-                            activeScriptExecution = ScriptExecutionInfo(
-                                title = "Rootfs System Packager",
-                                scriptName = "backup_bootstrap",
-                                args = emptyList()
-                            )
-                        }
+                        envBackupIncludeSecrets = false
+                        showEnvBackupDialog = true
                     }
                 }
             )
@@ -4769,6 +4767,67 @@ private fun BackupsSubScreen(
                 }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showEnvBackupDialog) {
+        AlertDialog(
+            onDismissRequest = { showEnvBackupDialog = false },
+            icon = { Icon(Icons.Outlined.Archive, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            title = { Text("Back up environment", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Saves the Linux system and your home folder to Download/Antigem/backups. Restore it in the installer with \"From a ZIP file\".",
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { envBackupIncludeSecrets = !envBackupIncludeSecrets }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = envBackupIncludeSecrets, onCheckedChange = { envBackupIncludeSecrets = it })
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Include SSH keys and sign-ins", fontSize = 13.5.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "SSH keys, agent and GitHub logins, shell history. Useful when moving to a new phone or app.",
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    if (envBackupIncludeSecrets) {
+                        BackupNote("Never share this backup with anyone: whoever has it can sign in to your accounts and servers. Delete it once you have restored it.")
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val includeSecrets = envBackupIncludeSecrets
+                        showEnvBackupDialog = false
+                        requestStoragePermission {
+                            activeScriptExecution = ScriptExecutionInfo(
+                                title = "Rootfs System Packager",
+                                scriptName = "backup_bootstrap",
+                                args = if (includeSecrets) listOf("--include-secrets") else emptyList()
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White)
+                ) {
+                    Text("Start backup", fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnvBackupDialog = false }) { Text("Cancel") }
             }
         )
     }

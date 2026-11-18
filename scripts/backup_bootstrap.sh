@@ -12,18 +12,37 @@ fi
 
 # ==============================================================================
 # Termux Complete Bootstrap Packager (usr + home + dotfiles)
+#
+# Usage: backup_bootstrap [--include-secrets] [output.zip]
+#   --include-secrets  also back up SSH keys, sign-ins (agent and GitHub logins) and shell history
+#
+# The zip is written as <output>.partial, tested entry by entry (unzip -t), and only then renamed to <output>:
+# a file named *.zip in the backups folder is always a complete, readable backup. Restore it in AntiGem's
+# installer ("From a ZIP file"); a backup made in the com.termux app is rewritten for ai.antigem there.
+# Works in both apps: paths come from $PREFIX/$HOME, else from where this script is installed.
 # ==============================================================================
 set -euo pipefail
 trap 'echo -e "\n\033[1;31m[ERROR]\033[0m Backup failed at line $LINENO: \x27$BASH_COMMAND\x27" >&2' ERR
 
-PREFIX_DIR="${PREFIX:-/data/data/com.termux/files/usr}"
-HOME_DIR="${HOME:-/data/data/com.termux/files/home}"
+SCRIPT_PREFIX="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || true)"
+PREFIX_DIR="${PREFIX:-$SCRIPT_PREFIX}"
 FILES_DIR="$(dirname "$PREFIX_DIR")"
+HOME_DIR="${HOME:-$FILES_DIR/home}"
+
+INCLUDE_SECRETS=0
+OUTPUT_ZIP=""
+for arg in "$@"; do
+    case "$arg" in
+        --include-secrets) INCLUDE_SECRETS=1 ;;
+        *) OUTPUT_ZIP="$arg" ;;
+    esac
+done
 
 BACKUP_DIR="/sdcard/Download/Antigem/backups"
 TIMESTAMP="$(date +"%Y-%m-%d-%H-%M-%S")"
-ZIP_BASENAME="bootrapz_${TIMESTAMP}.zip"
-OUTPUT_ZIP="${1:-${BACKUP_DIR}/${ZIP_BASENAME}}"
+OUTPUT_ZIP="${OUTPUT_ZIP:-${BACKUP_DIR}/bootrapz_${TIMESTAMP}.zip}"
+PARTIAL_ZIP="${OUTPUT_ZIP}.partial"
+ZIP_LOG="${FILES_DIR}/.backup_bootstrap.$$.log" # outside usr/ and home/, so not archived
 
 echo "=== Termux Full Environment Packager ==="
 echo "Files root : $FILES_DIR"
@@ -31,55 +50,77 @@ echo "Prefix     : $PREFIX_DIR"
 echo "Home       : $HOME_DIR"
 echo "Output     : $OUTPUT_ZIP"
 echo "Timestamp  : $TIMESTAMP"
+if [ "$INCLUDE_SECRETS" = 1 ]; then
+    echo "Secrets    : INCLUDED (SSH keys, sign-ins, shell history)"
+else
+    echo "Secrets    : left out"
+fi
 echo "========================================"
 
-if ! command -v zip >/dev/null 2>&1; then
-    echo -e "\n\033[1;31m[ERROR]\033[0m 'zip' utility is not installed. Please install it with 'pkg install zip'." >&2
+missing=""
+command -v zip >/dev/null 2>&1 || missing="$missing zip"
+command -v unzip >/dev/null 2>&1 || missing="$missing unzip"
+if [ -n "$missing" ]; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m Needed to make and check the backup:$missing. Install with: pkg install$missing" >&2
     exit 1
 fi
 
-if [ ! -d "$FILES_DIR" ]; then
-    echo -e "\n\033[1;31m[ERROR]\033[0m Directory '$FILES_DIR' not found." >&2
+if [ ! -d "$FILES_DIR/usr" ] || [ ! -d "$FILES_DIR/home" ]; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m '$FILES_DIR' has no usr/ and home/ to back up." >&2
     exit 1
 fi
+
+# Until the backup is complete and checked, only the .partial file exists; it is removed on any failure
+cleanup() {
+    rm -f "$PARTIAL_ZIP" "$ZIP_LOG"
+}
+trap cleanup EXIT
 
 cd "$FILES_DIR"
 
-echo "[1/3] Archiving usr/ and home/ (preserving unix permissions & symlinks)..."
-TEMP_ZIP="${FILES_DIR}/bootstrap-bundle.zip"
-rm -f "$TEMP_ZIP"
-
+# Always left out: sockets, caches and temporary files
 EXCLUDE_PATTERNS=(
     "*.sock"
     "*/.cache/*"
-    "home/.ssh/*"
-    "usr/etc/ssh/ssh_host_*"
-    "etc/ssh/ssh_host_*"
-    "home/.gemini/jetski-standalone-oauth-token*"
-    "home/.gemini/*oauth*"
-    "home/.gemini/*token*"
-    "home/.bash_history"
-    "home/.zsh_history"
+    "usr/tmp/*"
 )
+# Left out unless --include-secrets: whoever has them can sign in as the user
+if [ "$INCLUDE_SECRETS" != 1 ]; then
+    EXCLUDE_PATTERNS+=(
+        "home/.ssh/*"
+        "usr/etc/ssh/ssh_host_*"
+        "home/.gemini/jetski-standalone-oauth-token*"
+        "home/.gemini/*oauth*"
+        "home/.gemini/*token*"
+        "home/.claude/.credentials.json"
+        "home/.codex/auth.json"
+        "home/.local/share/opencode/auth.json"
+        "home/.config/gh/hosts.yml"
+        "home/.git-credentials"
+        "home/.netrc"
+        "home/.bash_history"
+        "home/.zsh_history"
+    )
+fi
 
-# Count items for accurate 0-100% progress tracking
+echo "[1/4] Archiving usr/ and home/ (preserving unix permissions & symlinks)..."
+
+# Count items for accurate 0-100% progress tracking (same exclusions as zip)
 echo "      Calculating total files..."
-TOTAL_FILES=$( { find usr home \
-    \( ! -name "*.sock" \
-       -a ! -path "*/.cache/*" \
-       -a ! -path "home/.ssh/*" \
-       -a ! -name "ssh_host_*" \
-       -a ! -path "home/.gemini/jetski-standalone-oauth-token*" \
-       -a ! -path "home/.gemini/*oauth*" \
-       -a ! -path "home/.gemini/*token*" \
-       -a ! -name ".bash_history" \
-       -a ! -name ".zsh_history" \
-    \) 2>/dev/null || true; } | wc -l)
+FIND_EXCLUDES=()
+for p in "${EXCLUDE_PATTERNS[@]}"; do FIND_EXCLUDES+=(! -path "$p"); done
+TOTAL_FILES=$( { find usr home "${FIND_EXCLUDES[@]}" 2>/dev/null || true; } | wc -l)
 TOTAL_FILES=$((TOTAL_FILES + 0))
 echo "      Total entries to package: $TOTAL_FILES"
 
-# Run zip with live progress bar and security exclusions
-{ zip -r -y "$TEMP_ZIP" usr home -x "${EXCLUDE_PATTERNS[@]}" 2>/dev/null || true; } | awk -v total="$TOTAL_FILES" '
+mkdir -p "$(dirname "$OUTPUT_ZIP")"
+rm -f "$PARTIAL_ZIP"
+
+# Run zip with a live progress bar; its exit status is checked below (warnings go to $ZIP_LOG).
+# The ERR trap runs even without set -e, so it is off while zip runs.
+trap - ERR
+set +e
+zip -r -y "$PARTIAL_ZIP" usr home -x "${EXCLUDE_PATTERNS[@]}" 2>"$ZIP_LOG" | awk -v total="$TOTAL_FILES" '
 BEGIN {
     cols = 12;
     count = 0;
@@ -106,11 +147,43 @@ END {
     printf("\r\033[K [\033[32m%s\033[0m] \033[1;32m100%%\033[0m (%d/%d)\n", bar, count, count);
 }
 '
+ZIP_STATUS=${PIPESTATUS[0]}
+set -e
+trap 'echo -e "\n\033[1;31m[ERROR]\033[0m Backup failed at line $LINENO: \x27$BASH_COMMAND\x27" >&2' ERR
 
-echo "[2/3] Exporting archive to Antigem backups storage..."
-mkdir -p "$(dirname "$OUTPUT_ZIP")"
-cp "$TEMP_ZIP" "$OUTPUT_ZIP"
-rm -f "$TEMP_ZIP"
+# 0: done; 18: some files could not be read (the rest is archived): a warning, listed below
+if [ "$ZIP_STATUS" != 0 ] && [ "$ZIP_STATUS" != 18 ]; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m zip failed (exit $ZIP_STATUS), no backup was saved:" >&2
+    tail -n 20 "$ZIP_LOG" >&2 || true
+    exit 1
+fi
+if [ "$ZIP_STATUS" = 18 ]; then
+    echo -e "\033[1;33m[WARNING]\033[0m Some files could not be read and are not in the backup:"
+    grep -i "could not open\|not found\|permission" "$ZIP_LOG" | head -n 20 || true
+fi
 
-echo "[3/3] Done! Bootstrap archive ready:"
-echo "      ✅ Saved to: $OUTPUT_ZIP"
+echo "[2/4] Checking the archive (every file is read back and its checksum compared)..."
+if ! unzip -tqq "$PARTIAL_ZIP" >"$ZIP_LOG" 2>&1; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m The new archive is damaged, no backup was saved:" >&2
+    tail -n 20 "$ZIP_LOG" >&2 || true
+    exit 1
+fi
+unzip -Z1 "$PARTIAL_ZIP" >"$ZIP_LOG" 2>/dev/null || true
+if ! grep -qx -e "usr/bin/bash" -e "usr/bin/sh" "$ZIP_LOG"; then
+    echo -e "\n\033[1;31m[ERROR]\033[0m The archive has no usr/bin/bash or usr/bin/sh: it could not be restored, no backup was saved." >&2
+    exit 1
+fi
+
+echo "[3/4] Saving..."
+sync "$PARTIAL_ZIP" 2>/dev/null || sync
+mv -f "$PARTIAL_ZIP" "$OUTPUT_ZIP"
+trap - EXIT
+rm -f "$ZIP_LOG"
+
+SIZE="$(du -h "$OUTPUT_ZIP" 2>/dev/null | cut -f1)"
+echo "[4/4] Done! Backup checked and saved (${SIZE:-?}):"
+echo "      ✅ $OUTPUT_ZIP"
+if [ "$INCLUDE_SECRETS" = 1 ]; then
+    echo -e "      \033[1;31m⚠ This backup contains your SSH keys and sign-ins. Never share it with anyone:\033[0m"
+    echo -e "      \033[1;31m  whoever has it can sign in to your accounts and servers.\033[0m"
+fi
