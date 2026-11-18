@@ -43,9 +43,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.gemini.domain.model.ChatMessage
 
-/** The prompt a user message actually sent: a voice request's full prompt, else the message as stored. */
+/**
+ * The prompt a user message actually sent: a voice request's full prompt, else the text before the chat collapsed its
+ * hidden parts ([ChatMessage.sentContent]), else the message as stored.
+ */
 fun fullPromptOf(message: ChatMessage): String =
-    message.rawContent?.takeIf { message.viaVoice && it.isNotBlank() } ?: message.content
+    message.rawContent?.takeIf { message.viaVoice && it.isNotBlank() } ?: message.sentContent ?: message.content
 
 private val HIDDEN_TAG = Regex("</?(antigem-expansion|attached-files)\\b[^>]*>")
 

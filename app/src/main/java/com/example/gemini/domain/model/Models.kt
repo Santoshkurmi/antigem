@@ -92,7 +92,9 @@ data class ChatMessage(
     /** What the voice said while handing that request to the agent. */
     val voiceLine: String? = null,
     /** A user message: the id its project checkpoint was saved under, when the agent's transcript knows it. */
-    val checkpointKey: String? = null
+    val checkpointKey: String? = null,
+    /** A user message whose [content] the chat shows collapsed (hidden parts removed): the text as it was sent. */
+    val sentContent: String? = null
 )
 
 @Serializable

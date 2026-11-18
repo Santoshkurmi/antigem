@@ -64,7 +64,8 @@ object ChatFeedCache {
                 } else {
                     // Show the slash command the user typed, not the instructions it expanded to
                     val shown = com.example.gemini.data.remote.PromptExpansion.collapse(msg.content)
-                    msgItems.add(ChatFeedItem.User(if (shown === msg.content) msg else msg.copy(content = shown)))
+                    // (the full text stays along for "View full prompt")
+                    msgItems.add(ChatFeedItem.User(if (shown === msg.content) msg else msg.copy(content = shown, sentContent = msg.content)))
                 }
             }
             MessageRole.ASSISTANT -> {
