@@ -47,7 +47,7 @@
         android:allowBackup="true"
         android:largeHeap="true"
         android:hasFragileUserData="true"
-        android:manageSpaceActivity="com.example.gemini.ui.settings.ManageSpaceActivity"
+        android:manageSpaceActivity="ai.antigem.ui.settings.ManageSpaceActivity"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -274,7 +274,7 @@
 
         <!-- Android Automation (android_automation_mcp): screen reading, gestures and screenshots -->
         <service
-            android:name="com.example.gemini.data.automation.AutomationAccessibilityService"
+            android:name="ai.antigem.data.automation.AutomationAccessibilityService"
             android:label="@string/accessibility_service_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
@@ -288,19 +288,19 @@
 
         <!-- Jarvis hands-free mode: keeps the microphone available while it listens for the wake phrase -->
         <service
-            android:name="com.example.gemini.data.jarvis.JarvisService"
+            android:name="ai.antigem.data.jarvis.JarvisService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
         <!-- Antigravity voice call: keeps the microphone available while a call runs in the background -->
         <service
-            android:name="com.example.gemini.data.voice.AgyVoiceCallService"
+            android:name="ai.antigem.data.voice.AgyVoiceCallService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
         <!-- Jarvis Quick Settings tile: tap to talk from anywhere -->
         <service
-            android:name="com.example.gemini.data.jarvis.JarvisTileService"
+            android:name="ai.antigem.data.jarvis.JarvisTileService"
             android:exported="true"
             android:icon="@drawable/ic_jarvis_mic"
             android:label="Jarvis"
@@ -312,7 +312,7 @@
 
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
         <service
-            android:name="com.example.gemini.data.adb.AdbPairingService"
+            android:name="ai.antigem.data.adb.AdbPairingService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
@@ -321,7 +321,7 @@
         </service>
 
         <provider
-            android:name="com.example.gemini.data.files.AntiGemFileProvider"
+            android:name="ai.antigem.data.files.AntiGemFileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
@@ -333,20 +333,20 @@
         <!-- Mini Apps: the launcher grid, each app's root page (its own task / Recents card, one per app id via the
              data URI) and pushed pages (same task as their root) -->
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppsActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppsActivity"
             android:exported="true"
             android:theme="@style/Theme.AntiGem.MiniApp"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
         <!-- "Get apps": the mini apps of AntiGem's GitHub catalog -->
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppStoreActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppStoreActivity"
             android:exported="false"
             android:theme="@style/Theme.AntiGem.MiniApp"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize" />
         <!-- The mini app installer (like Android's for .apk): opening an .agapp from any app (WhatsApp, Telegram, Gmail,
              Files, a browser's downloads, AntiGem's file explorer) shows the install / update screen over that app -->
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppInstallActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppInstallActivity"
             android:exported="true"
             android:label="Mini app installer"
             android:excludeFromRecents="true"
@@ -401,21 +401,21 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppActivity"
             android:exported="true"
             android:documentLaunchMode="intoExisting"
             android:theme="@style/Theme.AntiGem.MiniApp"
             android:windowSoftInputMode="stateHidden|adjustResize"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|density|fontScale" />
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppPageActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppPageActivity"
             android:exported="false"
             android:theme="@style/Theme.AntiGem.MiniApp"
             android:windowSoftInputMode="stateHidden|adjustResize"
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|density|fontScale" />
         <!-- Mini app home-screen shortcuts and notification taps: bring the app forward as it was (or start it) -->
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppLaunchActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppLaunchActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -431,7 +431,7 @@
         </activity>
         <!-- "Mini app" in Android's share sheet: send text, links and files to a mini app that accepts them -->
         <activity
-            android:name="com.example.gemini.ui.miniapps.MiniAppShareActivity"
+            android:name="ai.antigem.ui.miniapps.MiniAppShareActivity"
             android:exported="true"
             android:label="Mini app"
             android:excludeFromRecents="true"
@@ -447,15 +447,15 @@
         </activity>
         <!-- Mini app notification buttons that don't open the app, inline replies, swipe-away -->
         <receiver
-            android:name="com.example.gemini.data.miniapps.MiniAppNotificationReceiver"
+            android:name="ai.antigem.data.miniapps.MiniAppNotificationReceiver"
             android:exported="false" />
         <!-- Mini app reminders and exact-time background tasks -->
         <receiver
-            android:name="com.example.gemini.data.miniapps.MiniAppAlarmReceiver"
+            android:name="ai.antigem.data.miniapps.MiniAppAlarmReceiver"
             android:exported="false" />
         <!-- Android drops alarms on reboot (and shifts them on clock / time-zone changes): set them again -->
         <receiver
-            android:name="com.example.gemini.data.miniapps.MiniAppBootReceiver"
+            android:name="ai.antigem.data.miniapps.MiniAppBootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -467,7 +467,7 @@
 
         <!-- Manage Space Activity (Clear Storage Interceptor) -->
         <activity
-            android:name="com.example.gemini.ui.settings.ManageSpaceActivity"
+            android:name="ai.antigem.ui.settings.ManageSpaceActivity"
             android:exported="true"
             android:label="AntiGem Space Manager"
             android:theme="@style/Theme.Gemini">
@@ -479,7 +479,7 @@
 
         <!-- Device Admin Receiver for Accidental Uninstall Protection -->
         <receiver
-            android:name="com.example.gemini.data.admin.AntiGemDeviceAdminReceiver"
+            android:name="ai.antigem.data.admin.AntiGemDeviceAdminReceiver"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:exported="true">
             <meta-data

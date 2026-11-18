@@ -1,0 +1,353 @@
+package ai.antigem.data.agent.claude
+
+import ai.antigem.data.preferences.AuthPreferences
+import ai.antigem.data.remote.AgyBridgeService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
+import java.util.concurrent.TimeUnit
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+
+/**
+ * Talks to the bridge's `/api/claude/` endpoints. The bridge runs the `claude` processes; this client never touches
+ * Claude's files or runs commands itself.
+ */
+class ClaudeBridgeClient(
+    private val bridge: AgyBridgeService = AgyBridgeService.instance
+) {
+    private val jsonType = "application/json".toMediaType()
+
+    private fun url(path: String) = AuthPreferences.currentBridgeHttpUrl.trimEnd('/') + "/api/claude" + path
+
+    private suspend inline fun <reified T> get(path: String): Result<T> = call(Request.Builder().url(url(path)).get().build())
+
+    private suspend inline fun <reified T> post(path: String, body: String = "{}"): Result<T> =
+        call(Request.Builder().url(url(path)).post(body.toRequestBody(jsonType)).build())
+
+    /** For calls that run the CLI on the bridge and can outlast the default 30 s read timeout. */
+    private val slowClient by lazy { bridge.client.newBuilder().readTimeout(60, TimeUnit.SECONDS).build() }
+
+    private suspend inline fun <reified T> call(request: Request, http: OkHttpClient = bridge.client): Result<T> = withContext(Dispatchers.IO) {
+        runCatching {
+            http.newCall(request).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                val isJson = text.trimStart().startsWith("{")
+                // the bridge's Claude routes always answer JSON; a plain 404 means a bridge without them, and a 503
+                // "disabled" one that was started with --no-claude (Claude was off when the server started)
+                if (resp.code == 404 && !isJson) throw ClaudeBridgeOutdatedException()
+                if (resp.code == 503 && text.contains("\"disabled\":true")) {
+                    throw ClaudeBridgeOutdatedException("The local server was started with Claude Code turned off. Restart it to use Claude.")
+                }
+                if (!resp.isSuccessful && !isJson) error("HTTP ${resp.code}" + text.trim().take(120).let { if (it.isBlank()) "" else ": $it" })
+                ClaudeJson.decodeFromString<T>(text)
+            }
+        }
+    }
+
+    suspend fun status(): Result<ClaudeCliStatus> = call(Request.Builder().url(url("/status")).get().build(), slowClient)
+
+    /** Models, commands and skills; [cwd]: the project whose own skills and commands to include (default: the home folder). */
+    suspend fun info(refresh: Boolean = false, cwd: String? = null): Result<ClaudeInfoResponse> {
+        val q = listOfNotNull(
+            if (refresh) "refresh=1" else null,
+            cwd?.takeIf { it.isNotBlank() }?.let { "cwd=" + java.net.URLEncoder.encode(it, "UTF-8") }
+        ).joinToString("&")
+        return get(if (q.isEmpty()) "/info" else "/info?$q")
+    }
+
+    suspend fun logout(): Result<BridgeSimpleResponse> = post("/auth/logout")
+
+    suspend fun listSessions(): Result<ClaudeSessionListResponse> =
+        get<ClaudeSessionListResponse>("/sessions").map(::expandSubagentRuns)
+
+    /**
+     * A chat's transcript. [full]: everything written so far, also while its process is live (for reading a chat
+     * without attaching to it); otherwise a live process' part is left to the session's event stream.
+     */
+    suspend fun history(sessionId: String, full: Boolean = false): Result<ClaudeHistoryResponse> {
+        // a subagent listed by the VS Code bridge: its transcript lives under the chat that ran it
+        subagentParents[sessionId]?.let { parent ->
+            val agentId = sessionId.removePrefix("agent-")
+            return get<ClaudeSubagentHistoryResponse>("/sessions/$parent/subagents/$agentId/history")
+                .map { ClaudeHistoryResponse(success = it.success, entries = it.entries, error = it.error) }
+        }
+        return get("/sessions/$sessionId/history" + if (full) "?full=1" else "")
+    }
+
+    /**
+     * AntiGem's VS Code bridge (Connect to PC) lists a chat's subagent runs inside the chat ("subagents") instead of as
+     * read-only chats of their own like the app's bridge. They become the same "agent-<id>" entries here (nested under
+     * their chat, or the subagent that started them), and [subagentParents] remembers which chat holds each transcript.
+     */
+    private val subagentParents = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun expandSubagentRuns(resp: ClaudeSessionListResponse): ClaudeSessionListResponse {
+        if (resp.sessions.none { it.subagents.isNotEmpty() }) return resp
+        val listed = resp.sessions.mapTo(HashSet()) { it.id }
+        val extra = mutableListOf<ClaudeSessionSummary>()
+        for (chat in resp.sessions) for (run in chat.subagents) {
+            if (run.agent_id.isBlank()) continue
+            val id = "agent-${run.agent_id}"
+            subagentParents[id] = chat.id
+            if (id in listed) continue
+            extra += ClaudeSessionSummary(
+                id = id,
+                title = run.description.lineSequence().firstOrNull().orEmpty().trim().take(80).ifBlank { run.agent_type },
+                cwd = chat.cwd,
+                created_at = run.created_at.takeIf { it > 0 } ?: run.updated_at,
+                updated_at = run.updated_at,
+                live = run.running,
+                busy = run.running,
+                subagent = true,
+                parent_id = if (run.parent_agent_id.isNotBlank()) "agent-${run.parent_agent_id}" else chat.id,
+                agent_type = run.agent_type,
+            )
+        }
+        return resp.copy(sessions = resp.sessions.map { if (it.subagents.isEmpty()) it else it.copy(subagents = emptyList()) } + extra)
+    }
+
+    suspend fun rename(sessionId: String, title: String): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/title", ClaudeJson.encodeToString(ClaudeTitleRequest(title)))
+
+    /** Archives / unarchives a chat (the bridge keeps the list; the transcript is untouched). */
+    suspend fun archive(sessionId: String, archived: Boolean): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/archive", ClaudeJson.encodeToString(ClaudeArchiveRequest(archived)))
+
+    suspend fun kill(sessionId: String): Result<BridgeSimpleResponse> = post("/sessions/$sessionId/kill")
+
+    /** Cuts the chat right before the prompt [beforeUuid]; the next message continues from there. */
+    suspend fun rewind(sessionId: String, beforeUuid: String): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/rewind", ClaudeJson.encodeToString(ClaudeRewindRequest(beforeUuid)))
+
+    /** Copies the chat under [newId] (written to disk right away). */
+    suspend fun fork(sessionId: String, newId: String, title: String): Result<BridgeSimpleResponse> =
+        post("/sessions/$sessionId/fork", ClaudeJson.encodeToString(ClaudeForkRequest(newId, title)))
+
+    suspend fun delete(sessionId: String): Result<BridgeSimpleResponse> =
+        call(Request.Builder().url(url("/sessions/$sessionId")).delete().build())
+
+    suspend fun usage(refresh: Boolean = false): Result<ClaudeUsageResponse> = get(if (refresh) "/usage?refresh=1" else "/usage")
+
+    // ---- login
+    suspend fun startLogin(method: String): Result<ClaudeLoginResponse> =
+        post("/auth/login", ClaudeJson.encodeToString(ClaudeLoginStartRequest(method)))
+
+    suspend fun loginState(loginId: String): Result<ClaudeLoginResponse> = get("/auth/login/$loginId")
+
+    suspend fun submitLoginCode(loginId: String, code: String): Result<ClaudeLoginResponse> =
+        post("/auth/login/$loginId/code", ClaudeJson.encodeToString(ClaudeLoginCodeRequest(code)))
+
+    suspend fun cancelLogin(loginId: String): Result<BridgeSimpleResponse> =
+        call(Request.Builder().url(url("/auth/login/$loginId")).delete().build())
+
+    // ---- configuration
+    suspend fun settings(): Result<ClaudeSettingsResponse> = get("/settings")
+
+    suspend fun saveSettings(settings: kotlinx.serialization.json.JsonObject): Result<BridgeSimpleResponse> =
+        call(Request.Builder().url(url("/settings")).put(ClaudeJson.encodeToString(ClaudeSettingsPut(settings)).toRequestBody(jsonType)).build())
+
+    // ---- custom providers
+    suspend fun providers(): Result<ClaudeProvidersResponse> = get("/providers")
+
+    /** Adds [provider] (blank id) or updates it. */
+    suspend fun saveProvider(provider: ClaudeProvider): Result<ClaudeProviderResponse> {
+        val body = ClaudeJson.encodeToString(provider).toRequestBody(jsonType)
+        return call(
+            if (provider.id.isBlank()) Request.Builder().url(url("/providers")).post(body).build()
+            else Request.Builder().url(url("/providers/${provider.id}")).put(body).build()
+        )
+    }
+
+    suspend fun deleteProvider(id: String): Result<BridgeSimpleResponse> =
+        call(Request.Builder().url(url("/providers/$id")).delete().build())
+
+    /** The provider's model list; [freeOnly] (OpenRouter) keeps free models that can call tools. */
+    suspend fun fetchProviderModels(id: String, freeOnly: Boolean): Result<ClaudeFetchModelsResponse> =
+        call(Request.Builder().url(url("/providers/$id/fetch-models")).post(ClaudeJson.encodeToString(ClaudeFetchModelsRequest(freeOnly)).toRequestBody(jsonType)).build(), slowClient)
+
+    /** The model list fetched with the editor form's values (saved or not). */
+    suspend fun fetchFormModels(provider: ClaudeProvider, freeOnly: Boolean): Result<ClaudeFetchModelsResponse> {
+        val json = buildJsonObject {
+            ClaudeJson.encodeToJsonElement(ClaudeProvider.serializer(), provider).jsonObject.forEach { (k, v) -> put(k, v) }
+            put("free_only", freeOnly)
+        }
+        return call(Request.Builder().url(url("/providers/_fetch")).post(json.toString().toRequestBody(jsonType)).build(), slowClient)
+    }
+
+    /** Stops the chat's process (when idle); its next message starts one with the current settings. */
+    suspend fun restartSession(id: String): Result<BridgeSimpleResponse> = post("/sessions/$id/restart")
+
+    /** Restarts the idle running chats of provider [id]. */
+    suspend fun restartProviderSessions(id: String): Result<ClaudeRestartProviderResponse> = post("/providers/$id/restart-sessions")
+
+    /** One tiny request to [model] with the form's values (saved or not), sent like the CLI would. */
+    suspend fun testProvider(provider: ClaudeProvider, model: String): Result<ClaudeProviderTestResponse> {
+        val json = buildJsonObject {
+            ClaudeJson.encodeToJsonElement(ClaudeProvider.serializer(), provider).jsonObject.forEach { (k, v) -> put(k, v) }
+            put("model", model)
+        }
+        return call(Request.Builder().url(url("/providers/_test")).post(json.toString().toRequestBody(jsonType)).build(), slowClient)
+    }
+
+    /** Moves the endpoint configured in settings.json into a provider (settings.json then uses the Claude login). */
+    suspend fun importSettingsProvider(): Result<ClaudeProviderResponse> = post("/providers/import-settings")
+
+    private fun memoryQuery(scope: String, cwd: String?) =
+        "/memory?scope=$scope" + (cwd?.let { "&cwd=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
+
+    suspend fun memory(scope: String, cwd: String? = null): Result<ClaudeMemoryResponse> = get(memoryQuery(scope, cwd))
+
+    suspend fun saveMemory(scope: String, cwd: String?, content: String): Result<BridgeSimpleResponse> =
+        call(Request.Builder().url(url(memoryQuery(scope, cwd))).put(ClaudeJson.encodeToString(ClaudeMemoryPut(content)).toRequestBody(jsonType)).build())
+
+    private fun autoMemoryQuery(cwd: String?) = "/memory/auto" + (cwd?.let { "?cwd=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
+
+    /** Notes Claude saved by itself for the project [cwd] (null = the default workspace). */
+    suspend fun autoMemory(cwd: String?): Result<ClaudeAutoMemoryResponse> = get(autoMemoryQuery(cwd))
+
+    suspend fun deleteAutoMemory(cwd: String?, name: String): Result<BridgeSimpleResponse> {
+        val q = autoMemoryQuery(cwd) + (if (cwd == null) "?" else "&") + "name=" + java.net.URLEncoder.encode(name, "UTF-8")
+        return call(Request.Builder().url(url(q)).delete().build())
+    }
+
+    suspend fun mcpServers(cwd: String? = null): Result<ClaudeMcpResponse> =
+        get("/mcp" + (cwd?.let { "?cwd=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
+
+    suspend fun addMcpServer(req: ClaudeMcpAddRequest): Result<ClaudeCommandOutput> = post("/mcp", ClaudeJson.encodeToString(req))
+
+    suspend fun removeMcpServer(name: String, scope: String?, cwd: String?): Result<ClaudeCommandOutput> {
+        val q = buildString {
+            append("/mcp?name=").append(java.net.URLEncoder.encode(name, "UTF-8"))
+            scope?.let { append("&scope=").append(it) }
+            cwd?.let { append("&cwd=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+        }
+        return call(Request.Builder().url(url(q)).delete().build())
+    }
+
+    suspend fun plugins(): Result<ClaudePluginsResponse> = get("/plugins")
+
+    /** action: install | uninstall | enable | disable | update | marketplace-add | marketplace-remove | marketplace-update */
+    suspend fun pluginAction(action: String, body: ClaudePluginAction): Result<ClaudeCommandOutput> =
+        post("/plugins/$action", ClaudeJson.encodeToString(body))
+
+    suspend fun cliJob(): Result<ClaudeCliJobResponse> = get("/cli/job")
+
+    /** Saves an attachment of chat [sessionId] on the bridge; Claude is given its path. */
+    suspend fun saveAttachment(sessionId: String, name: String, mimeType: String, base64: String): Result<ClaudeSavedAttachment> =
+        call(Request.Builder().url(url("/attachments")).post(ClaudeJson.encodeToString(ClaudeAttachmentSave(sessionId, name, mimeType, base64)).toRequestBody(jsonType)).build(), slowClient)
+
+    suspend fun sandbox(): Result<ClaudeSandboxInfo> = call(Request.Builder().url(url("/sandbox")).get().build(), slowClient)
+
+    /** action: install | update */
+    suspend fun startCliJob(action: String): Result<ClaudeCliJobResponse> = post("/cli/$action")
+
+    /** Dictation relay: send 16 kHz mono s16le PCM as binary frames; transcript frames come back as text. */
+    fun openVoice(language: String, listener: WebSocketListener): WebSocket {
+        val httpUrl = url("/voice").toHttpUrl().newBuilder().addQueryParameter("language", language).build()
+        val request = Request.Builder().url(httpUrl.toString().replaceFirst("http", "ws")).build()
+        return bridge.wsClient.newWebSocket(request, listener)
+    }
+
+    /**
+     * Attaches to a session's WebSocket. Frames with `seq >= since` still in the bridge buffer are replayed first
+     * (`since = -1`: no replay). Spawn options apply when the bridge starts the process for the first message.
+     */
+    fun connect(sessionId: String, since: Long, spawn: BridgeConfigFrame): Flow<ClaudeSocketEvent> = callbackFlow {
+        val httpUrl = url("/session").toHttpUrl().newBuilder()
+            .addQueryParameter("id", sessionId)
+            .addQueryParameter("since", since.toString())
+            .apply {
+                spawn.cwd?.let { addQueryParameter("cwd", it) }
+                spawn.model?.let { addQueryParameter("model", it) }
+                spawn.permission_mode?.let { addQueryParameter("permission_mode", it) }
+                spawn.effort?.let { addQueryParameter("effort", it) }
+                spawn.fork_from?.let { addQueryParameter("fork_from", it) }
+                spawn.resume_session_at?.let { addQueryParameter("resume_session_at", it) }
+                spawn.thinking?.let { addQueryParameter("thinking", it) }
+            }
+            .build()
+        val request = Request.Builder().url(httpUrl.toString().replaceFirst("http", "ws")).build()
+        val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                trySend(ClaudeSocketEvent.Opened(ClaudeSocket(webSocket)))
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                runCatching { ClaudeJson.decodeFromString<BridgeFrame>(text) }
+                    .onSuccess { trySend(ClaudeSocketEvent.Frame(it)) }
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                trySend(ClaudeSocketEvent.Closed(null))
+                close()
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                trySend(ClaudeSocketEvent.Closed(t.message ?: "connection failed"))
+                close()
+            }
+        }
+        val ws = bridge.wsClient.newWebSocket(request, listener)
+        awaitClose { ws.close(1000, null) }
+        // never drop a frame: a lost `result` would leave the turn running forever
+    }.buffer(Channel.UNLIMITED)
+}
+
+/** Nothing answered at the bridge address (not running yet, stopped, or unreachable). */
+fun Throwable.isBridgeUnreachable(): Boolean =
+    this is java.net.ConnectException || this is java.net.NoRouteToHostException || this is java.net.UnknownHostException ||
+        // OkHttp reports a connect timeout as SocketTimeoutException("failed to connect …")
+        (this is java.net.SocketTimeoutException && message.orEmpty().contains("connect", ignoreCase = true))
+
+/**
+ * The app has just started (or the local server is starting): an unreachable bridge is expected for a few seconds,
+ * so callers wait and retry instead of reporting it offline. Like AGY's start-up grace period.
+ */
+object BridgeStartup {
+    private val appStart = System.currentTimeMillis()
+    @Volatile private var reached = false
+
+    fun markReached() {
+        reached = true
+    }
+
+    fun isStartingUp(): Boolean {
+        if (reached) return false
+        val elapsed = System.currentTimeMillis() - appStart
+        val serverStarting = ai.antigem.data.local.LocalServerManager.status.value is ai.antigem.data.local.LocalServerStatus.Starting
+        return elapsed < 20_000 || (serverStarting && elapsed < 60_000)
+    }
+}
+
+/** The bridge answered but has no `/api/claude` routes: an older bridge binary is still running. */
+class ClaudeBridgeOutdatedException(
+    message: String = "The running bridge has no Claude Code support. Restart the local server to load the new version."
+) : IllegalStateException(message)
+
+class ClaudeSocket internal constructor(private val ws: WebSocket) {
+    fun send(text: String): Boolean = ws.send(text)
+    fun close() {
+        ws.close(1000, null)
+    }
+}
+
+sealed interface ClaudeSocketEvent {
+    data class Opened(val socket: ClaudeSocket) : ClaudeSocketEvent
+    data class Frame(val frame: BridgeFrame) : ClaudeSocketEvent
+    data class Closed(val error: String?) : ClaudeSocketEvent
+}

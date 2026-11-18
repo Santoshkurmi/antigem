@@ -1,0 +1,1555 @@
+package ai.antigem.data.remote
+
+import android.util.Log
+import ai.antigem.data.preferences.AuthPreferences
+import ai.antigem.data.remote.core.AgyCsrfManager
+import ai.antigem.domain.model.AiModel
+import ai.antigem.domain.model.ChatMessage
+import ai.antigem.domain.model.MessageRole
+import ai.antigem.domain.model.TokenUsage
+import ai.antigem.domain.model.ToolCall
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+data class AgyConversationSummary(
+    val id: String,
+    val title: String,
+    val createdAt: String,
+    val stepsCount: Int = 0,
+    val isRunning: Boolean = false,
+    val lastActivity: String? = null
+)
+
+data class AgyProjectSummary(
+    val name: String,
+    val path: String
+)
+
+data class AgyActiveInstance(
+    val conversationId: String,
+    val model: String,
+    val workspaceDir: String,
+    val pid: Long = 0,
+    val uptimeSeconds: Long = 0,
+    val isBusy: Boolean = false
+)
+
+enum class BridgeConnectionState {
+    CONNECTED_READY,
+    STREAMING,
+    SPAWNING_INSTANCE,
+    CONNECTING,
+    RECONNECTING,
+    OFFLINE_ERROR
+}
+
+data class AgyHubStatus(
+    val status: String = "idle", // "idle", "starting", "online", "error", "stopped"
+    val port: String = ai.antigem.BuildConfig.HUB_PORT.toString(),
+    val csrfToken: String? = null,
+    val error: String? = null,
+    val logs: List<String> = emptyList()
+)
+
+sealed class AgyStreamEvent {
+    data class TextChunk(val text: String, val seq: Long? = null) : AgyStreamEvent()
+    data class ThoughtChunk(val thought: String, val durationMs: Long? = null, val seq: Long? = null) : AgyStreamEvent()
+    data class ToolChunk(val tool: ToolCall, val seq: Long? = null) : AgyStreamEvent()
+    data class InstanceStatus(val status: String, val message: String? = null, val conversationId: String? = null) :
+        AgyStreamEvent()
+
+    data class SessionAttached(val conversationId: String, val isRunning: Boolean, val prompt: String? = null) :
+        AgyStreamEvent()
+
+    data class StreamSnapshot(
+        val conversationId: String,
+        val isRunning: Boolean,
+        val status: String,
+        val seq: Long,
+        val prompt: String? = null,
+        val thought: String = "",
+        val content: String = "",
+        val activeTools: List<ToolCall> = emptyList()
+    ) : AgyStreamEvent()
+
+    data class QuotaUpdate(val quotaSummary: ai.antigem.domain.model.QuotaSummaryResponse) : AgyStreamEvent()
+    data class Completed(
+        val tokenUsage: TokenUsage?,
+        val conversationId: String? = null,
+        val fullResponse: String? = null,
+        val seq: Long? = null
+    ) : AgyStreamEvent()
+
+    data class LoginUrl(val url: String) : AgyStreamEvent()
+    data class HubStatusEvent(val hubStatus: AgyHubStatus) : AgyStreamEvent()
+    data class Error(val message: String) : AgyStreamEvent()
+}
+
+class AgyBridgeService(
+    val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 12 else 5, TimeUnit.SECONDS)
+        .readTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
+        .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .addInterceptor { chain ->
+            val b = chain.request().newBuilder()
+                .header(AuthPreferences.currentFramedHeader, "true")
+            AuthPreferences.edgeHeader()?.let { (n, v) -> b.header(n, v) }
+            chain.proceed(b.build())
+        }
+        .apply {
+            if (ai.antigem.data.remote.inspector.NetworkInspectorManager.isEnabled) {
+                addInterceptor(ai.antigem.data.remote.inspector.NetworkInspectorInterceptor("IDE Bridge (HTTP)"))
+            }
+        }
+        .build()
+) {
+    companion object {
+        const val TAG = "AgyBridgeService"
+        val instance by lazy { AgyBridgeService() }
+    }
+
+    // Fast-failing client for health/status checks: 500ms on this phone, a network-grade budget for a remote server
+    // (a TLS handshake over mobile data cannot finish in 500ms and would make a healthy server look offline)
+    val fastClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 8000 else 500, TimeUnit.MILLISECONDS)
+        .readTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
+        .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(false)
+        .addInterceptor { chain ->
+            val b = chain.request().newBuilder()
+                .header(AuthPreferences.currentFramedHeader, "true")
+            AuthPreferences.edgeHeader()?.let { (n, v) -> b.header(n, v) }
+            chain.proceed(b.build())
+        }
+        .apply {
+            if (ai.antigem.data.remote.inspector.NetworkInspectorManager.isEnabled) {
+                addInterceptor(ai.antigem.data.remote.inspector.NetworkInspectorInterceptor("IDE Bridge (HTTP)"))
+            }
+        }
+        .build()
+
+    // Dedicated WebSocket client for live bridge monitoring with 1s connect timeout and 1s heartbeat ping
+    // (remote: 10s connect and a 15s heartbeat, so mobile-network hiccups reconnect instead of flapping Offline)
+    val wsClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10 else 3, TimeUnit.SECONDS)
+        .pingInterval(if (AuthPreferences.isRemoteEndpoint()) 15 else 1, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(false)
+        .addInterceptor { chain ->
+            val b = chain.request().newBuilder()
+                .header(AuthPreferences.currentFramedHeader, "true")
+            AuthPreferences.edgeHeader()?.let { (n, v) -> b.header(n, v) }
+            chain.proceed(b.build())
+        }
+        .build()
+
+    private val _systemConnectionState = MutableStateFlow<SystemConnectionState>(SystemConnectionState.Offline)
+    val systemConnectionState: StateFlow<SystemConnectionState> = _systemConnectionState.asStateFlow()
+
+    private val _connectionState = MutableStateFlow(BridgeConnectionState.CONNECTING)
+    val connectionState: StateFlow<BridgeConnectionState> = _connectionState.asStateFlow()
+
+    private val _hubStatus = MutableStateFlow(AgyHubStatus())
+    val hubStatus: StateFlow<AgyHubStatus> = _hubStatus.asStateFlow()
+
+    private val _loginUrlEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
+    val loginUrlEvents: SharedFlow<String> = _loginUrlEvents.asSharedFlow()
+
+    /**
+     * Suspends until the IDE Bridge (:1234) is connected and online, or returns false on timeout.
+     */
+    suspend fun awaitBridgeReady(timeoutMs: Long = 8000L): Boolean {
+        if (_systemConnectionState.value.isBridgeOnline) return true
+        return withTimeoutOrNull(timeoutMs) {
+            _systemConnectionState.first { it.isBridgeOnline }
+            true
+        } ?: false
+    }
+
+    /**
+     * Suspends until the Antigravity Hub (:1235) is fully ready and online, or returns false on timeout.
+     */
+    suspend fun awaitHubReady(timeoutMs: Long = 8000L): Boolean {
+        if (_systemConnectionState.value.isHubOnline) return true
+        return withTimeoutOrNull(timeoutMs) {
+            _systemConnectionState.first { it.isHubOnline }
+            true
+        } ?: false
+    }
+
+    private var isBridgeConnected: Boolean = false
+    private var currentAuthState: Boolean = true
+    private var currentAuthChecking: Boolean = false
+    private var currentHubStatus: String = "idle"
+    private var currentHubError: String? = null
+
+    fun recomputeSystemConnectionState() {
+        if (!isBridgeConnected) {
+            _systemConnectionState.value = SystemConnectionState.Offline
+            return
+        }
+        val hasCsrf = AgyCsrfManager.instance.token.isNotBlank()
+        _systemConnectionState.value = SystemConnectionState.Connected(
+            hubStatus = currentHubStatus,
+            error = currentHubError,
+            isAuth = currentAuthState,
+            isAuthChecking = currentAuthChecking,
+            hasCsrfToken = hasCsrf
+        )
+    }
+
+    fun updateAuthState(isAuth: Boolean, isChecking: Boolean = false) {
+        currentAuthState = isAuth
+        currentAuthChecking = isChecking
+        recomputeSystemConnectionState()
+    }
+
+    fun updateAuthChecking(isChecking: Boolean) {
+        currentAuthChecking = isChecking
+        recomputeSystemConnectionState()
+    }
+
+    fun updateConnectionState(newState: BridgeConnectionState) {
+        _connectionState.value = newState
+    }
+
+    fun updateHubStatus(newStatus: AgyHubStatus) {
+        _hubStatus.value = newStatus
+        currentHubStatus = newStatus.status
+        currentHubError = newStatus.error
+        if (!newStatus.csrfToken.isNullOrBlank()) {
+            AgyCsrfManager.instance.setCachedToken(AuthPreferences.currentHubUrl, newStatus.csrfToken)
+        } else if (newStatus.status == "stopped" || newStatus.status == "error") {
+            AgyCsrfManager.instance.clearToken()
+        }
+        recomputeSystemConnectionState()
+    }
+
+    fun resetState() {
+        isBridgeConnected = false
+        _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+        _hubStatus.value = AgyHubStatus(status = "stopped")
+        currentHubStatus = "stopped"
+        currentHubError = null
+        currentAuthState = true
+        currentAuthChecking = false
+        _systemConnectionState.value = SystemConnectionState.Offline
+        AgyCsrfManager.instance.clearToken()
+        try {
+            activeWebSocket?.cancel()
+        } catch (_: Exception) {}
+        activeWebSocket = null
+    }
+
+    fun notifyLocalStopped() {
+        resetState()
+    }
+
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private var activeWebSocket: WebSocket? = null
+
+    suspend fun fetchModels(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AiModel>> =
+        withContext(Dispatchers.IO) {
+            try {
+                if (!awaitBridgeReady()) {
+                    return@withContext Result.failure(Exception("IDE Bridge is offline"))
+                }
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/models")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                        return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    }
+                    _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val arr = json.optJSONArray("models") ?: JSONArray()
+                    val models = mutableListOf<AiModel>()
+
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val id = obj.getString("id")
+                        val name = obj.optString("name", id)
+                        models.add(AiModel.fromApi(id, name))
+                    }
+
+                    Result.success(models)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchModels failed: ${e.message}")
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                Result.failure(e)
+            }
+        }
+
+    suspend fun fetchQuotas(
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl,
+        force: Boolean = false
+    ): Result<ai.antigem.domain.model.QuotaSummaryResponse> = withContext(Dispatchers.IO) {
+        try {
+            if (!awaitBridgeReady()) {
+                return@withContext Result.failure(Exception("IDE Bridge is offline"))
+            }
+            val url = if (force) "$httpBaseUrl/api/quotas?force=true" else "$httpBaseUrl/api/quotas"
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val summary = parseQuotaSummary(json)
+                Result.success(summary)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchQuotas failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    fun parseQuotaSummary(json: JSONObject): ai.antigem.domain.model.QuotaSummaryResponse {
+        val groupsArr = json.optJSONArray("groups") ?: JSONArray()
+        val groupsList = mutableListOf<ai.antigem.domain.model.ModelQuotaGroup>()
+
+        for (i in 0 until groupsArr.length()) {
+            val groupObj = groupsArr.getJSONObject(i)
+            val rawGroupId = groupObj.optString("groupId", "")
+            val groupName = groupObj.optString("groupName", "")
+            val desc = groupObj.optString("description", "")
+
+            val gId = when {
+                rawGroupId.isNotBlank() -> rawGroupId
+                groupName.contains("argon", ignoreCase = true) -> "argon"
+                groupName.contains("claude", ignoreCase = true) || groupName.contains(
+                    "gpt",
+                    ignoreCase = true
+                ) -> "claude_gpt"
+                groupName.contains("gemini", ignoreCase = true) -> "gemini"
+
+                else -> groupName.lowercase().replace(" ", "_")
+            }
+
+            val fiveHourObj = groupObj.optJSONObject("fiveHour")
+            val fiveHour = fiveHourObj?.let {
+                val rTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() }
+                val cd = it.optString("countdown", "").ifBlank {
+                    AgyHubClient.formatQuotaResetCountdown(rTime)
+                }
+                ai.antigem.domain.model.QuotaWindowInfo(
+                    window = it.optString("window", "5h"),
+                    displayName = it.optString("displayName", ""),
+                    remainingFraction = it.optDouble("remainingFraction", 1.0).toFloat(),
+                    remainingPct = it.optString("remainingPct", "100.0%"),
+                    usedPct = it.optString("usedPct", "0.0%"),
+                    resetTime = rTime,
+                    countdown = cd,
+                    description = it.optString("description", "")
+                )
+            }
+
+            val weeklyObj = groupObj.optJSONObject("weekly")
+            val weekly = weeklyObj?.let {
+                val rTime = it.optString("resetTime", "").takeIf { t -> t.isNotBlank() }
+                val cd = it.optString("countdown", "").ifBlank {
+                    AgyHubClient.formatQuotaResetCountdown(rTime)
+                }
+                ai.antigem.domain.model.QuotaWindowInfo(
+                    window = it.optString("window", "weekly"),
+                    displayName = it.optString("displayName", ""),
+                    remainingFraction = it.optDouble("remainingFraction", 1.0).toFloat(),
+                    remainingPct = it.optString("remainingPct", "100.0%"),
+                    usedPct = it.optString("usedPct", "0.0%"),
+                    resetTime = rTime,
+                    countdown = cd,
+                    description = it.optString("description", "")
+                )
+            }
+
+            groupsList.add(
+                ai.antigem.domain.model.ModelQuotaGroup(
+                    groupId = gId,
+                    groupName = groupName,
+                    description = desc,
+                    fiveHour = fiveHour,
+                    weekly = weekly
+                )
+            )
+        }
+
+        return ai.antigem.domain.model.QuotaSummaryResponse(
+            groups = groupsList,
+            lastUpdated = json.optString("lastUpdated", "")
+        )
+    }
+
+    suspend fun fetchServerStatus(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): AgyHubStatus? =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/status")
+                    .get()
+                    .build()
+
+                fastClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext null
+                    }
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val hubObj = json.optJSONObject("hub")
+                    val st = hubObj?.optString("status", if (hubObj.optBoolean("active", false)) "online" else "stopped") ?: "stopped"
+                    val p = java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: ai.antigem.BuildConfig.HUB_PORT.toString()
+                    val csrf = hubObj?.optString("csrf_token")?.takeIf { it.isNotBlank() }
+                    val err = hubObj?.optString("error")?.takeIf { it.isNotBlank() }
+                    val logsArr = hubObj?.optJSONArray("logs")
+                    val logsList = mutableListOf<String>()
+                    if (logsArr != null) {
+                        for (i in 0 until logsArr.length()) {
+                            logsList.add(logsArr.optString(i))
+                        }
+                    }
+                    val hubUrl = AuthPreferences.currentHubUrl
+                    if (!csrf.isNullOrBlank()) {
+                        AgyCsrfManager.instance.setCachedToken(hubUrl, csrf)
+                    } else if (st == "stopped" || st == "error") {
+                        AgyCsrfManager.instance.clearToken(hubUrl)
+                    }
+                    AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+    suspend fun checkServerHealth(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val req = Request.Builder()
+                    .url("${httpBaseUrl.trimEnd('/')}/api/health")
+                    .get()
+                    .build()
+                fastClient.newCall(req).execute().use { it.isSuccessful }
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+    fun monitorHubStatus(wsUrl: String = AuthPreferences.currentBridgeWsUrl): Flow<AgyHubStatus> = callbackFlow {
+        val request = Request.Builder().url(wsUrl).build()
+        val wsListener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                isBridgeConnected = true
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                recomputeSystemConnectionState()
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                isBridgeConnected = true
+                try {
+                    val root = JSONObject(text)
+                    when (root.optString("type")) {
+                        "auth_login_url" -> {
+                            val url = root.optString("url")
+                            if (url.isNotBlank()) {
+                                _loginUrlEvents.tryEmit(url)
+                            }
+                        }
+                        "hub_status" -> {
+                            val st = root.optString("status", "idle")
+                            val p = root.optString("port").takeIf { it.isNotBlank() }
+                                ?: java.net.URI(AuthPreferences.currentHubUrl).port.takeIf { it > 0 }?.toString() ?: ai.antigem.BuildConfig.HUB_PORT.toString()
+                            val csrf = root.optString("csrf_token").takeIf { it.isNotBlank() }
+                                ?: root.optString("csrfToken").takeIf { it.isNotBlank() }
+                            val err = root.optString("error").takeIf { it.isNotBlank() }
+                            val logsArr = root.optJSONArray("logs")
+                            val logsList = mutableListOf<String>()
+                            if (logsArr != null) {
+                                for (i in 0 until logsArr.length()) {
+                                    logsList.add(logsArr.optString(i))
+                                }
+                            }
+
+                            val statusObj = AgyHubStatus(status = st, port = p, csrfToken = csrf, error = err, logs = logsList)
+                            updateHubStatus(statusObj)
+                            trySend(statusObj)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                isBridgeConnected = false
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                val stopped = AgyHubStatus(status = "stopped")
+                updateHubStatus(stopped)
+                trySend(stopped)
+                close(t)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                isBridgeConnected = false
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                val stopped = AgyHubStatus(status = "stopped")
+                updateHubStatus(stopped)
+                trySend(stopped)
+                close()
+            }
+        }
+
+        val ws = wsClient.newWebSocket(request, wsListener)
+        awaitClose {
+            ws.cancel()
+            isBridgeConnected = false
+            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+            updateHubStatus(AgyHubStatus(status = "stopped"))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun fetchConversations(
+        searchQuery: String? = null,
+        page: Int = 1,
+        limit: Int = 30,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<List<AgyConversationSummary>> = withContext(Dispatchers.IO) {
+        try {
+            val qParam =
+                if (!searchQuery.isNullOrBlank()) "&q=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}" else ""
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations?page=$page&limit=$limit$qParam")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("conversations") ?: JSONArray()
+                val list = mutableListOf<AgyConversationSummary>()
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(
+                        AgyConversationSummary(
+                            id = obj.getString("id"),
+                            title = obj.optString("title", "Conversation"),
+                            createdAt = obj.optString("created_at", ""),
+                            stepsCount = obj.optInt("steps_count", 0),
+                            isRunning = obj.optBoolean("isRunning", false),
+                            lastActivity = obj.optString("lastActivity").takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchConversations failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    data class ExportedArchiveResult(
+        val bytes: ByteArray,
+        val filename: String,
+        val title: String
+    )
+
+    suspend fun downloadConversationArchive(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<ExportedArchiveResult> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId/export")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val bytes = response.body?.bytes() ?: ByteArray(0)
+                val title = response.header("X-Conversation-Title") ?: conversationId
+                val contentDisposition = response.header("Content-Disposition") ?: ""
+                var filename = ""
+                val fnMatch = Regex("filename=\"?([^\";]+)\"?").find(contentDisposition)
+                if (fnMatch != null) {
+                    filename = fnMatch.groupValues[1]
+                }
+                if (filename.isBlank()) {
+                    val sanitized = title.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(40).ifBlank { "conversation" }
+                    val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    filename = "${sanitized}_${timeStamp}.antigem"
+                }
+
+                Result.success(ExportedArchiveResult(bytes, filename, title))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "downloadConversationArchive failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreConversationArchive(
+        archiveBytes: ByteArray,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<AgyConversationSummary> = withContext(Dispatchers.IO) {
+        try {
+            val body = archiveBytes.toRequestBody("application/octet-stream".toMediaType())
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/restore")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: ${response.body?.string()}"))
+                }
+                val responseStr = response.body?.string() ?: "{}"
+                val json = JSONObject(responseStr)
+                val convObj = json.optJSONObject("conversation") ?: json
+                val summary = AgyConversationSummary(
+                    id = convObj.optString("id", convObj.optString("conversation_id", "")),
+                    title = convObj.optString("title", "Restored Chat"),
+                    createdAt = convObj.optString("created_at", ""),
+                    stepsCount = convObj.optInt("steps_count", 1),
+                    isRunning = false,
+                    lastActivity = convObj.optString("lastActivity").takeIf { it.isNotBlank() }
+                )
+                Result.success(summary)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "restoreConversationArchive failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Finishes the Google sign-in of a hub on a server: the browser ended on http://localhost:<port>/... (the phone, not
+     * the server), the user pastes that address and the bridge replays it on the server's own loopback.
+     */
+    suspend fun forwardLoginCallback(
+        callbackUrl: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().put("url", callbackUrl.trim()).toString()
+            val request = Request.Builder()
+                .url("${httpBaseUrl.trimEnd('/')}/api/auth/forward-callback")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+            client.newCall(request).execute().use { response ->
+                val obj = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull()
+                if (obj?.optBoolean("success", false) == true) {
+                    Result.success(obj.optString("message", "Sign-in forwarded"))
+                } else {
+                    Result.failure(Exception(obj?.optString("error")?.takeIf { it.isNotBlank() } ?: "HTTP ${response.code}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Clones a public https repository on the machine the bridge runs on and reports its output line by line.
+     * Returns the exit code (0 = cloned). The last lines are `ANTIGEM_CLONED_PATH=<dir>` or `ANTIGEM_EXIT=<code>`.
+     */
+    suspend fun cloneRepository(
+        repoUrl: String,
+        name: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl,
+        onLine: (String) -> Unit
+    ): Int = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().put("url", repoUrl).put("name", name).toString()
+            val request = Request.Builder()
+                .url("${httpBaseUrl.trimEnd('/')}/api/git/clone")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+            // a clone can take minutes: no read timeout, the server ends the stream
+            client.newBuilder().readTimeout(0, TimeUnit.MILLISECONDS).build().newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val err = runCatching { JSONObject(response.body?.string().orEmpty()).optString("error") }.getOrNull()
+                    onLine("❌ Error: ${err?.takeIf { it.isNotBlank() } ?: "the server answered HTTP ${response.code} (is the bridge up to date?)"}")
+                    return@withContext 1
+                }
+                var exit = -1
+                response.body?.source()?.let { source ->
+                    while (true) {
+                        val line = source.readUtf8Line() ?: break
+                        if (line.startsWith("ANTIGEM_EXIT=")) exit = line.removePrefix("ANTIGEM_EXIT=").trim().toIntOrNull() ?: 1
+                        if (line.startsWith("ANTIGEM_CLONED_PATH=")) exit = 0
+                        onLine(line)
+                    }
+                }
+                if (exit < 0) 1 else exit
+            }
+        } catch (e: Exception) {
+            onLine("❌ Error: ${e.message}")
+            1
+        }
+    }
+
+    suspend fun uploadAttachment(
+        filename: String,
+        base64Data: String,
+        projectPath: String? = null,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<ai.antigem.domain.model.ChatAttachment> = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply {
+                put("filename", filename)
+                put("base64Data", base64Data)
+                if (!projectPath.isNullOrBlank()) {
+                    put("projectPath", projectPath)
+                }
+            }.toString()
+
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/upload")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("Upload HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val obj = JSONObject(body)
+                val att = ai.antigem.domain.model.ChatAttachment(
+                    id = obj.optString("id", "att_${System.currentTimeMillis()}"),
+                    name = obj.optString("name", filename),
+                    path = obj.optString("path", ""),
+                    isImage = obj.optBoolean("isImage", false),
+                    size = obj.optLong("size", 0L),
+                    url = obj.optString("url", "")
+                )
+                Result.success(att)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "uploadAttachment failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchConversationMessages(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Result<List<ChatMessage>> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId")
+                .get()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                }
+                val body = response.body?.string() ?: "{}"
+                val json = JSONObject(body)
+                val arr = json.optJSONArray("messages") ?: JSONArray()
+                val chatMessages = mutableListOf<ChatMessage>()
+
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val roleStr = obj.optString("role", "user")
+                    val role =
+                        if (roleStr == "agent" || roleStr == "assistant") ai.antigem.domain.model.MessageRole.ASSISTANT
+                        else ai.antigem.domain.model.MessageRole.USER
+                    val content = obj.optString("content", "")
+                    val thinking = obj.optString("thinking").takeIf { it.isNotBlank() }
+
+                    val toolCallsList = mutableListOf<ToolCall>()
+                    val toolsArr = obj.optJSONArray("tool_calls")
+                    if (toolsArr != null) {
+                        for (t in 0 until toolsArr.length()) {
+                            val toolObj = toolsArr.optJSONObject(t) ?: continue
+                            val toolId = toolObj.optString("id").ifBlank { "tool_${conversationId}_$t" }
+                            val toolName = toolObj.optString("name").ifBlank { toolObj.optString("tool_name", "tool") }
+                            val toolCmd = toolObj.optString("command").ifBlank {
+                                toolObj.optJSONObject("args")?.toString() ?: toolObj.optJSONObject("parameters")
+                                    ?.toString() ?: ""
+                            }
+                            val toolOut = toolObj.optString("output", "")
+                            val toolStatus = toolObj.optString("status", "SUCCESS")
+                            toolCallsList.add(
+                                ToolCall(
+                                    id = toolId,
+                                    name = toolName,
+                                    command = toolCmd,
+                                    status = toolStatus,
+                                    output = toolOut
+                                )
+                            )
+                        }
+                    }
+
+                    val rawContent = obj.optString("rawContent").takeIf { it.isNotBlank() && it != "null" }
+                    val contextSummary = obj.optString("contextSummary").takeIf { it.isNotBlank() && it != "null" }
+                    val stepIndex = if (obj.has("stepIndex")) obj.optInt("stepIndex") else null
+
+                    var tokenUsage: ai.antigem.domain.model.TokenUsage? = null
+                    val usageObj = obj.optJSONObject("tokenUsage")
+                    if (usageObj != null) {
+                        val inTok = usageObj.optInt("inputTokens", 0)
+                        val outTok = usageObj.optInt("outputTokens", 0)
+                        val cacheTok = usageObj.optInt("cacheReadTokens", 0)
+                        val totalTok = usageObj.optInt("totalTokens", inTok + outTok)
+                        val dur = (obj.optDouble("durationSeconds", 0.0) * 1000).toLong()
+                        tokenUsage = ai.antigem.domain.model.TokenUsage(
+                            promptTokens = inTok,
+                            outputTokens = outTok,
+                            cachedTokens = cacheTok,
+                            totalTokens = totalTok,
+                            durationMs = dur
+                        )
+                    }
+
+                    chatMessages.add(
+                        ChatMessage(
+                            id = "msg_${conversationId}_$i",
+                            conversationId = conversationId,
+                            role = role,
+                            content = content,
+                            thoughtText = thinking,
+                            toolCalls = toolCallsList,
+                            isStreaming = false,
+                            rawContent = rawContent,
+                            contextSummary = contextSummary,
+                            stepIndex = stepIndex,
+                            tokenUsage = tokenUsage
+                        )
+                    )
+                }
+
+                Result.success(chatMessages)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchConversationMessages failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchProjects(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AgyProjectSummary>> =
+        withContext(Dispatchers.IO) {
+            try {
+                if (!awaitBridgeReady()) {
+                    return@withContext Result.failure(Exception("IDE Bridge is offline"))
+                }
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/projects")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    }
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val arr = json.optJSONArray("projects") ?: JSONArray()
+                    val list = mutableListOf<AgyProjectSummary>()
+
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            AgyProjectSummary(
+                                name = obj.getString("name"),
+                                path = obj.getString("path")
+                            )
+                        )
+                    }
+                    Result.success(list)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchProjects failed: ${e.message}")
+                Result.failure(e)
+            }
+        }
+
+    suspend fun prewarm(
+        conversationId: String?,
+        model: String,
+        workspaceDir: String? = null,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val targetId = conversationId ?: "new"
+            val payload = JSONObject().apply {
+                put("model", model)
+                if (!workspaceDir.isNullOrBlank()) {
+                    put("workspaceDir", workspaceDir)
+                }
+            }.toString()
+
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$targetId/warm")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { }
+        } catch (e: Exception) {
+            Log.w(TAG, "prewarm failed (non-fatal): ${e.message}")
+        }
+    }
+
+    suspend fun fetchActiveInstances(httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl): Result<List<AgyActiveInstance>> =
+        withContext(Dispatchers.IO) {
+            try {
+                if (!awaitBridgeReady()) {
+                    return@withContext Result.failure(Exception("IDE Bridge is offline"))
+                }
+                val request = Request.Builder()
+                    .url("$httpBaseUrl/api/instances")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                    }
+                    val body = response.body?.string() ?: "{}"
+                    val json = JSONObject(body)
+                    val arr = json.optJSONArray("instances") ?: JSONArray()
+                    val list = mutableListOf<AgyActiveInstance>()
+
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        list.add(
+                            AgyActiveInstance(
+                                conversationId = obj.getString("conversationId"),
+                                model = obj.optString("model", ""),
+                                workspaceDir = obj.optString("workspaceDir", ""),
+                                pid = obj.optLong("pid", 0),
+                                uptimeSeconds = obj.optLong("uptimeSeconds", 0),
+                                isBusy = obj.optBoolean("isBusy", false)
+                            )
+                        )
+                    }
+                    Result.success(list)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchActiveInstances failed: ${e.message}")
+                Result.failure(e)
+            }
+        }
+
+    suspend fun terminateInstance(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/instances/$conversationId/terminate")
+                .post("{}".toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "terminateInstance failed: ${e.message}")
+            false
+        }
+    }
+
+    fun streamPrompt(
+        prompt: String,
+        model: String = "",
+        conversationId: String? = null,
+        workspaceDir: String? = null,
+        wsUrl: String = AuthPreferences.currentBridgeWsUrl
+    ): Flow<AgyStreamEvent> = callbackFlow {
+        if (!awaitBridgeReady(timeoutMs = 10_000L)) {
+            trySend(AgyStreamEvent.Error("IDE Bridge is offline. Please start the server to chat."))
+            close()
+            return@callbackFlow
+        }
+        _connectionState.value = BridgeConnectionState.CONNECTING
+        val request = Request.Builder().url(wsUrl).build()
+
+        var assignedConversationId = conversationId
+        val activeToolsMap = mutableMapOf<String, ToolCall>()
+
+        val wsListener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                Log.d(TAG, "[WS] Connected to AGY daemon bridge")
+                activeWebSocket = webSocket
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+
+                // Send prompt payload
+                val payload = JSONObject().apply {
+                    put("type", "send_prompt")
+                    put("prompt", prompt)
+                    put("model", model)
+                    if (!conversationId.isNullOrBlank()) {
+                        put("conversationId", conversationId)
+                    }
+                    if (!workspaceDir.isNullOrBlank()) {
+                        put("workspaceDir", workspaceDir)
+                    }
+                }
+                webSocket.send(payload.toString())
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val root = JSONObject(text)
+                    val type = root.optString("type")
+
+                    when (type) {
+                        "agy_event" -> {
+                            val data = root.optJSONObject("data") ?: return
+                            val event = data.optString("event")
+
+                            if (event == "init") {
+                                val convId = data.optString("conversation_id")
+                                if (convId.isNotBlank()) assignedConversationId = convId
+                                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                            }
+
+                            if (event == "step_update") {
+                                _connectionState.value = BridgeConnectionState.STREAMING
+                                val step = data.optJSONObject("step_update") ?: return
+                                val stepType = step.optString("step_type")
+
+                                // 1. Reasoning / Thought tokens
+                                if (step.has("thought") || step.has("thinking") || stepType == "thought") {
+                                    val thought = step.optString("thought").ifBlank { step.optString("thinking") }
+                                    if (thought.isNotBlank()) {
+                                        trySend(AgyStreamEvent.ThoughtChunk(thought))
+                                    }
+                                }
+
+                                // 2. Tool executions
+                                if (stepType == "tool" || step.has("tool_info") || step.has("tool_name")) {
+                                    val info = step.optJSONObject("tool_info")
+                                    val name = info?.optString("name") ?: step.optString("tool_name", "tool")
+                                    val params = info?.optJSONObject("parameters")?.toString()
+                                        ?: step.optString("tool_args", "")
+                                    val output = info?.optString("output") ?: step.optString("tool_output", "")
+                                    val state = step.optString("state", "ACTIVE")
+                                    val stepIndex = step.optInt("step_index", activeToolsMap.size)
+                                    val durationSec = step.optDouble("duration_seconds", 0.0)
+
+                                    val toolId = "tool_${assignedConversationId ?: "live"}_$stepIndex"
+                                    val toolCall = ToolCall(
+                                        id = toolId,
+                                        name = name,
+                                        command = params,
+                                        status = if (state == "DONE") "SUCCESS" else "RUNNING",
+                                        output = output,
+                                        durationMs = if (durationSec > 0) (durationSec * 1000).toLong() else null
+                                    )
+                                    activeToolsMap[toolId] = toolCall
+                                    trySend(AgyStreamEvent.ToolChunk(toolCall))
+                                }
+
+                                // 3. Agent response deltas
+                                if (stepType == "agent_response" && step.has("text_delta")) {
+                                    val delta = step.optString("text_delta")
+                                    if (delta.isNotEmpty()) {
+                                        trySend(AgyStreamEvent.TextChunk(delta))
+                                    }
+                                }
+                            }
+
+                            if (event == "result") {
+                                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                                val res = data.optJSONObject("result") ?: JSONObject()
+                                val usage = res.optJSONObject("usage")
+                                val durationSec = res.optDouble("duration_seconds", 0.0)
+
+                                val tokenUsage = if (usage != null) {
+                                    TokenUsage(
+                                        promptTokens = usage.optInt("input_tokens", 0),
+                                        outputTokens = usage.optInt("output_tokens", 0),
+                                        cachedTokens = usage.optInt("cache_read_tokens", 0),
+                                        totalTokens = usage.optInt("total_tokens", 0),
+                                        durationMs = (durationSec * 1000).toLong()
+                                    )
+                                } else null
+
+                                val fullResponse = res.optString("response")
+                                val error = res.optString("error")
+
+                                if (error.isNotBlank()) {
+                                    trySend(AgyStreamEvent.Error(error))
+                                } else {
+                                    trySend(
+                                        AgyStreamEvent.Completed(
+                                            tokenUsage = tokenUsage,
+                                            conversationId = assignedConversationId,
+                                            fullResponse = fullResponse
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        "auth_login_url" -> {
+                            val url = root.optString("url")
+                            if (url.isNotBlank()) {
+                                _loginUrlEvents.tryEmit(url)
+                                trySend(AgyStreamEvent.LoginUrl(url))
+                            }
+                        }
+
+                        "stream_snapshot" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val status = root.optString("status", "IDLE")
+                            val seq = root.optLong("seq", 0L)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            val thought = root.optString("thought", "")
+                            val content = root.optString("content", "")
+                            val toolsArr = root.optJSONArray("activeTools")
+                            val tools = mutableListOf<ToolCall>()
+                            if (toolsArr != null) {
+                                for (i in 0 until toolsArr.length()) {
+                                    val tObj = toolsArr.optJSONObject(i) ?: continue
+                                    tools.add(
+                                        ToolCall(
+                                            id = tObj.optString("id"),
+                                            name = tObj.optString("name"),
+                                            command = tObj.optString("command"),
+                                            status = tObj.optString("status", "RUNNING"),
+                                            output = tObj.optString("output", "")
+                                        )
+                                    )
+                                }
+                            }
+                            if (convId.isNotBlank()) assignedConversationId = convId
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.StreamSnapshot(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    status = status,
+                                    seq = seq,
+                                    prompt = prompt,
+                                    thought = thought,
+                                    content = content,
+                                    activeTools = tools
+                                )
+                            )
+                        }
+
+                        "session_attached" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            if (convId.isNotBlank()) assignedConversationId = convId
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.SessionAttached(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    prompt = prompt
+                                )
+                            )
+                        }
+
+                        "instance_status" -> {
+                            val status = root.optString("status")
+                            val msg = root.optString("message").takeIf { it.isNotBlank() }
+                            val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
+                            if (convId != null) assignedConversationId = convId
+                            _connectionState.value =
+                                if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.InstanceStatus(
+                                    status = status,
+                                    message = msg,
+                                    conversationId = convId
+                                )
+                            )
+                        }
+
+                        "quota_update" -> {
+                            val quotaObj = root.optJSONObject("data")
+                            if (quotaObj != null) {
+                                val summary = parseQuotaSummary(quotaObj)
+                                trySend(AgyStreamEvent.QuotaUpdate(summary))
+                            }
+                        }
+
+                        "raw_chunk" -> {
+                            val textChunk = root.optString("text")
+                            if (textChunk.isNotBlank()) {
+                                trySend(AgyStreamEvent.TextChunk(textChunk))
+                            }
+                        }
+
+                        "done" -> {
+                            _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                            channel.close()
+                        }
+
+                        "error" -> {
+                            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                            val errMsg = root.optString("message", "Unknown bridge error")
+                            trySend(AgyStreamEvent.Error(errMsg))
+                            channel.close()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing WS message: ${e.message}", e)
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.e(TAG, "[WS] Failure: ${t.message}")
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                trySend(AgyStreamEvent.Error("Daemon connection failure: ${t.message}. Ensure Termux bridge is running."))
+                channel.close()
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.d(TAG, "[WS] Closed: $code $reason")
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                channel.close()
+            }
+        }
+
+        val ws = client.newWebSocket(request, wsListener)
+
+        awaitClose {
+            ws.cancel()
+            activeWebSocket = null
+        }
+    }.flowOn(Dispatchers.IO)
+
+    fun attachToConversation(
+        conversationId: String,
+        wsUrl: String = AuthPreferences.currentBridgeWsUrl
+    ): Flow<AgyStreamEvent> = callbackFlow {
+        if (!awaitBridgeReady(timeoutMs = 10_000L)) {
+            trySend(AgyStreamEvent.Error("IDE Bridge is offline. Please start the server to view live chat."))
+            close()
+            return@callbackFlow
+        }
+        _connectionState.value = BridgeConnectionState.CONNECTING
+        val request = Request.Builder().url(wsUrl).build()
+        val activeToolsMap = mutableMapOf<String, ToolCall>()
+
+        val wsListener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                activeWebSocket = webSocket
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                val payload = JSONObject().apply {
+                    put("type", "attach_session")
+                    put("conversationId", conversationId)
+                }
+                webSocket.send(payload.toString())
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                try {
+                    val root = JSONObject(text)
+                    val type = root.optString("type")
+
+                    when (type) {
+                        "stream_snapshot" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val status = root.optString("status", "IDLE")
+                            val seq = root.optLong("seq", 0L)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            val thought = root.optString("thought", "")
+                            val content = root.optString("content", "")
+                            val toolsArr = root.optJSONArray("activeTools")
+                            val tools = mutableListOf<ToolCall>()
+                            if (toolsArr != null) {
+                                for (i in 0 until toolsArr.length()) {
+                                    val tObj = toolsArr.optJSONObject(i) ?: continue
+                                    tools.add(
+                                        ToolCall(
+                                            id = tObj.optString("id"),
+                                            name = tObj.optString("name"),
+                                            command = tObj.optString("command"),
+                                            status = tObj.optString("status", "RUNNING"),
+                                            output = tObj.optString("output", "")
+                                        )
+                                    )
+                                }
+                            }
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.StreamSnapshot(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    status = status,
+                                    seq = seq,
+                                    prompt = prompt,
+                                    thought = thought,
+                                    content = content,
+                                    activeTools = tools
+                                )
+                            )
+                        }
+
+                        "auth_login_url" -> {
+                            val url = root.optString("url")
+                            if (url.isNotBlank()) {
+                                _loginUrlEvents.tryEmit(url)
+                                trySend(AgyStreamEvent.LoginUrl(url))
+                            }
+                        }
+
+                        "session_attached" -> {
+                            val convId = root.optString("conversationId")
+                            val isRunning = root.optBoolean("isRunning", false)
+                            val prompt = root.optString("prompt").takeIf { it.isNotBlank() }
+                            _connectionState.value =
+                                if (isRunning) BridgeConnectionState.STREAMING else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.SessionAttached(
+                                    conversationId = convId,
+                                    isRunning = isRunning,
+                                    prompt = prompt
+                                )
+                            )
+                        }
+
+                        "agy_event" -> {
+                            val data = root.optJSONObject("data") ?: return
+                            val event = data.optString("event")
+
+                            if (event == "step_update") {
+                                _connectionState.value = BridgeConnectionState.STREAMING
+                                val step = data.optJSONObject("step_update") ?: return
+                                val stepType = step.optString("step_type")
+
+                                if (step.has("thought") || step.has("thinking") || stepType == "thought") {
+                                    val thought = step.optString("thought").ifBlank { step.optString("thinking") }
+                                    if (thought.isNotBlank()) {
+                                        trySend(AgyStreamEvent.ThoughtChunk(thought))
+                                    }
+                                }
+
+                                if (stepType == "tool" || step.has("tool_info") || step.has("tool_name")) {
+                                    val info = step.optJSONObject("tool_info")
+                                    val name = info?.optString("name") ?: step.optString("tool_name", "tool")
+                                    val params = info?.optJSONObject("parameters")?.toString()
+                                        ?: step.optString("tool_args", "")
+                                    val output = info?.optString("output") ?: step.optString("tool_output", "")
+                                    val state = step.optString("state", "ACTIVE")
+                                    val stepIndex = step.optInt("step_index", activeToolsMap.size)
+                                    val durationSec = step.optDouble("duration_seconds", 0.0)
+
+                                    val toolId = "tool_${conversationId}_$stepIndex"
+                                    val toolCall = ToolCall(
+                                        id = toolId,
+                                        name = name,
+                                        command = params,
+                                        status = if (state == "DONE") "SUCCESS" else "RUNNING",
+                                        output = output,
+                                        durationMs = if (durationSec > 0) (durationSec * 1000).toLong() else null
+                                    )
+                                    activeToolsMap[toolId] = toolCall
+                                    trySend(AgyStreamEvent.ToolChunk(toolCall))
+                                }
+
+                                if (stepType == "agent_response" && step.has("text_delta")) {
+                                    val delta = step.optString("text_delta")
+                                    if (delta.isNotEmpty()) {
+                                        trySend(AgyStreamEvent.TextChunk(delta))
+                                    }
+                                }
+                            }
+
+                            if (event == "result") {
+                                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                                val res = data.optJSONObject("result") ?: JSONObject()
+                                val usage = res.optJSONObject("usage")
+                                val durationSec = res.optDouble("duration_seconds", 0.0)
+
+                                val tokenUsage = if (usage != null) {
+                                    TokenUsage(
+                                        promptTokens = usage.optInt("input_tokens", 0),
+                                        outputTokens = usage.optInt("output_tokens", 0),
+                                        cachedTokens = usage.optInt("cache_read_tokens", 0),
+                                        totalTokens = usage.optInt("total_tokens", 0),
+                                        durationMs = (durationSec * 1000).toLong()
+                                    )
+                                } else null
+
+                                val fullResponse = res.optString("response")
+                                val error = res.optString("error")
+
+                                if (error.isNotBlank()) {
+                                    trySend(AgyStreamEvent.Error(error))
+                                } else {
+                                    trySend(
+                                        AgyStreamEvent.Completed(
+                                            tokenUsage = tokenUsage,
+                                            conversationId = conversationId,
+                                            fullResponse = fullResponse
+                                        )
+                                    )
+                                }
+                            }
+                        }
+
+                        "instance_status" -> {
+                            val status = root.optString("status")
+                            val msg = root.optString("message").takeIf { it.isNotBlank() }
+                            val convId = root.optString("conversationId").takeIf { it.isNotBlank() }
+                            _connectionState.value =
+                                if (status == "creating") BridgeConnectionState.SPAWNING_INSTANCE else BridgeConnectionState.CONNECTED_READY
+                            trySend(
+                                AgyStreamEvent.InstanceStatus(
+                                    status = status,
+                                    message = msg,
+                                    conversationId = convId
+                                )
+                            )
+                        }
+
+                        "done" -> {
+                            _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                            channel.close()
+                        }
+
+                        "error" -> {
+                            _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                            val errMsg = root.optString("message", "Unknown bridge error")
+                            trySend(AgyStreamEvent.Error(errMsg))
+                            channel.close()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing WS message: ${e.message}", e)
+                }
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                Log.w(TAG, "[WS] Attach Failure: ${t.message}")
+                _connectionState.value = BridgeConnectionState.OFFLINE_ERROR
+                channel.close()
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                _connectionState.value = BridgeConnectionState.CONNECTED_READY
+                channel.close()
+            }
+        }
+
+        val ws = client.newWebSocket(request, wsListener)
+
+        awaitClose {
+            ws.cancel()
+            activeWebSocket = null
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun updateConversationTitle(
+        conversationId: String,
+        title: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val payload = JSONObject().apply { put("title", title) }.toString()
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId")
+                .patch(payload.toRequestBody(jsonMediaType))
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "updateConversationTitle failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun deleteConversation(
+        conversationId: String,
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$httpBaseUrl/api/conversations/$conversationId")
+                .delete()
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "deleteConversation failed: ${e.message}")
+            false
+        }
+    }
+
+    fun abort(conversationId: String? = null, httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl) {
+        try {
+            activeWebSocket?.let { ws ->
+                val payload = JSONObject().apply {
+                    put("type", "abort")
+                    if (!conversationId.isNullOrBlank()) {
+                        put("conversationId", conversationId)
+                    }
+                }
+                ws.send(payload.toString())
+            }
+
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val payload = JSONObject().apply {
+                        if (!conversationId.isNullOrBlank()) {
+                            put("conversationId", conversationId)
+                        }
+                    }.toString()
+                    val request = Request.Builder()
+                        .url("$httpBaseUrl/api/abort")
+                        .post(payload.toRequestBody(jsonMediaType))
+                        .build()
+                    client.newCall(request).execute().use { }
+                } catch (e: Exception) {
+                    Log.w(TAG, "HTTP abort fallback failed: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "abort failed: ${e.message}")
+        }
+    }
+}

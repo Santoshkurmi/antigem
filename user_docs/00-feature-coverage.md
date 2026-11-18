@@ -4,9 +4,9 @@ This document provides exhaustive, code-verified proof that every UI component, 
 
 ## 1. Documentation File to Source File Audit Matrix
 
-Every user guide in this documentation suite was audited against specific Kotlin source files in `app/src/main/java/com/example/gemini/`:
+Every user guide in this documentation suite was audited against specific Kotlin source files in `app/src/main/java/ai/antigem/`:
 
-| Doc File | User Guide Title | Source Files Audited Against (`app/src/main/java/com/example/gemini/`) | Interactive Elements Audited |
+| Doc File | User Guide Title | Source Files Audited Against (`app/src/main/java/ai/antigem/`) | Interactive Elements Audited |
 | :--- | :--- | :--- | :--- |
 | `01-getting-started-and-onboarding.md` | Getting Started & First Launch | `ui/onboarding/OnboardingStep.kt`<br>`ui/onboarding/TerminalLauncherOnboardingDialog.kt`<br>`ui/settings/FullScreenLocalToolsInstaller.kt`<br>`ui/settings/LocalToolsInstallDialog.kt`<br>`ui/main/MainScreen.kt`<br>`ui/components/FloatingSwitcherWidget.kt`<br>`ui/bubble/FloatingBubbleView.kt`<br>`ui/bubble/FloatingChatActivity.kt`<br>`ui/updater/AppUpdateDialog.kt` | Welcome permissions dialog (Notifications, Files, Microphone), install modes, 32-bit warning, launcher icon picker, floating switcher widget, bubble overlay, and in-app updater dialog. |
 | `02-chat-and-ai-conversations.md` | Chat & AI Conversations | `ui/chat/ChatScreen.kt`<br>`ui/chat/ChatViewModel.kt`<br>`ui/chat/SlashCommandOverlay.kt`<br>`ui/components/ChatInputBar.kt`<br>`ui/components/MessageBubble.kt`<br>`ui/components/AgentToolCallCard.kt`<br>`ui/components/ChoiceQuestionnaireCard.kt`<br>`ui/components/QueuedMessagesCard.kt`<br>`ui/components/ChatAudioPlayer.kt`<br>`ui/components/ChatTelemetryDialog.kt`<br>`ui/components/ConversationExportHelper.kt`<br>`ui/drawer/ChatHistoryDrawer.kt` | Chat input bar, attachment selector (Photo/Image, Document/File), live dictation and voice recording bar, message bubbles (copy prompt/response, retry, edit prompt, regenerate, show details), tool cards, questionnaires, queued messages, telemetry, audio player, export, and chat history drawer. |
@@ -28,7 +28,7 @@ Every user guide in this documentation suite was audited against specific Kotlin
 
 ---
 
-## 2. UI Screen Packages (`app/src/main/java/com/example/gemini/ui/*`)
+## 2. UI Screen Packages (`app/src/main/java/ai/antigem/ui/*`)
 
 | Package / Folder | Description in Code | Documented In | Section Reference |
 | :--- | :--- | :--- | :--- |

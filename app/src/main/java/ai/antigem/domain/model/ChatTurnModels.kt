@@ -1,0 +1,101 @@
+package ai.antigem.domain.model
+
+import ai.antigem.data.remote.dto.CortexRequestedInteractionDto
+import kotlinx.serialization.Serializable
+
+/**
+ * High-level conversational turn representing either a User prompt or an Assistant response.
+ */
+sealed interface ChatTurn {
+    val key: String
+
+    data class User(
+        val stepIndex: Int,
+        val text: String,
+        val attachments: List<ChatAttachment> = emptyList(),
+        /** When the prompt was sent (the step's created_at); null when unknown. */
+        val createdAt: Long? = null,
+        /** Sent by an Antigravity voice call: [text] is what was said, [rawText] the prompt the agent got. */
+        val viaVoice: Boolean = false,
+        /** What the voice said while handing the request to the agent (voice calls only). */
+        val voiceLine: String? = null,
+        val rawText: String? = null,
+        /** The app's id of the message when this app sent it (its `client_msg:` tag): its project checkpoint key. */
+        val clientMessageId: String? = null
+    ) : ChatTurn {
+        override val key: String get() = "user_turn_$stepIndex"
+    }
+
+    data class Assistant(
+        val turnId: String,
+        val blocks: List<TurnBlock>,
+        val isStreaming: Boolean = false,
+        val tokenUsage: TokenUsage? = null,
+        /** The model that generated the turn (generator_model enum name, matching AiModel.id). */
+        val modelId: String? = null
+    ) : ChatTurn {
+        override val key: String get() = "assistant_turn_$turnId"
+    }
+}
+
+/**
+ * Individual ordered block within an Assistant Turn.
+ * Keyed strictly by type-prefixed stepIndex to guarantee stable, flicker-free rendering in Compose.
+ */
+sealed interface TurnBlock {
+    val stepIndex: Int
+    val key: String
+
+    data class Thinking(
+        override val stepIndex: Int,
+        val thought: String,
+        val durationMs: Long? = null,
+        val isStreaming: Boolean = false
+    ) : TurnBlock {
+        override val key: String get() = "thought_$stepIndex"
+    }
+
+    data class Text(
+        override val stepIndex: Int,
+        val markdown: String,
+        val isStreaming: Boolean = false
+    ) : TurnBlock {
+        override val key: String get() = "text_$stepIndex"
+    }
+
+    data class Tool(
+        override val stepIndex: Int,
+        val toolCall: ToolCall
+    ) : TurnBlock {
+        override val key: String get() = "tool_$stepIndex"
+    }
+
+    data class Permission(
+        override val stepIndex: Int,
+        val trajectoryId: String,
+        val interaction: CortexRequestedInteractionDto
+    ) : TurnBlock {
+        override val key: String get() = "perm_$stepIndex"
+    }
+
+    data class SystemNotice(
+        override val stepIndex: Int,
+        val title: String = "",
+        val content: String
+    ) : TurnBlock {
+        override val key: String get() = "notice_$stepIndex"
+    }
+
+    data class ErrorNotice(
+        override val stepIndex: Int,
+        val title: String = "Error",
+        val userMessage: String = "",
+        val shortError: String = "",
+        val fullError: String = "",
+        val errorCode: Int? = null,
+        val errorId: String = "",
+        val rawJson: String = ""
+    ) : TurnBlock {
+        override val key: String get() = "err_$stepIndex"
+    }
+}

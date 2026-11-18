@@ -1,0 +1,1790 @@
+package ai.antigem.data.agent.claude
+
+import android.app.Application
+import android.util.Log
+import ai.antigem.data.agent.AgentChatBackend
+import ai.antigem.data.agent.ChatSessionStore
+import ai.antigem.data.remote.SlashCommandItem
+import ai.antigem.data.remote.dto.AskQuestionResponseItemDto
+import ai.antigem.domain.model.AgentKind
+import ai.antigem.domain.model.AiModel
+import ai.antigem.domain.model.ChatAttachment
+import ai.antigem.domain.model.ChatMessage
+import ai.antigem.domain.model.Conversation
+import ai.antigem.domain.model.ToolCall
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import java.util.UUID
+
+/**
+ * Claude Code chat backend. The bridge runs one `claude` process per conversation; this class attaches to the
+ * conversation's WebSocket, sends prompts / control messages, and maps stream-json events into the shared chat state
+ * ([store]) through [ClaudeTranscript]. It also owns the per-chat controls (model, effort, thinking, permission mode)
+ * and the live indicators (prompt cache, context window, plan limits).
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ClaudeChatBackend(
+    private val application: Application,
+    private val backendScope: CoroutineScope,
+    private val store: ChatSessionStore,
+    private val prefs: ClaudePreferences,
+    private val client: ClaudeBridgeClient = ClaudeBridgeClient()
+) : AgentChatBackend {
+
+    override val kind = AgentKind.CLAUDE
+
+    private val _conversations = MutableStateFlow<List<Conversation>>(emptyList())
+    override val conversations: StateFlow<List<Conversation>> = _conversations.asStateFlow()
+    override val currentConversation: StateFlow<Conversation?> = store.currentConversation.asStateFlow()
+    // Claude keeps its own message / error state: the Antigravity backend writes the shared store and must never
+    // touch a Claude chat (ChatViewModel shows the state of the agent that owns the chat on screen)
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+    private val _conversationError = MutableStateFlow<String?>(null)
+    override val conversationError: StateFlow<String?> = _conversationError.asStateFlow()
+
+    private val _startupStatus = MutableStateFlow<String?>(null)
+    /** Set while a sent message waits for the claude process to boot (seconds on a phone), or while compacting. */
+    val startupStatus: StateFlow<String?> = _startupStatus.asStateFlow()
+
+    private val _isStreaming = MutableStateFlow(false)
+    override val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
+
+    private val _isTurnActive = MutableStateFlow(false)
+    /** A turn is in progress (including while waiting for an approval). */
+    val isCurrentChatActivelyRunning: StateFlow<Boolean> = _isTurnActive.asStateFlow()
+
+    private val _isLoadingConversation = MutableStateFlow(false)
+    override val isLoadingConversation: StateFlow<Boolean> = _isLoadingConversation.asStateFlow()
+
+    // ---- models & chat controls
+    private val _modelInfos = MutableStateFlow<List<ClaudeModelInfo>>(emptyList())
+    /** Models from the CLI's `initialize` (with supported effort levels). */
+    val modelInfos: StateFlow<List<ClaudeModelInfo>> = _modelInfos.asStateFlow()
+
+    private val _availableModels = MutableStateFlow<List<AiModel>>(emptyList())
+    /** The CLI's models; empty until they are loaded (no placeholder). */
+    val availableModels: StateFlow<List<AiModel>> = _availableModels.asStateFlow()
+
+    private val _modelsError = MutableStateFlow<String?>(null)
+    /** Why the model list could not be loaded (null while loading or after success). */
+    val modelsError: StateFlow<String?> = _modelsError.asStateFlow()
+
+    private val _selectedModelId = MutableStateFlow("default")
+    val selectedModelId: StateFlow<String> = _selectedModelId.asStateFlow()
+
+    private val _activeModel = MutableStateFlow<String?>(null)
+    /** Resolved model id the session is actually using (from the CLI). */
+    val activeModel: StateFlow<String?> = _activeModel.asStateFlow()
+
+    private val _effort = MutableStateFlow<String?>(null)
+    /** null = the model's default effort. */
+    val effort: StateFlow<String?> = _effort.asStateFlow()
+
+    private val _appliedEffort = MutableStateFlow<String?>(null)
+    /** The effort the running process really uses (`get_settings().applied.effort`), null until known. */
+    val appliedEffort: StateFlow<String?> = _appliedEffort.asStateFlow()
+
+    private val _controlMessages = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 8)
+    /** A chat control the CLI refused (shown as a toast), or other short notices. */
+    val controlMessages: kotlinx.coroutines.flow.SharedFlow<String> = _controlMessages
+
+    private val _thinkingEnabled = MutableStateFlow(true)
+    val thinkingEnabled: StateFlow<Boolean> = _thinkingEnabled.asStateFlow()
+
+    private val _permissionMode = MutableStateFlow(prefs.cachedDefaultMode())
+    val permissionMode: StateFlow<String> = _permissionMode.asStateFlow()
+
+    private val _fastModeState = MutableStateFlow("off")
+    val fastModeState: StateFlow<String> = _fastModeState.asStateFlow()
+
+    private val _outputStyles = MutableStateFlow<List<String>>(emptyList())
+    val outputStyles: StateFlow<List<String>> = _outputStyles.asStateFlow()
+
+    private val _slashCommands = MutableStateFlow<List<SlashCommandItem>>(emptyList())
+    val slashCommands: StateFlow<List<SlashCommandItem>> = _slashCommands.asStateFlow()
+
+    private val _isRefreshingModels = MutableStateFlow(false)
+    val isRefreshingModels: StateFlow<Boolean> = _isRefreshingModels.asStateFlow()
+
+    // ---- custom providers (Anthropic-compatible APIs; their models are "@provider/model")
+    private val _settingsConflicts = MutableStateFlow<List<String>>(emptyList())
+    /** ANTHROPIC_* keys of settings.json that provider chats override. */
+    val settingsConflicts: StateFlow<List<String>> = _settingsConflicts.asStateFlow()
+    private val _providers = MutableStateFlow<List<ClaudeProvider>>(emptyList())
+    val providers: StateFlow<List<ClaudeProvider>> = _providers.asStateFlow()
+
+    private val _settingsEndpoint = MutableStateFlow<String?>(null)
+    /** settings.json sends every chat to this endpoint (offered for moving into a provider). */
+    val settingsEndpoint: StateFlow<String?> = _settingsEndpoint.asStateFlow()
+
+    // the CLI's own models; [availableModels] adds the providers' models after them
+    private var officialModels: List<AiModel> = emptyList()
+
+    /** A model of another provider was chosen in a chat that already has messages: waits for the user's answer. */
+    data class ProviderSwitch(val modelId: String, val fromLabel: String, val toLabel: String, val resendTokens: Long?)
+
+    private val _pendingProviderSwitch = MutableStateFlow<ProviderSwitch?>(null)
+    val pendingProviderSwitch: StateFlow<ProviderSwitch?> = _pendingProviderSwitch.asStateFlow()
+
+    // ---- live indicators
+    private val _cacheInfo = MutableStateFlow<ClaudeTranscript.CacheInfo?>(null)
+    val cacheInfo: StateFlow<ClaudeTranscript.CacheInfo?> = _cacheInfo.asStateFlow()
+
+    private val _contextUsage = MutableStateFlow<ClaudeContextUsage?>(null)
+    val contextUsage: StateFlow<ClaudeContextUsage?> = _contextUsage.asStateFlow()
+
+    private val _rateLimits = MutableStateFlow<Map<String, ClaudeUnifiedWindow>>(emptyMap())
+    val rateLimits: StateFlow<Map<String, ClaudeUnifiedWindow>> = _rateLimits.asStateFlow()
+    /** The stream's windows that a newer usage fetch replaced: not shown again until the stream sends new ones. */
+    @Volatile private var supersededLimits: Map<String, ClaudeUnifiedWindow>? = null
+
+    /**
+     * A fresh plan-usage fetch is newer than the windows the last reply carried: drop those so the fetched numbers show
+     * (otherwise they stay up all day until the next message). The next rate-limit event from a reply shows again.
+     */
+    fun dropLiveRateLimits() {
+        supersededLimits = transcript.rateLimits
+        _rateLimits.value = emptyMap()
+    }
+
+    private val _sessionCost = MutableStateFlow(0.0)
+    val sessionCost: StateFlow<Double> = _sessionCost.asStateFlow()
+
+    private val _needsLogin = MutableStateFlow(false)
+    /** The last turn failed because the CLI is not signed in. */
+    val needsLogin: StateFlow<Boolean> = _needsLogin.asStateFlow()
+
+    private val _pendingPermissions = MutableStateFlow<List<ClaudeTranscript.PendingPermission>>(emptyList())
+    /** Tool approvals and plan approvals waiting for the user (questions are answered on their card). */
+    val pendingPermissions: StateFlow<List<ClaudeTranscript.PendingPermission>> = _pendingPermissions.asStateFlow()
+
+    /** Called after a turn so plan usage can refresh. */
+    var onTurnFinished: () -> Unit = {}
+
+    // ---- everything below is only touched on [worker]
+    private val worker = Dispatchers.Default.limitedParallelism(1)
+    private val transcript = ClaudeTranscript().also { it.isCustomProvider = { providerOf(_selectedModelId.value).isNotEmpty() } }
+    private var attachedId: String? = null
+    private var socket: ClaudeSocket? = null
+    private var socketJob: Job? = null
+    private var emitJob: Job? = null
+    private var lastSeq = -1L
+    private var processLive = false
+    private val outbox = ArrayDeque<String>()
+    private val replies = HashMap<String, CompletableDeferred<ClaudeControlResponseInner>>()
+    // the permission mode was changed in this chat; untouched it is left to the user's settings.json default
+    @Volatile private var modeTouched = false
+    // model / effort / thinking were changed in this chat (a new chat otherwise follows the settings.json defaults)
+    @Volatile private var controlsTouched = false
+    // settings.json defaults for new chats: model, effortLevel, alwaysThinkingEnabled
+    @Volatile private var chatDefaults = ChatDefaults()
+    // the mode new chats start in: the bridge's default (Auto unless the user set one in settings.json)
+    @Volatile private var defaultPermissionMode = prefs.cachedDefaultMode()
+    private val localConversations = LinkedHashMap<String, Conversation>()
+    // controls of chats opened in this app session (model / effort / thinking), by chat id
+    private val chatControls = HashMap<String, ChatControls>()
+    // a sent message is waiting for the process the bridge spawns for it
+    private var awaitingProcess = false
+    // shows the start-up notice only when the process takes a while (a quick start just shows the typing dots)
+    private var startupNoticeJob: Job? = null
+    private val _isCompacting = MutableStateFlow(false)
+    /** /compact (or auto-compaction) is running: the notice and the working row say so. */
+    val isCompacting: StateFlow<Boolean> = _isCompacting.asStateFlow()
+    // opening a chat whose process is live: its newest output is replayed from the bridge buffer up to this seq;
+    // the chat is shown once (complete) when it arrives
+    private var replayUntilSeq: Long? = null
+    private var replayDeadline: Job? = null
+    // messages sent while Claude was replying, not delivered yet: chat id → (uuid → entry); kept across chat switches
+    private val queuedByChat = HashMap<String, LinkedHashMap<String, ai.antigem.domain.model.QueuedMessage>>()
+    private var loopJob: Job? = null
+    private val titleRefreshes = HashMap<String, Job>()
+
+    /** Loads the session list and model info and keeps the list fresh (Claude Code is enabled). */
+    fun start() {
+        if (loopJob?.isActive == true) return
+        prefs.cachedInfo()?.let { applyInfo(it) }
+        loopJob = backendScope.launch {
+            refreshInfo(force = false)
+            refreshProviders()
+            loadChatDefaults()
+            while (isActive) {
+                refreshSessions()
+                // poll faster while a Claude chat is working so the sidebar's running state stays current
+                delay(if (_conversations.value.any { it.isRunning }) 5_000 else 30_000)
+            }
+        }
+    }
+
+    /** Claude Code was turned off: stop polling and forget its chats. */
+    fun stop() {
+        loopJob?.cancel()
+        loopJob = null
+        detach()
+        _conversations.value = emptyList()
+        synchronized(localConversations) { localConversations.clear() }
+    }
+
+    // ------------------------------------------------------------------ AgentChatBackend
+
+    override fun startNewChat() {
+        val id = UUID.randomUUID().toString()
+        val conv = Conversation(
+            id = id,
+            title = "New Chat",
+            modelId = _selectedModelId.value,
+            sessionId = id,
+            workspaceUri = defaultWorkspaceUri(),
+            agent = AgentKind.CLAUDE
+        )
+        showConversation(conv, loading = false)
+        applyChatDefaults()
+        _cacheInfo.value = null
+        _contextUsage.value = null
+        backendScope.launch(worker) {
+            detachLocked()
+            transcript.reset(id)
+            attachedId = id
+            publishQueue()
+        }
+    }
+
+    /** Sets the folder of the fresh chat that was just started (nothing sent yet), without changing the active project. */
+    fun setWorkspaceOfNewChat(path: String) {
+        val conv = store.currentConversation.value ?: return
+        if (conv.agent != AgentKind.CLAUDE || _messages.value.isNotEmpty() || path.isBlank()) return
+        val uri = if (path.startsWith("file://")) path else "file://$path"
+        val updated = conv.copy(workspaceUri = uri)
+        store.currentConversation.value = updated
+        upsertLocal(updated)
+    }
+
+    override fun selectConversation(id: String) {
+        val conv = _conversations.value.find { it.id == id }
+            ?: Conversation(id = id, title = "Claude Chat", sessionId = id, agent = AgentKind.CLAUDE, readOnly = ClaudeTranscript.isSubagentId(id))
+        showConversation(conv, loading = true)
+        backendScope.launch(worker) {
+            detachLocked()
+            attachedId = id
+            publishQueue()
+            loadAndAttach(id)
+        }
+    }
+
+    override fun sendMessage(content: String) {
+        val atts = store.attachments.value
+        if (content.isBlank() && atts.isEmpty()) return
+        val conv = store.currentConversation.value ?: return
+        if (conv.agent != AgentKind.CLAUDE) return
+        if (ClaudeTranscript.isSubagentId(conv.id)) { _controlMessages.tryEmit("A subagent chat can only be read"); return }
+        store.attachments.value = emptyList()
+        sendPrompt(conv, content.trim(), atts)
+    }
+
+    private fun sendPrompt(conv: Conversation, text: String, atts: List<ChatAttachment>) {
+        val displayText = text.ifBlank { if (atts.any { it.isImage }) "Image" else "Attachment" }
+        val title = if (conv.title == "New Chat" || conv.title.isBlank()) {
+            val first = ai.antigem.data.remote.PromptExpansion.collapse(displayText).lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            first.take(40) + if (first.length > 40) "..." else ""
+        } else conv.title
+        val updated = conv.copy(title = title, updatedAt = System.currentTimeMillis(), modelId = _selectedModelId.value)
+        store.currentConversation.value = updated
+        upsertLocal(updated)
+        _isTurnActive.value = true
+        _isStreaming.value = true
+        _needsLogin.value = false
+
+        val uuid = UUID.randomUUID().toString()
+        backendScope.launch(worker) {
+            if (attachedId != conv.id) {
+                detachLocked()
+                transcript.reset(conv.id)
+                attachedId = conv.id
+            }
+            if (processLive && transcript.isTurnActive) {
+                // Claude is replying: the CLI queues it (command_lifecycle "queued") and delivers it at the next tool
+                // boundary, or as the next turn. Its replay adds it to the chat once it is delivered ("started").
+                synchronized(queuedByChat) {
+                    queuedByChat.getOrPut(conv.id) { LinkedHashMap() }[uuid] = ai.antigem.domain.model.QueuedMessage(
+                        id = uuid,
+                        text = displayText,
+                        attachmentCount = atts.size,
+                        canSendNow = true, // interrupts the current reply; the CLI then runs the queued message
+                        canDelete = false
+                    )
+                }
+                publishQueue()
+                // project checkpoint (when on): sent while Claude works, so marked mid-turn; its reply never waits for it
+                ai.antigem.data.checkpoint.ProjectCheckpoints.beforeTurnInBackground(AgentKind.CLAUDE, conv.id, conv.workspaceUri, uuid, displayText)
+                val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
+                ensureConnected(conv.id)
+                send(frame)
+                return@launch
+            }
+            transcript.addLocalUserMessage(uuid, displayText, atts)
+            if (!processLive) {
+                awaitingProcess = true
+                startupNoticeJob?.cancel()
+                startupNoticeJob = backendScope.launch(worker) {
+                    delay(STARTUP_NOTICE_DELAY_MS)
+                    if (awaitingProcess) _startupStatus.value = "Starting Claude Code…"
+                }
+            }
+            emitNow()
+            // project checkpoint (when on): the files right before Claude gets the message. The worker waits for it
+            // (Claude is not replying in this chat now) so nothing, such as a chat switch, runs between it and the send.
+            if (ai.antigem.data.checkpoint.ProjectCheckpoints.mayCheckpoint(conv.workspaceUri)) {
+                kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                    ai.antigem.data.checkpoint.ProjectCheckpoints.beforeTurn(AgentKind.CLAUDE, conv.id, conv.workspaceUri, uuid, displayText)
+                }
+            }
+            val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
+            ensureConnected(conv.id)
+            send(frame)
+        }
+    }
+
+    override fun checkpointKey(message: ChatMessage): String? =
+        message.id.takeIf { it.startsWith("user_") }?.removePrefix("user_")
+
+    private val _queuedMessages = MutableStateFlow<List<ai.antigem.domain.model.QueuedMessage>>(emptyList())
+    /** The open chat's messages waiting for Claude to finish (shown in the queued-messages card). */
+    val queuedMessages: StateFlow<List<ai.antigem.domain.model.QueuedMessage>> = _queuedMessages.asStateFlow()
+
+    private fun publishQueue() {
+        val id = attachedId ?: store.currentConversation.value?.id
+        _queuedMessages.value = synchronized(queuedByChat) { id?.let { queuedByChat[it]?.values?.toList() }.orEmpty() }
+    }
+
+    /** A queued message was delivered (or dropped): out of the queue. */
+    private fun dequeue(chatId: String?, uuid: String) {
+        chatId ?: return
+        val removed = synchronized(queuedByChat) { queuedByChat[chatId]?.remove(uuid) != null }
+        if (removed) publishQueue()
+    }
+
+    /** The process is gone: the open chat's queued messages were never delivered. */
+    private fun dropQueued(reason: String) {
+        val dropped = synchronized(queuedByChat) { attachedId?.let { queuedByChat.remove(it) } }
+        if (dropped.isNullOrEmpty()) return
+        publishQueue()
+        transcript.addError(
+            if (dropped.size == 1) "Queued message not sent" else "${dropped.size} queued messages not sent",
+            reason + "\n\n" + dropped.values.joinToString("\n") { "• " + it.text.take(120) }
+        )
+    }
+
+    /** "Send now": interrupts the current reply; the CLI then runs the queued messages. */
+    fun sendQueuedNow(@Suppress("UNUSED_PARAMETER") id: String) = stopStreaming()
+
+    override fun stopStreaming() {
+        backendScope.launch(worker) {
+            if (socket == null) {
+                transcript.endTurn()
+                emitNow()
+                return@launch
+            }
+            sendControl(ClaudeControlRequestBody(subtype = "interrupt"))
+        }
+    }
+
+    override fun deleteConversation(id: String) {
+        _conversations.value = _conversations.value.filter { it.id != id }
+        synchronized(localConversations) { localConversations.remove(id) }
+        backendScope.launch(worker) {
+            if (attachedId == id) detachLocked()
+            client.delete(id).onFailure { Log.w(TAG, "delete $id failed: ${it.message}") }
+        }
+        if (store.currentConversation.value?.id == id) startNewChat()
+    }
+
+    /** Copies the chat on the bridge (it is a chat of its own right away) and opens the copy. */
+    override fun forkConversation(id: String) {
+        val source = _conversations.value.find { it.id == id } ?: return
+        val newId = UUID.randomUUID().toString()
+        val title = "${source.title} (fork)"
+        backendScope.launch {
+            client.fork(source.id, newId, title)
+                .mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+                .onSuccess {
+                    val now = System.currentTimeMillis()
+                    upsertLocal(source.copy(id = newId, sessionId = newId, title = title, createdAt = now, updatedAt = now, isRunning = false))
+                    withContext(Dispatchers.Main) { selectConversation(newId) }
+                    refreshSessions()
+                }
+                .onFailure { _controlMessages.tryEmit("Cannot fork this chat: ${it.message}") }
+        }
+    }
+
+    override fun retryConnections() {
+        backendScope.launch(worker) {
+            val id = attachedId ?: return@launch
+            if (store.currentConversation.value?.id != id) return@launch
+            // a chat not on disk yet has no history to reload: just reconnect (its output is in the bridge buffer)
+            if (isOnDisk(id)) loadAndAttach(id) else ensureConnected(id)
+        }
+        backendScope.launch { refreshSessions() }
+    }
+
+    override fun onAppForegrounded() {
+        backendScope.launch { refreshSessions() }
+        backendScope.launch(worker) {
+            val id = attachedId ?: return@launch
+            if (socketJob?.isActive != true && isOnDisk(id)) loadAndAttach(id)
+        }
+    }
+
+    /** The bridge lists the chat (its transcript exists); a chat only known locally has not been written yet. */
+    private fun isOnDisk(id: String) =
+        _conversations.value.any { it.id == id } && synchronized(localConversations) { id !in localConversations }
+
+    /** Stops listening to the current chat (another agent's chat is being opened). */
+    fun detach() {
+        _isStreaming.value = false
+        _isTurnActive.value = false
+        _isLoadingConversation.value = false
+        _pendingPermissions.value = emptyList()
+        backendScope.launch(worker) { detachLocked() }
+    }
+
+    // ------------------------------------------------------------------ approvals, plans & questions
+
+    fun approveTool(toolCall: ToolCall) = respondTool(toolCall.id) { p ->
+        ClaudePermissionResult(behavior = "allow", updatedInput = p.input, toolUseID = p.toolUseId) to "RUNNING"
+    }
+
+    /** Allow and remember: applies the CLI's [suggestionIndex]-th permission suggestion (a rule, a directory, a mode). */
+    fun approveToolAlways(toolUseId: String, suggestionIndex: Int) = respondTool(toolUseId) { p ->
+        val suggestion = p.suggestions?.getOrNull(suggestionIndex)
+        ClaudePermissionResult(
+            behavior = "allow",
+            updatedInput = p.input,
+            updatedPermissions = suggestion?.let { JsonArray(listOf(it)) },
+            toolUseID = p.toolUseId
+        ) to "RUNNING"
+    }
+
+    fun rejectTool(toolCall: ToolCall, reason: String? = null) = rejectToolById(toolCall.id, reason)
+
+    fun rejectToolById(toolUseId: String, reason: String?, interrupt: Boolean = false) = respondTool(toolUseId) { p ->
+        val message = reason?.takeIf { it.isNotBlank() } ?: "User rejected this tool call."
+        ClaudePermissionResult(behavior = "deny", message = message, interrupt = interrupt.takeIf { it }, toolUseID = p.toolUseId) to "REJECTED"
+    }
+
+    /** Plan approval: allow ExitPlanMode, then switch to [nextMode] ("acceptEdits", "default", "auto"). */
+    fun approvePlan(toolUseId: String, nextMode: String) {
+        respondTool(toolUseId) { p ->
+            ClaudePermissionResult(behavior = "allow", updatedInput = p.input, toolUseID = p.toolUseId) to "RUNNING"
+        }
+        setPermissionMode(nextMode)
+    }
+
+    /** Plan rejected: Claude keeps planning with the feedback. */
+    fun keepPlanning(toolUseId: String, feedback: String) = rejectToolById(
+        toolUseId,
+        feedback.ifBlank { "The user wants you to keep planning. Revise the plan before calling ExitPlanMode again." }
+    )
+
+    fun submitChoices(toolCall: ToolCall, responses: List<AskQuestionResponseItemDto>, summaryDisplay: String) {
+        backendScope.launch(worker) {
+            val p = transcript.pendingFor(toolCall.id) ?: return@launch
+            val answers = buildJsonObject {
+                for (r in responses) {
+                    if (r.skipped == true) continue
+                    val picked = r.selectedOptionIds.orEmpty().map { id ->
+                        r.options.find { it.id == id }?.let { it.text.ifBlank { it.label } } ?: id
+                    }
+                    val value = (picked + listOfNotNull(r.writeInResponse?.takeIf { it.isNotBlank() })).joinToString(", ")
+                    if (value.isNotBlank()) put(r.question, JsonPrimitive(value))
+                }
+            }
+            val input = JsonObject(p.input + ("answers" to answers))
+            respond(p.requestId, ClaudePermissionResult(behavior = "allow", updatedInput = input, toolUseID = p.toolUseId))
+            transcript.markPermissionAnswered(p.toolUseId, "RUNNING", summaryDisplay)
+            emitNow()
+        }
+    }
+
+    fun skipChoices(toolCall: ToolCall) = respondTool(toolCall.id) { p ->
+        ClaudePermissionResult(behavior = "deny", message = "The user skipped the question. Continue with your best judgement.", toolUseID = p.toolUseId) to "RUNNING"
+    }
+
+    fun cancelChoices(toolCall: ToolCall) = respondTool(toolCall.id) { p ->
+        ClaudePermissionResult(behavior = "deny", message = "The user cancelled the question.", interrupt = true, toolUseID = p.toolUseId) to "REJECTED"
+    }
+
+    private fun respondTool(toolUseId: String, build: (ClaudeTranscript.PendingPermission) -> Pair<ClaudePermissionResult, String>) {
+        backendScope.launch(worker) {
+            val p = transcript.pendingFor(toolUseId) ?: return@launch
+            val (result, status) = build(p)
+            respond(p.requestId, result)
+            transcript.markPermissionAnswered(p.toolUseId, status, result.message?.takeIf { status == "REJECTED" })
+            emitNow()
+        }
+    }
+
+    // ------------------------------------------------------------------ chat controls
+
+    fun selectModel(modelId: String) {
+        val previous = _selectedModelId.value
+        if (providerOf(modelId) != providerOf(previous)) {
+            // the endpoint is fixed when the process starts: another provider means a new process
+            val conv = store.currentConversation.value
+            if (conv != null && (_messages.value.isNotEmpty() || isOnDisk(conv.id))) {
+                _pendingProviderSwitch.value = ProviderSwitch(
+                    modelId = modelId,
+                    fromLabel = modelLabel(previous),
+                    toLabel = modelLabel(modelId),
+                    resendTokens = _contextUsage.value?.totalTokens?.takeIf { it > 0 } ?: _cacheInfo.value?.recacheTokens?.takeIf { it > 0 }
+                )
+                return
+            }
+            switchProvider(modelId)
+            return
+        }
+        val sameProvider = providerOf(modelId)
+        if (sameProvider.isNotEmpty()) {
+            // context window, output limit and thinking budget are fixed when the process starts: a model of the same
+            // provider with other limits needs a new process (the chat is resumed, nothing is lost)
+            val p = _providers.value.find { it.id == sameProvider }
+            if (p != null && p.limitsOf(rawModel(modelId)) != p.limitsOf(rawModel(previous))) {
+                _controlMessages.tryEmit("${modelLabel(modelId)} has other limits: the chat restarts to apply them")
+                switchProvider(modelId)
+                return
+            }
+        }
+        controlsTouched = true
+        setSelectedModel(modelId)
+        // keep the effort valid for the new model
+        val levels = _modelInfos.value.find { it.value == modelId }?.supportedEffortLevels.orEmpty()
+        if (_effort.value != null && levels.isNotEmpty() && _effort.value !in levels) setEffort(null)
+        applyControl(
+            // a provider's process knows its models by their own id
+            live = ClaudeControlRequestBody(subtype = "set_model", model = rawModel(modelId)),
+            spawn = BridgeConfigFrame(model = modelId),
+            what = "model",
+            revert = { setSelectedModel(previous) },
+            // the bridge remembers the chat's model for its next start (a reopened chat stays on the provider)
+            configureLive = true
+        )
+    }
+
+    /** The user confirmed moving this chat to [ProviderSwitch.modelId]'s provider. */
+    fun confirmProviderSwitch() {
+        val sw = _pendingProviderSwitch.value ?: return
+        _pendingProviderSwitch.value = null
+        switchProvider(sw.modelId)
+    }
+
+    fun cancelProviderSwitch() {
+        _pendingProviderSwitch.value = null
+    }
+
+    /** Opens a new chat (same folder) on the model of the pending switch instead of moving this one. */
+    fun startNewChatWithPendingModel() {
+        val sw = _pendingProviderSwitch.value ?: return
+        _pendingProviderSwitch.value = null
+        val workspace = store.currentConversation.value?.workspaceUri
+        startNewChat()
+        if (!workspace.isNullOrBlank()) store.currentConversation.value?.let { store.currentConversation.value = it.copy(workspaceUri = workspace) }
+        switchProvider(sw.modelId)
+    }
+
+    // a provider switch waiting for the running reply to end
+    @Volatile private var queuedRestart: String? = null
+
+    /**
+     * Moves the chat to [modelId] of another provider: the process is stopped and the next prompt starts a new one
+     * there, resuming the chat from its transcript. A running reply finishes first.
+     */
+    private fun switchProvider(modelId: String) {
+        controlsTouched = true
+        setSelectedModel(modelId)
+        if (providerOf(modelId).isNotEmpty()) _effort.value = null
+        if (_isTurnActive.value) {
+            queuedRestart = modelId
+            _controlMessages.tryEmit("Switches to ${modelLabel(modelId)} after this reply")
+            return
+        }
+        restartOn(modelId)
+    }
+
+    private fun restartOn(modelId: String) {
+        backendScope.launch(worker) {
+            if (socket == null && !processLive) return@launch // not connected: the next connect sends the new model
+            send(ClaudeJson.encodeToString(BridgeConfigFrame(type = "bridge_restart", model = modelId, effort = _effort.value ?: "default")))
+        }
+    }
+
+    private fun setSelectedModel(modelId: String) {
+        _selectedModelId.value = modelId
+        val conv = store.currentConversation.value
+        if (conv != null && conv.agent == AgentKind.CLAUDE) store.currentConversation.value = conv.copy(modelId = modelId)
+    }
+
+    /** level: low | medium | high | xhigh | max, or null for the model default. */
+    fun setEffort(level: String?) {
+        val previous = _effort.value
+        controlsTouched = true
+        _effort.value = level
+        applyControl(
+            live = ClaudeControlRequestBody(
+                subtype = "apply_flag_settings",
+                settings = buildJsonObject { put("effortLevel", level?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) }
+            ),
+            spawn = BridgeConfigFrame(effort = level ?: "default"),
+            what = "effort",
+            revert = { _effort.value = previous }
+        )
+    }
+
+    fun setThinking(enabled: Boolean) {
+        val previous = _thinkingEnabled.value
+        controlsTouched = true
+        _thinkingEnabled.value = enabled
+        // a custom provider gets a thinking budget only when its page sets one (many providers reject the parameter)
+        val budget = providerOf(_selectedModelId.value).let { id ->
+            if (id.isEmpty()) 31999 else _providers.value.find { it.id == id }?.limitsOf(rawModel(_selectedModelId.value))?.thinkingBudget ?: 0
+        }
+        applyControl(
+            live = if (enabled && budget == 0) null else ClaudeControlRequestBody(
+                subtype = "set_max_thinking_tokens",
+                max_thinking_tokens = if (enabled) budget else 0,
+                thinking_display = if (enabled) "summarized" else null
+            ),
+            spawn = BridgeConfigFrame(thinking = if (enabled) "on" else "off"),
+            what = "thinking",
+            revert = { _thinkingEnabled.value = previous }
+        )
+    }
+
+    /** default (Manual) | acceptEdits | plan | auto | dontAsk */
+    fun setPermissionMode(mode: String) {
+        val previous = _permissionMode.value
+        modeTouched = true
+        _permissionMode.value = mode
+        applyControl(
+            live = ClaudeControlRequestBody(subtype = "set_permission_mode", mode = mode),
+            spawn = BridgeConfigFrame(permission_mode = mode),
+            what = "mode",
+            revert = { _permissionMode.value = previous }
+        )
+    }
+
+    /**
+     * Applies a chat control. With a running process it is sent live and the CLI's answer is checked: a refused
+     * change is reverted (and shown), an accepted one is confirmed with [syncApplied]. Without a process it is a
+     * spawn option of the next start (no process is started); before the chat is connected [spawnConfig] covers it.
+     */
+    private fun applyControl(
+        live: ClaudeControlRequestBody?,
+        spawn: BridgeConfigFrame,
+        what: String,
+        revert: () -> Unit,
+        configureLive: Boolean = false
+    ) {
+        backendScope.launch(worker) {
+            if (socket == null) return@launch
+            if (!processLive || configureLive) send(ClaudeJson.encodeToString(spawn))
+            if (!processLive || live == null) return@launch
+            val reply = request(live, timeoutMs = 15_000)
+            when {
+                reply == null -> _controlMessages.tryEmit("Claude Code did not confirm the $what change")
+                reply.subtype == "error" -> {
+                    revert()
+                    _controlMessages.tryEmit("Claude Code refused the $what change: ${reply.error ?: "unknown error"}")
+                }
+                else -> syncApplied()
+            }
+        }
+    }
+
+    /** Reads what the running process really uses (`get_settings().applied`) and shows that in the controls. */
+    private suspend fun syncApplied() {
+        if (!processLive || socket == null) return
+        val applied = request(ClaudeControlRequestBody(subtype = "get_settings"), timeoutMs = 15_000)?.response
+            ?.let { runCatching { ClaudeJson.decodeFromJsonElement<ClaudeGetSettingsResult>(it) }.getOrNull() }
+            ?.applied ?: return
+        applied.model?.let { selectResolvedModel(it) }
+        _appliedEffort.value = applied.effort
+        if (_effort.value != null && applied.effort != null && applied.effort != _effort.value) _effort.value = applied.effort
+    }
+
+    /**
+     * Shows the model alias that runs [resolved] (a full id like `claude-opus-5-5`). The current choice is kept when
+     * it already resolves to it (e.g. "default" → Opus 5.5).
+     */
+    private fun selectResolvedModel(resolved: String) {
+        val provider = providerOf(_selectedModelId.value)
+        if (provider.isNotEmpty()) {
+            // a provider's process reports the model's own id; a router (openrouter/free) reports the model it picked,
+            // which is not one of the provider's models: the choice stays
+            val known = _providers.value.find { it.id == provider }?.models?.any { it.id == resolved } == true
+            if (known && rawModel(_selectedModelId.value) != resolved) setSelectedModel("@$provider/$resolved")
+            return
+        }
+        val infos = _modelInfos.value
+        val current = infos.find { it.value == _selectedModelId.value }
+        if (current?.value == resolved || current?.resolvedModel == resolved) return
+        val match = infos.firstOrNull { it.value == resolved } ?: infos.firstOrNull { it.resolvedModel == resolved && it.value != "default" }
+            ?: infos.firstOrNull { it.resolvedModel == resolved }
+        setSelectedModel(match?.value ?: resolved)
+    }
+
+    /** New chats start with the settings.json defaults (the Chat defaults page). */
+    private fun applyChatDefaults() {
+        controlsTouched = false
+        val d = chatDefaults
+        _selectedModelId.value = d.model ?: "default"
+        _effort.value = d.effort
+        _appliedEffort.value = null
+        _thinkingEnabled.value = d.thinking
+    }
+
+    /** Reads the defaults for new chats from settings.json (and applies them to a new chat nothing was sent in). */
+    fun loadChatDefaults() {
+        backendScope.launch {
+            client.settings().onSuccess { resp ->
+                if (!resp.success) return@onSuccess
+                val st = resp.settings
+                fun str(key: String) = (st[key] as? JsonPrimitive)?.contentOrNull
+                chatDefaults = ChatDefaults(
+                    model = str("model"),
+                    effort = str("effortLevel"),
+                    thinking = str("alwaysThinkingEnabled")?.toBooleanStrictOrNull() ?: true
+                )
+                val cur = store.currentConversation.value
+                if (!controlsTouched && cur != null && cur.agent == AgentKind.CLAUDE && !isOnDisk(cur.id) && _messages.value.isEmpty()) {
+                    applyChatDefaults()
+                }
+            }
+        }
+    }
+
+    private data class ChatDefaults(val model: String? = null, val effort: String? = null, val thinking: Boolean = true)
+
+    private data class ChatControls(val model: String, val effort: String?, val thinking: Boolean)
+
+    // ------------------------------------------------------------------ edit / regenerate / rewind / export
+
+    /**
+     * Edits the prompt with [userMessageId] in place, like the CLI's rewind: the chat is cut right before that
+     * prompt (the next message continues from there) and the prompt text is returned for the input box. With
+     * [restoreCode], files changed since that prompt are restored first.
+     */
+    fun editMessage(userMessageId: String, restoreCode: Boolean, onRestored: (String) -> Unit) {
+        val conv = store.currentConversation.value ?: return
+        val userUuid = userMessageId.removePrefix("user_")
+        backendScope.launch(worker) {
+            val text = transcript.userText(userUuid).orEmpty()
+            if (restoreCode) rewindFilesLocked(userUuid)
+            if (rewindLocked(conv.id, userUuid)) withContext(Dispatchers.Main) { onRestored(text) }
+        }
+    }
+
+    /** Regenerates the reply [assistantMessageId]: the chat is cut before its prompt and that prompt is sent again. */
+    fun regenerate(assistantMessageId: String) {
+        val conv = store.currentConversation.value ?: return
+        backendScope.launch(worker) {
+            val userUuid = transcript.userBefore(assistantMessageId) ?: return@launch
+            val text = transcript.userText(userUuid).orEmpty()
+            if (rewindLocked(conv.id, userUuid)) {
+                withContext(Dispatchers.Main) { sendPrompt(store.currentConversation.value ?: conv, text, emptyList()) }
+            }
+        }
+    }
+
+    /** Cuts chat [id] right before the prompt [userUuid] on the bridge and reloads it. */
+    private suspend fun rewindLocked(id: String, userUuid: String): Boolean {
+        _isLoadingConversation.value = true
+        val res = client.rewind(id, userUuid).mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+        if (res.isFailure) {
+            _isLoadingConversation.value = false
+            _controlMessages.tryEmit("Cannot edit this message: ${res.exceptionOrNull()?.message}")
+            return false
+        }
+        if (store.currentConversation.value?.id != id) return false
+        detachLocked()
+        attachedId = id
+        loadAndAttach(id)
+        return true
+    }
+
+    /** Restores files changed since [userUuid] (Claude's file checkpoints). Returns the CLI's summary. */
+    fun rewindFiles(userMessageId: String, dryRun: Boolean, onResult: (ClaudeRewindResult?) -> Unit) {
+        backendScope.launch(worker) {
+            val r = rewindFilesLocked(userMessageId.removePrefix("user_"), dryRun)
+            withContext(Dispatchers.Main) { onResult(r) }
+        }
+    }
+
+    private suspend fun rewindFilesLocked(userUuid: String, dryRun: Boolean = false): ClaudeRewindResult? {
+        val id = attachedId ?: return null
+        ensureConnected(id)
+        val reply = request(ClaudeControlRequestBody(subtype = "rewind_files", user_message_id = userUuid, dry_run = dryRun)) ?: return null
+        return reply.response?.let { runCatching { ClaudeJson.decodeFromJsonElement<ClaudeRewindResult>(it) }.getOrNull() }
+            ?: ClaudeRewindResult(error = reply.error)
+    }
+
+    /** The conversation as plain text (the CLI's /export format). */
+    fun exportConversation(onResult: (ClaudeExportResult?) -> Unit) {
+        backendScope.launch(worker) {
+            val id = attachedId
+            val res = if (id == null) null else {
+                ensureConnected(id)
+                request(ClaudeControlRequestBody(subtype = "export_conversation"))?.response
+                    ?.let { runCatching { ClaudeJson.decodeFromJsonElement<ClaudeExportResult>(it) }.getOrNull() }
+            }
+            withContext(Dispatchers.Main) { onResult(res) }
+        }
+    }
+
+    /**
+     * Loads a Claude conversation's messages without opening it (sidebar export / share, Jarvis reading a chat). Asks
+     * for the whole transcript: a chat whose process is still running (it stays up after a reply) otherwise came back
+     * without the part written since that process started — for a chat started in it, empty.
+     */
+    suspend fun loadMessages(conversationId: String): List<ChatMessage> {
+        val h = client.history(conversationId, full = true).getOrNull() ?: return emptyList()
+        val t = ClaudeTranscript().apply { reset(conversationId) }
+        h.entries.forEach { t.applyHistory(it) }
+        t.finishHistory()
+        return t.toChatMessages()
+    }
+
+    fun renameConversation(id: String, title: String) {
+        val clean = title.trim().ifBlank { return }
+        _conversations.value = _conversations.value.map { if (it.id == id) it.copy(title = clean) else it }
+        store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = it.copy(title = clean) }
+        backendScope.launch {
+            client.rename(id, clean).onFailure { Log.w(TAG, "rename failed: ${it.message}") }
+            refreshSessions()
+        }
+    }
+
+    /** Archives / unarchives a chat on the bridge (a chat without a transcript yet cannot be archived). */
+    fun setArchived(id: String, archived: Boolean) {
+        val before = _conversations.value.find { it.id == id }?.archived ?: return
+        if (before == archived) return
+        _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = archived) else it }
+        store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = it.copy(archived = archived) }
+        backendScope.launch {
+            client.archive(id, archived)
+                .mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+                .onFailure { e ->
+                    Log.w(TAG, "archive $id failed: ${e.message}")
+                    _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = before) else it }
+                    ai.antigem.ui.components.AppToastHelper.showToast(
+                        "Could not ${if (archived) "archive" else "unarchive"}: ${e.message}", ai.antigem.ui.components.ChatToastType.ERROR
+                    )
+                }
+            refreshSessions()
+        }
+    }
+
+    /** The context window the user saved for a custom model (0 = unknown or a Claude model). */
+    fun contextLengthOf(modelId: String): Long {
+        val provider = providerOf(modelId).ifEmpty { return 0 }
+        return _providers.value.find { it.id == provider }?.limitsOf(rawModel(modelId))?.context ?: 0
+    }
+
+    /** The CLI assumes a window of its own for unknown models; with the real one the total, share and free space are right. */
+    private fun ClaudeContextUsage.withRealWindow(window: Long): ClaudeContextUsage {
+        if (window <= 0) return this
+        return copy(
+            maxTokens = window,
+            percentage = totalTokens * 100.0 / window,
+            categories = categories.map { if (it.name.startsWith("Free space", ignoreCase = true)) it.copy(tokens = (window - totalTokens).coerceAtLeast(0)) else it }
+        )
+    }
+
+    fun refreshContextUsage() {
+        backendScope.launch(worker) {
+            if (!processLive || socket == null) return@launch
+            request(ClaudeControlRequestBody(subtype = "get_context_usage"))?.response?.let {
+                _contextUsage.value = runCatching { ClaudeJson.decodeFromJsonElement<ClaudeContextUsage>(it) }.getOrNull()
+                    ?.withRealWindow(contextLengthOf(_selectedModelId.value))
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ models / sessions / info
+
+    /** The folder whose skills and commands the "/" menu shows: the open Claude chat's project, else the active project. */
+    private fun slashCwd(): String? =
+        store.currentConversation.value?.takeIf { it.agent == AgentKind.CLAUDE }?.workspaceUri?.removePrefix("file://")?.takeIf { it.startsWith("/") }
+            ?: defaultWorkspaceUri().removePrefix("file://").takeIf { it.startsWith("/") }
+
+    /** The folder the commands on show were read in; the latest request (an older answer arriving late is dropped). */
+    @Volatile private var infoCwd: String? = null
+    private val infoRequests = java.util.concurrent.atomic.AtomicInteger()
+
+    /** The "/" menu follows the open chat's project: reads its commands and skills when the project is another one. */
+    fun refreshInfoForChat() {
+        if (slashCwd() != infoCwd) refreshInfo(force = false)
+    }
+
+    fun refreshInfo(force: Boolean = true) {
+        val cwd = slashCwd()
+        val request = infoRequests.incrementAndGet()
+        backendScope.launch {
+            _isRefreshingModels.value = true
+            client.info(refresh = force, cwd = cwd)
+                .onSuccess { resp ->
+                    val info = resp.info
+                    if (request != infoRequests.get()) return@onSuccess
+                    if (resp.success && info != null) {
+                        infoCwd = cwd
+                        applyInfo(info)
+                        prefs.saveInfo(info)
+                        _modelsError.value = null
+                        resp.default_mode?.let { mode ->
+                            defaultPermissionMode = mode
+                            prefs.saveDefaultMode(mode)
+                            if (!processLive && !modeTouched) _permissionMode.value = mode
+                        }
+                    } else {
+                        _modelsError.value = resp.error ?: "Claude Code did not return its models"
+                    }
+                }
+                .onFailure { _modelsError.value = it.message ?: "Cannot reach the bridge" }
+            _isRefreshingModels.value = false
+        }
+    }
+
+    /** Models, slash commands and defaults from the CLI's `initialize` (live or cached). */
+    private fun applyInfo(info: ClaudeInitializeInfo) {
+        if (info.models.isNotEmpty()) {
+            _modelInfos.value = info.models
+            officialModels = info.models.map { m ->
+                // "Default (recommended)" + "Opus 5.5 · Best for…" → "Default (Opus 5.5)"
+                val resolved = m.description.substringBefore(" · ", "").takeIf { m.value == "default" && it.isNotBlank() }
+                AiModel(
+                    id = m.value,
+                    displayName = resolved?.let { "Default ($it)" } ?: m.displayName.ifBlank { m.value },
+                    family = ai.antigem.domain.model.ModelFamily.CLAUDE,
+                    description = m.description,
+                    key = m.value,
+                    baseName = m.displayName.ifBlank { m.value }
+                )
+            }
+            publishModels()
+        }
+        _slashCommands.value = info.commands
+            .filter { it.name !in HIDDEN_COMMANDS && !it.description.startsWith("(removed)") }
+            .map { c ->
+                val appDescription = APP_COMMANDS[c.name]
+                SlashCommandItem(
+                    name = c.name,
+                    command = "/${c.name}",
+                    description = appDescription ?: c.description,
+                    argumentHint = if (appDescription != null) "" else c.argumentHint,
+                    type = when {
+                        appDescription != null -> "app"
+                        c.builtin && !c.name.contains(':') -> "command"
+                        else -> "skill"
+                    }
+                )
+            }
+        _outputStyles.value = info.available_output_styles
+        info.fast_mode_state?.let { _fastModeState.value = it }
+    }
+
+    /** Claude's models, then every provider's models ("@provider/model", described by the provider's name). */
+    private fun publishModels() {
+        _availableModels.value = officialModels + _providers.value.flatMap { p ->
+            p.models.map { m ->
+                val ref = "@${p.id}/${m.id}"
+                AiModel(
+                    id = ref,
+                    displayName = m.name?.takeIf { it.isNotBlank() } ?: m.id,
+                    family = ai.antigem.domain.model.ModelFamily.CLAUDE,
+                    description = listOfNotNull(p.name, m.contextLabel(p)).joinToString(" · "),
+                    key = ref,
+                    baseName = m.id
+                )
+            }
+        }
+    }
+
+    /** Readable name of a model id, with the provider for a custom one ("Gemma 4 31B · OpenRouter"). */
+    fun modelLabel(modelId: String): String {
+        val provider = providerOf(modelId)
+        val model = _availableModels.value.find { it.id == modelId }
+        if (provider.isEmpty()) return "Claude " + (model?.displayName ?: modelId)
+        val providerName = _providers.value.find { it.id == provider }?.name ?: provider
+        return (model?.displayName ?: rawModel(modelId)) + " · " + providerName
+    }
+
+    suspend fun refreshProviders() {
+        client.providers().onSuccess { resp ->
+            if (!resp.success) return@onSuccess
+            _providers.value = resp.providers
+            _settingsEndpoint.value = resp.settings_endpoint?.takeIf { it.isNotBlank() }
+            _settingsConflicts.value = resp.settings_conflicts
+            publishModels()
+        }.onFailure { Log.w(TAG, "providers failed: ${it.message}") }
+    }
+
+    /** Adds or updates [provider]; [onDone] gets the error, or null when it was saved. */
+    fun saveProvider(provider: ClaudeProvider, onDone: (String?) -> Unit = {}) {
+        backendScope.launch {
+            val err = client.saveProvider(provider).fold({ if (it.success) null else it.error ?: "the bridge refused" }, { it.message ?: "failed" })
+            if (err == null) refreshProviders()
+            withContext(Dispatchers.Main) { onDone(err) }
+        }
+    }
+
+    fun deleteProvider(id: String) {
+        backendScope.launch {
+            client.deleteProvider(id).onFailure { _controlMessages.tryEmit("Cannot remove the provider: ${it.message}") }
+            refreshProviders()
+        }
+    }
+
+    fun fetchProviderModels(id: String, freeOnly: Boolean, onResult: (Result<List<ClaudeProviderModel>>) -> Unit) {
+        backendScope.launch {
+            val res = client.fetchProviderModels(id, freeOnly).mapCatching { if (it.success) it.models else error(it.error ?: "the provider did not answer") }
+            withContext(Dispatchers.Main) { onResult(res) }
+        }
+    }
+
+    /** Restarts chat [id]'s process (when idle) so its next message uses the current provider settings. */
+    fun restartChat(id: String, onDone: (String) -> Unit) {
+        backendScope.launch {
+            onDone(
+                client.restartSession(id).fold(
+                    { if (it.success) "Restarted: the next message uses the current provider settings" else it.error ?: "Could not restart the chat" },
+                    { it.message ?: "The bridge is not reachable" }
+                )
+            )
+        }
+    }
+
+    /** Restarts the idle running chats of provider [id]; [onDone] gets (restarted, busy) or an error. */
+    fun restartProviderChats(id: String, onDone: (restarted: Int, busy: Int, error: String?) -> Unit) {
+        backendScope.launch {
+            client.restartProviderSessions(id).fold(
+                { onDone(it.restarted, it.busy, if (it.success) null else it.error ?: "the bridge refused") },
+                { onDone(0, 0, it.message ?: "the bridge is not reachable") }
+            )
+        }
+    }
+
+    /** Fetches the model list with the editor form's values, so an unsaved provider can be fetched too. */
+    fun fetchFormModels(provider: ClaudeProvider, freeOnly: Boolean, onResult: (ClaudeFetchOutcome) -> Unit) {
+        backendScope.launch {
+            onResult(
+                client.fetchFormModels(provider, freeOnly).fold(
+                    { if (it.success) ClaudeFetchOutcome(it.models, null, it.raw) else ClaudeFetchOutcome(error = it.error ?: "the provider did not answer", raw = it.raw) },
+                    { ClaudeFetchOutcome(error = it.message ?: "the bridge is not reachable") }
+                )
+            )
+        }
+    }
+
+    /** Sends one tiny request to [model] with [provider]'s current form values; [onResult] gets the outcome. */
+    fun testProvider(provider: ClaudeProvider, model: String, onResult: (ClaudeProviderTestResult) -> Unit) {
+        backendScope.launch {
+            val res = client.testProvider(provider, model).fold(
+                { it.result ?: ClaudeProviderTestResult(error = it.error ?: "the bridge gave no answer") },
+                { ClaudeProviderTestResult(error = it.message ?: "the bridge is not reachable") }
+            )
+            onResult(res)
+        }
+    }
+
+    fun importSettingsProvider(onDone: (String?) -> Unit = {}) {
+        backendScope.launch {
+            val err = client.importSettingsProvider().fold({ if (it.success) null else it.error ?: "the bridge refused" }, { it.message ?: "failed" })
+            if (err == null) {
+                refreshProviders()
+                loadChatDefaults()
+            }
+            withContext(Dispatchers.Main) { onDone(err) }
+        }
+    }
+
+    /**
+     * A slash command the app answers itself, or null to send [text] to Claude. Commands with arguments that only
+     * change a chat control (`/model opus`, `/effort high`, `/rename x`) are applied through the app's controls so
+     * the chips stay in sync.
+     */
+    fun appCommand(text: String): ClaudeAppCommand? {
+        val trimmed = text.trim()
+        if (!trimmed.startsWith("/")) return null
+        val name = trimmed.removePrefix("/").substringBefore(' ').lowercase()
+        val arg = trimmed.substringAfter(' ', "").trim()
+        return when (name) {
+            "usage", "cost" -> ClaudeAppCommand.Usage
+            "context" -> ClaudeAppCommand.Context
+            "mcp" -> if (arg.isBlank()) ClaudeAppCommand.Mcp else null
+            "config" -> if (arg.isBlank()) ClaudeAppCommand.Settings else null
+            "clear", "new" -> ClaudeAppCommand.NewChat
+            "model" -> if (arg.isBlank()) ClaudeAppCommand.ModelPicker else {
+                selectModel(arg)
+                ClaudeAppCommand.Done("Model set to $arg")
+            }
+            "effort" -> when {
+                arg.isBlank() -> ClaudeAppCommand.ModelPicker
+                arg.equals("auto", true) || arg.equals("default", true) -> {
+                    setEffort(null)
+                    ClaudeAppCommand.Done("Effort set to the model default")
+                }
+                else -> {
+                    setEffort(arg.lowercase())
+                    ClaudeAppCommand.Done("Effort set to ${effortName(arg)}")
+                }
+            }
+            "rename" -> if (arg.isBlank()) null else {
+                store.currentConversation.value?.id?.let { renameConversation(it, arg) }
+                ClaudeAppCommand.Done("Chat renamed")
+            }
+            else -> null
+        }
+    }
+
+    private fun effortName(level: String) = if (level.equals("xhigh", true)) "extra high" else level.lowercase()
+
+    /** Chats already asked for a title in this run of the app. */
+    private val titleAsked = HashSet<String>()
+
+    /**
+     * Claude Code names a chat only when its client asks (the VS Code extension does; a chat run through the bridge never
+     * got one, so it kept its first message as the title). After the first reply of a new chat, ask once: the title is
+     * saved in the chat's transcript, where the bridge's chat list reads it.
+     */
+    private fun requestTitleOnce() {
+        val id = attachedId ?: return
+        val prompts = _messages.value.filter { it.role == ai.antigem.domain.model.MessageRole.USER }
+        if (prompts.size != 1 || !titleAsked.add(id)) return
+        val first = prompts.first()
+        val typed = ai.antigem.data.remote.PromptExpansion.cleanTitle(first.content).trim()
+        val files = first.attachments.map { it.name }.filter { it.isNotBlank() }
+        val description = listOfNotNull(
+            typed.takeIf { it.isNotBlank() },
+            files.takeIf { it.isNotEmpty() }?.let { "Attached files: " + it.joinToString(", ") }
+        ).joinToString("\n").take(2_000)
+        if (description.isBlank()) return
+        backendScope.launch(worker) {
+            val reply = request(ClaudeControlRequestBody(subtype = "generate_session_title", description = description, persist = true), 60_000)
+            val title = reply?.response?.get("title")?.jsonPrimitive?.contentOrNull
+                ?.let { ai.antigem.data.remote.PromptExpansion.cleanTitle(it).trim() }
+            if (title.isNullOrBlank()) {
+                Log.w(TAG, "no title for $id: ${reply?.error ?: "no reply"}")
+                return@launch
+            }
+            _conversations.value = _conversations.value.map { if (it.id == id) it.copy(title = title) else it }
+            synchronized(localConversations) { localConversations[id]?.let { localConversations[id] = it.copy(title = title) } }
+            store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = it.copy(title = title) }
+        }
+    }
+
+    /** The CLI writes a chat's AI title shortly after the first reply: look again a few times. */
+    private fun scheduleTitleRefresh() {
+        val id = attachedId ?: return
+        titleRefreshes[id]?.cancel()
+        titleRefreshes[id] = backendScope.launch {
+            for (wait in longArrayOf(1_500, 6_000, 15_000)) {
+                delay(wait)
+                refreshSessions()
+            }
+        }
+    }
+
+    suspend fun refreshSessions() {
+        client.listSessions().onSuccess { resp ->
+            val fromBridge = resp.sessions.map { s ->
+                Conversation(
+                    id = s.id,
+                    // an older bridge makes titles from the raw first prompt, hidden blocks included
+                    title = ai.antigem.data.remote.PromptExpansion.cleanTitle(s.title).ifBlank { "Claude Chat" },
+                    sessionId = s.id,
+                    createdAt = s.created_at,
+                    updatedAt = s.updated_at,
+                    isRunning = s.busy,
+                    workspaceUri = if (s.cwd.isNotBlank()) "file://${s.cwd}" else "",
+                    agent = AgentKind.CLAUDE,
+                    archived = s.archived,
+                    // a subagent nests under the chat (or subagent) that started it and can only be read
+                    parentConversationId = s.parent_id.takeIf { s.subagent && it.isNotBlank() },
+                    subagentRole = if (s.subagent) s.title.ifBlank { s.agent_type } else null,
+                    subagentTypeName = s.agent_type.takeIf { s.subagent && it.isNotBlank() },
+                    readOnly = s.subagent
+                )
+            }
+            val ids = fromBridge.map { it.id }.toSet()
+            val locals = synchronized(localConversations) {
+                localConversations.keys.removeAll(ids)
+                localConversations.values.toList()
+            }
+            val openId = store.currentConversation.value?.id
+            val openRunning = _isTurnActive.value
+            _conversations.value = (locals + fromBridge)
+                .map { if (it.id == openId) it.copy(isRunning = it.isRunning || openRunning) else it }
+                .sortedByDescending { it.updatedAt }
+            val cur = store.currentConversation.value
+            if (cur != null && cur.agent == AgentKind.CLAUDE) {
+                fromBridge.find { it.id == cur.id }?.let { fresh ->
+                    if (fresh.title != cur.title && fresh.title.isNotBlank()) {
+                        store.currentConversation.value = cur.copy(title = fresh.title)
+                    }
+                }
+            }
+        }.onFailure { Log.w(TAG, "session list failed: ${it.message}") }
+    }
+
+    // ------------------------------------------------------------------ socket
+
+    private fun showConversation(conv: Conversation, loading: Boolean) {
+        // the chat being left keeps its controls for when it is opened again (its process may still run with them)
+        store.currentConversation.value?.takeIf { it.agent == AgentKind.CLAUDE && it.id != conv.id }?.let { prev ->
+            synchronized(chatControls) { chatControls[prev.id] = ChatControls(_selectedModelId.value, _effort.value, _thinkingEnabled.value) }
+        }
+        modeTouched = false
+        controlsTouched = false
+        _permissionMode.value = defaultPermissionMode
+        _appliedEffort.value = null
+        val remembered = synchronized(chatControls) { chatControls[conv.id] }
+        if (remembered != null) {
+            controlsTouched = true
+            _selectedModelId.value = remembered.model
+            _effort.value = remembered.effort
+            _thinkingEnabled.value = remembered.thinking
+        } else {
+            _effort.value = chatDefaults.effort
+            _thinkingEnabled.value = chatDefaults.thinking
+        }
+        store.currentConversation.value = conv
+        _messages.value = emptyList()
+        _conversationError.value = null
+        _isLoadingConversation.value = loading
+        _isStreaming.value = false
+        _isTurnActive.value = false
+        _pendingPermissions.value = emptyList()
+        _needsLogin.value = false
+    }
+
+    private suspend fun loadAndAttach(id: String) {
+        _isLoadingConversation.value = true
+        val res = client.history(id)
+        if (attachedId != id) return
+        if (ClaudeTranscript.isSubagentId(id)) {
+            res.onSuccess { h -> showSubagent(id, h) }
+                .onFailure { _isLoadingConversation.value = false; _conversationError.value = "Cannot load the subagent: ${it.message}" }
+            return
+        }
+        res.onSuccess { h ->
+            transcript.reset(id)
+            h.entries.forEach { transcript.applyHistory(it) }
+            transcript.finishHistory()
+            lastSeq = h.state.buffer_start_seq - 1
+            processLive = h.state.live
+            // resuming a chat continues on the model it last used (a running process is checked once attached)
+            if (!controlsTouched) {
+                when {
+                    h.model_ref.isNotBlank() -> setSelectedModel(h.model_ref)
+                    providerOf(_selectedModelId.value).isNotEmpty() -> _selectedModelId.value = chatDefaults.model ?: "default"
+                }
+            }
+            if (!h.state.live && !controlsTouched) transcript.sessionModel?.let { selectResolvedModel(it) }
+            val newest = h.state.next_seq - 1
+            if (h.state.live && newest >= h.state.buffer_start_seq) {
+                // the rest of the chat is in the bridge buffer: keep the loading state until it is replayed
+                replayUntilSeq = newest
+                replayDeadline?.cancel()
+                // safety net only: the replay normally ends within a moment
+                replayDeadline = backendScope.launch(worker) {
+                    delay(3_000)
+                    if (attachedId == id) finishReplay()
+                }
+            } else {
+                finishReplay()
+            }
+            connect(id, h.state.buffer_start_seq)
+        }.onFailure {
+            if (it.isBridgeUnreachable() && BridgeStartup.isStartingUp()) {
+                // the app just started and the local server is not up yet: keep loading and try again
+                backendScope.launch(worker) {
+                    delay(2_000)
+                    if (attachedId == id) loadAndAttach(id)
+                }
+                return
+            }
+            _isLoadingConversation.value = false
+            _conversationError.value = "Cannot load Claude chat: ${it.message}"
+        }
+    }
+
+    /**
+     * A subagent's transcript, read-only: no process and no live connection (Claude cannot resume a subagent). While it
+     * is running its transcript is read again every few seconds.
+     */
+    private fun showSubagent(id: String, h: ClaudeHistoryResponse) {
+        transcript.reset(id)
+        h.entries.forEach { transcript.applyHistory(it) }
+        transcript.finishHistory()
+        processLive = false
+        emitNow()
+        _isLoadingConversation.value = false
+        if (_conversations.value.find { it.id == id }?.isRunning != true) return
+        backendScope.launch(worker) {
+            delay(4_000)
+            if (attachedId != id) return@launch
+            refreshSessions()
+            val fresh = client.history(id).getOrNull() ?: return@launch
+            if (attachedId == id) showSubagent(id, fresh)
+        }
+    }
+
+    private fun finishReplay() {
+        replayUntilSeq = null
+        replayDeadline?.cancel()
+        replayDeadline = null
+        emitNow()
+        _isLoadingConversation.value = false
+    }
+
+    private fun ensureConnected(id: String) {
+        if (socketJob?.isActive == true) return
+        connect(id, if (lastSeq >= 0) lastSeq + 1 else -1)
+    }
+
+    private fun connect(id: String, since: Long) {
+        socketJob?.cancel()
+        socketJob = backendScope.launch(worker) {
+            var nextSince = since
+            while (isActive && attachedId == id) {
+                client.connect(id, nextSince, spawnConfig()).collect { ev ->
+                    when (ev) {
+                        is ClaudeSocketEvent.Opened -> {
+                            socket = ev.socket
+                            while (outbox.isNotEmpty()) ev.socket.send(outbox.removeFirst())
+                        }
+                        is ClaudeSocketEvent.Frame -> if (attachedId == id) handleFrame(ev.frame)
+                        is ClaudeSocketEvent.Closed -> {
+                            socket = null
+                            if (ev.error != null) Log.w(TAG, "socket closed: ${ev.error}")
+                        }
+                    }
+                }
+                socket = null
+                if (attachedId != id) break
+                delay(1500)
+                nextSince = if (lastSeq >= 0) lastSeq + 1 else -1
+            }
+        }
+    }
+
+    private fun spawnConfig(): BridgeConfigFrame {
+        val conv = store.currentConversation.value
+        val cwd = conv?.workspaceUri?.removePrefix("file://")?.takeIf { it.isNotBlank() }
+        return BridgeConfigFrame(
+            cwd = cwd,
+            // always explicit, so the process runs exactly what the controls show ("default" clears an older choice)
+            model = _selectedModelId.value.ifBlank { "default" },
+            permission_mode = _permissionMode.value.takeIf { modeTouched },
+            effort = _effort.value ?: "default",
+            thinking = if (_thinkingEnabled.value) "on" else "off"
+        )
+    }
+
+    private fun handleFrame(frame: BridgeFrame) {
+        when (frame.type) {
+            "bridge_line" -> {
+                val seq = frame.seq ?: return
+                if (seq <= lastSeq) return
+                if (lastSeq >= 0 && seq > lastSeq + 1) {
+                    // frames were lost on the way: attach again from the first missing one (the bridge buffer
+                    // still has it), otherwise e.g. a lost `result` leaves the turn running forever
+                    Log.w(TAG, "missed frames ${lastSeq + 1}..${seq - 1}: re-attaching")
+                    attachedId?.let { id ->
+                        socket = null
+                        connect(id, lastSeq + 1)
+                    }
+                    return
+                }
+                lastSeq = seq
+                val data = frame.data
+                val isReply = data?.get("type")?.jsonPrimitive?.contentOrNull == "control_response"
+                if (isReply) deliverReply(data!!)
+                val type = if (data != null && !isReply) transcript.applyLive(data) else ""
+                // a queued message was delivered (its replay, or command_lifecycle started / completed / cancelled)
+                when (type) {
+                    "command_lifecycle" -> {
+                        val state = data?.get("state")?.jsonPrimitive?.contentOrNull
+                        if (state != "queued") data?.get("command_uuid")?.jsonPrimitive?.contentOrNull?.let { dequeue(attachedId, it) }
+                    }
+                    "user" -> data?.get("uuid")?.jsonPrimitive?.contentOrNull?.let { dequeue(attachedId, it) }
+                }
+                val replayTarget = replayUntilSeq
+                if (replayTarget != null) {
+                    // old output being replayed while the chat opens: no side effects, show it once at the end.
+                    // Every buffered line counts, control replies included (often the newest line).
+                    if (seq >= replayTarget) finishReplay()
+                    return
+                }
+                if (data == null || isReply) return
+                if (awaitingProcess && type != "stream_event" && type != "rate_limit_event" && type != "command_lifecycle") {
+                    awaitingProcess = false
+                    clearStartupNotice()
+                }
+                if (retryNoticeShown && (type == "stream_event" || type == "assistant" || type == "result")) {
+                    retryNoticeShown = false
+                    _startupStatus.value = null
+                }
+                when (type) {
+                    "result" -> {
+                        queuedRestart?.let {
+                            queuedRestart = null
+                            restartOn(it)
+                        }
+                        endCompactingNotice()
+                        requestTitleOnce()
+                        scheduleTitleRefresh()
+                        onTurnFinished()
+                        refreshContextUsage()
+                    }
+                    "system" -> when (data["subtype"]?.jsonPrimitive?.contentOrNull) {
+                        "api_retry" -> showRetryNotice(data)
+                        "session_title_changed" -> {
+                            val title = data["title"]?.jsonPrimitive?.contentOrNull?.let { ai.antigem.data.remote.PromptExpansion.cleanTitle(it) }
+                            val cur = store.currentConversation.value
+                            if (!title.isNullOrBlank() && cur != null && cur.id == attachedId) {
+                                store.currentConversation.value = cur.copy(title = title)
+                                _conversations.value = _conversations.value.map { if (it.id == cur.id) it.copy(title = title) else it }
+                                synchronized(localConversations) { localConversations[cur.id]?.let { localConversations[cur.id] = it.copy(title = title) } }
+                            }
+                        }
+                        "init" -> {
+                            processLive = true
+                            transcript.permissionMode?.let { _permissionMode.value = it }
+                            // confirm what the process really runs (not inline: the reply arrives on this worker)
+                            backendScope.launch(worker) { syncApplied() }
+                        }
+                        "status" -> {
+                            transcript.permissionMode?.let { _permissionMode.value = it }
+                            if (data["status"]?.jsonPrimitive?.contentOrNull == "compacting") {
+                                _isCompacting.value = true
+                                _startupStatus.value = "Compacting the conversation…"
+                            } else endCompactingNotice()
+                        }
+                        "compact_boundary" -> {
+                            endCompactingNotice()
+                            // the chat's first message (with the app's global context) was summarized away: resend it next time
+                            ai.antigem.data.context.GlobalContext.forget(attachedId ?: store.currentConversation.value?.id)
+                            // and the Agent memory text with it
+                            ai.antigem.data.memory.AgentMemory.forget(attachedId ?: store.currentConversation.value?.id)
+                        }
+                    }
+                }
+                if (type == "stream_event") scheduleEmit() else emitNow()
+            }
+            "bridge_state" -> {
+                val st = frame.state ?: return
+                processLive = st.live
+                when (frame.event) {
+                    "attached" -> {
+                        if (lastSeq >= 0 && lastSeq + 1 < st.buffer_start_seq) {
+                            // output was dropped from the buffer while we were away: reload from the transcript
+                            // (a chat not written to disk yet keeps what it shows)
+                            val id = attachedId
+                            if (id != null && isOnDisk(id)) {
+                                backendScope.launch(worker) { loadAndAttach(id) }
+                                return
+                            }
+                        }
+                        // no process and nothing sent on this connection: a turn shown as running is over (the
+                        // process exited while we were away). A just-sent message starts the process itself.
+                        if (!st.live && transcript.isTurnActive && !awaitingProcess) transcript.endTurn()
+                        if (replayUntilSeq != null && st.next_seq - 1 <= lastSeq) finishReplay()
+                        // a running process may use other settings than this app last showed for the chat
+                        if (st.live) backendScope.launch(worker) { syncApplied() }
+                    }
+                    "spawned" -> {
+                        // only when the start-up notice is already shown (a slow start)
+                        if (awaitingProcess && _startupStatus.value != null) _startupStatus.value = "Claude Code is starting…"
+                    }
+                    "exited" -> {
+                        awaitingProcess = false
+                        clearStartupNotice()
+                        if (replayUntilSeq != null) finishReplay()
+                        failReplies("Claude process exited")
+                        dropQueued("Claude Code stopped before it was delivered.")
+                        val err = frame.error.orEmpty()
+                        if (transcript.isTurnActive || (frame.exit_code ?: 0) != 0) {
+                            if ((frame.exit_code ?: 0) != 0) {
+                                transcript.addError("Claude Code stopped", err.ifBlank { "The claude process exited with code ${frame.exit_code}." })
+                            }
+                            transcript.endTurn()
+                        }
+                    }
+                }
+                emitNow()
+            }
+            "bridge_error" -> {
+                val err = frame.error.orEmpty()
+                awaitingProcess = false
+                clearStartupNotice()
+                if (replayUntilSeq != null) finishReplay()
+                failReplies(err)
+                dropQueued(err)
+                transcript.addError(
+                    if (err.contains("not found", ignoreCase = true)) "Claude Code is not installed" else "Claude Code unavailable",
+                    if (err.contains("not found", ignoreCase = true)) "$err\n\nInstall it from Settings → Claude Code → Account & CLI." else err
+                )
+                transcript.endTurn()
+                emitNow()
+            }
+        }
+    }
+
+    // the "Provider error … retrying" notice is showing: the next model output (or the result) removes it
+    private var retryNoticeShown = false
+
+    /** "Provider rate limit (HTTP 429). Retrying in 18s · attempt 6 of 10" from a `system/api_retry` line. */
+    private fun showRetryNotice(data: JsonObject) {
+        val attempt = data["attempt"]?.jsonPrimitive?.intOrNull ?: return
+        val max = data["max_retries"]?.jsonPrimitive?.intOrNull
+        val delaySec = ((data["retry_delay_ms"]?.jsonPrimitive?.longOrNull ?: 0L) + 999) / 1000
+        val status = data["error_status"]?.jsonPrimitive?.intOrNull
+        val reason = when {
+            status == 429 -> "rate limit (HTTP 429)"
+            status == 401 || status == 403 -> "the key was rejected (HTTP $status)"
+            status == 402 -> "payment or balance problem (HTTP 402)"
+            status != null && status >= 500 -> "the provider is having problems (HTTP $status)"
+            status != null -> "HTTP $status"
+            else -> "cannot reach the provider"
+        }
+        retryNoticeShown = true
+        _startupStatus.value = "Provider error: $reason. Retrying in ${delaySec}s · attempt $attempt${if (max != null) " of $max" else ""}"
+    }
+
+    private fun clearStartupNotice() {
+        startupNoticeJob?.cancel()
+        startupNoticeJob = null
+        _isCompacting.value = false
+        _startupStatus.value = null
+    }
+
+    private fun endCompactingNotice() {
+        if (!_isCompacting.value) return
+        _isCompacting.value = false
+        _startupStatus.value = null
+    }
+
+    private fun deliverReply(data: JsonObject) {
+        val ev = runCatching { ClaudeJson.decodeFromJsonElement<ClaudeControlResponseEvent>(data) }.getOrNull() ?: return
+        replies.remove(ev.response.request_id)?.complete(ev.response)
+    }
+
+    private fun failReplies(error: String) {
+        replies.values.forEach { it.complete(ClaudeControlResponseInner(subtype = "error", error = error)) }
+        replies.clear()
+    }
+
+    /** Sends a control request and waits for its reply (null on timeout). Starts the process if needed. */
+    private suspend fun request(body: ClaudeControlRequestBody, timeoutMs: Long = 30_000): ClaudeControlResponseInner? {
+        val id = "app_${UUID.randomUUID()}"
+        val deferred = CompletableDeferred<ClaudeControlResponseInner>()
+        replies[id] = deferred
+        send(ClaudeJson.encodeToString(ClaudeControlRequest(request_id = id, request = body)))
+        // the reply arrives on this same worker: wait without blocking it
+        val result = withContext(Dispatchers.IO) { withTimeoutOrNull(timeoutMs) { deferred.await() } }
+        replies.remove(id)
+        return result
+    }
+
+    private fun send(text: String) {
+        val s = socket
+        if (s == null || !s.send(text)) outbox.addLast(text)
+    }
+
+    private fun sendControl(body: ClaudeControlRequestBody) {
+        send(ClaudeJson.encodeToString(ClaudeControlRequest(request_id = "app_${UUID.randomUUID()}", request = body)))
+    }
+
+    private fun respond(requestId: String, result: ClaudePermissionResult) {
+        send(ClaudeJson.encodeToString(ClaudeControlResponse(ClaudeControlResponseBody(request_id = requestId, response = result))))
+    }
+
+    private fun detachLocked() {
+        socketJob?.cancel()
+        socketJob = null
+        socket?.close()
+        socket = null
+        emitJob?.cancel()
+        emitJob = null
+        outbox.clear()
+        failReplies("chat closed")
+        attachedId = null
+        lastSeq = -1
+        processLive = false
+        awaitingProcess = false
+        clearStartupNotice()
+        replayUntilSeq = null
+        replayDeadline?.cancel()
+        replayDeadline = null
+    }
+
+    private fun scheduleEmit() {
+        if (emitJob?.isActive == true) return
+        emitJob = backendScope.launch(worker) {
+            delay(40)
+            emitNow()
+        }
+    }
+
+    private fun emitNow() {
+        emitJob?.cancel()
+        emitJob = null
+        if (replayUntilSeq != null) return
+        val id = attachedId ?: return
+        if (store.currentConversation.value?.id != id) return
+        val msgs = transcript.toChatMessages()
+        _messages.value = msgs
+        val active = transcript.isTurnActive
+        _isTurnActive.value = active
+        if (_conversations.value.any { it.id == id && it.isRunning != active }) {
+            _conversations.value = _conversations.value.map { if (it.id == id) it.copy(isRunning = active) else it }
+        }
+        _isStreaming.value = active && !transcript.hasPending()
+        _pendingPermissions.value = transcript.pendingList().filter { it.toolName != "AskUserQuestion" }
+        _cacheInfo.value = transcript.cacheInfo
+        // identity check: each rate-limit event builds a new map, so only the dropped one stays hidden
+        if (transcript.rateLimits.isNotEmpty() && transcript.rateLimits !== supersededLimits) _rateLimits.value = transcript.rateLimits
+        if (transcript.sessionCostUsd > 0) _sessionCost.value = transcript.sessionCostUsd
+        _needsLogin.value = transcript.needsLogin
+        transcript.sessionModel?.let { _activeModel.value = it }
+        ai.antigem.ui.chat.ChatFeedCache.prewarm(msgs)
+    }
+
+    private fun upsertLocal(conv: Conversation) {
+        val inBridge = _conversations.value.any { it.id == conv.id }
+        if (!inBridge) synchronized(localConversations) { localConversations[conv.id] = conv }
+        _conversations.value = (listOf(conv) + _conversations.value.filter { it.id != conv.id }).sortedByDescending { it.updatedAt }
+    }
+
+    private fun defaultWorkspaceUri(): String {
+        val path = ai.antigem.data.daemon.IdeDaemonManager.activeProject.value?.path.orEmpty()
+        return if (path.isBlank()) "" else if (path.startsWith("file://")) path else "file://$path"
+    }
+
+    /**
+     * The prompt's content blocks. Images (already shrunk by the app) go inline, so Claude sees them directly. Other
+     * files never come here as data: the message's text lists them by path (see AttachedFiles) and Claude opens them
+     * in place with its tools.
+     */
+    private fun buildBlocks(text: String, atts: List<ChatAttachment>): List<ClaudeContentBlock> {
+        val blocks = mutableListOf<ClaudeContentBlock>()
+        val notes = mutableListOf<String>()
+        for (a in atts) {
+            val b64 = a.base64
+            if (a.reference && b64.isNullOrBlank()) continue
+            val mime = a.mimeType?.lowercase().orEmpty()
+            if (b64.isNullOrBlank()) {
+                notes.add("[Attachment ${a.name} could not be read]")
+                continue
+            }
+            if (mime in IMAGE_TYPES && b64.length * 3L / 4 <= INLINE_IMAGE_BYTES) {
+                blocks.add(ClaudeContentBlock(type = "image", source = ClaudeBlockSource("base64", mime, b64)))
+                continue
+            }
+            notes.add("[Attachment ${a.name} could not be sent]")
+        }
+        val fullText = (notes + listOf(text))
+            .filter { it.isNotBlank() }
+            .joinToString("\n\n")
+        if (fullText.isNotBlank() || blocks.isEmpty()) blocks.add(ClaudeContentBlock(type = "text", text = fullText.ifBlank { " " }))
+        return blocks
+    }
+
+    companion object {
+        private const val TAG = "ClaudeChatBackend"
+
+        /** The provider id of a custom model ("@openrouter/x" → "openrouter"), "" for Claude's own models. */
+        fun providerOf(modelId: String): String = if (modelId.startsWith("@")) modelId.drop(1).substringBefore('/') else ""
+
+        /** The model's own id (without "@provider/"). */
+        fun rawModel(modelId: String): String = if (modelId.startsWith("@")) modelId.substringAfter('/') else modelId
+
+        private val IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/gif", "image/webp")
+        /** The API takes inline images up to about 5 MB of base64; the app's shrunk images stay well below. */
+        private const val INLINE_IMAGE_BYTES = 3_500_000L
+
+        /** The start-up notice appears only when Claude Code takes longer than this to answer a sent message. */
+        private const val STARTUP_NOTICE_DELAY_MS = 4_000L
+
+        /** Built-in commands whose terminal view the app replaces with its own screen (see [appCommand]). */
+        val APP_COMMANDS = mapOf(
+            "usage" to "Plan usage limits and this chat's cost",
+            "context" to "Context window usage",
+            "model" to "Choose the model",
+            "effort" to "Set the effort level",
+            "mcp" to "MCP servers",
+            "config" to "Claude Code settings",
+            "clear" to "Start a new chat"
+        )
+
+        /** Built-ins that do nothing useful in the app (terminal-only views, internal or removed commands). */
+        private val HIDDEN_COMMANDS = setOf(
+            "color", "focus", "heapdump", "__remote-workflow", "workflow-launch-exec", "extra-usage", "agents", "import"
+        )
+
+        /** Permission modes in the order the mode menu shows them. */
+        val PERMISSION_MODES = listOf(
+            "default" to "Manual",
+            "acceptEdits" to "Accept edits",
+            "plan" to "Plan",
+            "auto" to "Auto",
+            "dontAsk" to "Don't ask"
+        )
+    }
+}
+
+/** "128K context · 8K output", or null when the context window is unknown (own value, else the provider's default). */
+fun ClaudeProviderModel.contextLabel(provider: ClaudeProvider? = null): String? {
+    val limits = provider?.limitsOf(this)
+    val ctx = limits?.context ?: context_length
+    val out = limits?.maxOutput ?: max_output_tokens
+    if (ctx <= 0) return null
+    return "${tokenLabel(ctx)} context" + if (out > 0) " · ${tokenLabel(out)} output" else ""
+}
+
+/** "thinking 16K", "no thinking", or null when the model inherits a provider that sends no budget. */
+fun ClaudeProviderModel.thinkingLabel(provider: ClaudeProvider): String? {
+    val budget = provider.limitsOf(this).thinkingBudget
+    return when {
+        budget > 0 -> "thinking ${tokenLabel(budget.toLong())}"
+        thinking_mode == "off" -> "no thinking"
+        else -> null
+    }
+}
+
+/** 128000 → "128K", 1000000 → "1M". */
+fun tokenLabel(n: Long): String = when {
+    n >= 1_000_000 -> (n / 1_000_000.0).let { if (it % 1.0 == 0.0) "${it.toLong()}M" else String.format(java.util.Locale.US, "%.1fM", it) }
+    n >= 1000 -> "${(n + 500) / 1000}K"
+    else -> n.toString()
+}

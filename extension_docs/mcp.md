@@ -72,7 +72,7 @@ Run repository tests from the project root:
 
 ```sh
 node --experimental-vm-modules --test app/src/test/browserextensions/*.test.mjs
-./gradlew :app:testTermuxDebugUnitTest --tests com.example.gemini.ui.browser.WebViewExtensionArchiveTest --offline
+./gradlew :app:testDebugUnitTest --tests ai.antigem.ui.browser.WebViewExtensionArchiveTest --offline
 ```
 
 A minimal package load and MCP call test does not prove page automation. Test against the device's actual WebView, verify returned network/media IDs, and use guarded dry runs when the extension implements them.

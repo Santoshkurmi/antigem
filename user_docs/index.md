@@ -36,7 +36,7 @@ Quick fixes for the three most common problems, the chapter directory, and how t
 Proof that every screen, setting and Jarvis page in the app is covered by a guide, with the real source file for each one.
 
 - 1. Documentation File to Source File Audit Matrix
-- 2. UI Screen Packages (`app/src/main/java/com/example/gemini/ui/*`)
+- 2. UI Screen Packages (`app/src/main/java/ai/antigem/ui/*`)
 - 3. Active Settings Sections & Conditional Visibility (`SettingsDialog.kt`)
 - 4. All 10 Jarvis Settings Pages (`JarvisSettingsPage.kt`)
 

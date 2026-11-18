@@ -1,6 +1,6 @@
 package ai.antigem.app
 
-import com.example.gemini.data.service.AntiGemService
+import ai.antigem.data.service.AntiGemService
 
 /**
  * Direct ai.antigem.app.TermuxService implementation for shell commands

@@ -407,7 +407,7 @@ APKs are written to `app/build/outputs/apk/<variant>/<buildType>/` and `build/ou
 ```text
 antigem/
 ├── app/src/main/
-│   ├── java/com/example/gemini/
+│   ├── java/ai/antigem/
 │   │   ├── data/          # Agent backends (agy, claude, opencode, codex), terminal, ADB, automation, notes, updater
 │   │   ├── domain/        # Chat models and parsing
 │   │   └── ui/            # Compose screens: chat, IDE, browser, notes, settings

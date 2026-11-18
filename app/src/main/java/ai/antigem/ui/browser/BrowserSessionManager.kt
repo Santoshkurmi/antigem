@@ -1,0 +1,2084 @@
+package ai.antigem.ui.browser
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
+import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Base64
+import android.util.Log
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
+import android.webkit.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import ai.antigem.ui.browser.mcp.BrowserAgentIndicator
+import ai.antigem.ui.browser.mcp.BrowserAgentLock
+import ai.antigem.ui.browser.mcp.BrowserCdp
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedDeque
+import kotlin.coroutines.resume
+
+/**
+ * Diagnostic Console Log entry captured from a live WebView tab.
+ */
+data class BrowserConsoleMessage(
+    val timestamp: Long = System.currentTimeMillis(),
+    val level: String, // "DEBUG", "LOG", "INFO", "WARN", "ERROR"
+    val message: String,
+    val sourceId: String = "",
+    val lineNumber: Int = 0
+) {
+    fun toJsonObject(): JSONObject = JSONObject().apply {
+        put("timestamp", timestamp)
+        put("level", level)
+        put("message", message)
+        put("sourceId", sourceId)
+        put("lineNumber", lineNumber)
+    }
+}
+
+/**
+ * Diagnostic Network/Navigation Error entry captured from WebViewClient.
+ */
+data class BrowserNetworkError(
+    val timestamp: Long = System.currentTimeMillis(),
+    val url: String,
+    val errorCode: Int = 0,
+    val description: String,
+    val isMainFrame: Boolean = true
+) {
+    fun toJsonObject(): JSONObject = JSONObject().apply {
+        put("timestamp", timestamp)
+        put("url", url)
+        put("errorCode", errorCode)
+        put("description", description)
+        put("isMainFrame", isMainFrame)
+    }
+}
+
+/**
+ * A JavaScript alert, confirm, prompt or "leave page?" the page is waiting on. The page (and, since tabs share one
+ * renderer, every page) is paused until it is answered, by the user's card or browser_handle_dialog.
+ */
+class BrowserJsDialog(
+    val type: String,
+    val message: String,
+    val defaultText: String,
+    val url: String,
+    private val result: android.webkit.JsResult
+) {
+    @Volatile private var answered = false
+
+    /** Answers on the main thread; [text] is the prompt's reply. */
+    fun answer(accept: Boolean, text: String? = null) {
+        if (answered) return
+        answered = true
+        when {
+            accept && result is android.webkit.JsPromptResult -> result.confirm(text ?: defaultText)
+            accept -> result.confirm()
+            else -> result.cancel()
+        }
+    }
+}
+
+/**
+ * Model representing a persistent browser tab.
+ */
+class BrowserTabSession(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    initialUrl: String = "",
+    initialTitle: String = "New Tab"
+) {
+    var url by mutableStateOf(initialUrl)
+    var title by mutableStateOf(initialTitle)
+    var isLoading by mutableStateOf(false)
+    var progress by mutableStateOf(0)
+    var canGoBack by mutableStateOf(false)
+    var canGoForward by mutableStateOf(false)
+    var scrollY by mutableStateOf(0)
+    var webView: WebView? = null
+    var isBackgroundActive by mutableStateOf(true)
+    var lastError by mutableStateOf<BrowserNetworkError?>(null)
+    var isStalled by mutableStateOf(false)
+    var isDevToolsEnabled by mutableStateOf(false)
+    var isDesktopMode by mutableStateOf(false)
+    var previewBitmap by mutableStateOf<Bitmap?>(null)
+
+    // AI automation (Flow): lock requested by the model, AI currently working, temporary user unlock,
+    // and whether the tab is what the user is looking at right now
+    var aiLocked by mutableStateOf(false)
+    var aiBusy by mutableStateOf(false)
+    var userUnlocked by mutableStateOf(false)
+    var isOnScreen by mutableStateOf(false)
+
+    // Browser MCP: keyboard/zoom lock while an agent acts (short, automatic), the agent's explicit lock (browser_lock,
+    // until unlocked), and a page dialog waiting for an answer
+    var agentInputLock by mutableStateOf(false)
+    var agentLocked by mutableStateOf(false)
+    /** The agent lock pinned the page zoom (only while agent-locked). */
+    var agentZoomPinned = false
+    var pendingDialog by mutableStateOf<BrowserJsDialog?>(null)
+
+    /** True while the user must not interact with the page (overlay shown, keyboard kept away). */
+    val blocksUserInput: Boolean
+        get() = aiBusy || (aiLocked && !userUnlocked)
+
+    // Circular buffers for real-time telemetry (capped to 300 entries each)
+    val consoleLogs = ConcurrentLinkedDeque<BrowserConsoleMessage>()
+    val networkErrors = ConcurrentLinkedDeque<BrowserNetworkError>()
+
+    private var stallWatchdogRunnable: Runnable? = null
+
+    fun capturePreview() {
+        val wv = webView ?: return
+        try {
+            val w = wv.width
+            val h = wv.height
+            if (w > 0 && h > 0) {
+                val scale = 0.4f
+                val scaledW = (w * scale).toInt().coerceAtLeast(1)
+                val scaledH = (h * scale).toInt().coerceAtLeast(1)
+                val bitmap = Bitmap.createBitmap(scaledW, scaledH, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                canvas.scale(scale, scale)
+                wv.draw(canvas)
+                previewBitmap = bitmap
+            }
+        } catch (e: Throwable) {
+            Log.d("BrowserTabSession", "capturePreview skipped: ${e.message}")
+        }
+    }
+
+    fun startLoadingWatchdog(handler: Handler, timeoutMs: Long = 15000L) {
+        cancelLoadingWatchdog(handler)
+        isStalled = false
+        val r = Runnable {
+            if (isLoading) {
+                isStalled = true
+                if (lastError == null) {
+                    lastError = BrowserNetworkError(
+                        url = url,
+                        errorCode = -1001,
+                        description = "Page load timed out (took longer than ${timeoutMs / 1000}s). The web server or host might be unreachable or stalled."
+                    )
+                }
+            }
+        }
+        stallWatchdogRunnable = r
+        handler.postDelayed(r, timeoutMs)
+    }
+
+    fun cancelLoadingWatchdog(handler: Handler) {
+        stallWatchdogRunnable?.let { handler.removeCallbacks(it) }
+        stallWatchdogRunnable = null
+    }
+
+    fun clearError() {
+        lastError = null
+        isStalled = false
+    }
+
+    fun stopLoading(handler: Handler? = null) {
+        try {
+            webView?.stopLoading()
+        } catch (_: Throwable) {}
+        isLoading = false
+        if (handler != null) {
+            cancelLoadingWatchdog(handler)
+        }
+    }
+
+    fun addConsoleLog(msg: BrowserConsoleMessage) {
+        if (consoleLogs.size >= 300) consoleLogs.pollFirst()
+        consoleLogs.addLast(msg)
+    }
+
+    fun addNetworkError(err: BrowserNetworkError) {
+        if (networkErrors.size >= 200) networkErrors.pollFirst()
+        networkErrors.addLast(err)
+    }
+
+    fun clearLogs() {
+        consoleLogs.clear()
+        networkErrors.clear()
+    }
+
+    fun toSummaryJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("url", url)
+        put("title", title)
+        put("isDesktopMode", isDesktopMode)
+        put("viewMode", if (isDesktopMode) "desktop" else "mobile")
+        put("isLoading", isLoading)
+        put("progress", progress)
+        put("canGoBack", canGoBack)
+        put("canGoForward", canGoForward)
+        put("hasActiveWebView", webView != null)
+        put("consoleErrorCount", consoleLogs.count { it.level == "ERROR" })
+        put("networkErrorCount", networkErrors.size)
+        if (agentLocked) put("lockedByAgent", true)
+        pendingDialog?.let { put("dialog", JSONObject().put("type", it.type).put("message", it.message.take(300))) }
+    }
+}
+
+/** Largest total size uploadFiles builds inside the page when no file chooser opens. */
+private const val MAX_IN_PAGE_UPLOAD_BYTES = 25L * 1024 * 1024
+
+/**
+ * Singleton BrowserSessionManager that maintains persistent browser sessions,
+ * offscreen headless rendering for AI inspection, screenshot capture, DOM tree querying,
+ * interaction dispatching, and console log aggregation.
+ */
+class BrowserSessionManager private constructor() {
+
+    companion object {
+        private const val TAG = "BrowserSessionManager"
+        val instance: BrowserSessionManager by lazy { BrowserSessionManager() }
+
+        private const val MAX_LOGS_PER_QUERY = 150
+        private const val DEFAULT_TIMEOUT_MS = 15000L
+
+        /**
+         * Injects script to spoof Desktop screen width/height, platform, client hints, and desktop viewport meta tag.
+         * This prevents responsive sites (like YouTube, Google, Facebook, Twitter, Reddit) from falling back to mobile.
+         * Google sign-in pages are left untouched: their bot checks flag overridden navigator properties.
+         */
+        fun injectDesktopSpoofing(view: WebView?, url: String? = view?.url) {
+            if (BrowserIdentity.isGoogleSignInUrl(url)) return
+            val fullVersion = BrowserIdentity.chromeFullVersion(WebSettings.getDefaultUserAgent(view?.context ?: return))
+            val majorVersion = fullVersion.substringBefore('.')
+            // With native client hints, navigator.userAgentData is already the desktop Chrome one
+            val spoofUserAgentData = !BrowserIdentity.canSetClientHints()
+            val js = """
+            (function() {
+                try {
+                    // 1. Override screen dimensions to full desktop resolution
+                    var screenProps = {
+                        width: 1920,
+                        height: 1080,
+                        availWidth: 1920,
+                        availHeight: 1040,
+                        colorDepth: 24,
+                        pixelDepth: 24
+                    };
+                    for (var p in screenProps) {
+                        try {
+                            Object.defineProperty(window.screen, p, {
+                                get: (function(val) { return function() { return val; }; })(screenProps[p]),
+                                configurable: true
+                            });
+                        } catch(e) {}
+                    }
+
+                    // 2. Override navigator platform and touch points
+                    try {
+                        Object.defineProperty(navigator, 'platform', { get: function() { return 'Linux x86_64'; }, configurable: true });
+                    } catch(e) {}
+                    try {
+                        Object.defineProperty(navigator, 'maxTouchPoints', { get: function() { return 1; }, configurable: true });
+                    } catch(e) {}
+
+                    // 3. Override navigator.userAgentData (Chromium Client Hints)
+                    try {
+                        if ($spoofUserAgentData && navigator.userAgentData) {
+                            Object.defineProperty(navigator, 'userAgentData', {
+                                get: function() {
+                                    return {
+                                        mobile: false,
+                                        platform: 'Linux',
+                                        brands: [
+                                            { brand: 'Chromium', version: '$majorVersion' },
+                                            { brand: 'Google Chrome', version: '$majorVersion' },
+                                            { brand: 'Not;A=Brand', version: '24' }
+                                        ],
+                                        getHighEntropyValues: function() {
+                                            return Promise.resolve({
+                                                architecture: 'x86',
+                                                bitness: '64',
+                                                mobile: false,
+                                                model: '',
+                                                platform: 'Linux',
+                                                platformVersion: '6.8.0',
+                                                uaFullVersion: '$fullVersion',
+                                                fullVersionList: [
+                                                    { brand: 'Chromium', version: '$fullVersion' },
+                                                    { brand: 'Google Chrome', version: '$fullVersion' },
+                                                    { brand: 'Not;A=Brand', version: '24.0.0.0' }
+                                                ]
+                                            });
+                                        }
+                                    };
+                                },
+                                configurable: true
+                            });
+                        }
+                    } catch(e) {}
+
+                    // 4. Force 1280px desktop viewport width with pinch zoom-in and zoom-out fully enabled
+                    function applyDesktopViewport() {
+                        try {
+                            if (window.__antigemInputLock) {
+                                window.__antigemInputLock.applyViewport();
+                                return;
+                            }
+                            var meta = document.querySelector('meta[name="viewport"]');
+                            if (!meta) {
+                                meta = document.createElement('meta');
+                                meta.name = 'viewport';
+                                (document.head || document.documentElement).appendChild(meta);
+                            }
+                            meta.setAttribute('content', 'width=1280, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes');
+                        } catch(e) {}
+                    }
+
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyDesktopViewport);
+                    }
+                    applyDesktopViewport();
+                } catch(e) {}
+            })();
+            """.trimIndent()
+            try {
+                view?.evaluateJavascript(js, null)
+            } catch (_: Exception) {}
+        }
+
+        /**
+         * Formats raw user/agent input into a valid HTTP/HTTPS/File URL or search query.
+         */
+        fun formatUrl(input: String): String {
+            val trimmed = input.trim()
+            if (trimmed.isBlank()) return ""
+            if (trimmed.startsWith("http://", ignoreCase = true) ||
+                trimmed.startsWith("https://", ignoreCase = true) ||
+                trimmed.startsWith("file://", ignoreCase = true) ||
+                trimmed.startsWith("about:", ignoreCase = true) ||
+                trimmed.startsWith("data:", ignoreCase = true)
+            ) {
+                return trimmed
+            }
+            if (trimmed.startsWith("localhost", ignoreCase = true) ||
+                trimmed.startsWith("127.0.0.1") ||
+                trimmed.startsWith("192.168.") ||
+                trimmed.startsWith("10.0.") ||
+                trimmed.matches(Regex("^[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}(/.*)?$")) ||
+                (trimmed.contains(":") && trimmed.substringBefore(":").all { it.isLetterOrDigit() || it == '.' })
+            ) {
+                return "http://$trimmed"
+            }
+            val encoded = try { URLEncoder.encode(trimmed, "UTF-8") } catch (_: Exception) { trimmed }
+            return "https://www.google.com/search?q=$encoded"
+        }
+    }
+
+    data class SpeedDialShortcut(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val title: String,
+        val url: String,
+        val iconUrl: String? = null
+    )
+
+    data class TypedHistoryItem(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val query: String,
+        val url: String,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private val defaultShortcuts = listOf(
+        SpeedDialShortcut(id = "google", title = "Google", url = "https://www.google.com"),
+        SpeedDialShortcut(id = "youtube", title = "YouTube", url = "https://www.youtube.com")
+    )
+
+    val shortcuts = mutableStateListOf<SpeedDialShortcut>().apply {
+        addAll(defaultShortcuts)
+    }
+
+    val typedHistory = mutableStateListOf<TypedHistoryItem>()
+
+    private var shortcutsLoaded = false
+    private var historyLoaded = false
+
+    fun loadShortcutsIfNeeded(context: Context) {
+        if (shortcutsLoaded) return
+        shortcutsLoaded = true
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_shortcuts", Context.MODE_PRIVATE)
+        val json = prefs.getString("shortcuts_json", null) ?: return
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<SpeedDialShortcut>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    SpeedDialShortcut(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        title = obj.getString("title"),
+                        url = obj.getString("url")
+                    )
+                )
+            }
+            if (list.isNotEmpty()) {
+                shortcuts.clear()
+                shortcuts.addAll(list)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun loadHistoryIfNeeded(context: Context) {
+        if (historyLoaded) return
+        historyLoaded = true
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_history", Context.MODE_PRIVATE)
+        val json = prefs.getString("typed_history_json", null) ?: return
+        try {
+            val arr = JSONArray(json)
+            val list = mutableListOf<TypedHistoryItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    TypedHistoryItem(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        query = obj.getString("query"),
+                        url = obj.getString("url"),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                    )
+                )
+            }
+            if (list.isNotEmpty()) {
+                typedHistory.clear()
+                typedHistory.addAll(list)
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun addHistory(context: Context, query: String, finalUrl: String) {
+        val trimmedQuery = query.trim()
+        val trimmedUrl = finalUrl.trim()
+        if (trimmedQuery.isBlank() || trimmedUrl.isBlank() || trimmedUrl == "about:blank") return
+
+        loadHistoryIfNeeded(context)
+        // Remove duplicate if already exists
+        typedHistory.removeAll { it.url.equals(trimmedUrl, ignoreCase = true) || it.query.equals(trimmedQuery, ignoreCase = true) }
+        typedHistory.add(0, TypedHistoryItem(query = trimmedQuery, url = trimmedUrl))
+        // Cap history to 50 most recent items
+        while (typedHistory.size > 50) {
+            typedHistory.removeAt(typedHistory.lastIndex)
+        }
+        saveHistory(context)
+    }
+
+    fun removeHistory(context: Context, id: String) {
+        typedHistory.removeAll { it.id == id }
+        saveHistory(context)
+    }
+
+    fun clearHistory(context: Context) {
+        typedHistory.clear()
+        saveHistory(context)
+    }
+
+    private fun saveHistory(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_history", Context.MODE_PRIVATE)
+        try {
+            val arr = JSONArray()
+            typedHistory.forEach { item ->
+                arr.put(JSONObject().apply {
+                    put("id", item.id)
+                    put("query", item.query)
+                    put("url", item.url)
+                    put("timestamp", item.timestamp)
+                })
+            }
+            prefs.edit().putString("typed_history_json", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun addShortcut(context: Context, title: String, url: String) {
+        val formatted = formatUrl(url)
+        val sc = SpeedDialShortcut(title = title, url = formatted)
+        shortcuts.add(sc)
+        saveShortcuts(context)
+    }
+
+    fun removeShortcut(context: Context, id: String) {
+        shortcuts.removeAll { it.id == id }
+        saveShortcuts(context)
+    }
+
+    private fun saveShortcuts(context: Context) {
+        val prefs = context.applicationContext.getSharedPreferences("antigem_browser_shortcuts", Context.MODE_PRIVATE)
+        try {
+            val arr = JSONArray()
+            shortcuts.forEach { sc ->
+                arr.put(JSONObject().apply {
+                    put("id", sc.id)
+                    put("title", sc.title)
+                    put("url", sc.url)
+                })
+            }
+            prefs.edit().putString("shortcuts_json", arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private data class AutomationInputState(
+        val view: WebView,
+        val focusable: Boolean,
+        val focusableInTouchMode: Boolean,
+        val supportZoom: Boolean,
+        val builtInZoomControls: Boolean,
+        val softInputMode: Int?,
+        val altFocusableIm: Boolean?
+    )
+
+    private val automationInputStates = mutableMapOf<String, AutomationInputState>()
+
+    val tabs = mutableStateListOf<BrowserTabSession>().apply {
+        add(BrowserTabSession(initialUrl = "", initialTitle = "New Tab"))
+    }
+
+    var activeTabId by mutableStateOf<String?>(tabs.firstOrNull()?.id)
+
+    /**
+     * Headless offscreen container to keep WebViews measured and layout-computed
+     * even when the browser UI screen is hidden (e.g., user is chatting).
+     */
+    private var offscreenContainer: ViewGroup? = null
+    private var appContext: Context? = null
+
+    /** An automated file pick: the next file chooser [webView] opens receives [files] instead of showing a picker. */
+    private class PendingChooser(val webView: WebView, val files: List<Uri>, val result: CompletableDeferred<JSONObject>)
+
+    @Volatile
+    private var pendingChooser: PendingChooser? = null
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+        WebView.setWebContentsDebuggingEnabled(true)
+        loadShortcutsIfNeeded(context)
+    }
+
+    fun getActiveTab(): BrowserTabSession? {
+        return tabs.find { it.id == activeTabId } ?: tabs.firstOrNull()
+    }
+
+    fun getTab(tabId: String?): BrowserTabSession? {
+        if (tabId.isNullOrBlank()) return getActiveTab()
+        return tabs.find { it.id == tabId } ?: getActiveTab()
+    }
+
+    fun listTabsJson(): JSONArray {
+        val array = JSONArray()
+        tabs.forEach { tab ->
+            val json = tab.toSummaryJson()
+            json.put("isActive", tab.id == activeTabId)
+            array.put(json)
+        }
+        return array
+    }
+
+    fun getMainHandler(): Handler = mainHandler
+
+    fun addNewTab(url: String = "", title: String = "New Tab", activate: Boolean = true, desktopMode: Boolean? = null): BrowserTabSession {
+        val formatted = if (url.isNotBlank()) formatUrl(url) else ""
+        val newTab = BrowserTabSession(
+            initialUrl = formatted,
+            initialTitle = if (formatted.isNotBlank()) formatted else title
+        )
+        if (desktopMode != null) {
+            newTab.isDesktopMode = desktopMode
+        }
+        tabs.add(newTab)
+        if (activate || activeTabId == null) {
+            activeTabId = newTab.id
+        }
+        if (formatted.isNotBlank()) {
+            loadUrlInTab(newTab, formatted)
+        }
+        return newTab
+    }
+
+    fun switchTab(tabId: String): Boolean {
+        val tab = tabs.find { it.id == tabId } ?: return false
+        activeTabId = tab.id
+        return true
+    }
+
+    fun closeAllTabs() {
+        mainHandler.post {
+            tabs.forEach { tabToRemove ->
+                try {
+                    setAutomationInput(tabToRemove, false)
+                    tabToRemove.webView?.onPause()
+                    tabToRemove.webView?.let { wv ->
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        wv.destroy()
+                    }
+                    tabToRemove.webView = null
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error destroying WebView", e)
+                }
+            }
+        }
+        tabs.clear()
+        activeTabId = null
+    }
+
+    fun closeTab(tabId: String): Boolean {
+        val index = tabs.indexOfFirst { it.id == tabId }
+        if (index == -1) return false
+        val tabToRemove = tabs[index]
+        setAutomationInput(tabToRemove, false)
+        tabToRemove.pendingDialog?.answer(false)
+        tabToRemove.pendingDialog = null
+        BrowserCdp.forget(tabId)
+        BrowserAgentIndicator.clear(tabId)
+        BrowserAgentLock.forget(tabId)
+        mainHandler.post {
+            try {
+                tabToRemove.webView?.onPause()
+                tabToRemove.webView?.let { wv ->
+                    (wv.parent as? ViewGroup)?.removeView(wv)
+                    wv.destroy()
+                }
+                tabToRemove.webView = null
+            } catch (e: Exception) {
+                Log.w(TAG, "Error destroying WebView for tab $tabId", e)
+            }
+        }
+        tabs.removeAt(index)
+
+        if (tabs.isEmpty()) {
+            activeTabId = null
+        } else if (activeTabId == tabId) {
+            val nextIndex = (index - 1).coerceAtLeast(0)
+            activeTabId = tabs[nextIndex].id
+        }
+        return true
+    }
+
+    /**
+     * Wipes everything a site could use to recognise this browser again: cookies, local/session
+     * storage, IndexedDB, service workers, HTTP cache, saved HTTP auth, site permissions, tabs and
+     * typed history. Speed-dial shortcuts are kept. Ends with one fresh, empty tab.
+     */
+    fun clearAllBrowsingData(context: Context, onDone: () -> Unit = {}) {
+        mainHandler.post {
+            val ctx = context.applicationContext
+            tabs.forEach { setAutomationInput(it, false) }
+            // HTTP cache is shared by all WebViews, but clearing it needs an instance
+            val tabView = tabs.firstNotNullOfOrNull { it.webView }
+            val cacheView = tabView ?: WebView(ctx)
+            cacheView.clearCache(true)
+            if (tabView == null) runCatching { cacheView.destroy() }
+            tabs.forEach { tab ->
+                tab.webView?.let { wv ->
+                    runCatching {
+                        wv.stopLoading()
+                        wv.clearHistory()
+                        wv.clearFormData()
+                        wv.clearSslPreferences()
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        wv.destroy()
+                    }
+                }
+                tab.webView = null
+            }
+            tabs.clear()
+            WebStorage.getInstance().deleteAllData()
+            GeolocationPermissions.getInstance().clearAll()
+            WebViewDatabase.getInstance(ctx).clearHttpAuthUsernamePassword()
+            clearHistory(ctx)
+            val cookies = CookieManager.getInstance()
+            cookies.removeAllCookies {
+                cookies.flush()
+                val fresh = BrowserTabSession(initialUrl = "", initialTitle = "New Tab")
+                tabs.add(fresh)
+                activeTabId = fresh.id
+                onDone()
+            }
+        }
+    }
+
+    /**
+     * Opens a URL in an existing tab or creates a new tab.
+     */
+    fun openUrl(url: String, tabId: String? = null, newTab: Boolean = false, desktopMode: Boolean? = null): BrowserTabSession {
+        val formatted = formatUrl(url)
+        val targetTab = if (newTab || tabs.isEmpty()) {
+            addNewTab(formatted, formatted, activate = true, desktopMode = desktopMode)
+        } else {
+            val t = getTab(tabId) ?: addNewTab(formatted, formatted, activate = true, desktopMode = desktopMode)
+            if (desktopMode != null && t.isDesktopMode != desktopMode) {
+                setDesktopMode(t, desktopMode)
+            }
+            t.url = formatted
+            t.title = formatted
+            loadUrlInTab(t, formatted)
+            t
+        }
+        return targetTab
+    }
+
+    fun reloadTab(tabId: String? = null) {
+        val tab = getTab(tabId) ?: return
+        mainHandler.post {
+            try {
+                tab.clearError()
+                tab.isLoading = true
+                tab.startLoadingWatchdog(mainHandler)
+                tab.webView?.reload() ?: run {
+                    if (tab.url.isNotBlank()) loadUrlInTab(tab, tab.url)
+                }
+            } catch (e: Throwable) {
+                if (tab.url.isNotBlank()) loadUrlInTab(tab, tab.url)
+            }
+        }
+    }
+
+    fun goBackTab(tabId: String? = null): Boolean {
+        val tab = getTab(tabId) ?: return false
+        val wv = tab.webView ?: return false
+        if (wv.canGoBack()) {
+            mainHandler.post { wv.goBack() }
+            return true
+        }
+        return false
+    }
+
+    fun goForwardTab(tabId: String? = null): Boolean {
+        val tab = getTab(tabId) ?: return false
+        val wv = tab.webView ?: return false
+        if (wv.canGoForward()) {
+            mainHandler.post { wv.goForward() }
+            return true
+        }
+        return false
+    }
+
+    fun loadUrlInTab(tab: BrowserTabSession, url: String, context: Context? = null) {
+        val ctx = context ?: appContext
+        var effectiveUrl = url
+        if (tab.isDesktopMode) {
+            if (effectiveUrl.contains("://m.youtube.com")) {
+                effectiveUrl = effectiveUrl.replace("://m.youtube.com", "://www.youtube.com")
+                if (!effectiveUrl.contains("app=desktop")) {
+                    effectiveUrl += if (effectiveUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                }
+            } else if (effectiveUrl.contains("://m.facebook.com")) {
+                effectiveUrl = effectiveUrl.replace("://m.facebook.com", "://www.facebook.com")
+            } else if (effectiveUrl.contains("://mobile.twitter.com")) {
+                effectiveUrl = effectiveUrl.replace("://mobile.twitter.com", "://twitter.com")
+            } else if (effectiveUrl.contains("://m.wikipedia.org")) {
+                effectiveUrl = effectiveUrl.replace("://m.wikipedia.org", "://en.wikipedia.org")
+            }
+        }
+        tab.clearError()
+        tab.url = effectiveUrl
+        tab.isLoading = true
+        tab.startLoadingWatchdog(mainHandler)
+
+        val load: () -> Unit = load@{
+            try {
+                val effectiveCtx = ctx ?: tab.webView?.context ?: return@load
+                var wv = tab.webView
+                if (wv == null) {
+                    wv = ensureWebViewAttached(effectiveCtx, tab, isDark = true)
+                }
+
+                try {
+                    wv.loadUrl(effectiveUrl)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "WebView loadUrl failed on existing instance, recreating WebView...", e)
+                    wv = createWebView(effectiveCtx, tab, isDark = true)
+                    wv.loadUrl(effectiveUrl)
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Fatal error loading URL: $effectiveUrl", e)
+                tab.cancelLoadingWatchdog(mainHandler)
+                tab.isLoading = false
+                tab.lastError = BrowserNetworkError(
+                    url = effectiveUrl,
+                    errorCode = -999,
+                    description = "Failed to load page: ${e.message ?: "Unknown WebView Error"}"
+                )
+            }
+        }
+        if (BrowserIdentity.isGoogleSignInUrl(effectiveUrl) && hasDevTools(tab)) {
+            releaseDevTools(tab) { load() }
+        } else {
+            mainHandler.post { load() }
+        }
+    }
+
+    /** Whether a DevTools session (the extension host's or the browser MCP's) may be attached to [tab]. */
+    private fun hasDevTools(tab: BrowserTabSession) =
+        BrowserExtensionManager.instance.isHostRunning() || BrowserCdp.isAttached(tab.id)
+
+    /** Detaches every DevTools session from [tab] (Google sign-in must load without one), then runs [then] on the main thread. */
+    private fun releaseDevTools(tab: BrowserTabSession, then: () -> Unit) {
+        BrowserCdp.releaseThen(tab.id) {
+            if (BrowserExtensionManager.instance.isHostRunning()) BrowserExtensionManager.instance.releaseTab(tab, then) else then()
+        }
+    }
+
+    fun toggleDesktopMode(tab: BrowserTabSession?, context: Context? = null) {
+        val t = tab ?: getActiveTab() ?: return
+        setDesktopMode(t, !t.isDesktopMode, context)
+    }
+
+    fun setDesktopMode(tab: BrowserTabSession, enable: Boolean, context: Context? = null) {
+        tab.isDesktopMode = enable
+        mainHandler.post {
+            val effectiveCtx = context ?: appContext
+            val wv = tab.webView ?: run {
+                if (effectiveCtx != null) ensureWebViewAttached(effectiveCtx, tab, isDark = true) else null
+            } ?: return@post
+
+            BrowserIdentity.applyTo(wv.settings, wv.context, enable)
+
+            if (enable) {
+                wv.settings.useWideViewPort = true
+                wv.settings.loadWithOverviewMode = true
+                wv.settings.setSupportZoom(true)
+                wv.settings.builtInZoomControls = true
+                wv.settings.displayZoomControls = false
+            } else {
+                wv.settings.useWideViewPort = true
+                wv.settings.loadWithOverviewMode = true
+            }
+
+            val currentUrl = tab.url
+            if (currentUrl.isNotBlank() && currentUrl != "about:blank") {
+                if (enable) {
+                    var targetUrl = currentUrl
+                    if (targetUrl.contains("://m.youtube.com")) {
+                        targetUrl = targetUrl.replace("://m.youtube.com", "://www.youtube.com")
+                        if (!targetUrl.contains("app=desktop")) {
+                            targetUrl += if (targetUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                        }
+                    } else if (targetUrl.contains("://m.facebook.com")) {
+                        targetUrl = targetUrl.replace("://m.facebook.com", "://www.facebook.com")
+                    } else if (targetUrl.contains("://mobile.twitter.com")) {
+                        targetUrl = targetUrl.replace("://mobile.twitter.com", "://twitter.com")
+                    } else if (targetUrl.contains("://m.wikipedia.org")) {
+                        targetUrl = targetUrl.replace("://m.wikipedia.org", "://en.wikipedia.org")
+                    }
+
+                    if (targetUrl != currentUrl) {
+                        tab.url = targetUrl
+                        wv.loadUrl(targetUrl)
+                        return@post
+                    }
+                } else {
+                    if (currentUrl.contains("app=desktop")) {
+                        val cleanedUrl = currentUrl
+                            .replace("?app=desktop&", "?")
+                            .replace("?app=desktop", "")
+                            .replace("&app=desktop", "")
+                        if (cleanedUrl != currentUrl) {
+                            tab.url = cleanedUrl
+                            wv.loadUrl(cleanedUrl)
+                            return@post
+                        }
+                    }
+                }
+                wv.reload()
+            }
+        }
+    }
+
+    /**
+     * Ensures the WebView instance is created, configured, and offscreen-measured if headless.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    fun ensureWebViewAttached(context: Context, tab: BrowserTabSession, isDark: Boolean): WebView {
+        tab.webView?.let { return it }
+        return createWebView(context, tab, isDark)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    fun createWebView(context: Context, tab: BrowserTabSession, isDark: Boolean, loadInitialUrl: Boolean = true): WebView {
+        try {
+            tab.webView?.let { old ->
+                (old.parent as? ViewGroup)?.removeView(old)
+                old.destroy()
+            }
+        } catch (_: Exception) {}
+        tab.webView = null
+
+        val wv = object : WebView(context) {
+            private fun blocksFlowInput() = tab.blocksUserInput || tab.agentInputLock
+
+            // While AI automation drives this tab, page input focus must never bring up the soft keyboard
+            override fun onCheckIsTextEditor(): Boolean = if (blocksFlowInput()) false else super.onCheckIsTextEditor()
+
+            override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
+                if (blocksFlowInput()) null else super.onCreateInputConnection(outAttrs)
+
+            // Never take focus or show keyboard while AI is busy
+            override fun requestFocus(direction: Int, previouslyFocusedRect: Rect?): Boolean =
+                if (blocksFlowInput()) false else super.requestFocus(direction, previouslyFocusedRect)
+
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (hasWindowFocus && tab.aiBusy) {
+                    setAutomationInput(tab, true)
+                }
+            }
+        }.apply {
+            setBackgroundColor(Color.WHITE)
+            layoutParams = ViewGroup.LayoutParams(1080, 1920)
+
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                allowFileAccess = true
+                allowContentAccess = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                cacheMode = WebSettings.LOAD_DEFAULT
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
+                mediaPlaybackRequiresUserGesture = false
+                // Popup sign-in flows ("Sign in with Google" on other sites) need window.open + window.opener
+                setSupportMultipleWindows(true)
+                javaScriptCanOpenWindowsAutomatically = true
+
+                BrowserIdentity.applyTo(this, context, tab.isDesktopMode)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    isAlgorithmicDarkeningAllowed = false
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    @Suppress("DEPRECATION")
+                    forceDark = WebSettings.FORCE_DARK_OFF
+                }
+            }
+
+            CookieManager.getInstance().setAcceptCookie(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            }
+
+            webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    tab.clearError()
+                    tab.isLoading = true
+                    tab.startLoadingWatchdog(mainHandler)
+                    if (url.isNullOrBlank() || url == "about:blank") {
+                        tab.url = ""
+                        tab.title = "New Tab"
+                    } else if (!url.startsWith("data:")) {
+                        tab.url = url
+                    }
+                    tab.canGoBack = view?.canGoBack() == true
+                    tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view, url)
+                    }
+                    setAutomationInput(tab, tab.aiBusy)
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    tab.isLoading = false
+                    tab.cancelLoadingWatchdog(mainHandler)
+                    if (url.isNullOrBlank() || url == "about:blank") {
+                        tab.url = ""
+                        tab.title = "New Tab"
+                    } else if (!url.startsWith("data:")) {
+                        tab.url = url
+                    }
+                    view?.title?.let {
+                        if (it.isNotBlank() && tab.url.isNotBlank() && it != "about:blank") {
+                            tab.title = it
+                        }
+                    }
+                    tab.canGoBack = view?.canGoBack() == true
+                    tab.canGoForward = view?.canGoForward() == true
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view, url)
+                    }
+                    if (tab.isDevToolsEnabled && view != null && !BrowserIdentity.isGoogleSignInUrl(url)) {
+                        ErudaHelper.inject(view, showImmediately = false)
+                    }
+                    if (tab.isDesktopMode && tab.aiBusy) {
+                        view?.postDelayed({ zoomOutFully(tab) }, 800)
+                    }
+                    setAutomationInput(tab, tab.aiBusy)
+                    if (tab.agentInputLock) view?.evaluateJavascript(BrowserAutomationScripts.agentInputLock(true, tab.agentZoomPinned), null)
+                    view?.postDelayed({
+                        tab.capturePreview()
+                    }, 400)
+                }
+
+                override fun onPageCommitVisible(view: WebView?, url: String?) {
+                    super.onPageCommitVisible(view, url)
+                    if (tab.isDesktopMode) {
+                        injectDesktopSpoofing(view, url)
+                    }
+                    setAutomationInput(tab, tab.aiBusy)
+                    if (tab.agentInputLock) view?.evaluateJavascript(BrowserAutomationScripts.agentInputLock(true, tab.agentZoomPinned), null)
+                }
+
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    super.onReceivedError(view, request, error)
+                    val desc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        val descriptionStr = error?.description?.toString() ?: ""
+                        if (descriptionStr.isNotBlank()) descriptionStr else "Network Error (${error?.errorCode})"
+                    } else "Network Connection Failure"
+                    val reqUrl = request?.url?.toString() ?: tab.url
+                    val isMain = request?.isForMainFrame ?: true
+
+                    val err = BrowserNetworkError(
+                        url = reqUrl,
+                        errorCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) error?.errorCode ?: 0 else 0,
+                        description = desc,
+                        isMainFrame = isMain
+                    )
+                    tab.addNetworkError(err)
+                    if (isMain) {
+                        tab.cancelLoadingWatchdog(mainHandler)
+                        tab.lastError = err
+                        tab.isLoading = false
+                    }
+                }
+
+                override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    val reqUrl = request?.url?.toString() ?: tab.url
+                    val status = errorResponse?.statusCode ?: 0
+                    val reason = errorResponse?.reasonPhrase ?: "HTTP Error"
+                    val isMain = request?.isForMainFrame ?: false
+
+                    val err = BrowserNetworkError(
+                        url = reqUrl,
+                        errorCode = status,
+                        description = "HTTP $status: $reason",
+                        isMainFrame = isMain
+                    )
+                    tab.addNetworkError(err)
+                    if (isMain && status >= 400) {
+                        tab.cancelLoadingWatchdog(mainHandler)
+                        tab.lastError = err
+                        tab.isLoading = false
+                    }
+                }
+
+                override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: android.net.http.SslError?) {
+                    val reqUrl = error?.url ?: tab.url
+                    val isLocal = reqUrl.contains("localhost") || reqUrl.contains("127.0.0.1") || reqUrl.contains("192.168.") || reqUrl.contains("10.0.")
+                    
+                    // For local development on localhost/127.0.0.1, automatically bypass self-signed SSL errors so dev servers load seamlessly
+                    if (isLocal) {
+                        handler?.proceed()
+                        return
+                    }
+
+                    val primaryMsg = when (error?.primaryError) {
+                        android.net.http.SslError.SSL_UNTRUSTED -> "Untrusted Certificate Authority (Self-signed or invalid CA)"
+                        android.net.http.SslError.SSL_EXPIRED -> "SSL Certificate Expired"
+                        android.net.http.SslError.SSL_IDMISMATCH -> "Hostname Mismatch"
+                        android.net.http.SslError.SSL_NOTYETVALID -> "Certificate Not Yet Valid"
+                        else -> "SSL Handshake / Security Failure"
+                    }
+                    val err = BrowserNetworkError(
+                        url = reqUrl,
+                        errorCode = error?.primaryError ?: 0,
+                        description = "SSL Certificate Warning: $primaryMsg",
+                        isMainFrame = true
+                    )
+                    tab.addNetworkError(err)
+                    tab.cancelLoadingWatchdog(mainHandler)
+                    tab.lastError = err
+                    tab.isLoading = false
+                    super.onReceivedSslError(view, handler, error)
+                }
+
+                override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                    val didCrash = detail?.didCrash() == true
+                    val msg = if (didCrash) "WebView render process crashed unexpectedly." else "WebView render process was terminated by OS (Memory Pressure)."
+                    val err = BrowserNetworkError(
+                        url = tab.url,
+                        errorCode = -1,
+                        description = msg,
+                        isMainFrame = true
+                    )
+                    tab.addNetworkError(err)
+                    tab.cancelLoadingWatchdog(mainHandler)
+                    tab.lastError = err
+                    tab.isLoading = false
+                    return super.onRenderProcessGone(view, detail)
+                }
+
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val uri = request?.url ?: return false
+                    val scheme = uri.scheme?.lowercase() ?: return false
+                    if (scheme == "http" || scheme == "https" || scheme == "file" || scheme == "about" || scheme == "data") {
+                        // Detach DevTools sessions (extension host, browser MCP) before Google sign-in loads,
+                        // so its bot checks never see an attached debugger. GET only: a POST cannot be replayed.
+                        val target = uri.toString()
+                        if (request.isForMainFrame && request.method.equals("GET", ignoreCase = true) &&
+                            BrowserIdentity.isGoogleSignInUrl(target) && !BrowserIdentity.isGoogleSignInUrl(tab.url) &&
+                            hasDevTools(tab)
+                        ) {
+                            val referer = Uri.parse(tab.url).takeIf { it.scheme == "https" && !it.host.isNullOrBlank() }
+                                ?.let { "https://${it.host}/" }
+                            tab.url = target
+                            releaseDevTools(tab) {
+                                if (referer != null) view?.loadUrl(target, mapOf("Referer" to referer)) else view?.loadUrl(target)
+                            }
+                            return true
+                        }
+                        if (tab.isDesktopMode) {
+                            val host = uri.host?.lowercase() ?: ""
+                            if (host == "m.youtube.com") {
+                                var desktopUrl = uri.toString().replace("://m.youtube.com", "://www.youtube.com")
+                                if (!desktopUrl.contains("app=desktop")) {
+                                    desktopUrl += if (desktopUrl.contains("?")) "&app=desktop" else "?app=desktop"
+                                }
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "m.facebook.com") {
+                                val desktopUrl = uri.toString().replace("://m.facebook.com", "://www.facebook.com")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "mobile.twitter.com") {
+                                val desktopUrl = uri.toString().replace("://mobile.twitter.com", "://twitter.com")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            } else if (host == "m.wikipedia.org") {
+                                val desktopUrl = uri.toString().replace("://m.wikipedia.org", "://en.wikipedia.org")
+                                tab.url = desktopUrl
+                                view?.loadUrl(desktopUrl)
+                                return true
+                            }
+                        }
+                        return false
+                    }
+                    return try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        true
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+            }
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                    tab.progress = newProgress
+                    tab.isLoading = newProgress < 100
+                    tab.canGoBack = view?.canGoBack() == true
+                    tab.canGoForward = view?.canGoForward() == true
+                }
+
+                override fun onReceivedTitle(view: WebView?, title: String?) {
+                    if (!title.isNullOrBlank()) tab.title = title
+                }
+
+                // window.open / target=_blank: open a real tab that keeps window.opener, like Chrome.
+                // Popups without a user gesture are blocked, as Chrome does.
+                override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
+                    val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                    if (!isUserGesture) return false
+                    val popupTab = BrowserTabSession(initialUrl = "", initialTitle = "New Tab").also {
+                        it.isDesktopMode = tab.isDesktopMode
+                    }
+                    transport.webView = createWebView(context, popupTab, isDark, loadInitialUrl = false)
+                    // A tab the browser MCP opens from a locked tab is locked too
+                    BrowserAgentLock.inherit(popupTab, tab)
+                    tabs.add(popupTab)
+                    // Leave AI-driven tabs in front so automation keeps the tab it is working on
+                    if (!tab.aiBusy) activeTabId = popupTab.id
+                    resultMsg.sendToTarget()
+                    return true
+                }
+
+                // While an agent drives this tab, or the tab is not on screen, keep page dialogs in the tab: the page waits
+                // until the agent (browser_handle_dialog) or the user (the card over the page) answers. Otherwise the
+                // WebView shows its own dialog as usual.
+                private fun keepDialog(type: String, url: String?, message: String?, defaultText: String?, result: android.webkit.JsResult?): Boolean {
+                    if (result == null || !(BrowserAgentLock.isAgentActive(tab) || !tab.isOnScreen)) return false
+                    tab.pendingDialog?.answer(false)
+                    tab.pendingDialog = BrowserJsDialog(type, message.orEmpty(), defaultText.orEmpty(), url.orEmpty(), result)
+                    return true
+                }
+
+                override fun onJsAlert(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean =
+                    keepDialog("alert", url, message, null, result) || super.onJsAlert(view, url, message, result)
+
+                override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean =
+                    keepDialog("confirm", url, message, null, result) || super.onJsConfirm(view, url, message, result)
+
+                override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: android.webkit.JsPromptResult?): Boolean =
+                    keepDialog("prompt", url, message, defaultValue, result) || super.onJsPrompt(view, url, message, defaultValue, result)
+
+                override fun onJsBeforeUnload(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean =
+                    keepDialog("beforeunload", url, message, null, result) || super.onJsBeforeUnload(view, url, message, result)
+
+                override fun onCloseWindow(window: WebView?) {
+                    tabs.firstOrNull { it.webView === window }?.let { closeTab(it.id) }
+                }
+
+                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                    if (consoleMessage != null) {
+                        val level = when (consoleMessage.messageLevel()) {
+                            ConsoleMessage.MessageLevel.ERROR -> "ERROR"
+                            ConsoleMessage.MessageLevel.WARNING -> "WARN"
+                            ConsoleMessage.MessageLevel.LOG -> "LOG"
+                            ConsoleMessage.MessageLevel.TIP -> "INFO"
+                            ConsoleMessage.MessageLevel.DEBUG -> "DEBUG"
+                            else -> "LOG"
+                        }
+                        tab.addConsoleLog(
+                            BrowserConsoleMessage(
+                                level = level,
+                                message = consoleMessage.message() ?: "",
+                                sourceId = consoleMessage.sourceId() ?: "",
+                                lineNumber = consoleMessage.lineNumber()
+                            )
+                        )
+                    }
+                    return super.onConsoleMessage(consoleMessage)
+                }
+
+                override fun onShowFileChooser(
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?
+                ): Boolean {
+                    // Answer an automated upload for this tab without a picker; otherwise the normal picker
+                    val pending = pendingChooser?.takeIf { it.webView === webView }
+                        ?: return super.onShowFileChooser(webView, filePathCallback, fileChooserParams)
+                    pendingChooser = null
+                    val multiple = fileChooserParams?.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+                    val given = if (multiple) pending.files else pending.files.take(1)
+                    filePathCallback?.onReceiveValue(given.toTypedArray())
+                    pending.result.complete(JSONObject().put("multiple", multiple).put("given", given.size)
+                        .put("accept", JSONArray(fileChooserParams?.acceptTypes.orEmpty().filter { it.isNotBlank() })))
+                    return true
+                }
+            }
+        }
+
+        tab.webView = wv
+        // Measure and layout offscreen so dimensions are valid even without UI attachment
+        wv.measure(
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY)
+        )
+        wv.layout(0, 0, 1080, 1920)
+
+        // A popup WebView must stay unused until WebViewTransport hands it to the opener
+        if (!loadInitialUrl) return wv
+        if (tab.url.isNotBlank() && tab.url != "about:blank") {
+            BrowserExtensionManager.instance.loadWithExtensions(tab, wv, tab.url)
+        } else {
+            wv.loadUrl("about:blank")
+        }
+        return wv
+    }
+
+    /**
+     * Waits until the page finishes loading or timeout occurs.
+     */
+    suspend fun waitForPageLoad(tabId: String? = null, timeoutMs: Long = DEFAULT_TIMEOUT_MS): Boolean {
+        val tab = getTab(tabId) ?: return false
+        if (!tab.isLoading && tab.progress >= 100) return true
+
+        return withTimeoutOrNull(timeoutMs) {
+            while (tab.isLoading || tab.progress < 100) {
+                kotlinx.coroutines.delay(100)
+            }
+            true
+        } ?: false
+    }
+
+    /**
+     * Executes arbitrary JavaScript on the target tab's WebView and returns the raw string result.
+     */
+    suspend fun evaluateJs(tabId: String?, script: String): Result<String> = withContext(Dispatchers.Main) {
+        val tab = getTab(tabId) ?: return@withContext Result.failure(Exception("Tab not found"))
+        val wv = tab.webView ?: return@withContext Result.failure(Exception("WebView not initialized for tab"))
+
+        try {
+            suspendCancellableCoroutine { continuation ->
+                wv.evaluateJavascript(script) { result ->
+                    val cleanResult = if (result != null && result.startsWith("\"") && result.endsWith("\"") && result.length >= 2) {
+                        // Unescape JSON string if returned as JSON string
+                        try {
+                            org.json.JSONTokener(result).nextValue().toString()
+                        } catch (_: Exception) {
+                            result
+                        }
+                    } else {
+                        result ?: "null"
+                    }
+                    if (continuation.isActive) {
+                        continuation.resume(Result.success(cleanResult))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Captures a screenshot of the viewport or entire scrollable page.
+     */
+    suspend fun captureScreenshot(
+        tabId: String? = null,
+        fullPage: Boolean = false,
+        quality: Int = 80
+    ): Result<Bitmap> = withContext(Dispatchers.Main) {
+        val tab = getTab(tabId) ?: return@withContext Result.failure(Exception("Tab not found"))
+        val wv = tab.webView ?: return@withContext Result.failure(Exception("WebView not initialized"))
+
+        try {
+            val width = if (wv.width > 0) wv.width else 1080
+            val height = if (wv.height > 0) wv.height else 1920
+
+            if (wv.width == 0 || wv.height == 0) {
+                wv.measure(
+                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+                )
+                wv.layout(0, 0, width, height)
+            }
+
+            val bitmap = if (fullPage) {
+                val scale = wv.scale.coerceAtLeast(1f)
+                val contentHeight = (wv.contentHeight * scale).toInt().coerceIn(height, 8000)
+                val bmp = Bitmap.createBitmap(width, contentHeight, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                wv.draw(canvas)
+                bmp
+            } else {
+                val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                wv.draw(canvas)
+                bmp
+            }
+
+            Result.success(bitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Screenshot capture failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Captures a screenshot and returns Base64 data URI (image/jpeg).
+     */
+    suspend fun captureScreenshotBase64(
+        tabId: String? = null,
+        fullPage: Boolean = false,
+        quality: Int = 80
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val bmpResult = captureScreenshot(tabId, fullPage, quality)
+        if (bmpResult.isFailure) return@withContext Result.failure(bmpResult.exceptionOrNull()!!)
+
+        val bmp = bmpResult.getOrNull()!!
+        try {
+            val baos = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), baos)
+            val bytes = baos.toByteArray()
+            val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            Result.success("data:image/jpeg;base64,$base64")
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            bmp.recycle()
+        }
+    }
+
+    /**
+     * Captures a screenshot and saves it to a file.
+     */
+    suspend fun captureScreenshotToFile(
+        tabId: String? = null,
+        outputFile: File,
+        fullPage: Boolean = false,
+        quality: Int = 80
+    ): Result<File> = withContext(Dispatchers.IO) {
+        val bmpResult = captureScreenshot(tabId, fullPage, quality)
+        if (bmpResult.isFailure) return@withContext Result.failure(bmpResult.exceptionOrNull()!!)
+
+        val bmp = bmpResult.getOrNull()!!
+        try {
+            outputFile.parentFile?.mkdirs()
+            FileOutputStream(outputFile).use { fos ->
+                bmp.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), fos)
+                fos.flush()
+            }
+            Result.success(outputFile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally {
+            bmp.recycle()
+        }
+    }
+
+    /**
+     * Injected JavaScript that parses interactive elements, layout tree, and text content
+     * formatted specifically for LLM consumption.
+     */
+    private val domInspectorScript = """
+        (function() {
+            try {
+                const doc = document;
+                const win = window;
+                const vw = win.innerWidth || doc.documentElement.clientWidth;
+                const vh = win.innerHeight || doc.documentElement.clientHeight;
+                const scrollX = win.scrollX || win.pageXOffset || 0;
+                const scrollY = win.scrollY || win.pageYOffset || 0;
+                const pageW = Math.max(doc.body.scrollWidth, doc.documentElement.scrollWidth);
+                const pageH = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+
+                function isVisible(el) {
+                    if (!el) return false;
+                    const style = win.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return false;
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                }
+
+                function getSelector(el) {
+                    if (el.id) return '#' + el.id;
+                    if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+                    let path = [];
+                    while (el && el.nodeType === Node.ELEMENT_NODE) {
+                        let selector = el.tagName.toLowerCase();
+                        if (el.id) {
+                            path.unshift('#' + el.id);
+                            break;
+                        } else {
+                            let sibling = el;
+                            let nth = 1;
+                            while (sibling = sibling.previousElementSibling) {
+                                if (sibling.tagName === el.tagName) nth++;
+                            }
+                            if (nth > 1) selector += ':nth-of-type(' + nth + ')';
+                        }
+                        path.unshift(selector);
+                        el = el.parentElement;
+                        if (path.length > 4) break;
+                    }
+                    return path.join(' > ');
+                }
+
+                const interactiveSelectors = [
+                    'button', 'a[href]', 'input', 'textarea', 'select',
+                    '[role="button"]', '[role="link"]', '[role="tab"]', '[role="checkbox"]',
+                    '[onclick]', '[contenteditable="true"]', 'details', 'summary'
+                ];
+
+                const allElements = doc.querySelectorAll(interactiveSelectors.join(','));
+                const interactiveItems = [];
+
+                allElements.forEach((el, index) => {
+                    if (!isVisible(el)) return;
+                    const rect = el.getBoundingClientRect();
+                    const text = (el.innerText || el.textContent || el.value || el.placeholder || el.getAttribute('aria-label') || '').trim().substring(0, 100);
+                    
+                    interactiveItems.push({
+                        idx: index,
+                        tag: el.tagName.toLowerCase(),
+                        id: el.id || undefined,
+                        name: el.name || undefined,
+                        type: el.type || undefined,
+                        role: el.getAttribute('role') || undefined,
+                        text: text || undefined,
+                        href: el.getAttribute('href') || undefined,
+                        placeholder: el.placeholder || undefined,
+                        value: (el.tagName.toLowerCase() === 'input' || el.tagName.toLowerCase() === 'textarea') ? el.value : undefined,
+                        checked: el.checked || undefined,
+                        disabled: el.disabled || undefined,
+                        selector: getSelector(el),
+                        rect: {
+                            top: Math.round(rect.top),
+                            left: Math.round(rect.left),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height),
+                            inViewport: (rect.top >= 0 && rect.top <= vh && rect.left >= 0 && rect.left <= vw)
+                        }
+                    });
+                });
+
+                // Headings for structure
+                const headings = [];
+                doc.querySelectorAll('h1, h2, h3, h4').forEach(h => {
+                    if (isVisible(h)) {
+                        headings.push({
+                            level: h.tagName.toLowerCase(),
+                            text: (h.innerText || h.textContent || '').trim().substring(0, 80)
+                        });
+                    }
+                });
+
+                return JSON.stringify({
+                    url: win.location.href,
+                    title: doc.title,
+                    viewport: { width: vw, height: vh, scrollX: Math.round(scrollX), scrollY: Math.round(scrollY) },
+                    pageSize: { width: pageW, height: pageH },
+                    headings: headings.slice(0, 15),
+                    interactiveElements: interactiveItems.slice(0, 80)
+                });
+            } catch (err) {
+                return JSON.stringify({ error: err.toString() });
+            }
+        })();
+    """.trimIndent()
+
+    /**
+     * Inspects DOM layout and returns structured interactive elements.
+     */
+    suspend fun inspectDom(tabId: String? = null): Result<JSONObject> {
+        val res = evaluateJs(tabId, domInspectorScript)
+        if (res.isFailure) return Result.failure(res.exceptionOrNull()!!)
+
+        return try {
+            val jsonStr = res.getOrNull() ?: "{}"
+            Result.success(JSONObject(jsonStr))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Clicks an element by CSS selector or by (X, Y) coordinates.
+     */
+    suspend fun clickElement(
+        tabId: String? = null,
+        selector: String? = null,
+        x: Float? = null,
+        y: Float? = null
+    ): Result<Boolean> {
+        val script = if (!selector.isNullOrBlank()) {
+            val escaped = JSONObject.quote(selector)
+            """
+            (function() {
+                try {
+                    const el = document.querySelector($escaped);
+                    if (!el) return { success: false, error: "Element not found for selector: " + $escaped };
+                    el.scrollIntoView({ behavior: 'instant', block: 'center' });
+                    el.focus && el.focus();
+                    ['mousedown', 'mouseup', 'click'].forEach(evtType => {
+                        el.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window }));
+                    });
+                    if (el.tagName.toLowerCase() === 'a' && el.href) {
+                        el.click();
+                    }
+                    return { success: true };
+                } catch(e) {
+                    return { success: false, error: e.toString() };
+                }
+            })();
+            """.trimIndent()
+        } else if (x != null && y != null) {
+            """
+            (function() {
+                try {
+                    const el = document.elementFromPoint($x, $y);
+                    if (!el) return { success: false, error: "No element at point ($x, $y)" };
+                    el.focus && el.focus();
+                    ['mousedown', 'mouseup', 'click'].forEach(evtType => {
+                        el.dispatchEvent(new MouseEvent(evtType, { bubbles: true, cancelable: true, view: window, clientX: $x, clientY: $y }));
+                    });
+                    return { success: true, clickedTag: el.tagName };
+                } catch(e) {
+                    return { success: false, error: e.toString() };
+                }
+            })();
+            """.trimIndent()
+        } else {
+            return Result.failure(Exception("Either selector or (x, y) coordinates must be provided"))
+        }
+
+        val res = evaluateJs(tabId, script)
+        if (res.isFailure) return Result.failure(res.exceptionOrNull()!!)
+
+        return try {
+            val json = JSONObject(res.getOrNull() ?: "{}")
+            if (json.optBoolean("success", false)) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception(json.optString("error", "Click failed")))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Types text into an input or textarea element by selector.
+     */
+    suspend fun typeText(
+        tabId: String? = null,
+        selector: String,
+        text: String,
+        clearFirst: Boolean = false
+    ): Result<Boolean> {
+        val escapedSel = JSONObject.quote(selector)
+        val escapedVal = JSONObject.quote(text)
+
+        val script = """
+            (function() {
+                try {
+                    const el = document.querySelector($escapedSel);
+                    if (!el) return { success: false, error: "Input element not found: " + $escapedSel };
+                    el.scrollIntoView({ behavior: 'instant', block: 'center' });
+                    el.focus();
+                    if ($clearFirst) {
+                        el.value = '';
+                    }
+                    el.value = ($clearFirst ? '' : el.value) + $escapedVal;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    return { success: true, currentValue: el.value };
+                } catch(e) {
+                    return { success: false, error: e.toString() };
+                }
+            })();
+        """.trimIndent()
+
+        val res = evaluateJs(tabId, script)
+        if (res.isFailure) return Result.failure(res.exceptionOrNull()!!)
+
+        return try {
+            val json = JSONObject(res.getOrNull() ?: "{}")
+            if (json.optBoolean("success", false)) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception(json.optString("error", "Typing failed")))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Scrolls the window or scrolls an element into view.
+     */
+    suspend fun scrollPage(
+        tabId: String? = null,
+        dx: Int = 0,
+        dy: Int = 0,
+        selector: String? = null
+    ): Result<Boolean> {
+        val script = if (!selector.isNullOrBlank()) {
+            val escaped = JSONObject.quote(selector)
+            """
+            (function() {
+                try {
+                    const el = document.querySelector($escaped);
+                    if (!el) return { success: false, error: "Element not found: " + $escaped };
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return { success: true };
+                } catch(e) {
+                    return { success: false, error: e.toString() };
+                }
+            })();
+            """.trimIndent()
+        } else {
+            """
+            (function() {
+                try {
+                    window.scrollBy({ left: $dx, top: $dy, behavior: 'instant' });
+                    return { success: true, scrollX: window.scrollX, scrollY: window.scrollY };
+                } catch(e) {
+                    return { success: false, error: e.toString() };
+                }
+            })();
+            """.trimIndent()
+        }
+
+        val res = evaluateJs(tabId, script)
+        if (res.isFailure) return Result.failure(res.exceptionOrNull()!!)
+
+        return try {
+            val json = JSONObject(res.getOrNull() ?: "{}")
+            if (json.optBoolean("success", false)) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception(json.optString("error", "Scroll failed")))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Zooms the tab out as far as the page allows, so a desktop-width page fits the screen width.
+     */
+    fun zoomOutFully(tab: BrowserTabSession) {
+        mainHandler.post {
+            val wv = tab.webView ?: return@post
+            repeat(15) { if (!wv.zoomOut()) return@post }
+        }
+    }
+
+    private fun activityOf(view: WebView): Activity? {
+        var context = view.context
+        while (context is ContextWrapper && context !is Activity) context = context.baseContext
+        if (context is Activity) return context
+        context = view.rootView.context
+        while (context is ContextWrapper && context !is Activity) context = context.baseContext
+        return context as? Activity
+    }
+
+    /** Native input/gesture lock for Flow automation; JavaScript focus and trusted touch still work. */
+    fun setAutomationInput(tab: BrowserTabSession, enabled: Boolean) {
+        mainHandler.post {
+            if (!enabled || !tab.aiBusy) {
+                restoreAutomationInput(tab.id)
+                return@post
+            }
+            val view = tab.webView ?: return@post
+            val previous = automationInputStates[tab.id]
+            val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            if (previous?.view !== view) {
+                automationInputStates[tab.id] = AutomationInputState(
+                    view, view.isFocusable, view.isFocusableInTouchMode,
+                    view.settings.supportZoom(), view.settings.builtInZoomControls,
+                    previous?.softInputMode ?: activityOf(view)?.window?.attributes?.softInputMode,
+                    previous?.altFocusableIm ?: activityOf(view)?.window?.attributes?.flags?.let {
+                        it and WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM != 0
+                    }
+                )
+                imm?.hideSoftInputFromWindow(view.windowToken, 0)
+                view.clearFocus()
+                view.isFocusableInTouchMode = false
+                view.isFocusable = false
+                // Discard a connection opened before aiBusy changed; returning null only affects new ones.
+                imm?.restartInput(view)
+            }
+            view.settings.setSupportZoom(false)
+            view.settings.builtInZoomControls = false
+            // Block IME interaction at the window too: newly mounted picker inputs can focus
+            // before the page's inputmode observer runs.
+            activityOf(view)?.window?.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+            activityOf(view)?.window?.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+            )
+            view.evaluateJavascript(BrowserAutomationScripts.inputLock(true), null)
+        }
+    }
+
+    private fun restoreAutomationInput(tabId: String): Boolean {
+        val state = automationInputStates.remove(tabId) ?: return false
+        val view = state.view
+        view.evaluateJavascript(BrowserAutomationScripts.inputLock(false), null)
+        view.clearFocus()
+        view.settings.setSupportZoom(state.supportZoom)
+        view.settings.builtInZoomControls = state.builtInZoomControls
+        view.isFocusableInTouchMode = state.focusableInTouchMode
+        view.isFocusable = state.focusable
+        state.softInputMode?.let { activityOf(view)?.window?.setSoftInputMode(it) }
+        state.altFocusableIm?.let { enabled ->
+            val flag = WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            activityOf(view)?.window?.setFlags(if (enabled) flag else 0, flag)
+        }
+        val imm = view.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(view.windowToken, 0)
+        imm?.restartInput(view)
+        return true
+    }
+
+    /**
+     * Hides the soft keyboard if it is showing for this tab's WebView and locks the window against resizing/zooming.
+     */
+    fun hideKeyboard(tab: BrowserTabSession) {
+        fun doHide(wv: android.webkit.WebView) {
+            val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(wv.windowToken, 0)
+            wv.clearFocus()
+            var ctx = wv.context
+            while (ctx is ContextWrapper && ctx !is Activity) {
+                ctx = ctx.baseContext
+            }
+            (ctx as? Activity)?.window?.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+            )
+        }
+        mainHandler.post {
+            val wv = tab.webView ?: return@post
+            doHide(wv)
+            mainHandler.postDelayed({ if (tab.aiBusy) tab.webView?.let { doHide(it) } }, 50)
+            mainHandler.postDelayed({ if (tab.aiBusy) tab.webView?.let { doHide(it) } }, 200)
+        }
+    }
+
+    /**
+     * After AI automation: closes the keyboard and drops the WebView's focus, so unblocking input doesn't
+     * bring the keyboard back for a field the AI focused.
+     */
+    fun releaseFocus(tab: BrowserTabSession) {
+        mainHandler.post {
+            if (restoreAutomationInput(tab.id)) return@post
+            val wv = tab.webView ?: return@post
+            val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(wv.windowToken, 0)
+            if (wv.hasFocus()) wv.clearFocus()
+            var ctx = wv.context
+            while (ctx is ContextWrapper && ctx !is Activity) {
+                ctx = ctx.baseContext
+            }
+            (ctx as? Activity)?.window?.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            )
+        }
+    }
+
+    /**
+     * Sends a real (trusted) touch tap to the WebView. [fx]/[fy] are fractions (0..1)
+     * of the page's visual viewport, so the result is independent of zoom and density.
+     */
+    suspend fun dispatchTap(tabId: String?, fx: Float, fy: Float): Result<Boolean> = withContext(Dispatchers.Main) {
+        val tab = (if (tabId.isNullOrBlank()) getActiveTab() else tabs.find { it.id == tabId })
+            ?: return@withContext Result.failure(Exception("Tab not found"))
+        val wv = tab.webView ?: return@withContext Result.failure(Exception("WebView not initialized for tab"))
+        if (wv.width <= 0 || wv.height <= 0) return@withContext Result.failure(Exception("WebView has no size yet"))
+        if (fx !in 0f..1f || fy !in 0f..1f) return@withContext Result.failure(Exception("Tap point is outside the visible page"))
+
+        val x = fx * wv.width
+        val y = fy * wv.height
+        val downTime = SystemClock.uptimeMillis()
+        val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+        wv.dispatchTouchEvent(down)
+        down.recycle()
+        kotlinx.coroutines.delay(70)
+        val up = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0).apply {
+            source = InputDevice.SOURCE_TOUCHSCREEN
+        }
+        wv.dispatchTouchEvent(up)
+        up.recycle()
+        Result.success(true)
+    }
+
+    private val uploadMutex = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Uploads local files to a page the way a person picking them would: finds the upload element ([selector], a CSS
+     * point [x]/[y], a viewport fraction [fx]/[fy], or the page's only file input), arms this tab's file chooser and
+     * real-taps the element, so the site's own chooser receives the files without a picker. A hidden file input is
+     * shown on top just for the tap. [method] "auto" falls back to building the files inside the page (assigning a
+     * file input, or a drop event on a drag-and-drop area) when no chooser opens; "chooser"/"drop" force one way.
+     */
+    suspend fun uploadFiles(
+        tabId: String?, paths: List<String>, selector: String? = null, x: Float? = null, y: Float? = null,
+        fx: Float? = null, fy: Float? = null, method: String = "auto", timeoutMs: Long = 10_000
+    ): Result<JSONObject> = runCatching {
+        require(method in setOf("auto", "chooser", "drop")) { "method must be auto, chooser or drop" }
+        val files = resolveUploadFiles(paths)
+        uploadMutex.withLock {
+            val tab = withContext(Dispatchers.Main) { if (tabId.isNullOrBlank()) getActiveTab() else tabs.find { it.id == tabId } }
+                ?: error("Tab not found")
+            val wv = tab.webView ?: error("WebView not initialized for tab")
+            val located = JSONObject(evaluateJs(tab.id, uploadLocateScript(selector, x, y, fx, fy)).getOrThrow())
+            require(located.optBoolean("ok")) { located.optString("error").ifBlank { "Could not find the upload element" } }
+            val result = JSONObject().put("files", JSONArray(files.map { it.name })).put("target", located.optString("tag"))
+                .put("file_input", located.optBoolean("file_input"))
+            try {
+                if (method != "drop" && located.optBoolean("tappable", true)) {
+                    val picked = CompletableDeferred<JSONObject>()
+                    pendingChooser = PendingChooser(wv, files.map { Uri.fromFile(it) }, picked)
+                    try {
+                        dispatchTap(tab.id, located.getDouble("fx").toFloat(), located.getDouble("fy").toFloat()).getOrThrow()
+                        val info = withTimeoutOrNull(timeoutMs) { picked.await() }
+                        if (info != null) {
+                            result.put("method", "chooser").put("given", info.getInt("given")).put("multiple", info.getBoolean("multiple"))
+                                .put("accept", info.getJSONArray("accept"))
+                            if (info.getInt("given") < files.size) result.put("note", "The page takes one file at a time; only the first was given")
+                            return@withLock result
+                        }
+                    } finally {
+                        if (pendingChooser?.result === picked) pendingChooser = null
+                    }
+                    require(method == "auto") {
+                        "The page did not open a file chooser within ${timeoutMs / 1000} s. Point at the element that opens it (its upload button or <input type=file>), or use method \"drop\" for a drag-and-drop area."
+                    }
+                }
+                require(files.sumOf { it.length() } <= MAX_IN_PAGE_UPLOAD_BYTES) {
+                    "No file chooser opened, and the files are too large to build inside the page (25 MiB). Point at the element that opens the file chooser."
+                }
+                val payload = JSONArray(files.map { file ->
+                    JSONObject().put("name", file.name)
+                        .put("type", android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "application/octet-stream")
+                        .put("data", android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP))
+                })
+                val done = JSONObject(evaluateJs(tab.id, uploadInPageScript(payload)).getOrThrow())
+                require(done.optBoolean("ok")) { done.optString("error").ifBlank { "In-page upload failed" } }
+                result.put("method", done.getString("method")).put("given", done.getInt("given"))
+                    .put("note", "No file chooser opened; the files were built inside the page. Some sites ignore that, so check the page shows them.")
+            } finally {
+                evaluateJs(tab.id, "window.__agUploadRestore&&window.__agUploadRestore();delete window.__agUploadTarget;true")
+            }
+        }
+    }
+
+    private fun resolveUploadFiles(paths: List<String>): List<File> {
+        require(paths.size in 1..20) { "Pass 1–20 file paths" }
+        val context = appContext ?: error("Browser is not initialized")
+        val home = ai.antigem.data.local.LocalEnvironmentManager.getHomeDir(context).canonicalFile
+        val roots = listOf(home, File("/sdcard").canonicalFile, File("/storage/emulated/0").canonicalFile)
+        return paths.map { path ->
+            val raw = when {
+                path == "~" || path.startsWith("~/") -> File(home, path.removePrefix("~").removePrefix("/"))
+                File(path).isAbsolute -> File(path)
+                else -> File(home, path)
+            }
+            val file = raw.canonicalFile
+            require(roots.any { file.path.startsWith(it.path + File.separator) }) { "File must be inside the terminal home or shared storage: $path" }
+            require(file.isFile) { "File not found: $path" }
+            file
+        }
+    }
+
+    /** Finds the upload element, makes it tappable and returns its centre as viewport fractions (see dispatchTap). */
+    private fun uploadLocateScript(selector: String?, x: Float?, y: Float?, fx: Float?, fy: Float?): String {
+        fun num(v: Float?) = v?.toString() ?: "null"
+        return """
+        (function(sel, px, py, ffx, ffy) {
+          const shown = el => { const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+            return r.width >= 4 && r.height >= 4 && s.visibility !== 'hidden' && s.display !== 'none' && parseFloat(s.opacity || '1') > 0.05; };
+          const name = el => el.id ? '#' + el.id : el.name ? el.tagName.toLowerCase() + '[name="' + el.name + '"]' : el.tagName.toLowerCase();
+          const v = window.visualViewport;
+          let el = null;
+          if (sel) { el = document.querySelector(sel); if (!el) return {ok:false, error:'No element matches ' + sel}; }
+          else if (px != null) el = document.elementFromPoint(px, py);
+          else if (ffx != null) el = document.elementFromPoint((v ? v.offsetLeft : 0) + ffx * (v ? v.width : innerWidth), (v ? v.offsetTop : 0) + ffy * (v ? v.height : innerHeight));
+          else {
+            const inputs = [...document.querySelectorAll('input[type=file]')].filter(i => !i.disabled);
+            if (!inputs.length) return {ok:false, error:'No file input on this page. Pass the selector (or x/y) of its upload button.'};
+            if (inputs.length > 1) return {ok:false, error:'Several file inputs on this page; pass a selector, e.g. ' + inputs.slice(0, 8).map(name).join(', ')};
+            el = inputs[0];
+          }
+          if (!el) return {ok:false, error:'No element at that point'};
+          const input = el.matches('input[type=file]') ? el : (el.control && el.control.matches && el.control.matches('input[type=file]') ? el.control : null);
+          window.__agUploadTarget = el;
+          const base = {ok:true, tag:el.tagName.toLowerCase(), file_input:!!input, multiple:!!(input && input.multiple), accept:input ? input.accept : ''};
+          let overlaid = false;
+          if (input && !shown(el)) {
+            // A hidden file input: lay it over the page just for the tap, restored afterwards
+            const saved = input.getAttribute('style');
+            window.__agUploadRestore = () => { if (saved === null) input.removeAttribute('style'); else input.setAttribute('style', saved); delete window.__agUploadRestore; };
+            input.setAttribute('style', (saved || '') + ';position:fixed!important;left:0!important;top:0!important;width:100vw!important;height:100vh!important;' +
+              'opacity:0.01!important;z-index:2147483647!important;display:block!important;visibility:visible!important;pointer-events:auto!important');
+            el = input; overlaid = true; window.__agUploadTarget = input;
+            if (!shown(input)) { window.__agUploadRestore(); return Object.assign(base, {tappable:false}); }
+          } else el.scrollIntoView({block:'center', inline:'center', behavior:'instant'});
+          const r = el.getBoundingClientRect();
+          const cx = (r.left + r.width / 2 - (v ? v.offsetLeft : 0)) / (v ? v.width : innerWidth);
+          const cy = (r.top + r.height / 2 - (v ? v.offsetTop : 0)) / (v ? v.height : innerHeight);
+          if (!(cx >= 0 && cx <= 1 && cy >= 0 && cy <= 1)) return Object.assign(base, {tappable:false});
+          return Object.assign(base, {tappable:true, overlaid, fx:cx, fy:cy});
+        })(${selector?.let { JSONObject.quote(it) } ?: "null"}, ${num(x)}, ${num(y)}, ${num(fx)}, ${num(fy)})
+        """.trimIndent()
+    }
+
+    /** Fallback without a chooser: assigns the files to the file input, or drops them on a drag-and-drop area. */
+    private fun uploadInPageScript(files: JSONArray) = """
+        (function(files) {
+          const el = window.__agUploadTarget;
+          if (!el || !el.isConnected) return {ok:false, error:'The upload element is gone'};
+          const input = el.matches('input[type=file]') ? el : (el.control && el.control.matches && el.control.matches('input[type=file]') ? el.control : null);
+          const dt = new DataTransfer();
+          for (const f of (input && !input.multiple) ? files.slice(0, 1) : files) {
+            const bin = atob(f.data), bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            dt.items.add(new File([bytes], f.name, {type:f.type, lastModified:Date.now()}));
+          }
+          if (input) {
+            input.files = dt.files;
+            input.dispatchEvent(new Event('input', {bubbles:true}));
+            input.dispatchEvent(new Event('change', {bubbles:true}));
+            return {ok:true, method:'assign', given:dt.files.length};
+          }
+          for (const type of ['dragenter', 'dragover', 'drop']) el.dispatchEvent(new DragEvent(type, {bubbles:true, cancelable:true, dataTransfer:dt}));
+          return {ok:true, method:'drop', given:dt.files.length};
+        })($files)
+    """.trimIndent()
+
+    /**
+     * Sends a real key press (e.g. KeyEvent.KEYCODE_ESCAPE) to the WebView.
+     */
+    suspend fun dispatchKey(tabId: String?, keyCode: Int): Result<Boolean> = withContext(Dispatchers.Main) {
+        val tab = (if (tabId.isNullOrBlank()) getActiveTab() else tabs.find { it.id == tabId })
+            ?: return@withContext Result.failure(Exception("Tab not found"))
+        val wv = tab.webView ?: return@withContext Result.failure(Exception("WebView not initialized for tab"))
+        val now = SystemClock.uptimeMillis()
+        wv.dispatchKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0))
+        wv.dispatchKeyEvent(KeyEvent(now, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0))
+        Result.success(true)
+    }
+
+    /**
+     * Retrieves captured console logs for a tab.
+     */
+    fun getConsoleLogs(
+        tabId: String? = null,
+        levelFilter: String? = null,
+        limit: Int = MAX_LOGS_PER_QUERY
+    ): List<BrowserConsoleMessage> {
+        val tab = getTab(tabId) ?: return emptyList()
+        val all = tab.consoleLogs.toList()
+        val filtered = if (!levelFilter.isNullOrBlank() && levelFilter != "ALL") {
+            all.filter { it.level.equals(levelFilter, ignoreCase = true) }
+        } else {
+            all
+        }
+        return filtered.takeLast(limit.coerceIn(1, 300))
+    }
+
+    /**
+     * Retrieves captured network and HTTP errors for a tab.
+     */
+    fun getNetworkErrors(
+        tabId: String? = null,
+        limit: Int = MAX_LOGS_PER_QUERY
+    ): List<BrowserNetworkError> {
+        val tab = getTab(tabId) ?: return emptyList()
+        return tab.networkErrors.toList().takeLast(limit.coerceIn(1, 200))
+    }
+}

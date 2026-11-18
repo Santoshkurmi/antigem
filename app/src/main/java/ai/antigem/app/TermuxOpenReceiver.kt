@@ -3,7 +3,7 @@ package ai.antigem.app
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.example.gemini.data.receiver.TermuxOpenReceiver as CoreOpenReceiver
+import ai.antigem.data.receiver.TermuxOpenReceiver as CoreOpenReceiver
 
 /**
  * Direct ai.antigem.app.TermuxOpenReceiver implementation for shell scripts

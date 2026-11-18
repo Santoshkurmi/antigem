@@ -1,0 +1,165 @@
+package ai.antigem.ui.browser
+
+import android.content.Context
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import org.json.JSONArray
+
+/** A public GitHub repository holding plugin folders; [ref] is a branch or tag, blank for the default branch. */
+data class PluginRepo(val owner: String, val name: String, val ref: String = "") {
+    val slug get() = "$owner/$name"
+    val label get() = if (ref.isBlank()) slug else "$slug@$ref"
+}
+
+/** One plugin a repository offers; [version] comes from the index, or from its manifest when the index has none. */
+data class RepoPlugin(val path: String, val id: String, val name: String, val version: String, val description: String, val iconUrl: String)
+
+data class RepoListing(val title: String, val plugins: List<RepoPlugin>, val fromIndex: Boolean)
+
+/** A running repository install: phase is listing | downloading | extracting | installing, then starting (loading it in the app). */
+data class RepoInstallProgress(val phase: String, val bytesDone: Long, val bytesTotal: Long, val filesDone: Int, val filesTotal: Int, val note: String = "") {
+    /** 0..1 when the size is known, else null (the bar then just moves). */
+    val fraction: Float? get() = if (bytesTotal > 0 && phase in setOf("downloading", "extracting")) (bytesDone.toFloat() / bytesTotal).coerceIn(0f, 1f) else null
+}
+
+/** Dotted numeric versions, as shown and compared in the plugin screens. */
+object PluginVersions {
+    fun label(version: String) = if (version.isBlank()) "no version" else "v" + version.removePrefix("v")
+
+    /** Part-by-part comparison; null when either version is missing or not numeric. */
+    fun compare(a: String, b: String): Int? {
+        if (a.isBlank() || b.isBlank()) return null
+        val x = a.removePrefix("v").split('.', '-').map { it.toIntOrNull() ?: return null }
+        val y = b.removePrefix("v").split('.', '-').map { it.toIntOrNull() ?: return null }
+        for (i in 0 until maxOf(x.size, y.size)) { val d = x.getOrElse(i) { 0 }.compareTo(y.getOrElse(i) { 0 }); if (d != 0) return d }
+        return 0
+    }
+}
+
+/**
+ * The user's plugin repositories and what each offers. Listing (from a repo's `antigem-plugins.json`, or its
+ * top-level folders with a manifest.json) and installing a single folder are done by the IDE bridge.
+ */
+object PluginRepositories {
+    const val INDEX = "antigem-plugins.json"
+    private const val PREFS = "plugin_repositories"
+    /**
+     * The official repositories, each added once (for new and existing users) under its own "added" flag, so a
+     * repository added later still reaches users who already got the earlier ones. A removed one stays removed.
+     */
+    private val DEFAULT_REPOS = listOf(
+        "dipeshkrydv/antigem_plugins" to "default_repo_added",
+        "Santoshkurmi/antigem_plugins" to "default_repo_added_santoshkurmi"
+    )
+    private val NAME = "[A-Za-z0-9_.-]+"
+
+    val repos = mutableStateListOf<PluginRepo>()
+    /** Latest listing and error per [PluginRepo.label]; [loading] holds labels being refreshed. */
+    val listings = mutableStateMapOf<String, RepoListing>()
+    val errors = mutableStateMapOf<String, String>()
+    val loading = mutableStateListOf<String>()
+    /** The repository install or update in progress, polled from the IDE bridge; null when none is running. */
+    var installProgress by mutableStateOf<RepoInstallProgress?>(null)
+        private set
+
+    private var appContext: Context? = null
+
+    fun init(context: Context) {
+        if (appContext != null) return
+        appContext = context.applicationContext
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.getString("repos", null)?.let { stored ->
+            runCatching { val array = JSONArray(stored); repos.addAll((0 until array.length()).map { parse(array.getString(it)) }) }
+        }
+        // Each official repository is added once, at the top in this order; if the user removes it, it stays removed
+        DEFAULT_REPOS.forEachIndexed { index, (repo, addedKey) ->
+            if (prefs.getBoolean(addedKey, false)) return@forEachIndexed
+            val official = parse(repo)
+            if (repos.none { it.slug.equals(official.slug, ignoreCase = true) }) repos.add(index.coerceAtMost(repos.size), official)
+            prefs.edit().putBoolean(addedKey, true).apply()
+            persist()
+        }
+    }
+
+    /** Accepts `owner/repo`, `owner/repo@branch`, `https://github.com/owner/repo` and `…/tree/branch` URLs. */
+    fun parse(input: String): PluginRepo {
+        val text = input.trim().removeSuffix("/").removeSuffix(".git").replace(Regex("^(https?://)?(www\\.)?github\\.com/"), "")
+        val tree = Regex("^($NAME)/($NAME)/tree/(.+)$").find(text)
+        val plain = Regex("^($NAME)/($NAME)(?:@(.+))?$").find(text)
+        val match = tree ?: plain ?: throw IllegalArgumentException("Use owner/repo, owner/repo@branch or a github.com repository URL")
+        val ref = match.groupValues[3]
+        require(ref.none { it.isWhitespace() } && ref.split('/').none { it.isEmpty() || it == ".." } || ref.isEmpty()) { "Invalid branch or tag: $ref" }
+        return PluginRepo(match.groupValues[1], match.groupValues[2], ref)
+    }
+
+    fun add(repo: PluginRepo) {
+        require(repos.none { it.label.equals(repo.label, ignoreCase = true) }) { "${repo.label} is already added" }
+        repos.add(repo); persist()
+    }
+
+    fun remove(repo: PluginRepo) {
+        repos.remove(repo); listings.remove(repo.label); errors.remove(repo.label); persist()
+    }
+
+    private fun persist() {
+        val context = appContext ?: return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("repos", JSONArray(repos.map { it.label }).toString()).apply()
+    }
+
+    suspend fun refreshAll() = coroutineScope { repos.toList().map { async { refresh(it) } }.awaitAll() }
+
+    suspend fun refresh(repo: PluginRepo) {
+        if (repo.label in loading) return
+        withContext(Dispatchers.Main) { loading.add(repo.label) }
+        val result = runCatching { PluginBridge.repoList(repo.label) }
+        withContext(Dispatchers.Main) {
+            result.onSuccess { listings[repo.label] = it; errors.remove(repo.label) }
+                .onFailure { errors[repo.label] = it.message ?: "Could not read ${repo.label}" }
+            loading.remove(repo.label)
+        }
+    }
+
+    /** The installed plugin a repository entry corresponds to: same repo and folder, else the same plugin ID. */
+    fun installedFor(repo: PluginRepo, plugin: RepoPlugin): BrowserExtension? {
+        val installed = BrowserExtensionManager.instance.extensions
+        return installed.firstOrNull { it.source?.repo.equals(repo.slug, ignoreCase = true) && it.source?.path == plugin.path }
+            ?: plugin.id.takeIf { it.isNotBlank() }?.let { id -> installed.firstOrNull { it.id == id } }
+    }
+
+    /** A newer version of [extension] in the repository it was installed from, if one has been seen. */
+    fun updateFor(extension: BrowserExtension): RepoPlugin? {
+        val source = extension.source ?: return null
+        val repo = repos.firstOrNull { it.slug.equals(source.repo, ignoreCase = true) && it.ref == source.ref } ?: return null
+        val offered = listings[repo.label]?.plugins?.firstOrNull { it.path == source.path } ?: return null
+        return offered.takeIf { (PluginVersions.compare(it.version, extension.version) ?: 0) > 0 }
+    }
+
+    suspend fun install(repo: PluginRepo, plugin: RepoPlugin, folder: String, updateId: String?, asNew: Boolean = false): BrowserExtension = coroutineScope {
+        withContext(Dispatchers.Main) { installProgress = RepoInstallProgress("listing", 0, 0, 0, 0) }
+        val poller = launch(Dispatchers.IO) {
+            while (true) {
+                val p = runCatching { PluginBridge.repoProgress(folder.trim()) }.getOrNull()
+                // The bridge is done once it stops reporting; the app then loads the new files
+                withContext(Dispatchers.Main) { installProgress = p ?: installProgress?.copy(phase = "starting") }
+                delay(250)
+            }
+        }
+        try {
+            BrowserExtensionManager.instance.installFromRepo(repo.label, plugin.path, folder, updateId, asNew)
+        } finally {
+            poller.cancel()
+            withContext(Dispatchers.Main + NonCancellable) { installProgress = null }
+        }
+    }
+}

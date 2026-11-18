@@ -5,7 +5,7 @@
 #
 # Output: scripts/render_bundle/out/antigem-render-bundle-v1.zip (+ .sha256), git-ignored.
 # Upload that zip to a GitHub release with the tag in BUNDLE_TAG (same file name), then put the printed
-# SHA-256 in RenderBundle.BUNDLE_SHA256 (app/src/main/java/com/example/gemini/data/render/RenderBundle.kt).
+# SHA-256 in RenderBundle.BUNDLE_SHA256 (app/src/main/java/ai/antigem/data/render/RenderBundle.kt).
 #
 # Every library is pinned to an exact version: the app tells the model these exact versions.
 # Changing a version = new bundle tag (render-v2, ...) + new URL / SHA-256 / versions in RenderBundle.kt.
