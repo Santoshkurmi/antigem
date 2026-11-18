@@ -7,6 +7,7 @@ import android.system.OsConstants
 import android.util.Log
 import com.example.gemini.BuildConfig
 import com.example.gemini.data.local.LocalEnvironmentManager
+import com.example.gemini.data.local.TermuxRelocation
 import com.example.gemini.ui.browser.BrowserExtensionManager
 import com.example.gemini.ui.browser.PluginRepositories
 import kotlinx.coroutines.CoroutineScope
@@ -343,6 +344,7 @@ object ReaManager {
             appendLog("✓ $name")
         }
         File(shareDir, "files.json").writeText(index.toString(1))
+        relocateSetupFiles()
         appendLog("✓ Setup files $version in ${shareDir.absolutePath}")
         _state.update { it.copy(filesUpdate = null) }
         // A changed filter or launcher only reaches agents through the launcher step
@@ -718,10 +720,21 @@ object ReaManager {
         }
     }
 
+    /**
+     * The setup files are written for com.termux (/data/data/com.termux/files/…). In ai.antigem (and the ai.antidev
+     * debug build) they are rewritten for this app's package, like Termux packages, else the scripts look for the
+     * container and their tools in com.termux's folder. Runs before every step too, for files downloaded before.
+     */
+    private fun relocateSetupFiles() {
+        runCatching { TermuxRelocation.relocateIfNeeded(appContext, shareDir) }
+            .onFailure { Log.w(TAG, "relocating the setup files: ${it.message}") }
+    }
+
     /** Runs `rea-setup.sh <step>`, streaming its output into the log; false (and an error message) on failure. */
     private suspend fun shellTask(progress: String, step: String, timeoutSeconds: Long): Boolean {
         val script = File(shareDir, "rea-setup.sh")
         if (!script.exists()) throw IllegalStateException("The setup files are missing. Tap Get setup files first.")
+        relocateSetupFiles()
         _state.update { it.copy(progress = progress) }
         appendLog("$ bash rea-setup.sh $step")
         // $$ is this shell, and exec keeps its PID for the script: Stop kills that process tree
