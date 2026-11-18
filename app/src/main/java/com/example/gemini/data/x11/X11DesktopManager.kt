@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,6 +57,24 @@ object X11DesktopManager {
     private const val DISPLAY = ":0"
     private const val LOG_FILE = "antigem-x11.log"
     private const val KEEP_CONFIGS = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
+    /**
+     * Brings every installed package up to date before new ones are installed. Termux packages don't state the versions
+     * they need, so a new package next to older libraries can fail to run (dbus 1.16 couldn't start with the base
+     * system's older libexpat, and the desktop with it).
+     */
+    private const val UPGRADE = "apt-get full-upgrade -y $KEEP_CONFIGS"
+
+    /** How long Start waits for the X server to listen on display :0. */
+    private const val START_TIMEOUT_MS = 20_000L
+
+    /** After that, how long the desktop must keep running: when its session fails, termux-x11 stops within about a second. */
+    private const val SETTLE_MS = 3_000L
+
+    /** Lines of the X server's log that mean it stopped because something failed. */
+    private val FAILURE_LINE = Regex(
+        "exited, status=[1-9]|killed by signal|CANNOT LINK EXECUTABLE|Fatal server error|XKB_CONFIG_ROOT is not set|TMPDIR is not set"
+    )
 
     /** Desktops offered in the picker: the x11-repo package to install, and the command that starts a session. */
     enum class Desktop(val label: String, val packages: String, val sessionBinary: String) {
@@ -160,6 +179,10 @@ object X11DesktopManager {
     /** Re-reads everything from the phone: cheap (package manager, a few files and /proc), safe to poll. */
     fun refresh() = scope.launch { refreshNow() }
 
+    /** Set while [stop] stops the desktop, so that isn't reported as the desktop stopping by itself. */
+    @Volatile
+    private var stopRequested = false
+
     private fun refreshNow() {
         val ctx = appContext
         val prefix = LocalEnvironmentManager.getPrefixDir(ctx)
@@ -167,7 +190,8 @@ object X11DesktopManager {
         val dpkgInfo = File(prefix, "var/lib/dpkg/info")
         val companion = listOf(COMPANION_ANTIGEM, COMPANION_OFFICIAL).firstOrNull { File(dpkgInfo, "$it.list").exists() }
             ?.takeIf { File(bin, "termux-x11").exists() }
-        _state.update {
+        val running = xServerPids().isNotEmpty()
+        val previous = _state.getAndUpdate {
             it.copy(
                 ready = true,
                 bootstrapInstalled = LocalEnvironmentManager.isInstalled(ctx),
@@ -176,9 +200,52 @@ object X11DesktopManager {
                 dbusInstalled = File(bin, "dbus-launch").exists(),
                 installedDesktops = Desktop.entries.filter { d -> File(bin, d.sessionBinary).exists() }.toSet(),
                 installedBrowsers = Browser.entries.filter { b -> File(bin, b.binaryName).exists() }.toSet(),
-                running = xServerPids().isNotEmpty()
+                running = running
             )
         }
+        // It stopped without the Stop button (crashed, logged out, closed in Termux:X11). A running Start reports its own.
+        if (previous.running && !running && !stopRequested && job?.isActive != true) reportStopped()
+    }
+
+    /** The desktop stopped by itself: say so, and why when the end of the X server's log shows an error. */
+    private fun reportStopped() {
+        val tail = xLogTail()
+        val failed = tail.any { FAILURE_LINE.containsMatchIn(it) }
+        _state.update {
+            it.copy(
+                logTask = Task.START,
+                log = if (tail.isEmpty()) emptyList() else listOf("End of $LOG_FILE:") + tail,
+                message = if (failed) "The desktop stopped because of an error. ${reasonHint(tail)}" else "The desktop has stopped.",
+                isError = failed
+            )
+        }
+    }
+
+    /** The last lines of the X server's log (it grows while a desktop runs, so only its end is read). */
+    private fun xLogTail(maxLines: Int = 20): List<String> {
+        val file = File(LocalEnvironmentManager.getTmpDir(appContext), LOG_FILE)
+        val text = runCatching {
+            java.io.RandomAccessFile(file, "r").use { raf ->
+                val from = (raf.length() - 16 * 1024).coerceAtLeast(0)
+                val bytes = ByteArray((raf.length() - from).toInt())
+                raf.seek(from)
+                raf.readFully(bytes)
+                // starting mid-file: the first line is cut, drop it
+                String(bytes, Charsets.UTF_8).lines().let { if (from > 0) it.drop(1) else it }
+            }
+        }.getOrDefault(emptyList())
+        return text.map { it.trimEnd() }.filter { it.isNotEmpty() }.takeLast(maxLines)
+    }
+
+    /** What to do about the errors we know, from the end of the X server's log. */
+    private fun reasonHint(tail: List<String>): String = when {
+        tail.any { "CANNOT LINK EXECUTABLE" in it } ->
+            "A program could not load a library, which usually means some packages are out of date. " +
+                "Run \"pkg upgrade\" in the terminal, then start again."
+        tail.any { "XKB_CONFIG_ROOT is not set" in it } ->
+            "This Termux:X11 build can't find the keyboard files. Update the Termux:X11 app (step 1), then start again."
+        tail.isEmpty() -> "Its log ($LOG_FILE) is empty."
+        else -> "The reason is at the end of the log in step 4."
     }
 
     private fun readAppInfo(ctx: Context): AppInfo? {
@@ -255,9 +322,9 @@ object X11DesktopManager {
     fun installDesktop() = runTask(Task.DESKTOP) {
         val desktop = _state.value.desktop
         shellTask(
-            "Installing ${desktop.label}… (a large download, this can take a while)",
+            "Updating installed packages, then installing ${desktop.label}… (a large download, this can take a while)",
             "apt-get update && apt-get install -y $KEEP_CONFIGS x11-repo && apt-get update && " +
-                "apt-get install -y $KEEP_CONFIGS dbus ${desktop.packages}",
+                "$UPGRADE && apt-get install -y $KEEP_CONFIGS dbus ${desktop.packages}",
             3600
         )
     }
@@ -267,46 +334,86 @@ object X11DesktopManager {
     fun installBrowser() = runTask(Task.BROWSER) {
         val browser = _state.value.browser
         shellTask(
-            "Installing ${browser.label}…",
+            "Updating installed packages, then installing ${browser.label}…",
             "apt-get update && apt-get install -y $KEEP_CONFIGS tur-repo && apt-get update && " +
-                "apt-get install -y $KEEP_CONFIGS ${browser.packageName}",
+                "$UPGRADE && apt-get install -y $KEEP_CONFIGS ${browser.packageName}",
             3600
         )
     }
 
     // ---------------- step 4: start / open / stop ----------------
 
-    /** Starts the X server with the chosen desktop (unless it is already running) and opens Termux:X11. */
+    /**
+     * Starts the X server with the chosen desktop (unless it is already running) and opens Termux:X11 once the desktop is
+     * really up: the server listens on display :0 and keeps running for [SETTLE_MS]. (Its process exists long before
+     * that, and when the desktop session fails, termux-x11 stops the server too.) Otherwise the end of its log says why.
+     */
     fun start(context: Context) = runTask(Task.START) {
         if (xServerPids().isEmpty()) {
+            stopRequested = false
             val tmp = LocalEnvironmentManager.getTmpDir(appContext)
             // Left behind when the X server was killed: it would refuse to start ("Server is already active for display 0")
             File(tmp, ".X0-lock").delete()
-            File(tmp, ".X11-unix/X0").delete()
+            val socket = File(tmp, ".X11-unix/X0")
+            socket.delete()
             val desktop = _state.value.desktop
             val log = File(tmp, LOG_FILE)
-            _state.update { it.copy(progress = "Starting the X server with ${desktop.label}…") }
+            _state.update { it.copy(progress = "Starting the X server…") }
             // nohup + redirects: the command returns at once and the X server outlives it
             val command = "nohup termux-x11 $DISPLAY -xstartup \"${desktop.startCommand}\" " +
                 "> '${log.absolutePath}' 2>&1 < /dev/null &"
             appendLog("$ $command")
             shell(command, 30)
-            var up = false
-            for (attempt in 0 until 20) {
+
+            // 1. the X server comes up and listens on display :0 (its socket appears)
+            val startedAt = System.currentTimeMillis()
+            var seen = false
+            var listening = false
+            while (System.currentTimeMillis() - startedAt < START_TIMEOUT_MS) {
                 delay(250)
-                if (xServerPids().isNotEmpty()) { up = true; break }
+                val alive = xServerPids().isNotEmpty()
+                if (alive) seen = true
+                if (alive && socket.exists()) { listening = true; break }
+                if (!alive && (seen || System.currentTimeMillis() - startedAt > 5_000)) break
             }
-            if (!up) {
-                val tail = runCatching { log.readLines().takeLast(15) }.getOrDefault(emptyList())
-                tail.forEach(::appendLog)
-                refreshNow()
-                report("The X server did not start. See the log above.", isError = true)
+            if (!listening) {
+                failStart(desktop, seen)
                 return@runTask
             }
-            appendLog("✓ X server running on display $DISPLAY")
+            appendLog("✓ X server listening on display $DISPLAY")
+
+            // 2. the desktop session starts; if it exits, the X server stops with it
+            _state.update { it.copy(progress = "Starting ${desktop.label}…") }
+            val settleUntil = System.currentTimeMillis() + SETTLE_MS
+            while (System.currentTimeMillis() < settleUntil) {
+                delay(250)
+                if (xServerPids().isEmpty()) {
+                    failStart(desktop, seen = true)
+                    return@runTask
+                }
+            }
+            appendLog("✓ ${desktop.label} running on display $DISPLAY")
         }
         refreshNow()
         withContext(Dispatchers.Main) { open(context) }
+    }
+
+    /** Start failed: the end of the X server's log goes into step 4's log, and the message says what happened. */
+    private fun failStart(desktop: Desktop, seen: Boolean) {
+        val tail = xLogTail()
+        if (tail.isNotEmpty()) {
+            appendLog("End of $LOG_FILE:")
+            tail.forEach(::appendLog)
+        }
+        // termux-x11 prints "<pid> exited, status=<n>" when the desktop session ends
+        val sessionEnded = tail.any { Regex("^\\d+ (exited, status=|killed by signal)").containsMatchIn(it) }
+        val what = when {
+            !seen -> "The X server did not start."
+            sessionEnded -> "${desktop.label} stopped right after starting, and the X server with it."
+            else -> "The X server stopped right after starting."
+        }
+        refreshNow()
+        report("$what ${reasonHint(tail)}", isError = true)
     }
 
     fun open(context: Context) {
@@ -321,19 +428,24 @@ object X11DesktopManager {
 
     /** Closes the Termux:X11 window and stops the X server; the desktop's programs exit with it. */
     fun stop(context: Context) = scope.launch {
-        runCatching {
-            // the fork's own action name (its Java code keeps com.termux.x11), sent to its package ai.antigem.x11
-            context.sendBroadcast(Intent("com.termux.x11.ACTION_STOP").setPackage(X11_PACKAGE))
+        stopRequested = true
+        try {
+            runCatching {
+                // the fork's own action name (its Java code keeps com.termux.x11), sent to its package ai.antigem.x11
+                context.sendBroadcast(Intent("com.termux.x11.ACTION_STOP").setPackage(X11_PACKAGE))
+            }
+            // SIGTERM (not SIGKILL) so the X server removes its lock file and socket
+            xServerPids().forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGTERM) } }
+            for (attempt in 0 until 12) {
+                if (xServerPids().isEmpty()) break
+                delay(250)
+            }
+            xServerPids().forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGKILL) } }
+            refreshNow()
+            report("Desktop stopped.")
+        } finally {
+            stopRequested = false
         }
-        // SIGTERM (not SIGKILL) so the X server removes its lock file and socket
-        xServerPids().forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGTERM) } }
-        for (attempt in 0 until 12) {
-            if (xServerPids().isEmpty()) break
-            delay(250)
-        }
-        xServerPids().forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGKILL) } }
-        refreshNow()
-        report("Desktop stopped.")
     }
 
     // ---------------- optional: Android's child process limit ----------------

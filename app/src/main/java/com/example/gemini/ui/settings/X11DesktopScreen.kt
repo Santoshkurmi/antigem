@@ -313,7 +313,7 @@ private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderS
         "1. Install antigem-termux-x11-sharedUid.apk and download antigem-termux-x11-*-all.deb from ${X11DesktopManager.FORK_RELEASES_PAGE}" to null,
         "2. Enable x11-repo" to "pkg install x11-repo",
         "3. Install the termux-x11 command (in the folder with the .deb)" to "apt install ./antigem-termux-x11-*-all.deb",
-        "4. Install a desktop" to "pkg install dbus ${desktop.packages}",
+        "4. Update your packages, then install a desktop" to "pkg upgrade -y && pkg install dbus ${desktop.packages}",
         "5. Start it, then open Termux:X11" to start
     )
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
