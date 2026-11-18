@@ -2066,6 +2066,15 @@ class AgyChatBackend(
 
                 val currentAutoExecPolicy = authPrefs.commandAutoExecutionPolicy.firstOrNull() ?: "CASCADE_COMMANDS_AUTO_EXECUTION_EAGER"
 
+                // project checkpoint (when on): the files right before Antigravity gets the message (local projects
+                // only: a cloud chat's files are not on the bridge's machine). A queued one never holds anything up.
+                if (clientMessageId != null && !conv.isCloud) {
+                    val ws = _currentConversation.value?.takeIf { it.id == conv.id }?.workspaceUri?.takeIf { it.isNotBlank() } ?: conv.workspaceUri
+                    val title = promptText ?: userPrompt
+                    if (queued) com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurnInBackground(AgentKind.AGY, conv.id, ws, clientMessageId, title)
+                    else com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurn(AgentKind.AGY, conv.id, ws, clientMessageId, title)
+                }
+
                 var sendRes = agyHubClient.sendUserPrompt(
                     cascadeId = conv.id,
                     text = userPrompt,

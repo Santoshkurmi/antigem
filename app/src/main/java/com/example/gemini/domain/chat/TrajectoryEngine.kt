@@ -689,7 +689,8 @@ class TrajectoryEngine {
                             createdAt = turn.createdAt ?: System.currentTimeMillis(),
                             rawContent = turn.rawText,
                             viaVoice = turn.viaVoice,
-                            voiceLine = turn.voiceLine
+                            voiceLine = turn.voiceLine,
+                            checkpointKey = turn.clientMessageId
                         )
                     )
                 }
@@ -1274,13 +1275,14 @@ class TrajectoryEngine {
     private fun userTurnOf(step: Step, stepIndex: Int): ChatTurn.User {
         val userText = extractUserText(step.user_input)
         val tags = step.user_input?.tags.orEmpty()
+        val clientMessageId = tags.firstOrNull { it.startsWith(CLIENT_MSG_TAG_PREFIX) }?.removePrefix(CLIENT_MSG_TAG_PREFIX)?.takeIf { it.isNotBlank() }
         val createdAt = parseTimestampToMillis(step.metadata?.created_at)?.takeIf { it > 0 }
         val voice = VoiceTurn.parse(userText, tags)
         // files sent by path are listed in the message's hidden text: shown as cards (the text keeps the list, hidden
         // on screen, so editing the message brings the files back)
         val attachments = extractUserAttachments(step.user_input, stepIndex) +
             com.example.gemini.data.files.AttachedFiles.extract(userText, "att_$stepIndex").second
-        if (voice == null) return ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = createdAt)
+        if (voice == null) return ChatTurn.User(stepIndex = stepIndex, text = userText, attachments = attachments, createdAt = createdAt, clientMessageId = clientMessageId)
         return ChatTurn.User(
             stepIndex = stepIndex,
             text = voice.spoken.ifBlank { "Voice request" },
@@ -1288,7 +1290,8 @@ class TrajectoryEngine {
             createdAt = createdAt,
             viaVoice = true,
             voiceLine = voice.voiceLine,
-            rawText = userText
+            rawText = userText,
+            clientMessageId = clientMessageId
         )
     }
 

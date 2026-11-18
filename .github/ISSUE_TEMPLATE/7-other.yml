@@ -1,0 +1,42 @@
+name: 📝 Something else
+description: Use this ONLY if none of the templates above fit. Issues that belong in another template will be closed.
+title: ""
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Use this only if you have no other choice.**
+        Bug, crash, install problem, agent / model problem, improvement or new feature? Go back and pick that template instead: issues here that fit one of them will be **closed**.
+        Questions ("how do I…?") go to the [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you start
+      options:
+        - label: I checked the other templates and none of them fits.
+          required: true
+        - label: I searched the [existing issues](https://github.com/Santoshkurmi/antigem/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+
+  - type: textarea
+    id: why_other
+    attributes:
+      label: Why doesn't any other template fit?
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Explain clearly what, when and how. Add screenshots if they help.
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App version
+      description: "**Settings → About & Info**"
+      placeholder: "1.2.0 (129)"

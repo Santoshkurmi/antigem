@@ -335,6 +335,8 @@ class ClaudeChatBackend(
                     )
                 }
                 publishQueue()
+                // project checkpoint (when on): sent while Claude works, so marked mid-turn; its reply never waits for it
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurnInBackground(AgentKind.CLAUDE, conv.id, conv.workspaceUri, uuid, displayText)
                 val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
                 ensureConnected(conv.id)
                 send(frame)
@@ -350,11 +352,21 @@ class ClaudeChatBackend(
                 }
             }
             emitNow()
+            // project checkpoint (when on): the files right before Claude gets the message. The worker waits for it
+            // (Claude is not replying in this chat now) so nothing, such as a chat switch, runs between it and the send.
+            if (com.example.gemini.data.checkpoint.ProjectCheckpoints.mayCheckpoint(conv.workspaceUri)) {
+                kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                    com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurn(AgentKind.CLAUDE, conv.id, conv.workspaceUri, uuid, displayText)
+                }
+            }
             val frame = ClaudeJson.encodeToString(ClaudeUserMessage(uuid = uuid, message = ClaudeOutgoingMessage(buildBlocks(text, atts))))
             ensureConnected(conv.id)
             send(frame)
         }
     }
+
+    override fun checkpointKey(message: ChatMessage): String? =
+        message.id.takeIf { it.startsWith("user_") }?.removePrefix("user_")
 
     private val _queuedMessages = MutableStateFlow<List<com.example.gemini.domain.model.QueuedMessage>>(emptyList())
     /** The open chat's messages waiting for Claude to finish (shown in the queued-messages card). */
@@ -1482,6 +1494,8 @@ class ClaudeChatBackend(
                             endCompactingNotice()
                             // the chat's first message (with the app's global context) was summarized away: resend it next time
                             com.example.gemini.data.context.GlobalContext.forget(attachedId ?: store.currentConversation.value?.id)
+                            // and the Agent memory text with it
+                            com.example.gemini.data.memory.AgentMemory.forget(attachedId ?: store.currentConversation.value?.id)
                         }
                     }
                 }

@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
         instanceRef = java.lang.ref.WeakReference(this)
         com.example.gemini.data.jarvis.JarvisPreferences.init(this)
         com.example.gemini.data.context.GlobalContext.init(this)
+        com.example.gemini.data.memory.AgentMemory.init(this)
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isEnabled =
             chatViewModel.authPreferences.getNetworkInspectorEnabledSync()
         com.example.gemini.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled =
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
         com.example.gemini.data.remote.AndroidLocalBridgeServer.instance.start(this)
         com.example.gemini.data.jarvis.JarvisController.attach(application, chatViewModel)
         com.example.gemini.data.agent.ChatCompletionMonitor.start(application, chatViewModel)
+        com.example.gemini.data.memory.MemorySync.start(chatViewModel)
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
 

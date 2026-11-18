@@ -245,7 +245,6 @@ fun ChatScreen(
     val claudeSlashCommands by claudeBackend.slashCommands.collectAsState()
     var showClaudeLogin by remember { mutableStateOf(false) }
     var claudeSettingsPage by remember { mutableStateOf<com.example.gemini.ui.claude.ClaudeSettingsPage?>(null) }
-    var restoreCodeOnEdit by remember { mutableStateOf(false) }
     val claudeSettingsDeps = remember(viewModel) {
         com.example.gemini.ui.claude.ClaudeSettingsDeps(viewModel.claudeAccount, viewModel.claudeConfig, viewModel.claudeBackend, viewModel.claudePrefs)
     }
@@ -786,6 +785,26 @@ fun ChatScreen(
         }
     }
     var pendingMessageAction by remember { mutableStateOf<PendingMessageAction?>(null) }
+    // Project checkpoints: the open chat's restore points, the "go back" sheet, and the one-time "track this project?"
+    val messageCheckpoints by viewModel.messageCheckpoints.collectAsState()
+    val checkpointSettings by com.example.gemini.data.checkpoint.ProjectCheckpoints.settings.collectAsState()
+    var restoreSheetFor by remember { mutableStateOf<Pair<ChatMessage, com.example.gemini.data.checkpoint.CheckpointSummary>?>(null) }
+    var trackProjectAsk by remember { mutableStateOf<com.example.gemini.data.checkpoint.CheckpointProjectState?>(null) }
+    val askedTrackProjects = remember { mutableSetOf<String>() }
+    val newChatProjectPath = com.example.gemini.data.checkpoint.ProjectCheckpoints.pathOf(currentConv?.workspaceUri)
+    val newChatEmpty = messages.isEmpty()
+    LaunchedEffect(newChatProjectPath, newChatEmpty, checkpointSettings?.mode, currentConv?.isCloud) {
+        val path = newChatProjectPath ?: return@LaunchedEffect
+        if (!newChatEmpty || currentConv?.isCloud == true) return@LaunchedEffect
+        if (checkpointSettings?.mode != com.example.gemini.data.checkpoint.CheckpointSettings.MODE_SELECTED) return@LaunchedEffect
+        if (path in askedTrackProjects) return@LaunchedEffect
+        delay(400) // the project picker closes first
+        val st = com.example.gemini.data.checkpoint.ProjectCheckpoints.projectState(path).getOrNull() ?: return@LaunchedEffect
+        if (st.shouldAsk) {
+            askedTrackProjects.add(path)
+            trackProjectAsk = st
+        }
+    }
     val thinkingPref by viewModel.thinkingPreference.collectAsState()
     val terminatedToolDialogState by viewModel.terminatedToolDialog.collectAsState()
     val isConversationsLoading by viewModel.isConversationsLoading.collectAsState()
@@ -1153,7 +1172,6 @@ fun ChatScreen(
     val activeChatProject by TermuxDaemonManager.activeProject.collectAsState()
     val usedProjects by TermuxDaemonManager.projects.collectAsState()
     var showProjectDropdown by remember { mutableStateOf(false) }
-    var chatProjectFiles by remember { mutableStateOf<List<com.example.gemini.data.daemon.FileNode>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         TermuxDaemonManager.loadProjects(conversations)
@@ -1162,15 +1180,6 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         TermuxDaemonManager.serverReconnectedEvent.collect {
             TermuxDaemonManager.loadProjects(conversations)
-        }
-    }
-
-    LaunchedEffect(activeChatProject) {
-        if (activeChatProject != null) {
-            scope.launch {
-                val tree = IdeApiClient.getFileTree(activeChatProject?.path)
-                chatProjectFiles = flattenFileNodes(tree)
-            }
         }
     }
 
@@ -2189,9 +2198,14 @@ fun ChatScreen(
                             )
                         }
 
+                        // web views of this chat's blocks stay alive while the chat is open; all destroyed when it is left
+                        val chatWebViewCache = remember(currentConv?.id) { com.example.gemini.ui.components.ChatWebViewCache(context) }
+                        DisposableEffect(chatWebViewCache) { onDispose { chatWebViewCache.close() } }
+
                         CompositionLocalProvider(
                             androidx.compose.ui.platform.LocalDensity provides customDensity,
-                            com.example.gemini.ui.components.LocalQuestionPanelActive provides true
+                            com.example.gemini.ui.components.LocalQuestionPanelActive provides true,
+                            com.example.gemini.ui.components.LocalChatWebViewCache provides chatWebViewCache
                         ) {
                                 // iOS-style vertical bounce at the top and bottom (also for a short chat that cannot scroll);
                                 // only this list: code blocks and other sideways scrollers keep Android's own edge effect
@@ -2257,6 +2271,10 @@ fun ChatScreen(
                                                 },
                                                 onViewRawPayload = { payloadJson ->
                                                     showRawPayloadDialog = payloadJson
+                                                },
+                                                checkpoint = messageCheckpoints[feedItem.message.id],
+                                                onRestoreCheckpoint = { msg ->
+                                                    messageCheckpoints[msg.id]?.let { restoreSheetFor = msg to it }
                                                 }
                                             )
                                         }
@@ -2299,7 +2317,9 @@ fun ChatScreen(
                                                     is MarkdownBlock.Alert, is MarkdownBlock.Table -> true
                                                     else -> false
                                                 }
-                                                if (selectable) SelectionContainer { blockView() } else blockView()
+                                                CompositionLocalProvider(com.example.gemini.ui.components.LocalWebViewSlot provides feedItem.key) {
+                                                    if (selectable) SelectionContainer { blockView() } else blockView()
+                                                }
                                             }
                                         }
                                         // with the working animation on, the working row below replaces these dots
@@ -2518,13 +2538,18 @@ fun ChatScreen(
                     val isAtMentioning = mention != null
                     val atQuery = mention?.query ?: ""
 
-                    val fileSuggestions = remember(atQuery, chatProjectFiles, isAtMentioning) {
-                        if (!isAtMentioning || chatProjectFiles.isEmpty()) emptyList()
-                        else {
-                            chatProjectFiles.filter { file ->
-                                !file.isDir && (atQuery.isBlank() || file.name.contains(atQuery, ignoreCase = true) || file.path.contains(atQuery, ignoreCase = true))
-                            }
+                    // Nothing is loaded before an @mention: the bridge searches the project's files and folders by name
+                    // (by path when the text has a "/") once something is typed. A new keystroke (or removing the @,
+                    // sending, leaving) cancels the running search.
+                    val mentionProjectPath = activeChatProject?.path
+                    var fileSuggestions by remember { mutableStateOf<List<com.example.gemini.data.files.ExplorerEntry>>(emptyList()) }
+                    LaunchedEffect(isAtMentioning, atQuery, mentionProjectPath) {
+                        if (!isAtMentioning || atQuery.isBlank() || mentionProjectPath.isNullOrBlank()) {
+                            fileSuggestions = emptyList()
+                            return@LaunchedEffect
                         }
+                        delay(250) // wait for a pause in typing
+                        fileSuggestions = com.example.gemini.data.files.FileExplorerApi.searchFileNames(mentionProjectPath, atQuery, filesOnly = false)
                     }
 
                     androidx.compose.animation.AnimatedVisibility(
@@ -2561,7 +2586,7 @@ fun ChatScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Description,
+                                            imageVector = if (file.isDir) Icons.Default.Folder else Icons.Default.Description,
                                             contentDescription = null,
                                             tint = ClaudeTerracotta,
                                             modifier = Modifier.size(16.dp)
@@ -3261,6 +3286,35 @@ fun ChatScreen(
 
 
 
+    // Project checkpoints: go back to before a message (files, chat, or both), with a preview
+    restoreSheetFor?.let { (msg, cp) ->
+        val path = com.example.gemini.data.checkpoint.ProjectCheckpoints.pathOf(currentConv?.workspaceUri)
+        if (path == null) {
+            restoreSheetFor = null
+        } else {
+            com.example.gemini.ui.checkpoint.CheckpointRestoreSheet(
+                projectPath = path,
+                checkpoint = cp,
+                onDismiss = { restoreSheetFor = null },
+                onRestoreChat = if (isReadOnlyChat) null else {
+                    {
+                        viewModel.revertAndEditLastUserMessage(msg) { restoredText ->
+                            inputState.setTextAndPlaceCursorAtEnd(restoredText)
+                        }
+                    }
+                },
+                agentBusy = isActivelyRunning,
+                otherRunningChats = remember(path) { viewModel.runningChatsInProject(path) }
+            )
+        }
+    }
+    trackProjectAsk?.let { st ->
+        com.example.gemini.ui.checkpoint.TrackProjectDialog(st) { answer ->
+            trackProjectAsk = null
+            if (answer != null) scope.launch { com.example.gemini.data.checkpoint.ProjectCheckpoints.setDecision(st.path, answer) }
+        }
+    }
+
     // Confirmation Dialog for Edit / Retry when deleting subsequent output
     pendingMessageAction?.let { action ->
         AlertDialog(
@@ -3278,10 +3332,8 @@ fun ChatScreen(
                 Column {
                     Text(
                         text = when {
-                            isCodexChat && action.type == MessageActionType.EDIT ->
-                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat. Files Codex changed stay as they are."
-                            (isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT ->
-                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat."
+                            (isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT ->
+                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat. Files stay as they are."
                             isClaudeChat || isOpenCodeChat || isCodexChat ->
                                 "This chat goes back to right before this reply and ${if (isOpenCodeChat) "OpenCode" else if (isCodexChat) "Codex" else "Claude"} answers the same message again. The current reply is removed from the chat."
                             action.type == MessageActionType.EDIT ->
@@ -3293,15 +3345,23 @@ fun ChatScreen(
                         lineHeight = 21.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                     )
-                    if ((isClaudeChat || isOpenCodeChat) && action.type == MessageActionType.EDIT) {
+                    // files go back only through the message's restore point (Settings → Project checkpoints)
+                    val cp = messageCheckpoints[action.message.id]
+                    if (action.type == MessageActionType.EDIT && cp != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .padding(top = 10.dp)
-                                .clickable { restoreCodeOnEdit = !restoreCodeOnEdit }
+                                .padding(top = 12.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    restoreSheetFor = action.message to cp
+                                    pendingMessageAction = null
+                                }
+                                .padding(horizontal = 6.dp, vertical = 6.dp)
                         ) {
-                            androidx.compose.material3.Checkbox(checked = restoreCodeOnEdit, onCheckedChange = { restoreCodeOnEdit = it })
-                            Text("Also restore files ${if (isOpenCodeChat) "OpenCode" else "Claude"} changed after this message", fontSize = 13.5.sp)
+                            Icon(androidx.compose.material.icons.Icons.Outlined.History, null, tint = com.example.gemini.theme.AppColors.info, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Put files back too? Use this message's restore point", fontSize = 13.5.sp, color = com.example.gemini.theme.AppColors.info)
                         }
                     }
                 }
@@ -3311,10 +3371,9 @@ fun ChatScreen(
                     onClick = {
                         val target = action.message
                         if ((isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT) {
-                            viewModel.editClaudeMessage(target, restoreCodeOnEdit) { restoredText ->
+                            viewModel.editClaudeMessage(target, restoreCode = false) { restoredText ->
                                 inputState.setTextAndPlaceCursorAtEnd(restoredText)
                             }
-                            restoreCodeOnEdit = false
                         } else if (action.type == MessageActionType.EDIT) {
                             viewModel.revertAndEditLastUserMessage(target) { restoredText ->
                                 inputState.setTextAndPlaceCursorAtEnd(restoredText)
@@ -3973,19 +4032,6 @@ private data class SlashTrigger(val index: Int, val query: String, val nothingBe
 
 /** An `@file` mention being typed (no space after it yet): where its `@` is and the text after it. */
 private data class MentionTrigger(val index: Int, val query: String)
-
-private fun flattenFileNodes(nodes: List<com.example.gemini.data.daemon.FileNode>): List<com.example.gemini.data.daemon.FileNode> {
-    val result = mutableListOf<com.example.gemini.data.daemon.FileNode>()
-    for (node in nodes) {
-        if (!node.isDir) {
-            result.add(node)
-        }
-        if (node.children.isNotEmpty()) {
-            result.addAll(flattenFileNodes(node.children))
-        }
-    }
-    return result
-}
 
 /**
  * A file link from a chat as a full path: a relative one ([Foo.kt](src/Foo.kt), as VS Code chats write them) is a file

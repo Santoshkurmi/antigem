@@ -708,6 +708,8 @@ class CodexChatBackend(
             val input = JsonArray(listOf(textInput(promptText)) + listOfNotNull(skillInput) + inputs)
             if (busy) {
                 // Codex is working on this chat: the message waits in Codex's queue and runs after the current turn
+                // (its project checkpoint, when on, is marked mid-turn and never holds the reply up)
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurnInBackground(AgentKind.CODEX, conv.id, updated.workspaceUri, clientId, text)
                 sentTo.add(conv.id)
                 client.rpc("thread/queue/add", buildJsonObject {
                     put("threadId", conv.id); put("input", input); put("clientUserMessageId", clientId)
@@ -750,6 +752,8 @@ class CodexChatBackend(
             publishConversations()
             // the turn runs on the model picked now (its card and the "Switched to" divider show it)
             _selectedModelId.value.takeIf { it.isNotBlank() }?.let { transcript.model = it }
+            // project checkpoint (when on): the files right before Codex gets the message
+            val checkpoint = com.example.gemini.data.checkpoint.ProjectCheckpoints.beforeTurn(AgentKind.CODEX, threadId, updated.workspaceUri, clientId, text)
             val mode = prefs.permissionMode.value
             val r = client.rpc("turn/start", buildJsonObject {
                 put("threadId", threadId)
@@ -764,6 +768,10 @@ class CodexChatBackend(
                 collaborationMode()?.let { put("collaborationMode", it) }
             })
             if (r.isFailure) fail(clientId, "Codex did not take the message", r.exceptionOrNull())
+            // the chat knows the message by its turn id once Codex has it
+            else if (checkpoint != null) r.getOrNull().obj().o("turn").str("id")?.let { turnId ->
+                backendScope.launch { com.example.gemini.data.checkpoint.ProjectCheckpoints.bind(updated.workspaceUri, checkpoint, turnId) }
+            }
         }
     }
 

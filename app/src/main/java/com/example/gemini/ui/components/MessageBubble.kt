@@ -23,9 +23,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -288,7 +290,7 @@ fun MessageBubble(
                             IconButton(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Copied Response", message.content)
+                                    val clip = ClipData.newPlainText("Copied Response", MemoryBlocks.strip(message.content))
                                     clipboard.setPrimaryClip(clip)
                                     Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
                                 },
@@ -364,11 +366,20 @@ fun UserMessageBubble(
     onViewRawPayload: ((String) -> Unit)? = null,
     /** false in a read-only chat: no "undo and edit". */
     canEdit: Boolean = true,
+    /** The project checkpoint saved right before this message (Settings → Project checkpoints), if any. */
+    checkpoint: com.example.gemini.data.checkpoint.CheckpointSummary? = null,
+    /** Opens "go back to before this message" (files and/or chat). */
+    onRestoreCheckpoint: ((ChatMessage) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var showUserActions by remember { mutableStateOf(false) }
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
+    // the prompt as it was sent, hidden parts included (for debugging)
+    var showFullPrompt by remember { mutableStateOf(false) }
+    if (showFullPrompt) {
+        FullPromptDialog(prompt = fullPromptOf(message), attachmentCount = message.attachments.size, onDismiss = { showFullPrompt = false })
+    }
 
     if (previewImageUrl != null) {
         FullScreenImageDialog(
@@ -529,6 +540,31 @@ fun UserMessageBubble(
             }
         }
 
+        // a project checkpoint was saved right before this message: one tap to go back to it
+        if (checkpoint != null && onRestoreCheckpoint != null) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 5.dp, end = 2.dp)
+                    .clip(RoundedCornerShape(50))
+                    .clickable { onRestoreCheckpoint(message) }
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Restore point",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+        }
+
         // Action icons shown on tap/press below sent user message
         AnimatedVisibility(
             visible = showUserActions,
@@ -559,6 +595,23 @@ fun UserMessageBubble(
                     )
                 }
 
+                // The full prompt as sent, hidden parts included
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = {
+                        showFullPrompt = true
+                        showUserActions = false
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Visibility,
+                        contentDescription = "View full prompt",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
                 // Edit Prompt
                 if (canEdit) Spacer(modifier = Modifier.width(4.dp))
                 if (canEdit) IconButton(
@@ -574,6 +627,25 @@ fun UserMessageBubble(
                         tint = ClaudeTerracotta,
                         modifier = Modifier.size(15.dp)
                     )
+                }
+
+                // Go back to the project checkpoint saved before this message
+                if (checkpoint != null && onRestoreCheckpoint != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = {
+                            onRestoreCheckpoint(message)
+                            showUserActions = false
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.History,
+                            contentDescription = "Restore to before this message",
+                            tint = com.example.gemini.theme.AppColors.info,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 val payloadToShow = message.rawContent ?: message.rawPayload
@@ -637,7 +709,7 @@ fun AssistantMessageFooter(
             IconButton(
                 onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Copied Response", message.content)
+                    val clip = ClipData.newPlainText("Copied Response", MemoryBlocks.strip(message.content))
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
                 },

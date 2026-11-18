@@ -1,0 +1,115 @@
+name: 📦 Install / setup problem
+description: The APK does not install, or the Linux environment / packages / agents fail to set up.
+title: "[Setup]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read these first, they solve most install problems:
+        - The `termux` build uses the package name **`com.termux`**: it **can't be installed next to the official Termux app**. Uninstall Termux first.
+        - You **can't update** from the Standalone build to the Shared UID build (or the other way) on top: Android shows `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`. Back up, uninstall, install the other one.
+        - Builds are for **arm64** phones.
+
+        "Not installing" with no details will be **closed**. Write the **exact** error message.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the [existing issues](https://github.com/Santoshkurmi/antigem/issues?q=is%3Aissue) for this error.
+          required: true
+        - label: I read the notes above (official Termux not installed, correct build, arm64 phone).
+          required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where does it fail?
+      options:
+        - Installing the APK (Android refuses it)
+        - First launch / Linux environment (bootstrap) setup
+        - Installing or updating packages (pkg / apt)
+        - Installing an agent (agy, Claude Code, OpenCode, Codex)
+        - Android Development setup (Kotlin / Flutter / React Native)
+        - REA / Ubuntu setup
+        - X11 desktop setup
+        - Server mode (bridge on my server)
+        - Updating the app from an older version
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: apk
+    attributes:
+      label: Which APK file did you install?
+      description: The exact file name from the releases page.
+      placeholder: "antiGem-termux-shared-v1.2.0.apk"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Phone, Android version and CPU
+      description: CPU type is in the Android settings or any device-info app (arm64-v8a, armeabi-v7a, x86_64).
+      placeholder: "Redmi Note 12, Android 13, arm64-v8a"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: termux_installed
+    attributes:
+      label: Is the official Termux app (or another Termux fork) installed on this phone?
+      options:
+        - "No"
+        - "Yes"
+        - It was installed before, I uninstalled it
+    validations:
+      required: true
+
+  - type: input
+    id: storage
+    attributes:
+      label: Free storage on the phone
+      placeholder: "8 GB free"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error message
+      description: Copy the error text or take a screenshot. For terminal errors, paste the whole command and its output.
+      placeholder: |
+        $ pkg install nodejs
+        E: The repository ... is not signed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do, step by step?
+      placeholder: |
+        1. Uninstalled the old version
+        2. Installed antiGem-termux-shared-v1.2.0.apk
+        3. Opened the app, chose Claude Code + OpenCode
+        4. Setup stopped at "Verifying shell" with an error
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+      placeholder: "Cleared data and tried again, switched from Wi-Fi to mobile data, ran pkg update…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots / screen recording / anything else

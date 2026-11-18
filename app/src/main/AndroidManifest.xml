@@ -55,6 +55,13 @@
             android:name="com.telemetrydeck.sdk.TelemetryDeckInitProvider"
             android:authorities="${applicationId}.TelemetryDeckInitProvider"
             tools:node="remove" />
+        <!-- Crash screen: its own process, so it has fresh memory (works after an out-of-memory crash too) -->
+        <activity
+            android:name=".crash.CrashActivity"
+            android:exported="false"
+            android:process=":crash"
+            android:taskAffinity="${applicationId}.crash"
+            android:theme="@style/Theme.Gemini" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

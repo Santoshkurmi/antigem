@@ -20,11 +20,13 @@ import (
 
 	// DNS for Android (no /etc/resolv.conf there); a package so `go build main.go` includes it too
 	_ "gemini-server/pkg/androiddns"
+	"gemini-server/pkg/checkpoint"
 	"gemini-server/pkg/claude"
 	"gemini-server/pkg/codex"
 	"gemini-server/pkg/config"
 	"gemini-server/pkg/handlers"
 	"gemini-server/pkg/hub"
+	"gemini-server/pkg/memory"
 	"gemini-server/pkg/opencode"
 	"gemini-server/pkg/plugins"
 	"gemini-server/pkg/runlog"
@@ -371,6 +373,12 @@ func main() {
 		codexMgr = codex.NewManager(cfg.HomeDir, cfg.WorkspaceDir, customCodexBin)
 		mux.Handle("/api/codex/", codexMgr)
 	}
+
+	// Project checkpoints: a hidden copy of the project before each chat message (any agent), restore with preview
+	mux.Handle("/api/checkpoints/", checkpoint.NewManager(cfg.HomeDir))
+
+	// Agent memory: memory files and chat history the agents read (~/.antigem/memory), shared by every agent
+	mux.Handle("/api/memory/", memory.NewManager(cfg.HomeDir))
 
 	// Custom AntiGem plugins on disk: list, install (ZIP or GitHub repository), update, remove, export
 	pluginMgr := plugins.NewManager(cfg.HomeDir)

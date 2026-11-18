@@ -371,6 +371,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** New chat with [agent] (e.g. `/clear` in a Claude chat), without changing the new-chat default. */
     fun startNewChat(agent: AgentKind) {
+        flushMemoryWait()
         when (agent) {
             AgentKind.CLAUDE -> {
                 agyBackend.detach()
@@ -399,6 +400,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun selectConversation(id: String) {
+        flushMemoryWait()
         when (agentOf(id)) {
             AgentKind.CLAUDE -> {
                 agyBackend.detach()
@@ -439,8 +441,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (copies.isNotEmpty()) viewModelScope.launch(Dispatchers.IO) { com.example.gemini.data.files.FileExplorerApi.delete(copies) }
         // Jarvis forgets it too: a deleted Jarvis chat is replaced by a new one on the next message
         com.example.gemini.data.jarvis.JarvisController.onChatDeleted(id)
+        // Agent memory: its history file goes too (memories it saved stay)
+        com.example.gemini.data.memory.MemorySync.onChatDeleted(id)
     }
     fun forkConversation(id: String) {
+        flushMemoryWait()
         if (agentOf(id) == AgentKind.CODEX) {
             agyBackend.detach()
             claudeBackend.detach()
@@ -491,13 +496,58 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val intercepted = (if (jarvis.isAttached) jarvis.interceptScreenMessage(chatId, expanded) else expanded) ?: return
         rememberCopies(chatId, refs)
         // a normal chat (a Jarvis chat carries its own guide instead): the app's global context goes in front
-        val it = if (intercepted === expanded) withGlobalContext(chatId, expanded) else intercepted
-        when {
-            isClaudeActive -> claudeBackend.sendMessage(it)
-            isOpenCodeActive -> openCodeBackend.sendMessage(it)
-            isCodexActive -> codexBackend.sendMessage(it)
-            else -> agyBackend.sendMessage(it)
+        val normal = intercepted === expanded
+        val send: (String?) -> Unit = { memory ->
+            val prompt = if (normal) withGlobalContext(chatId, expanded) else intercepted
+            dispatch(if (memory != null) PromptExpansion.hidden(memory) + prompt else prompt)
         }
+        // Settings → Agents → Agent memory: a chat's first message also carries the memory text from the bridge (it
+        // waits for it briefly); messages typed meanwhile go after it, in order
+        memoryWait?.let { w -> w.queue += send; return }
+        val conv = currentConversation.value
+        val hasEarlier = messages.value.any { m -> m.role == MessageRole.USER }
+        // (not an Antigravity cloud chat: it runs in Google's cloud and cannot read the memory files)
+        if (!normal || conv == null || conv.cloudProjectId != null || !com.example.gemini.data.memory.AgentMemory.wants(conv.agent, chatId, hasEarlier)) {
+            send(null)
+            return
+        }
+        val wait = MemoryWait(chatId).also { it.queue += send }
+        memoryWait = wait
+        wait.job = viewModelScope.launch {
+            val memory = kotlinx.coroutines.withTimeoutOrNull(com.example.gemini.data.memory.AgentMemory.waitMs() + 500) {
+                com.example.gemini.data.memory.AgentMemory.contextFor(conv.agent, conv.workspaceUri, content)
+            }
+            finishMemoryWait(wait, memory)
+        }
+    }
+
+    private fun dispatch(prompt: String) = when {
+        isClaudeActive -> claudeBackend.sendMessage(prompt)
+        isOpenCodeActive -> openCodeBackend.sendMessage(prompt)
+        isCodexActive -> codexBackend.sendMessage(prompt)
+        else -> agyBackend.sendMessage(prompt)
+    }
+
+    /** A chat's first message waiting (briefly) for its Agent memory text, and the messages typed meanwhile. */
+    private class MemoryWait(val chatId: String?) {
+        val queue = mutableListOf<(String?) -> Unit>()
+        var job: kotlinx.coroutines.Job? = null
+    }
+    private var memoryWait: MemoryWait? = null
+
+    /** Sends what waited: the first message with [memory] (null: without it), then the others in order. */
+    private fun finishMemoryWait(wait: MemoryWait, memory: String?) {
+        if (memoryWait !== wait) return
+        memoryWait = null
+        wait.queue.forEachIndexed { i, send -> send(if (i == 0) memory else null) }
+        if (memory != null) com.example.gemini.data.memory.AgentMemory.markSent(wait.chatId ?: currentConversation.value?.id)
+    }
+
+    /** Leaving the chat (another one, a new one, a fork): a message still waiting for its memory text goes now, without it. */
+    private fun flushMemoryWait() {
+        val wait = memoryWait ?: return
+        wait.job?.cancel()
+        finishMemoryWait(wait, null)
     }
 
     /** The copies a sent message uses are kept under its chat (a new chat once it has its id), so deleting the chat deletes them. */
@@ -762,6 +812,62 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _messages = store.messages
     /** Messages of the chat on screen, from the agent that owns it. */
     val messages: StateFlow<List<ChatMessage>> = byAgent(_messages, claudeBackend.messages, openCodeBackend.messages, codexBackend.messages)
+
+    // ==================== PROJECT CHECKPOINTS ====================
+
+    private fun backendOf(agent: AgentKind?): com.example.gemini.data.agent.AgentChatBackend = when (agent) {
+        AgentKind.CLAUDE -> claudeBackend
+        AgentKind.OPENCODE -> openCodeBackend
+        AgentKind.CODEX -> codexBackend
+        else -> agyBackend
+    }
+
+    /** Project checkpoints of the open chat's messages, by message id (empty while checkpoints are off). */
+    val messageCheckpoints: StateFlow<Map<String, com.example.gemini.data.checkpoint.CheckpointSummary>> =
+        combine(store.currentConversation, messages, com.example.gemini.data.checkpoint.ProjectCheckpoints.byKey) { conv, msgs, byKey ->
+            if (conv == null || byKey.isEmpty()) emptyMap()
+            else {
+                val backend = backendOf(conv.agent)
+                buildMap {
+                    for (m in msgs) {
+                        if (m.role != MessageRole.USER) continue
+                        val cp = backend.checkpointKey(m)?.let { byKey[it] } ?: continue
+                        put(m.id, cp)
+                    }
+                }
+            }
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Other chats (any agent) still running in the project at [path]. */
+    fun runningChatsInProject(path: String): Int {
+        val open = store.currentConversation.value?.id
+        return allConversations.value.count {
+            it.id != open && (it.isRunning || it.notFullyIdle) && com.example.gemini.data.checkpoint.ProjectCheckpoints.pathOf(it.workspaceUri) == path
+        }
+    }
+
+    init {
+        // the open chat's checkpoints are looked up whenever its messages (or the checkpoints) change
+        viewModelScope.launch(Dispatchers.Default) {
+            com.example.gemini.data.checkpoint.ProjectCheckpoints.refreshSettings()
+            combine(
+                store.currentConversation, messages,
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.settings,
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.changes
+            ) { conv, msgs, settings, changes ->
+                if (conv == null || conv.isCloud || settings?.isOn != true) null
+                else {
+                    val backend = backendOf(conv.agent)
+                    Triple(conv.workspaceUri, msgs.mapNotNullTo(LinkedHashSet()) { m -> m.takeIf { it.role == MessageRole.USER }?.let { backend.checkpointKey(it) } }, changes)
+                }
+            }.distinctUntilChanged().collectLatest { req ->
+                if (req == null) return@collectLatest
+                delay(300)
+                com.example.gemini.data.checkpoint.ProjectCheckpoints.warm(req.first)
+                if (req.second.isNotEmpty()) com.example.gemini.data.checkpoint.ProjectCheckpoints.lookup(req.first, req.second)
+            }
+        }
+    }
 
     private val _thinkingPreference = MutableStateFlow(com.example.gemini.domain.model.ThinkingPreference())
     val thinkingPreference: StateFlow<com.example.gemini.domain.model.ThinkingPreference> = _thinkingPreference.asStateFlow()

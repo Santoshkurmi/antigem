@@ -146,8 +146,14 @@ sealed class MarkdownBlock {
     data class Math(val latex: String, val isDisplay: Boolean = true) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Mermaid(val code: String) : MarkdownBlock()
+    /** smiles / functionplot / jsxgraph / matter / tikz: drawn from the STEM bundle (Settings → STEM & diagrams). */
+    @androidx.compose.runtime.Immutable
+    data class Stem(val kind: StemKind, val code: String) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
+    /** An ```antigem-memory block (Agent memory): shown as a chip; [complete] once its closing fence arrived. */
+    @androidx.compose.runtime.Immutable
+    data class MemoryChip(val body: String, val complete: Boolean) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class Image(val alt: String, val url: String) : MarkdownBlock()
 
@@ -208,6 +214,12 @@ fun MarkdownBlockView(
         }
         is MarkdownBlock.Mermaid -> {
             MermaidDiagramView(code = block.code, modifier = modifier)
+        }
+        is MarkdownBlock.MemoryChip -> {
+            MemoryChipView(body = block.body, complete = block.complete, modifier = modifier)
+        }
+        is MarkdownBlock.Stem -> {
+            StemBlockView(kind = block.kind, code = block.code, modifier = modifier)
         }
         is MarkdownBlock.Code -> {
             CodeBlock(code = block.code, language = block.language, modifier = modifier)
@@ -542,13 +554,19 @@ fun NativeMathView(
             .removePrefix("$").removeSuffix("$")
             .trim()
     }
+    // \ce{...} / \pu{...} chemistry rewritten into plain LaTeX (Settings → STEM & diagrams → Chemical equations)
+    val chemOn = com.example.gemini.data.render.RenderComponent.CHEM in com.example.gemini.data.render.RenderBundle.active.collectAsState().value
+    val texLatex = remember(cleanLatex, chemOn) {
+        if (chemOn) com.example.gemini.data.render.ChemNotation.expand(cleanLatex) else cleanLatex
+    }
+    val isChem = texLatex != cleanLatex
 
-    val cacheKey = cleanLatex.hashCode() * 31 + textColor * 7 + textSizePx.toInt()
-    val jLatexDrawable = remember(cleanLatex, textColor, textSizePx, isDark) {
+    val cacheKey = texLatex.hashCode() * 31 + textColor * 7 + textSizePx.toInt()
+    val jLatexDrawable = remember(texLatex, textColor, textSizePx, isDark) {
         mathDrawableCache.get(cacheKey) ?: run {
             val built = try {
-                // First attempt: Colorized LaTeX formula with syntax highlighting
-                val colorizedLatex = colorizeLatexEquation(cleanLatex, isDark)
+                // First attempt: Colorized LaTeX formula with syntax highlighting (chemistry stays one colour)
+                val colorizedLatex = if (isChem) texLatex else colorizeLatexEquation(texLatex, isDark)
                 JLatexMathDrawable.builder(colorizedLatex)
                     .textSize(textSizePx)
                     .color(textColor)
@@ -557,7 +575,7 @@ fun NativeMathView(
             } catch (_: Exception) {
                 try {
                     // Fallback: Standard monochrome native LaTeX
-                    JLatexMathDrawable.builder(cleanLatex)
+                    JLatexMathDrawable.builder(texLatex)
                         .textSize(textSizePx)
                         .color(textColor)
                         .background(android.graphics.Color.TRANSPARENT)
@@ -646,13 +664,19 @@ fun MermaidDiagramView(
     }
 
     val mermaidTheme = if (isDark) "dark" else "default"
-    val htmlContent = remember(safeCode, mermaidTheme) {
+    // the bundled copy when installed and switched on (Settings → STEM & diagrams), else the CDN
+    remember { com.example.gemini.data.render.RenderBundle.init(context) }
+    val renderActive by com.example.gemini.data.render.RenderBundle.active.collectAsState()
+    val mermaidSrc = if (com.example.gemini.data.render.RenderComponent.MERMAID in renderActive)
+        "${com.example.gemini.data.render.RenderBundle.BASE_URL}mermaid/mermaid.min.js"
+    else com.example.gemini.data.render.RenderBundle.MERMAID_CDN
+    val htmlContent = remember(safeCode, mermaidTheme, mermaidSrc) {
         """
         <!DOCTYPE html>
         <html>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
-            <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+            <script src="$mermaidSrc"></script>
             <style>
                 * { box-sizing: border-box; }
                 html, body {
@@ -824,7 +848,9 @@ fun MermaidDiagramView(
                         .heightIn(min = 180.dp, max = 420.dp)
                         .padding(6.dp)
                 ) {
-                    AndroidView(
+                    // kept alive while the chat is open (ChatWebViewCache), so scrolling back doesn't draw it again
+                    KeptWebView(
+                        part = "mermaid",
                         factory = { ctx ->
                             android.webkit.WebView(ctx).apply {
                                 layoutParams = android.view.ViewGroup.LayoutParams(
@@ -842,6 +868,7 @@ fun MermaidDiagramView(
                                 settings.useWideViewPort = true
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
+                                webViewClient = com.example.gemini.data.render.RenderBundle.webViewClient(allowNetwork = true)
                                 tag = htmlContent
                                 loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
                             }
@@ -1074,6 +1101,7 @@ fun MermaidFullscreenDialog(
                                     settings.setSupportZoom(true)
                                     settings.builtInZoomControls = true
                                     settings.displayZoomControls = false
+                                    webViewClient = com.example.gemini.data.render.RenderBundle.webViewClient(allowNetwork = true)
                                     webViewRef = this
                                     loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
                                 }
@@ -2632,7 +2660,10 @@ private fun buildRichAnnotatedString(
             val textSizePx = if (density != null) with(density) { 14.5.sp.toPx() } else 38f
             val baseColor = if (isDark) android.graphics.Color.parseColor("#F59E0B") else android.graphics.Color.parseColor("#C2410C")
 
-            val colorizedMath = colorizeLatexEquation(mathContent, isDark)
+            // \ce{...} / \pu{...} chemistry rewritten into plain LaTeX (Settings → STEM & diagrams), kept one colour
+            val texMath = if (com.example.gemini.data.render.RenderBundle.isActive(com.example.gemini.data.render.RenderComponent.CHEM))
+                com.example.gemini.data.render.ChemNotation.expand(mathContent) else mathContent
+            val colorizedMath = if (texMath != mathContent) texMath else colorizeLatexEquation(mathContent, isDark)
             val drawable = try {
                 JLatexMathDrawable.builder(colorizedMath)
                     .textSize(textSizePx)
@@ -2641,7 +2672,7 @@ private fun buildRichAnnotatedString(
                     .build()
             } catch (_: Exception) {
                 try {
-                    JLatexMathDrawable.builder(mathContent)
+                    JLatexMathDrawable.builder(texMath)
                         .textSize(textSizePx)
                         .color(baseColor)
                         .background(android.graphics.Color.TRANSPARENT)
@@ -3097,8 +3128,14 @@ fun parseMarkdownBlocks(
             }
             if (lang.equals("math", ignoreCase = true) || lang.equals("latex", ignoreCase = true) || lang.equals("katex", ignoreCase = true)) {
                 result.add(MarkdownBlock.Math(latex = codeLines.joinToString("\n"), isDisplay = true))
+            } else if (lang.equals(MemoryBlocks.LANG, ignoreCase = true)) {
+                // Agent memory: the bridge saves it, the chat shows a chip
+                result.add(MarkdownBlock.MemoryChip(body = codeLines.joinToString("\n"), complete = i < lines.size))
             } else if (lang.equals("mermaid", ignoreCase = true)) {
                 result.add(MarkdownBlock.Mermaid(code = codeLines.joinToString("\n").trim()))
+            } else if (StemKind.fromLang(lang) != null && i < lines.size) {
+                // only once the closing ``` arrived: a block still streaming in stays code (no TeX run per token)
+                result.add(MarkdownBlock.Stem(kind = StemKind.fromLang(lang)!!, code = codeLines.joinToString("\n").trim()))
             } else if (lang.equals("interactive_ui", ignoreCase = true) || lang.equals("interactive_app", ignoreCase = true) || lang.equals("html_app", ignoreCase = true) || lang.equals("canvas_app", ignoreCase = true) || lang.equals("widget", ignoreCase = true) || lang.equals("ui", ignoreCase = true) || lang.equals("mini_app", ignoreCase = true)) {
                 result.add(MarkdownBlock.InteractiveUi(htmlCode = codeLines.joinToString("\n").trim()))
             } else {

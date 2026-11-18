@@ -170,7 +170,8 @@ fun AgentsSettingsPage(
     isApplying: Boolean,
     onApply: (Set<AgentKind>) -> Unit,
     modifier: Modifier = Modifier,
-    onOpenGlobalContext: (() -> Unit)? = null
+    onOpenGlobalContext: (() -> Unit)? = null,
+    onOpenAgentMemory: (() -> Unit)? = null
 ) {
     var selected by remember(enabled) { mutableStateOf(enabled) }
     var confirm by remember { mutableStateOf(false) }
@@ -202,6 +203,10 @@ fun AgentsSettingsPage(
         if (onOpenGlobalContext != null) {
             Spacer(Modifier.height(24.dp))
             com.example.gemini.ui.settings.GlobalContextEntryRow(onClick = onOpenGlobalContext)
+        }
+        if (onOpenAgentMemory != null) {
+            Spacer(Modifier.height(12.dp))
+            com.example.gemini.ui.settings.AgentMemoryEntryRow(onClick = onOpenAgentMemory)
         }
         Spacer(Modifier.height(12.dp))
         val vibrateOnDone by com.example.gemini.data.agent.ChatCompletionMonitor.vibrate.collectAsState()

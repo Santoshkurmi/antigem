@@ -87,6 +87,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     THEMES("Themes", "Light and dark mode, and the theme gallery"),
     APPEARANCE("Appearance", "Chat text size, chat list, header icons and the app switcher"),
+    STEM_RENDERING("STEM & diagrams", "Chemistry, graphs, geometry, simulations, circuits and offline Mermaid in chats"),
     SERVERS("Servers & Connectivity", "Configure AGY Hub and IDE Bridge endpoints"),
     CONNECT_PC("Connect to PC", "Use the agents on your PC (AntiGem in VS Code) from this phone"),
     WEBVIEW_EXTENSIONS("Custom AntiGem Plugins", "Install and manage plugins: MCP tools and skills"),
@@ -96,6 +97,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     TERMINAL("Terminal & Shell", "SSH configuration, local tools, and styling"),
     BACKUPS("Backups & Restore", "Backup rootfs environment and AGY chat histories"),
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
+    PROJECT_CHECKPOINTS("Project checkpoints", "Go back to before any chat message: files restored with a preview"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
     ANTIGRAVITY("Antigravity", "CLI, MCP servers, skills & plugins, commands & permissions"),
     AGY_CLI("Antigravity CLI", "agy version and install, on this device or the server"),
@@ -111,6 +113,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     CODEX_PAGE("Codex", "Account, usage limits, permissions, MCP, server & install"),
     AGENTS("Agents", "Run Antigravity, Claude Code, OpenCode, Codex or several"),
     GLOBAL_CONTEXT("Global context", "What every chat is told about this app, and your own instructions"),
+    AGENT_MEMORY("Agent memory & history", "Memories every agent keeps across chats, and past chats they can look up"),
+    AGENT_HISTORY("Saved chats", "The chat history the agents can look up: read, edit or remove it"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     JARVIS_AGENT("Jarvis · Agent", "Which agent and model Jarvis talks to"),
     JARVIS_PERSONALITY("Jarvis · Personality & you", "How Jarvis speaks, and what it should know about you"),
@@ -159,7 +163,8 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         CODEX_PAGE -> CODEX
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
         REA_GROUPS -> REA
-        GLOBAL_CONTEXT -> AGENTS
+        GLOBAL_CONTEXT, AGENT_MEMORY -> AGENTS
+        AGENT_HISTORY -> AGENT_MEMORY
         CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
@@ -496,6 +501,8 @@ fun SettingsDialog(
 
                     SettingsSection.SLASH_COMMANDS -> CustomSlashCommandsScreen()
 
+                    SettingsSection.PROJECT_CHECKPOINTS -> com.example.gemini.ui.checkpoint.ProjectCheckpointsScreen()
+
                     SettingsSection.MCP -> McpSubScreen(
                         mcpServers = mcpServers,
                         isLoading = isMcpLoading,
@@ -627,9 +634,13 @@ fun SettingsDialog(
                         enabled = enabledAgents,
                         isApplying = isApplyingAgents,
                         onApply = onApplyAgents,
-                        onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT }
+                        onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT },
+                        onOpenAgentMemory = { currentSection = SettingsSection.AGENT_MEMORY }
                     )
                     SettingsSection.GLOBAL_CONTEXT -> GlobalContextScreen()
+                    SettingsSection.AGENT_MEMORY -> AgentMemoryScreen(onOpenHistory = { currentSection = SettingsSection.AGENT_HISTORY })
+                    SettingsSection.AGENT_HISTORY -> AgentHistoryScreen()
+                    SettingsSection.STEM_RENDERING -> StemRenderingScreen()
                     SettingsSection.JARVIS -> com.example.gemini.ui.jarvis.JarvisSettingsScreen(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
@@ -805,6 +816,17 @@ private fun MainSettingsMenu(
         else -> "Offline" to c.danger
     }
     val jarvisOn by com.example.gemini.data.jarvis.JarvisPreferences.enabled.state.collectAsState()
+    // Project checkpoints: off / chosen projects / all git projects
+    val checkpointSettings by com.example.gemini.data.checkpoint.ProjectCheckpoints.settings.collectAsState()
+    LaunchedEffect(Unit) { com.example.gemini.data.checkpoint.ProjectCheckpoints.refreshSettings() }
+    val checkpointsRow = row(SettingsSection.PROJECT_CHECKPOINTS, Icons.Outlined.History, c.info,
+        when (checkpointSettings?.mode) {
+            com.example.gemini.data.checkpoint.CheckpointSettings.MODE_SELECTED -> "Chosen projects"
+            com.example.gemini.data.checkpoint.CheckpointSettings.MODE_ALL -> "All projects"
+            null -> null
+            else -> "Off"
+        },
+        if (checkpointSettings?.isOn == true) QuotaGreen else null)
     val activeMcp = mcpServers.count { it.isEnabled }
     val deviceTools = rememberDeviceToolRows(onNavigate)
     val githubRow = rememberGitHubRow(onNavigate)
@@ -820,6 +842,13 @@ private fun MainSettingsMenu(
     val pcRow = row(SettingsSection.CONNECT_PC, Icons.Outlined.Computer, c.accentTeal,
         when { !pcEnabled -> "Off"; pcInUse != null -> pcInUse.name; else -> "On" },
         if (pcInUse != null) QuotaGreen else null)
+
+    // STEM & diagrams: whether the render bundle is installed
+    val stemContext = LocalContext.current
+    remember { com.example.gemini.data.render.RenderBundle.init(stemContext) }
+    val stemInstalled by com.example.gemini.data.render.RenderBundle.installed.collectAsState()
+    val stemRow = row(SettingsSection.STEM_RENDERING, Icons.Outlined.Science, c.accentTeal,
+        if (stemInstalled) "Installed" else null, if (stemInstalled) QuotaGreen else null)
 
     // Claude Code's row shows the account state (signed in / plan / signed out)
     var claudeValue: String? = null
@@ -844,6 +873,7 @@ private fun MainSettingsMenu(
             listOf(
                 row(SettingsSection.THEMES, Icons.Outlined.Palette, c.accentPink, com.example.gemini.theme.ThemeManager.current.name),
                 row(SettingsSection.APPEARANCE, Icons.Outlined.Tune, c.accentAlt),
+                stemRow,
                 row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info, serverValue, serverColor),
                 pcRow
             ),
@@ -877,7 +907,8 @@ private fun MainSettingsMenu(
             ),
             listOf(
                 row(SettingsSection.WEBVIEW_EXTENSIONS, Icons.Outlined.Extension, c.accentAlt),
-                row(SettingsSection.SLASH_COMMANDS, Icons.Outlined.Bolt, c.warning)
+                row(SettingsSection.SLASH_COMMANDS, Icons.Outlined.Bolt, c.warning),
+                checkpointsRow
             ),
             listOfNotNull(
                 row(SettingsSection.TERMINAL, Icons.Outlined.Terminal, c.accentIndigo,

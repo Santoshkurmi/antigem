@@ -55,6 +55,7 @@ object GlobalContext {
         if (sp != null) return
         val p = context.applicationContext.getSharedPreferences("global_context", Context.MODE_PRIVATE)
         filesDir = context.applicationContext.filesDir.absolutePath
+        com.example.gemini.data.render.RenderBundle.init(context)
         _builtInEnabled.value = p.getBoolean("builtin_enabled", true)
         _entries.value = runCatching {
             val arr = JSONArray(p.getString("entries", "[]"))
@@ -137,6 +138,8 @@ object GlobalContext {
     fun firstMessageBody(): String? {
         val parts = mutableListOf<String>()
         if (_builtInEnabled.value) parts += builtInText()
+        // Settings → STEM & diagrams: the extra blocks this chat renders (normal chats only, not Jarvis)
+        com.example.gemini.data.render.RenderBundle.promptSection(canReadFiles = runsInTermux)?.let { parts += it }
         val own = active().filter { !it.everyMessage }
         if (own.isNotEmpty()) parts += "## The user's own instructions\n" + entriesBlock(own)
         return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")

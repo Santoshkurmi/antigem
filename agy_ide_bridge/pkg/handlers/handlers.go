@@ -1261,14 +1261,20 @@ func (h *Handler) FsMkdirHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// FileTreeHandler recursively lists all files and folders without arbitrary depth limits.
+// fileTreeMaxNodes caps how many files and folders one /api/tree reply holds: a huge folder (a whole phone storage,
+// big caches) would otherwise make a reply of hundreds of MB that runs the app out of memory.
+const fileTreeMaxNodes = 20000
+
+// FileTreeHandler recursively lists files and folders (up to 25 levels and fileTreeMaxNodes entries).
+// Symlinked folders are listed but not walked into.
 func (h *Handler) FileTreeHandler(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")
 	if dir == "" {
 		dir = h.Cfg.ProjectsBaseDir
 	}
 
-	tree, err := buildRecursiveFileTree(dir, 0, 25)
+	budget := fileTreeMaxNodes
+	tree, err := buildRecursiveFileTree(dir, 0, 25, &budget)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -1279,8 +1285,9 @@ func (h *Handler) FileTreeHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tree)
 }
 
-func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int) ([]models.FileNode, error) {
-	if currentDepth > maxDepth {
+// buildRecursiveFileTree lists dir; budget is how many more entries the whole tree may hold (shared by all levels).
+func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int, budget *int) ([]models.FileNode, error) {
+	if currentDepth > maxDepth || *budget <= 0 {
 		return nil, nil
 	}
 
@@ -1291,6 +1298,9 @@ func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int) ([]model
 
 	var nodes []models.FileNode
 	for _, entry := range entries {
+		if *budget <= 0 {
+			break
+		}
 		name := entry.Name()
 		// Ignore only internal VCS storage and heavy build/dependency caches
 		if name == ".git" || name == "node_modules" || name == "build" || name == "target" || name == "dist" || name == ".gradle" || name == ".idea" {
@@ -1315,18 +1325,12 @@ func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int) ([]model
 			Size:  size,
 		}
 
-		if isDir {
-			realPath, err := filepath.EvalSymlinks(fullPath)
-			if err == nil {
-				// Prevent infinite loop if symlink points to ancestor directory
-				if !strings.HasPrefix(dir, realPath) {
-					children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth)
-					node.Children = children
-				}
-			} else {
-				children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth)
-				node.Children = children
-			}
+		*budget--
+		// Symlinked folders are not walked: on Termux ~/storage/* all point into the same phone storage, and links
+		// can loop back up the tree.
+		if isDir && entry.Type()&os.ModeSymlink == 0 {
+			children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth, budget)
+			node.Children = children
 		}
 
 		nodes = append(nodes, node)

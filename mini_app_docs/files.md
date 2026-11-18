@@ -26,9 +26,11 @@ The same forms (`app:<id>/…` included) work for `AntiGem.ui.viewMedia` items a
 
 Never reachable, whatever is granted:
 
-- other apps' data (`~/.antigem/`, except the `data/` folders of the app's shared group) and every app's code
-  (`~/mini-apps/`),
-- hidden folders directly in home (`~/.ssh`, `~/.codex`, …),
+- AntiGem's own folder `~/.antigem/` (settings, the browser profile, uploads, other apps' data; only the `data/`
+  folders of the app's shared group are reachable) and every app's code (`~/mini-apps/`),
+- hidden folders directly in home (`~/.ssh`, `~/.codex`, …), unless the manifest declares that folder or one inside
+  it, for example `{ "path": "~/.gemini", "access": "read" }`, and the user grants it. "All files" and picked folders
+  never open them. Apps not signed with the official AntiGem mini apps key need the typed confirmation for these,
 - anything outside AntiGem's home and the phone's shared storage (`/storage/emulated/0`), such as system folders or a
   removable SD card.
 

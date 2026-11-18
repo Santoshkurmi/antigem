@@ -7,6 +7,7 @@ import android.content.Context
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -238,7 +239,9 @@ fun InteractiveUiView(
                         .heightIn(min = 220.dp, max = 420.dp)
                 ) {
                     key(reloadKey, isDark) {
-                        AndroidView(
+                        // kept alive while the chat is open (ChatWebViewCache): scrolling back keeps the app's state
+                        KeptWebView(
+                            part = "app",
                             factory = { ctx ->
                                 WebView(ctx).apply {
                                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
@@ -253,18 +256,28 @@ fun InteractiveUiView(
                                         cacheMode = WebSettings.LOAD_NO_CACHE
                                     }
                                     webChromeClient = WebChromeClient()
-                                    webViewClient = WebViewClient()
+                                    webViewClient = object : WebViewClient() {
+                                        // a dead renderer would otherwise crash the app
+                                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                            ChatWebViewCache.onRendererGone(view)
+                                            return true
+                                        }
+                                    }
                                     addJavascriptInterface(
                                         InteractiveUiJsBridge(ctx) { msg ->
                                             Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
                                         },
                                         "antiGemini"
                                     )
-                                    loadDataWithBaseURL("https://antigravity.local/", fullHtml, "text/html", "UTF-8", null)
                                 }
                             },
                             update = { view ->
-                                view.loadDataWithBaseURL("https://antigravity.local/", fullHtml, "text/html", "UTF-8", null)
+                                // load only when the page changed (a kept view comes back with its page running)
+                                val pageKey = "$reloadKey:$isDark:${fullHtml.hashCode()}:${fullHtml.length}"
+                                if (view.tag != pageKey) {
+                                    view.tag = pageKey
+                                    view.loadDataWithBaseURL("https://antigravity.local/", fullHtml, "text/html", "UTF-8", null)
+                                }
                             },
                             modifier = Modifier.fillMaxSize()
                         )

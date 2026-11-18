@@ -3,7 +3,6 @@ package com.example.gemini.data.jarvis
 import android.content.Context
 import com.example.gemini.data.agent.ChatCompletionMonitor
 import com.example.gemini.data.daemon.IdeApiClient
-import com.example.gemini.data.daemon.FileNode
 import com.example.gemini.data.daemon.ProjectItem
 import com.example.gemini.data.daemon.TermuxDaemonManager
 import com.example.gemini.domain.model.AgentKind
@@ -1727,13 +1726,6 @@ object JarvisMcp {
         return text("Opened project ${p.name}.")
     }
 
-    private fun flatten(nodes: List<FileNode>, out: MutableList<FileNode>, cap: Int = 6000) {
-        for (n in nodes) {
-            if (out.size >= cap) return
-            if (n.isDir) flatten(n.children, out, cap) else out.add(n)
-        }
-    }
-
     private suspend fun resolveFile(file: String): Pair<String, String>? {
         val project = TermuxDaemonManager.activeProject.value
         val f = file.trim()
@@ -1742,11 +1734,9 @@ object JarvisMcp {
             val p = project.path.trimEnd('/') + "/" + f.removePrefix("./")
             if (IdeApiClient.readFileDetailed(p) != null) return p to f.substringAfterLast('/')
         }
-        // just a name: look through the project's files
+        // just a name: search the project's files by name on the bridge (no full file tree download)
         val root = project?.path ?: return null
-        val tree = IdeApiClient.getFileTree(root)
-        val files = ArrayList<FileNode>()
-        flatten(tree, files)
+        val files = com.example.gemini.data.files.FileExplorerApi.searchFileNames(root, f.substringAfterLast('/'), limit = 200)
         val lower = f.lowercase()
         val hit = files.firstOrNull { it.name.equals(f, true) }
             ?: files.firstOrNull { it.path.lowercase().endsWith("/$lower") }

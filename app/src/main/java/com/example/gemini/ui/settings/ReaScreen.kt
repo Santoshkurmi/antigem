@@ -201,6 +201,8 @@ fun ReaScreen(
             if (device != null) Mono("adb connected: ${device.serial}") else OutlinedButton(onClick = onOpenAdbConnect) { Text("Set up ADB Connect") }
         }
 
+        WebsitesCard(state, cardBg, cardBorder)
+
         ManualSetupCard(state, cardBg, cardBorder)
 
         RemoveCard(state, busy, cardBg, cardBorder) { confirm = it }
@@ -481,6 +483,75 @@ private fun SkillPluginCard(
         if (state.pluginInstalled) {
             Hint("To give an agent the skill, type /plu: in its chat and pick REA, or add the plugin in that agent's MCP settings with the Custom Plugin MCP preset → REA.")
         }
+    }
+}
+
+/**
+ * Website analysis: REA's website tools on the browser's tabs. One switch adds the "web" tool group (and tells agents to
+ * analyze with REA first); the other runs the loopback DevTools bridge REA connects to, with a warning that any app on
+ * the phone can reach it while it is on.
+ */
+@Composable
+private fun WebsitesCard(state: ReaManager.State, cardBg: Color, cardBorder: BorderStroke) {
+    val context = LocalContext.current
+    val bridge by com.example.gemini.data.rea.ReaWebBridge.state.collectAsState()
+    InfoCard(
+        "Websites (optional)", cardBg, cardBorder,
+        pill = when {
+            bridge.running -> "Listening" to Amber
+            state.webEnabled -> "On" to QuotaGreen
+            else -> "Off" to MaterialTheme.colorScheme.primary
+        }
+    ) {
+        Hint("Let agents analyze websites open in AntiGem's browser with REA: page structure, scripts and the APIs they call, libraries and frameworks, network and console errors, accessibility, storage and screenshots. REA only observes; agents open pages and click with the browser MCP.")
+        SwitchRow(
+            "Website analysis",
+            "Adds the Websites tool group and tells agents to analyze sites with REA first, screenshots included, and to use the browser MCP only for what REA cannot do.",
+            state.webEnabled, enabled = state.ready
+        ) { ReaManager.setWebEnabled(it) }
+        if (!state.webEnabled) return@InfoCard
+        if (!state.usable) Hint("Install REA and the MCP launcher above first.")
+        Hint("REA servers you already added only show the Websites group once it is chosen: open the REA preset in the agent's MCP settings, type the server's name, tick Websites and save. New REA servers include it.")
+
+        SwitchRow(
+            "Browser connection (port ${bridge.port})",
+            "Opens ${bridge.endpoint} so REA can reach the browser's tabs through Chrome DevTools. Only browser tabs are shown, never your chats.",
+            bridge.running
+        ) { ReaManager.setBrowserConnection(context, it) }
+        Surface(shape = RoundedCornerShape(10.dp), color = Amber.copy(alpha = 0.12f)) {
+            Text(
+                "While this is on, any app on this phone can connect to port ${bridge.port} and read or control the pages open in AntiGem's browser, including sites you are signed in to. Turn it on only while an agent analyzes a site and off when you are done. It also turns off when AntiGem closes.",
+                fontSize = 12.sp, color = Amber, modifier = Modifier.padding(10.dp)
+            )
+        }
+        bridge.error?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+        if (bridge.running) {
+            CopyLine(bridge.endpoint, mono = true)
+            Mono(
+                "${bridge.connections} REA connection${if (bridge.connections == 1) "" else "s"} open · ${bridge.requests} requests" +
+                    (bridge.lastActivity?.let { "\nLast: $it" } ?: "")
+            )
+        }
+        Text("Try in chat", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        listOf(
+            "Open https://example.com in the browser, then analyze it with REA: structure, technologies, scripts and the APIs it calls, and give recommendations.",
+            "With REA, check the open browser tab for accessibility problems, console errors and failed requests, with a screenshot.",
+            "Use REA to find which frameworks and libraries the site in the browser uses, with the evidence."
+        ).forEach { CopyLine(it) }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, text: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }
+    ) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+            Text(text, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        }
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onChange)
     }
 }
 

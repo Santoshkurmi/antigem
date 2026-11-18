@@ -1,0 +1,492 @@
+package com.example.gemini.ui.checkpoint
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FolderCopy
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.gemini.data.checkpoint.CheckpointFileChange
+import com.example.gemini.data.checkpoint.CheckpointPreview
+import com.example.gemini.data.checkpoint.CheckpointSummary
+import com.example.gemini.data.checkpoint.ProjectCheckpoints
+import com.example.gemini.domain.model.AgentKind
+import com.example.gemini.theme.AppColors
+import com.example.gemini.ui.components.accent
+import com.example.gemini.ui.components.label
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/** What a restore puts back. */
+enum class RestoreMode(val title: String, val description: String, val files: Boolean, val chat: Boolean) {
+    CHAT_AND_FILES("Chat and files", "The chat goes back to before this message (its text returns to the input box) and the files go back too", true, true),
+    FILES("Files only", "Only the project files go back; the chat stays as it is", true, false),
+    CHAT("Chat only", "Only the chat goes back (its text returns to the input box); files stay as they are now", false, true)
+}
+
+private sealed interface SheetState {
+    data object Loading : SheetState
+    data class Failed(val message: String) : SheetState
+    data class Ready(val preview: CheckpointPreview) : SheetState
+    data object Working : SheetState
+    data class Done(val result: CheckpointPreview, val mode: RestoreMode) : SheetState
+    data object Undone : SheetState
+}
+
+/**
+ * "Go back to before this message": loads what would change (files and warnings), lets the user pick chat / files /
+ * both, restores, and offers to undo the file part right after.
+ *
+ * [onRestoreChat] goes back in the chat (null: no chat part, e.g. from the settings history).
+ * [agentBusy]: the agent is still working in this chat (restoring is blocked until it stops).
+ * [otherRunningChats]: other chats in the same project still running (warned about).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CheckpointRestoreSheet(
+    projectPath: String,
+    checkpoint: CheckpointSummary,
+    onDismiss: () -> Unit,
+    onRestoreChat: (() -> Unit)? = null,
+    agentBusy: Boolean = false,
+    otherRunningChats: Int = 0,
+    onDelete: (() -> Unit)? = null
+) {
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<SheetState>(SheetState.Loading) }
+    var mode by remember { mutableStateOf(if (onRestoreChat != null) RestoreMode.CHAT_AND_FILES else RestoreMode.FILES) }
+    var reload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(checkpoint.id, reload) {
+        state = SheetState.Loading
+        state = ProjectCheckpoints.preview(projectPath, checkpoint.id).fold(
+            onSuccess = { SheetState.Ready(it) },
+            onFailure = { SheetState.Failed(it.message ?: "Could not compare the files") }
+        )
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val accent = MaterialTheme.colorScheme.primary
+    ModalBottomSheet(
+        onDismissRequest = { if (state !is SheetState.Working) onDismiss() },
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 22.dp)
+                .navigationBarsPadding().animateContentSize()
+        ) {
+            SheetHeader(checkpoint, onRestoreChat != null)
+            Spacer(Modifier.height(14.dp))
+            when (val s = state) {
+                SheetState.Loading -> Busy("Comparing the project with this checkpoint…")
+                SheetState.Working -> Busy("Restoring…")
+                is SheetState.Failed -> {
+                    Notice(Icons.Outlined.ErrorOutline, AppColors.danger, s.message)
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onDismiss) { Text("Close") }
+                        Spacer(Modifier.width(6.dp))
+                        FilledTonalButton(onClick = { reload++ }) { Text("Try again") }
+                    }
+                }
+                is SheetState.Ready -> {
+                    val pv = s.preview
+                    PreviewBody(projectPath, checkpoint, pv, files = mode.files)
+                    if (agentBusy) {
+                        Spacer(Modifier.height(10.dp))
+                        Notice(Icons.Outlined.WarningAmber, AppColors.danger, "The agent is still working in this chat. Stop it first, then restore.")
+                    } else if (otherRunningChats > 0) {
+                        Spacer(Modifier.height(10.dp))
+                        Notice(Icons.Outlined.WarningAmber, AppColors.warning,
+                            "$otherRunningChats other chat${if (otherRunningChats == 1) " is" else "s are"} still running in this project and may change files again after the restore.")
+                    }
+                    if (onRestoreChat != null) {
+                        Spacer(Modifier.height(16.dp))
+                        Text("What goes back", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            RestoreMode.entries.forEach { m ->
+                                com.example.gemini.ui.claude.PickerOption(
+                                    title = m.title,
+                                    description = m.description,
+                                    color = accent,
+                                    selected = m == mode,
+                                    icon = when (m) {
+                                        RestoreMode.CHAT_AND_FILES -> Icons.Outlined.History
+                                        RestoreMode.FILES -> Icons.Outlined.FolderCopy
+                                        RestoreMode.CHAT -> Icons.Outlined.ChatBubbleOutline
+                                    },
+                                    onClick = { mode = m }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    val nothingToRestore = !mode.chat && pv.files.isEmpty()
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        if (onDelete != null) {
+                            TextButton(onClick = onDelete) { Text("Delete", color = AppColors.danger) }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onDismiss) { Text("Cancel") }
+                        Spacer(Modifier.width(6.dp))
+                        Button(
+                            enabled = !agentBusy && !nothingToRestore,
+                            onClick = {
+                                val chosen = mode
+                                if (!chosen.files) {
+                                    onRestoreChat?.invoke()
+                                    onDismiss()
+                                    return@Button
+                                }
+                                state = SheetState.Working
+                                scope.launch {
+                                    ProjectCheckpoints.restore(projectPath, checkpoint.id).fold(
+                                        onSuccess = { res ->
+                                            if (chosen.chat) onRestoreChat?.invoke()
+                                            state = SheetState.Done(res, chosen)
+                                        },
+                                        onFailure = { state = SheetState.Failed(it.message ?: "Restore failed: nothing was changed") }
+                                    )
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = accent)
+                        ) {
+                            Text(when (mode) {
+                                RestoreMode.CHAT_AND_FILES -> "Restore chat & files"
+                                RestoreMode.FILES -> "Restore files"
+                                RestoreMode.CHAT -> "Restore chat"
+                            }, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                is SheetState.Done -> DoneBody(s, projectPath, onDismiss, onUndone = { state = SheetState.Undone }, onUndoing = { state = SheetState.Working },
+                    onUndoFailed = { state = SheetState.Failed(it) })
+                SheetState.Undone -> {
+                    Notice(Icons.Outlined.CheckCircle, AppColors.success, "Restore undone: the files are as they were right before it.")
+                    Spacer(Modifier.height(14.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button(onClick = onDismiss) { Text("Done") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetHeader(cp: CheckpointSummary, fromChat: Boolean) {
+    val agent = agentOf(cp.agent)
+    val color = agent?.accent() ?: MaterialTheme.colorScheme.primary
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(color.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.History, null, tint = color, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (cp.isPreRestore) "Undo that restore" else if (fromChat) "Go back to before this message" else "Restore this checkpoint",
+                fontSize = 17.sp, fontWeight = FontWeight.Bold
+            )
+            Text(
+                listOfNotNull(agent?.label(), formatCheckpointTime(cp.time)).joinToString(" · "),
+                fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    cp.title?.takeIf { it.isNotBlank() }?.let {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "“$it”", fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+        )
+    }
+}
+
+@Composable
+private fun Busy(text: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(text, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun Notice(icon: ImageVector, color: Color, text: String) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(17.dp).padding(top = 1.dp))
+        Spacer(Modifier.width(9.dp))
+        Text(text, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+    }
+}
+
+@Composable
+private fun PreviewBody(projectPath: String, cp: CheckpointSummary, pv: CheckpointPreview, files: Boolean) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    if (!files) {
+        Notice(Icons.Outlined.Info, AppColors.info,
+            "Files stay as they are now" + if (pv.files.isNotEmpty()) " (${pv.files.size} would differ from this checkpoint)." else ".")
+        return
+    }
+    if (pv.files.isEmpty()) {
+        Notice(Icons.Outlined.CheckCircle, AppColors.success, "No file changes: the project's files are already as they were at this point.")
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (pv.modified > 0) CountChip(Icons.Outlined.Edit, AppColors.warning, "${pv.modified} changed")
+            if (pv.recreated > 0) CountChip(Icons.Outlined.AddCircleOutline, AppColors.success, "${pv.recreated} come back")
+            if (pv.deleted > 0) CountChip(Icons.Outlined.RemoveCircleOutline, AppColors.danger, "${pv.deleted} removed")
+        }
+        Spacer(Modifier.height(10.dp))
+        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+                pv.files.forEachIndexed { i, f ->
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    FileRow(projectPath, cp.id, f)
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text("Tap a file to see exactly what changes in it.", fontSize = 11.5.sp, color = muted)
+    }
+    val shown = pv.warnings.filter { it.kind != "outside" }
+    if (shown.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            shown.forEach { w ->
+                Notice(Icons.Outlined.WarningAmber, if (w.kind == "other_chats" || w.kind == "mid_turn" || w.kind == "late") AppColors.warning else AppColors.info, w.text)
+            }
+            if (pv.laterChats.isNotEmpty()) {
+                Column(Modifier.padding(start = 6.dp)) {
+                    pv.laterChats.take(5).forEach { lc ->
+                        val a = agentOf(lc.agent)
+                        Text(
+                            "• ${a?.label() ?: "Chat"}: “${lc.title?.takeIf { it.isNotBlank() } ?: "untitled"}” (${lc.turns} message${if (lc.turns == 1) "" else "s"}, ${formatCheckpointTime(lc.time)})",
+                            fontSize = 12.sp, lineHeight = 16.sp, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+    pv.warnings.firstOrNull { it.kind == "outside" }?.let {
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(Icons.Outlined.Info, null, tint = muted, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(it.text, fontSize = 11.5.sp, lineHeight = 15.sp, color = muted)
+        }
+    }
+}
+
+@Composable
+private fun CountChip(icon: ImageVector, color: Color, text: String) {
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(5.dp))
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = color)
+    }
+}
+
+@Composable
+private fun FileRow(projectPath: String, checkpointId: String, f: CheckpointFileChange) {
+    var open by remember { mutableStateOf(false) }
+    var diff by remember { mutableStateOf<String?>(null) }
+    var diffError by remember { mutableStateOf<String?>(null) }
+    val (icon, color, label) = when (f.change) {
+        "deleted" -> Triple(Icons.Outlined.RemoveCircleOutline, AppColors.danger, "removed")
+        "recreated" -> Triple(Icons.Outlined.AddCircleOutline, AppColors.success, "comes back")
+        else -> Triple(Icons.Outlined.Edit, AppColors.warning, "changed")
+    }
+    LaunchedEffect(open) {
+        if (open && diff == null && !f.binary) {
+            ProjectCheckpoints.diff(projectPath, checkpointId, f.path).fold({ diff = it }, { diffError = it.message })
+        }
+    }
+    val name = f.path.substringAfterLast('/')
+    val dir = f.path.substringBeforeLast('/', "")
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, label, tint = color, modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (dir.isNotEmpty()) Text(dir, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(Modifier.width(8.dp))
+            if (f.binary) {
+                Text("binary", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                if (f.added > 0) Text("+${f.added}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = AppColors.success, fontFamily = FontFamily.Monospace)
+                if (f.added > 0 && f.removed > 0) Spacer(Modifier.width(5.dp))
+                if (f.removed > 0) Text("−${f.removed}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = AppColors.danger, fontFamily = FontFamily.Monospace)
+            }
+            Spacer(Modifier.width(6.dp))
+            Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        }
+        AnimatedVisibility(visible = open, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
+                when {
+                    f.binary -> Text("A binary file: it is put back as it was.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    diffError != null -> Text(diffError!!, fontSize = 12.sp, color = AppColors.danger)
+                    diff == null -> LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+                    else -> DiffBlock(diff!!)
+                }
+            }
+        }
+    }
+}
+
+/** A unified diff (now → checkpoint): green lines come back, red ones go away. */
+@Composable
+private fun DiffBlock(diff: String) {
+    val lines = remember(diff) {
+        diff.lines().dropWhile { !it.startsWith("@@") }.let { if (it.isEmpty()) diff.lines() else it }
+    }
+    val maxLines = 500
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(AppColors.codeBg)
+            .horizontalScroll(rememberScrollState()).padding(vertical = 6.dp)
+    ) {
+        lines.take(maxLines).forEach { line ->
+            val (bg, fg) = when {
+                line.startsWith("+") -> AppColors.success.copy(alpha = 0.14f) to AppColors.success
+                line.startsWith("-") -> AppColors.danger.copy(alpha = 0.14f) to AppColors.danger
+                line.startsWith("@@") -> Color.Transparent to AppColors.info
+                line.startsWith("\\") -> Color.Transparent to MaterialTheme.colorScheme.onSurfaceVariant
+                else -> Color.Transparent to AppColors.codeText
+            }
+            Text(
+                line.ifEmpty { " " },
+                fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp, color = fg, softWrap = false,
+                modifier = Modifier.background(bg).padding(horizontal = 8.dp)
+            )
+        }
+        if (lines.size > maxLines) {
+            Text("… ${lines.size - maxLines} more lines", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun DoneBody(
+    s: SheetState.Done, projectPath: String, onDismiss: () -> Unit,
+    onUndone: () -> Unit, onUndoing: () -> Unit, onUndoFailed: (String) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val r = s.result
+    val parts = listOfNotNull(
+        r.modified.takeIf { it > 0 }?.let { "$it changed back" },
+        r.recreated.takeIf { it > 0 }?.let { "$it brought back" },
+        r.deleted.takeIf { it > 0 }?.let { "$it removed" }
+    )
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(56.dp).clip(CircleShape).background(AppColors.success.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.CheckCircle, null, tint = AppColors.success, modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(if (r.errors.isEmpty()) "Files restored" else "Files restored, with problems", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (parts.isEmpty()) "Nothing had to change." else parts.joinToString(" · "),
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (s.mode.chat) {
+            Spacer(Modifier.height(4.dp))
+            Text("The chat went back too: the message is in the input box.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    if (r.errors.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        Notice(Icons.Outlined.ErrorOutline, AppColors.danger, r.errors.take(8).joinToString("\n") + if (r.errors.size > 8) "\n… ${r.errors.size - 8} more" else "")
+    }
+    Spacer(Modifier.height(16.dp))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        val undo = r.undoId
+        if (undo != null) {
+            OutlinedButton(onClick = {
+                onUndoing()
+                scope.launch {
+                    ProjectCheckpoints.restore(projectPath, undo).fold({ onUndone() }, { onUndoFailed(it.message ?: "Could not undo") })
+                }
+            }) {
+                Icon(Icons.AutoMirrored.Outlined.Undo, null, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (s.mode.chat) "Undo files" else "Undo restore")
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Button(onClick = onDismiss) { Text("Done") }
+    }
+    if (s.mode.chat && r.undoId != null) {
+        Spacer(Modifier.height(6.dp))
+        Text("Undo brings the files back; the chat part can't be undone.", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+internal fun agentOf(name: String?): AgentKind? =
+    name?.let { n -> AgentKind.entries.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+
+/** "just now", "5 min ago", "3 h ago", else the date. */
+fun formatCheckpointTime(ms: Long): String {
+    if (ms <= 0) return ""
+    val d = System.currentTimeMillis() - ms
+    return when {
+        d < 60_000 -> "just now"
+        d < 3_600_000 -> "${d / 60_000} min ago"
+        d < 24 * 3_600_000 -> "${d / 3_600_000} h ago"
+        else -> SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(ms))
+    }
+}
+
+fun formatBytes(b: Long): String = when {
+    b >= 1L shl 30 -> String.format(Locale.US, "%.1f GB", b / (1L shl 30).toDouble())
+    b >= 1L shl 20 -> String.format(Locale.US, "%.1f MB", b / (1L shl 20).toDouble())
+    b >= 1L shl 10 -> String.format(Locale.US, "%d KB", b / (1L shl 10))
+    else -> "$b B"
+}

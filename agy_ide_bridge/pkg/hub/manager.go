@@ -500,6 +500,10 @@ func (m *HubManager) Start() error {
 		if uploads := filepath.Join(home, ".antigem", "uploads"); os.MkdirAll(uploads, 0o700) == nil {
 			args = append(args, "--add-dir="+uploads)
 		}
+		// Agent memory: memory files and past chats the agent reads when the app tells it about them
+		if mem := filepath.Join(home, ".antigem", "memory"); os.MkdirAll(mem, 0o700) == nil {
+			args = append(args, "--add-dir="+mem)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

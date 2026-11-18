@@ -83,7 +83,10 @@ Files outside the app's own `data/` folder. Paths in the API are `data/…` (own
 
 - `storage:all`;
 - a manifest folder that is, or contains, the home folder or the root of shared storage (`~/`, `/sdcard`, `/storage`, `/`), or a folder that can't be resolved;
-- picking such a folder.
+- picking such a folder;
+- a manifest folder in a hidden home folder (`~/.gemini`, `~/.ssh`, …), unless the app is an official one (installed
+  from a package signed with the key of the [AntiGem mini apps](https://github.com/Santoshkurmi/antigem_mini_apps)
+  repository): those get the normal switch.
 
 The dialog says **Give <App> access to <scope>?**, explains that the app could read, change or delete photos, documents and downloads and send them anywhere it can reach, and asks to `Type iknowiamstupid to confirm:` (case does not matter). The button is **Give access**. In the first-launch dialog these switches start off.
 
@@ -179,7 +182,11 @@ Whatever is granted, a mini app can never reach:
 
 - **Other mini apps' code:** everything in `~/mini-apps/`, and installed apps' files.
 - **Other mini apps' data:** everything in `~/.antigem/mini-apps/`, except its own `data/` and the `data/` folders of its [shared group](shared-data.md).
-- **Hidden folders in the home folder:** `~/.ssh`, `~/.antigem`, `~/.codex`, `~/.claude` and every other folder starting with `.`.
+- **AntiGem's own folder:** everything in `~/.antigem/` (settings, the browser profile, uploads, every app's data).
+- **Other hidden folders in the home folder** (`~/.ssh`, `~/.codex`, `~/.claude`, every other folder starting with `.`),
+  unless the manifest declares that folder (or a folder inside it) in `storage.folders` and the user grants it. `storage:all`
+  and picked folders never open them. In the prompt such a folder is shown as **Hidden folder <path>** and always marked
+  sensitive.
 - **Anything outside the home folder and shared storage:** AntiGem's private files, system folders, other storage volumes.
 - **AntiGem's own local ports** (bridge, hub, phone-tools server), even with `localhost`.
 - **Other origins from the WebView itself:** pages can't navigate away or open windows; links open outside.

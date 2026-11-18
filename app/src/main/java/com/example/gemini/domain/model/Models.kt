@@ -90,7 +90,11 @@ data class ChatMessage(
     /** A request an Antigravity voice call sent: [content] is what was said (the full prompt is in [rawContent]). */
     val viaVoice: Boolean = false,
     /** What the voice said while handing that request to the agent. */
-    val voiceLine: String? = null
+    val voiceLine: String? = null,
+    /** A user message: the id its project checkpoint was saved under, when the agent's transcript knows it. */
+    val checkpointKey: String? = null,
+    /** A user message whose [content] the chat shows collapsed (hidden parts removed): the text as it was sent. */
+    val sentContent: String? = null
 )
 
 @Serializable

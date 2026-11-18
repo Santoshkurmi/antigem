@@ -19,7 +19,9 @@ sealed interface ChatTurn {
         val viaVoice: Boolean = false,
         /** What the voice said while handing the request to the agent (voice calls only). */
         val voiceLine: String? = null,
-        val rawText: String? = null
+        val rawText: String? = null,
+        /** The app's id of the message when this app sent it (its `client_msg:` tag): its project checkpoint key. */
+        val clientMessageId: String? = null
     ) : ChatTurn {
         override val key: String get() = "user_turn_$stepIndex"
     }

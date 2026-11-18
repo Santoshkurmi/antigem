@@ -1,0 +1,171 @@
+name: 🐞 Bug report
+description: Something in the app does not work the way it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **A bug report is useful only if it can be reproduced.**
+        "It doesn't work" or "App not working" without details will be **closed**.
+        Tell us **what** you did, **when** it happened, **what** you expected and **what** happened instead.
+
+        - App **crashed** (the "AntiGem stopped" screen)? Use **💥 Crash** instead.
+        - Problem **installing** the APK or **setting up** the Linux environment? Use **📦 Install / setup problem**.
+        - Problem with an **agent, model, sign-in or API key**? Use **🤖 Agent / model problem**.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the [existing issues](https://github.com/Santoshkurmi/antigem/issues?q=is%3Aissue) and this is not a duplicate.
+          required: true
+        - label: I am on the [latest release](https://github.com/Santoshkurmi/antigem/releases/latest), or I wrote below why I can't update.
+          required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App version
+      description: "**Settings → About & Info**. Example: 1.2.0 (129)"
+      placeholder: "1.2.0 (129)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build
+      description: "**Settings → About & Info** shows Shared UID Build or Standalone Build."
+      options:
+        - termux, Shared UID build
+        - termux, Standalone build
+        - standard (com.antigem, with the separate Termux app)
+        - I built it from source myself
+        - I don't know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Where the agents run
+      description: "**Settings → Servers** / **Settings → Connect to PC**"
+      options:
+        - On this phone (default)
+        - Server mode, SSH tunnel
+        - Server mode, domain / open ports
+        - Connected to a PC (AntiGem for VS Code)
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: "Samsung Galaxy A54, Android 14 (One UI 6)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Part of the app
+      multiple: true
+      options:
+        - Chat (messages, streaming, attachments)
+        - Antigravity agent
+        - Claude Code agent
+        - OpenCode agent
+        - Codex agent
+        - Terminal / Linux environment
+        - Code editor / files / Git
+        - Browser / Browser MCP
+        - Other MCP server (Android, Notes, Theme, REA…)
+        - Jarvis voice assistant
+        - Plugins / Mini apps
+        - Server mode / Connect to PC
+        - Backups / updates
+        - Settings / themes / UI
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe the problem. Write the exact error text you saw (copy it, don't type it from memory).
+      placeholder: |
+        When I send a message in a Claude Code chat with an image attached, the reply never comes.
+        The spinner keeps going and after ~2 minutes it shows "stream closed".
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps so we can make it happen on our phone. Number them.
+      placeholder: |
+        1. Open a new Claude Code chat
+        2. Attach a photo from the gallery
+        3. Type "describe this" and send
+        4. See the spinner forever
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Often
+        - Sometimes
+        - Happened once
+    validations:
+      required: true
+
+  - type: dropdown
+    id: since
+    attributes:
+      label: When did it start?
+      options:
+        - It never worked for me
+        - After updating the app
+        - After changing a setting
+        - After updating an agent / package (agy, claude, opencode, codex, pkg upgrade)
+        - It started by itself, I don't know why
+    validations:
+      required: true
+
+  - type: input
+    id: last_good
+    attributes:
+      label: Last version where it worked (if any)
+      placeholder: "1.1.9"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots or screen recording
+      description: |
+        A screenshot or a short screen recording helps a lot. Drag and drop files here.
+        Logs: **Settings → Diagnostics** (daemon logs). Paste text logs, don't screenshot them.
+        ⚠️ Remove API keys, tokens and passwords before posting.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Workarounds you found, things you already tried, other details.

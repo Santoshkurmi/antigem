@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions and help (WhatsApp community)
+    url: https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV
+    about: '"How do I…?" questions go here, not in issues. You get an answer faster there.'
+  - name: 📖 User guide
+    url: https://github.com/Santoshkurmi/antigem/blob/master/user_docs/README.md
+    about: Read this first. Many "bugs" are explained here.
+  - name: 🖥️ Server mode (VPS) guide
+    url: https://github.com/Santoshkurmi/antigem/blob/master/docs/remote-server.md
+    about: Setting up the bridge on your own server, SSH tunnel, nginx / Caddy, debugging.
