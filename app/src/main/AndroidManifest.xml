@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- sharedUserId: AntiGem's own Termux:API and Termux:X11 apps (same signing key) share its files. Adding or removing it
-     later would force users to reinstall, so it stays. -->
+     later would force users to reinstall, so it stays. It is the app's package name: ai.antigem (release), ai.antidev
+     (debug), so the two never claim the same shared user with different signing keys. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:sharedUserId="ai.antigem">
+    android:sharedUserId="${applicationId}">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

@@ -35,11 +35,6 @@ android {
         targetSdk = 28
         versionCode = appVersionCode
         versionName = appVersionName
-        // Local ports differ from the old com.termux build (1234/1235/8765), so both apps can run side by side
-        // while users move their data over
-        buildConfigField("int", "BRIDGE_PORT", "1236")
-        buildConfigField("int", "HUB_PORT", "1237")
-        buildConfigField("int", "BROWSER_MCP_PORT", "8767")
         // The local environment (glibc, proot, IDE bridge, bootstrap) is arm64 only, but armeabi-v7a is kept so 32-bit
         // ARM phones can install the app and use server mode (bridge on a PC). x86/x86_64 copies of dependency
         // libraries stay out of the APK
@@ -55,10 +50,18 @@ android {
         }
     }
 
+    // Local ports differ per app so they can all run side by side: the old com.termux build uses 1234/1235/8765,
+    // release (ai.antigem) 1236/1237/8767, debug (ai.antidev, see androidComponents below) 1238/1239/8768
     buildTypes {
         debug {
+            buildConfigField("int", "BRIDGE_PORT", "1238")
+            buildConfigField("int", "HUB_PORT", "1239")
+            buildConfigField("int", "BROWSER_MCP_PORT", "8768")
         }
         release {
+            buildConfigField("int", "BRIDGE_PORT", "1236")
+            buildConfigField("int", "HUB_PORT", "1237")
+            buildConfigField("int", "BROWSER_MCP_PORT", "8767")
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
@@ -431,6 +434,10 @@ val generateChangelog = tasks.register<GenerateChangelogTask>("generateChangelog
 androidComponents {
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateChangelog, GenerateChangelogTask::outputDir)
+
+        // Debug builds are their own app, ai.antidev ("AntiGem Dev"), so they install next to the release one. It must
+        // have the length of com.termux (10): the Termux packages are rewritten for it byte for byte.
+        if (variant.buildType == "debug") variant.applicationId.set("ai.antidev")
 
         val amBuildType = if (variant.buildType == "release") "release" else "debug"
         val termuxAm = tasks.register<TermuxAmAssetTask>("termuxAm${variant.name.replaceFirstChar { it.uppercase() }}") {

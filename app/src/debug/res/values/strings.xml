@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- debug builds (ai.antidev) install next to the release app: a different name to tell them apart -->
+    <string name="app_name">AntiGem Dev</string>
+</resources>
