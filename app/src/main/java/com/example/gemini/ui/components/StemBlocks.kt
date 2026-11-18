@@ -229,7 +229,9 @@ private fun StemWebView(
     val slot = if (kept) keptWebViewSlot("stem") else null
     // a kept page comes back at its last height instead of 200dp
     var heightDp by remember(slot) { mutableIntStateOf(slot?.let { cache?.height(it) } ?: 200) }
+    ChatWebViewCache.dlog("StemWebView compose slot=$slot heightDp=$heightDp kept=$kept")
     val onHeight: (Int) -> Unit = { px ->
+        ChatWebViewCache.dlog("AG.height slot=$slot px=$px (was $heightDp)")
         heightDp = px.coerceIn(48, 1200)
         if (slot != null) cache?.setHeight(slot, heightDp)
     }
@@ -268,9 +270,13 @@ private fun StemWebView(
                 it.onError = onError
             }
             val key = "$reloadKey:${html.hashCode()}:${html.length}"
+            ChatWebViewCache.dlog("Stem update slot=$slot load=${wv.tag != key} ${ChatWebViewCache.wvInfo(wv)}")
             if (wv.tag != key) {
                 wv.tag = key
                 wv.loadDataWithBaseURL(RenderBundle.BASE_URL, html, "text/html", "UTF-8", null)
+            } else {
+                // a kept page handed back: it reports its real height again (the saved one may be stale)
+                wv.evaluateJavascript("try{__h()}catch(e){}", null)
             }
         },
         modifier = if (fill) modifier.fillMaxSize() else modifier.fillMaxWidth().height(heightDp.dp)

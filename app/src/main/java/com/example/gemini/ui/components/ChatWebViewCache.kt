@@ -4,11 +4,14 @@ import android.app.ActivityManager
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
+import android.util.Log
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -34,8 +37,9 @@ val LocalWebViewSlot = staticCompositionLocalOf<String?> { null }
  * Main thread only.
  */
 class ChatWebViewCache(context: Context) {
-    private class Entry(val view: WebView) {
-        var inUse = true
+    private class Entry(val view: WebView, var owner: Any?) {
+        /** On screen (owned by a build of its block); null owner: parked. */
+        val inUse get() = owner != null
     }
 
     private val appContext = context.applicationContext
@@ -72,39 +76,63 @@ class ChatWebViewCache(context: Context) {
         appContext.registerComponentCallbacks(memoryCallbacks)
     }
 
-    /** The parked view of [slot], or a new one from [create] (kept under [slot]). */
-    fun obtain(slot: String, create: () -> WebView): WebView {
+    /**
+     * The kept view of [slot] for [owner] (one build of the block), or a new one from [create] (kept under [slot]).
+     * A view is free when it is parked, or when it has no parent: Compose put its item aside for reuse (it detaches
+     * the view but doesn't release it yet), so the block coming back takes it instead of building a second one.
+     */
+    fun obtain(slot: String, owner: Any, create: () -> WebView): WebView {
         val entry = entries[slot]
-        if (entry != null && !entry.inUse) {
-            entry.inUse = true
+        if (entry != null && (!entry.inUse || entry.view.parent == null)) {
+            val wasParked = !entry.inUse
+            entry.owner = owner
+            val oldParent = entry.view.parent
             (entry.view.parent as? ViewGroup)?.removeView(entry.view)
             entry.view.onResume()
+            dlog("obtain REUSE(${if (wasParked) "parked" else "put-aside"}) slot=$slot ${wvInfo(entry.view)} oldParent=${oldParent?.let { it.javaClass.simpleName + "@" + wvId(it) }} savedH=${heights[slot]}")
             return entry.view
         }
         // the slot's view is already on screen (should not happen): a view of its own, not kept
-        if (entry != null || closed) return create()
+        if (entry != null || closed) {
+            val view = create()
+            watch(view)
+            dlog("obtain UNCACHED slot=$slot closed=$closed busy=${entry?.let { wvInfo(it.view) }} new=${wvId(view)}")
+            return view
+        }
         if (isMemoryLow()) dropParked(0)
         val view = create()
-        entries[slot] = Entry(view)
+        watch(view)
+        entries[slot] = Entry(view, owner)
         owners[view] = this
+        dlog("obtain NEW slot=$slot view=${wvId(view)} cached=${entries.size}")
         return view
     }
 
-    /** The block of [slot] left the screen: its view is paused and parked (or destroyed if it isn't the kept one). */
-    fun release(slot: String, view: WebView) {
+    /**
+     * [owner]'s build of the block of [slot] is gone: its view is paused and parked (or destroyed if it isn't the kept
+     * one). Ignored when another build has taken the view since.
+     */
+    fun release(slot: String, view: WebView, owner: Any) {
         val entry = entries[slot]
         if (closed || entry == null || entry.view !== view) {
+            dlog("release DESTROY slot=$slot ${wvInfo(view)} closed=$closed entry=${entry?.let { wvId(it.view) }}")
             destroyView(view)
             return
         }
-        entry.inUse = false
+        if (entry.owner !== owner) {
+            dlog("release STALE slot=$slot ${wvInfo(view)} (taken by another build)")
+            return
+        }
+        entry.owner = null
         runCatching { view.onPause() }
+        dlog("release PARK slot=$slot ${wvInfo(view)} parked=${entries.values.count { !it.inUse }}")
         dropParked(if (isMemoryLow()) 0 else MAX_PARKED)
     }
 
     fun height(slot: String): Int? = heights[slot]
 
     fun setHeight(slot: String, dp: Int) {
+        if (heights[slot] != dp) dlog("height slot=$slot ${heights[slot]} -> $dp")
         heights[slot] = dp
     }
 
@@ -114,6 +142,7 @@ class ChatWebViewCache(context: Context) {
     /** Destroys every view; called when the chat is left. */
     fun close() {
         if (closed) return
+        dlog("close views=${entries.size}")
         closed = true
         runCatching { appContext.unregisterComponentCallbacks(memoryCallbacks) }
         entries.values.forEach { destroyView(it.view) }
@@ -129,6 +158,7 @@ class ChatWebViewCache(context: Context) {
         while (iter.hasNext() && parked > keep) {
             val entry = iter.next()
             if (entry.inUse) continue
+            dlog("dropParked keep=$keep ${wvInfo(entry.view)}")
             iter.remove()
             destroyView(entry.view)
             parked--
@@ -137,6 +167,7 @@ class ChatWebViewCache(context: Context) {
 
     private fun dropDead(view: WebView) {
         val slot = entries.entries.firstOrNull { it.value.view === view }?.key
+        dlog("rendererGone slot=$slot ${wvInfo(view)}")
         if (slot != null) {
             val entry = entries.remove(slot)
             if (entry?.inUse == true) generations[slot] = generation(slot) + 1
@@ -150,6 +181,30 @@ class ChatWebViewCache(context: Context) {
     }
 
     companion object {
+        // ------------------------------------------------------------------ debug (temporary)
+        const val TAG = "AGWebKeep"
+
+        fun dlog(msg: String) {
+            Log.d(TAG, msg)
+        }
+
+        fun wvId(o: Any): String = Integer.toHexString(System.identityHashCode(o))
+
+        fun wvInfo(v: View): String =
+            "view=${wvId(v)} ${v.width}x${v.height} attached=${v.isAttachedToWindow} shown=${v.isShown} " +
+                "parent=${v.parent?.let { it.javaClass.simpleName + "@" + wvId(it) }} tag=${(v.tag as? String)?.take(24)}"
+
+        /** Logs every attach / detach / resize of [v]. */
+        fun watch(v: View) {
+            v.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(view: View) = dlog("attached ${wvInfo(view)}")
+                override fun onViewDetachedFromWindow(view: View) = dlog("detached ${wvInfo(view)}")
+            })
+            v.addOnLayoutChangeListener { view, l, t, r, b, ol, ot, or, ob ->
+                if (r - l != or - ol || b - t != ob - ot) dlog("resized ${wvId(view)} ${or - ol}x${ob - ot} -> ${r - l}x${b - t}")
+            }
+        }
+
         /** Parked (off screen) views kept per chat. */
         const val MAX_PARKED = 12
 
@@ -197,15 +252,21 @@ fun KeptWebView(
     val cache = LocalChatWebViewCache.current
     val item = LocalWebViewSlot.current
     if (!keep || cache == null || item == null) {
+        ChatWebViewCache.dlog("KeptWebView plain part=$part keep=$keep cache=${cache != null} item=$item")
         AndroidView(factory = factory, update = update, onRelease = { ChatWebViewCache.destroyView(it) }, modifier = modifier)
         return
     }
     val slot = "$item/$part"
     key(cache, slot, cache.generation(slot)) {
+        // this build of the block: a release from an older build (put aside by Compose) can't park our view
+        val owner = remember { Any() }
         AndroidView(
-            factory = { ctx -> cache.obtain(slot) { factory(ctx) } },
-            update = update,
-            onRelease = { cache.release(slot, it) },
+            factory = { ctx -> cache.obtain(slot, owner) { factory(ctx) } },
+            update = { wv ->
+                ChatWebViewCache.dlog("update slot=$slot ${ChatWebViewCache.wvInfo(wv)}")
+                update(wv)
+            },
+            onRelease = { cache.release(slot, it, owner) },
             modifier = modifier
         )
     }
