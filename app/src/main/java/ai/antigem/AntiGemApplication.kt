@@ -1,6 +1,7 @@
 package ai.antigem
 
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.Signature
 import android.os.Build
@@ -9,7 +10,10 @@ import ai.antigem.data.adb.AdbConnectManager
 import ai.antigem.data.updater.PluginUpdateCheckWorker
 import ai.antigem.data.updater.UpdateCheckWorker
 import com.telemetrydeck.sdk.TelemetryDeck
+import com.telemetrydeck.sdk.TelemetryDeckSessionManagerProvider
+import com.telemetrydeck.sdk.TelemetryDeckSignalProcessor
 import java.security.MessageDigest
+import java.util.UUID
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 class AntiGemApplication : Application(), coil.ImageLoaderFactory {
@@ -74,9 +78,40 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
                 .defaultUser(SimpleTelemetryId.getUniqueUserId(this))
                 .testMode(BuildConfig.DEBUG)
                 .showDebugLogs(BuildConfig.DEBUG)
-                .sendNewSessionBeganSignal(true)
+                // Only installs and updates are reported (the free plan counts every signal): nothing per app open,
+                // and no session tracking (the SDK's would send a signal per open and time how long the app is used)
+                .sendNewSessionBeganSignal(false)
+                .sessionProvider(NoSessionTracking())
         )
+        reportInstallOrUpdate()
+    }
 
+    /**
+     * One signal per install ("App.installed") and per update ("App.updated"); TelemetryDeck adds the app version,
+     * Android version and device to it. The version last reported is remembered, so each one is sent only once.
+     */
+    private fun reportInstallOrUpdate() = runCatching {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        val version = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode
+        else @Suppress("DEPRECATION") info.versionCode.toLong()
+        val prefs = getSharedPreferences("telemetry_device_prefs", MODE_PRIVATE)
+        val reported = prefs.getLong("reported_version_code", -1L)
+        if (reported == version) return@runCatching
+        // nothing reported yet: a fresh install, or an update from a version that didn't report updates
+        val installed = reported == -1L && info.firstInstallTime == info.lastUpdateTime
+        val params = if (reported == -1L) emptyMap() else mapOf("previousVersionCode" to reported.toString())
+        TelemetryDeck.signal(if (installed) "App.installed" else "App.updated", params, null, null)
+        prefs.edit().putLong("reported_version_code", version).apply()
+    }
+
+    /** Session tracking that does nothing: keeps one session ID per app start, sends no signals. */
+    private class NoSessionTracking : TelemetryDeckSessionManagerProvider {
+        private var sessionId: UUID = UUID.randomUUID()
+        override fun register(ctx: Context?, client: TelemetryDeckSignalProcessor) {}
+        override fun stop() {}
+        override fun getCurrentSessionID(): UUID = sessionId
+        override fun startNewSession(sessionID: UUID) { sessionId = sessionID }
+        override fun setFirstSessionID(sessionID: UUID) { sessionId = sessionID }
     }
 
     private fun isOfficialRelease(): Boolean = runCatching {
