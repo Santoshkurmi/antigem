@@ -45,7 +45,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         com.example.gemini.data.preferences.AuthPreferences(this)
         // the chosen light / dark themes and the custom ones, before the first screen draws
         com.example.gemini.theme.ThemeManager.init(this)
-        UpdateCheckWorker.schedule(this)
+        // last version of this app: no update checks (new versions are the ai.antigem app)
+        UpdateCheckWorker.cancel(this)
         PluginUpdateCheckWorker.schedule(this)
         // mini app reminders and exact-time tasks: alarms again (Android may have dropped them), off the main thread
         com.example.gemini.data.miniapps.MiniAppScheduler.rearmAsync(this)

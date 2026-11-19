@@ -8765,90 +8765,30 @@ private fun AboutSubScreen(
                     }
                 }
 
+                // last version of this app: no update check, point to the new AntiGem app instead
                 Text(
-                    text = "Checks GitHub releases for new versions and downloads the matching APK directly.",
+                    text = "This is the last version of this AntiGem app. It won't get any more updates. New versions come as a new AntiGem app (ai.antigem), which runs its own Linux environment. Install it next to this one and move your chats and projects with Settings → Backups.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
 
-                if (updateCheckResultText != null) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger.copy(alpha = 0.12f) else QuotaGreen.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger.copy(alpha = 0.3f) else QuotaGreen.copy(alpha = 0.3f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isUpdateCheckError) Icons.Default.Warning else Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger else QuotaGreen,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = updateCheckResultText!!,
-                                fontSize = 12.sp,
-                                color = if (isUpdateCheckError) com.example.gemini.theme.AppColors.danger else QuotaGreen
-                            )
-                        }
-                    }
-                }
-
                 Button(
                     onClick = {
-                        if (!isCheckingUpdate) {
-                            isCheckingUpdate = true
-                            updateCheckResultText = null
-                            isUpdateCheckError = false
-                            coroutineScope.launch {
-                                val updateManager = AppUpdateManager(context)
-                                val checkResult = updateManager.checkForUpdates(forceCheck = true)
-                                isCheckingUpdate = false
-                                checkResult.onSuccess { info ->
-                                    if (info != null) {
-                                        updateInfo = info
-                                        updateCheckResultText = null
-                                    } else {
-                                        isUpdateCheckError = false
-                                        updateCheckResultText = "AntiGem is up to date (v${BuildConfig.VERSION_NAME})."
-                                        Toast.makeText(context, "AntiGem is up to date!", Toast.LENGTH_SHORT).show()
-                                    }
-                                }.onFailure { err ->
-                                    isUpdateCheckError = true
-                                    val msg = err.localizedMessage ?: "Could not connect to GitHub"
-                                    updateCheckResultText = msg
-                                    Toast.makeText(context, "Update check failed: $msg", Toast.LENGTH_LONG).show()
-                                }
-                            }
-                        }
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Santoshkurmi/antigem/releases"))
+                        context.startActivity(intent)
                     },
-                    enabled = !isCheckingUpdate,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
-                    if (isCheckingUpdate) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Checking GitHub...")
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Check for Updates")
-                    }
+                    Icon(
+                        imageVector = Icons.Default.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Get the new AntiGem")
                 }
             }
         }

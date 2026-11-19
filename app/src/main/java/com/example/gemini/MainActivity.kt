@@ -170,12 +170,6 @@ class MainActivity : ComponentActivity() {
             var pendingUpdateInfo by remember { mutableStateOf<com.example.gemini.data.updater.AppUpdateInfo?>(null) }
             val updateManager = remember { com.example.gemini.data.updater.AppUpdateManager(this@MainActivity) }
 
-            LaunchedEffect(Unit) {
-                updateManager.checkForUpdates().onSuccess { info ->
-                    pendingUpdateInfo = info
-                }
-            }
-
             LaunchedEffect(isFloatingDiagnosticsEnabled) {
                 if (isFloatingDiagnosticsEnabled) {
                     com.example.gemini.data.remote.core.AntiGemLiveDiagnostics.start()
