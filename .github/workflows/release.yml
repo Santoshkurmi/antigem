@@ -3,7 +3,7 @@ name: Build & Publish Release
 on:
   push:
     branches:
-      - master
+      - standalone
     paths:
       - 'version.json'
   workflow_dispatch:
@@ -70,6 +70,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.version.outputs.name }}
           body: ${{ steps.version.outputs.changelog }}
           generate_release_notes: true

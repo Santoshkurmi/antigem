@@ -21,6 +21,20 @@
 
 </div>
 
+> [!IMPORTANT]
+> ### AntiGem has a new home: `ai.antigem`
+> From **v2.0.0**, AntiGem is released under its own package name, **`ai.antigem`**. The old app was installed as `com.termux`, the Termux project's package name, which we used only so Termux packages could run at full speed. Shipping AntiGem under another project's name wasn't right, and it also stopped AntiGem from being installed next to the real Termux app. AntiGem now rewrites `com.termux` to `ai.antigem` inside each package as it installs (both names are 10 characters, so it is swapped byte for byte), with no proot and no slowdown.
+>
+> - **The old app keeps working.** Its last version is **v1.2.1** and it gets no more updates. New features and fixes only come to `ai.antigem`.
+> - **You can use both.** The new app installs next to the old one; nothing in the old one is touched. Move over whenever you're ready.
+> - **To move your setup:**
+>   1. In the old app: **Settings → Backups & Restore → Back up environment** (tick *Include SSH keys and sign-ins* to keep your logins; never share that file). It is saved to `Download/Antigem/backups`.
+>   2. Install **`AntiGem-v2.x.x.apk`** from [Releases](https://github.com/santoshkurmi/antigem/releases) (version 2.0.0 or newer; versions below 2.0.0 are the old app).
+>   3. On the new app's setup screen, choose **From a ZIP file** and pick your backup. Every `com.termux` path is rewritten for `ai.antigem` while it restores.
+>   4. When everything works, uninstall the old app, and delete the backup if it contains your sign-ins.
+>
+> The new app is brand new: a few packages, the Linux desktop (X11) and some `termux-*` commands are still being tested. If something breaks, please [open an issue](https://github.com/santoshkurmi/antigem/issues).
+
 ---
 
 ## See it in action
@@ -275,6 +289,8 @@ For advanced hardware APIs (such as `termux-location`, `termux-camera-photo`, `t
 
 > [!IMPORTANT]
 > The companion app must be AntiGem's build for `ai.antigem`: it shares AntiGem's Linux user (`sharedUserId ai.antigem`) to talk to it over UNIX sockets. Companion apps made for the old `com.termux` build, or the official Termux:API, don't work with it.
+>
+> **Moving from the old `com.termux` app?** Download the Termux:API companion again from the [releases page](https://github.com/Santoshkurmi/termux-api/releases) and install it for `ai.antigem`. Don't keep using the companion you installed for the old app: it only works with the old app.
 
 **How to enable:** install the companion APK from the [releases page](https://github.com/Santoshkurmi/termux-api/releases), then choose **AntiGem's Termux:API app** in **Settings → Termux Support → Termux:API**. One handler is used at a time: *Built-in* (the default) or the app, which then handles every `termux-*` command. AntiGem's dispatcher and the package's own binary sit side by side (`dpkg-divert`), so switching needs no reinstall, and installing or updating `termux-api` never breaks either of them.
 
@@ -294,6 +310,9 @@ termux-x11 :0 -xstartup "dbus-launch --exit-with-session xfce4-session"
 ```
 
 Then open Termux:X11. Don't install `termux-x11-nightly` from x11-repo: it only works with the official Termux:X11 app.
+
+> [!IMPORTANT]
+> **Moving from the old `com.termux` app?** Download AntiGem's Termux:X11 app and `.deb` again from the [AntiGem Termux:X11 releases](https://github.com/Santoshkurmi/termux-x11/releases/latest) and install them for `ai.antigem`. Don't keep using the Termux:X11 app you installed for the old app: it only works with the old app.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "version_code": 131,
   "version_name": "2.0.0",
-  "min_supported_version_code": 1,
+  "min_supported_version_code": 2,
   "changelog": [
     "New app package ai.antigem: AntiGem now runs its own Linux environment, the separate com.termux build is no longer needed",
     "Added rootfs v2 (Nov 19) with a choice of GitHub or Hugging Face download, and a link to each page to download the zip by hand",
