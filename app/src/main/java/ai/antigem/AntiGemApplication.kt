@@ -73,8 +73,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         TelemetryDeck.start(
             this,
             TelemetryDeck.Builder()
-                .appID("CAA615F6-9205-4490-BFC2-2E7E18FB0ECB")
-                .namespace("com.santoshkurmi")
+                .appID("5BE26330-812A-4293-AFB7-F5C98EAE4B82")
+                .namespace("ai.antigem")
                 .defaultUser(SimpleTelemetryId.getUniqueUserId(this))
                 .testMode(BuildConfig.DEBUG)
                 .showDebugLogs(BuildConfig.DEBUG)
