@@ -123,7 +123,11 @@ object GlobalContext {
         append("$h Showing things in this chat (paths absolute, no spaces, each on its own line)\n")
         append("- Image: `![caption](/abs/path/pic.png)` · Video: `![caption](/abs/path/clip.mp4)` (plays in the chat)\n")
         append("- File: `[name](/abs/path/file.ext)` (the user taps to open)\n")
-        append("Show images, videos and documents you create this way instead of only naming the path.")
+        append("Show images, videos and documents you create this way instead of only naming the path.\n\n")
+        append("$h Asking the user\n")
+        append("Request vague or ambiguous? Don't guess: ask with your question tool (e.g. AskUserQuestion), all at once, with a few options.\n\n")
+        append("$h Node projects\n")
+        append("New projects: use pnpm (faster, less disk) unless the user says otherwise. Existing npm projects (package-lock.json) stay on npm.")
     }.trimEnd()
 
     // ------------------------------------------------------------------ what goes where
