@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.data.local.BootstrapSource
 import ai.antigem.data.local.LocalEnvironmentManager
 import ai.antigem.data.local.LocalInstallerState
+import ai.antigem.data.local.RootfsMirror
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.theme.*
 
@@ -74,6 +76,9 @@ fun FullScreenLocalToolsInstaller(
     var selectedSourceType by remember { mutableStateOf(0) } // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
     var showLogs by remember { mutableStateOf(false) }
+    var selectedMirror by remember { mutableStateOf(RootfsMirror.GITHUB) }
+    // the site of the last full-rootfs download started here; null when the last install was something else
+    var lastMirror by remember { mutableStateOf<RootfsMirror?>(null) }
 
     val zipPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -84,15 +89,26 @@ fun FullScreenLocalToolsInstaller(
         }
     }
 
+    fun installFull() {
+        lastMirror = selectedMirror
+        LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto(selectedMirror))
+    }
+
     fun installSelected(fallbackToAuto: Boolean) {
         when (selectedSourceType) {
-            0 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto)
-            1 -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
+            0 -> installFull()
+            1 -> {
+                lastMirror = null
+                LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.BaseMinimum)
+            }
             2 -> {
                 val uri = selectedFileUri
                 when {
-                    uri != null -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.LocalZipUri(uri))
-                    fallbackToAuto -> LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.Auto)
+                    uri != null -> {
+                        lastMirror = null
+                        LocalEnvironmentManager.launchInstall(context, authPreferences, BootstrapSource.LocalZipUri(uri))
+                    }
+                    fallbackToAuto -> installFull()
                     else -> zipPickerLauncher.launch("*/*")
                 }
             }
@@ -139,7 +155,7 @@ fun FullScreenLocalToolsInstaller(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                InstallerHero(installerState)
+                InstallerHero(installerState, mirrorChoice = lastMirror != null)
                 Spacer(modifier = Modifier.height(28.dp))
 
                 AnimatedContent(
@@ -151,6 +167,8 @@ fun FullScreenLocalToolsInstaller(
                         is LocalInstallerState.Idle -> SourcePicker(
                             selected = selectedSourceType,
                             selectedFileName = selectedFileUri?.toString()?.substringAfterLast("/"),
+                            selectedMirror = selectedMirror,
+                            onSelectMirror = { selectedMirror = it },
                             onSelect = { selectedSourceType = it },
                             onPickZip = { zipPickerLauncher.launch("*/*") }
                         )
@@ -264,7 +282,18 @@ fun FullScreenLocalToolsInstaller(
                     is LocalInstallerState.Success -> PrimaryButton("Get started", Icons.Default.Check, onComplete)
 
                     is LocalInstallerState.Error -> {
-                        PrimaryButton("Try again", Icons.Default.Refresh) { installSelected(fallbackToAuto = true) }
+                        val failedMirror = lastMirror
+                        if (failedMirror != null) {
+                            // the full rootfs download failed: try the same site again or switch to the other one
+                            MirrorChooser(selected = selectedMirror, onSelect = { selectedMirror = it })
+                            if (selectedMirror == failedMirror) {
+                                PrimaryButton("Try again (${selectedMirror.label})", Icons.Default.Refresh) { installFull() }
+                            } else {
+                                PrimaryButton("Download from ${selectedMirror.label}", Icons.Default.Download) { installFull() }
+                            }
+                        } else {
+                            PrimaryButton("Try again", Icons.Default.Refresh) { installSelected(fallbackToAuto = true) }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             SecondaryButton("Change source", Modifier.weight(1f)) { LocalEnvironmentManager.resetState() }
                             SecondaryButton("Skip", Modifier.weight(1f), onSkip)
@@ -356,7 +385,7 @@ private fun UnsupportedDeviceScreen(onContinue: () -> Unit) {
 }
 
 @Composable
-private fun InstallerHero(state: LocalInstallerState) {
+private fun InstallerHero(state: LocalInstallerState, mirrorChoice: Boolean = false) {
     val (icon, tint) = when (state) {
         is LocalInstallerState.Success -> Icons.Default.Check to QuotaGreen
         is LocalInstallerState.Error -> Icons.Default.ErrorOutline to AppColors.danger
@@ -394,7 +423,11 @@ private fun InstallerHero(state: LocalInstallerState) {
     Text(
         text = when (state) {
             is LocalInstallerState.Success -> "The shell, core tools and AGY tools are installed."
-            is LocalInstallerState.Error -> "You can try again, or install from a ZIP file instead."
+            is LocalInstallerState.Error -> if (mirrorChoice) {
+                "Try again, switch to the other download site, or open its page (↗), download the zip and install it with \"From a ZIP file\"."
+            } else {
+                "You can try again, or install from a ZIP file instead."
+            }
             is LocalInstallerState.Idle -> "AntiGem runs its terminal, IDE and agents on a local Linux system. Choose how to install it."
             is LocalInstallerState.Discovering -> "Checking for the latest verified archive."
             is LocalInstallerState.AwaitingConfirmation -> "Review the details and confirm."
@@ -412,6 +445,8 @@ private fun InstallerHero(state: LocalInstallerState) {
 private fun SourcePicker(
     selected: Int,
     selectedFileName: String?,
+    selectedMirror: RootfsMirror,
+    onSelectMirror: (RootfsMirror) -> Unit,
     onSelect: (Int) -> Unit,
     onPickZip: () -> Unit
 ) {
@@ -423,7 +458,13 @@ private fun SourcePicker(
             description = "Verified rootfs with the tools and environment preconfigured.",
             selected = selected == 0,
             onClick = { onSelect(0) }
-        )
+        ) {
+            AnimatedVisibility(visible = selected == 0) {
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    MirrorChooser(selected = selectedMirror, onSelect = onSelectMirror)
+                }
+            }
+        }
         SourceOption(
             icon = Icons.Outlined.Bolt,
             title = "Minimal",
@@ -458,6 +499,50 @@ private fun SourcePicker(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * GitHub | Hugging Face: where the full rootfs is downloaded from (the same zip on both). The ↗ on each opens that
+ * site's page, where the zip can be downloaded by hand and installed with "From a ZIP file".
+ */
+@Composable
+private fun MirrorChooser(selected: RootfsMirror, onSelect: (RootfsMirror) -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        RootfsMirror.values().forEach { mirror ->
+            val isSelected = mirror == selected
+            Surface(
+                onClick = { onSelect(mirror) },
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.12f) else AppColors.card,
+                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else AppColors.border.copy(alpha = 0.6f)),
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
+                    Text(
+                        text = mirror.label,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (isSelected) ClaudeTerracotta else AppColors.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { runCatching { uriHandler.openUri(LocalEnvironmentManager.rootfsPage(mirror)) } },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.OpenInNew,
+                            contentDescription = "Open the ${mirror.label} download page",
+                            tint = if (isSelected) ClaudeTerracotta else AppColors.textSecondary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }

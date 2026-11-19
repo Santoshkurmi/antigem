@@ -47,8 +47,17 @@ data class DeviceHardwareInfo(
     val supportedAbis: List<String>
 )
 
+/** Where the full rootfs zip is downloaded from (the same file on both). */
+enum class RootfsMirror(val label: String) {
+    GITHUB("GitHub"),
+    HUGGING_FACE("Hugging Face")
+}
+
 sealed class BootstrapSource {
-    object Auto : BootstrapSource()
+    /** The full rootfs from [mirror]. `BootstrapSource.Auto` on its own is the companion: GitHub. */
+    open class Auto(val mirror: RootfsMirror = RootfsMirror.GITHUB) : BootstrapSource() {
+        companion object Default : Auto()
+    }
     object BaseMinimum : BootstrapSource()
     data class DirectUrl(val url: String) : BootstrapSource()
     data class LocalZipUri(val uri: android.net.Uri) : BootstrapSource()
@@ -61,10 +70,24 @@ object LocalEnvironmentManager {
     // Minimum 10 MB required for a real Termux bootstrap archive
     private const val MIN_BOOTSTRAP_SIZE_BYTES = 10 * 1024 * 1024L
 
-    const val HARDCODED_ROOTFS_URL = "https://github.com/Santoshkurmi/antigem/releases/download/rootfs-v1/bootrapz_2026-10-04.zip"
-    const val HARDCODED_ROOTFS_TAG = "rootfs-v1"
-    const val HARDCODED_ROOTFS_ASSET = "bootrapz_2026-10-04.zip"
-    const val HARDCODED_ROOTFS_SIZE_BYTES = 350 * 1024 * 1024L
+    const val HARDCODED_ROOTFS_URL = "https://github.com/Santoshkurmi/antigem/releases/download/rootfs-v2/bootrapz_2026-11-19.zip"
+    const val HARDCODED_ROOTFS_TAG = "rootfs-v2"
+    const val HARDCODED_ROOTFS_ASSET = "bootrapz_2026-11-19.zip"
+    const val HARDCODED_ROOTFS_SIZE_BYTES = 400_054_861L
+    const val HUGGINGFACE_ROOTFS_URL = "https://huggingface.co/datasets/santoshkurmi/rootfs-v2/resolve/main/bootrapz_2026-11-19.zip"
+    // pages where the user can download the same zip by hand (then install it with "From a ZIP file")
+    const val GITHUB_ROOTFS_PAGE = "https://github.com/Santoshkurmi/antigem/releases/tag/rootfs-v2"
+    const val HUGGINGFACE_ROOTFS_PAGE = "https://huggingface.co/datasets/santoshkurmi/rootfs-v2/tree/main"
+
+    fun rootfsUrl(mirror: RootfsMirror): String = when (mirror) {
+        RootfsMirror.GITHUB -> HARDCODED_ROOTFS_URL
+        RootfsMirror.HUGGING_FACE -> HUGGINGFACE_ROOTFS_URL
+    }
+
+    fun rootfsPage(mirror: RootfsMirror): String = when (mirror) {
+        RootfsMirror.GITHUB -> GITHUB_ROOTFS_PAGE
+        RootfsMirror.HUGGING_FACE -> HUGGINGFACE_ROOTFS_PAGE
+    }
 
     private const val NOTIFICATION_CHANNEL_ID = "antigem_bootstrap_install"
     private const val NOTIFICATION_ID = 4096
@@ -691,10 +714,10 @@ object LocalEnvironmentManager {
 
             when (source) {
                 is BootstrapSource.Auto -> {
-                    val targetUrl = HARDCODED_ROOTFS_URL
-                    val targetAsset = HARDCODED_ROOTFS_ASSET
+                    val targetUrl = rootfsUrl(source.mirror)
+                    val targetAsset = "$HARDCODED_ROOTFS_ASSET · ${source.mirror.label}"
                     val targetSizeBytes = HARDCODED_ROOTFS_SIZE_BYTES
-                    val titlePrefix = "AntiGem Rootfs"
+                    val titlePrefix = "AntiGem Rootfs (${source.mirror.label})"
 
                     _installerState.value = LocalInstallerState.Downloading(
                         bytesDownloaded = 0L,

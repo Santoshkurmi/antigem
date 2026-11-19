@@ -1,9 +1,26 @@
 {
   "version_code": 131,
-  "version_name": "2.0.1",
+  "version_name": "2.0.0",
   "min_supported_version_code": 1,
   "changelog": [
-    "Finalized and moving to beta state"
+    "New app package ai.antigem: AntiGem now runs its own Linux environment, the separate com.termux build is no longer needed",
+    "Added rootfs v2 (Nov 19) with a choice of GitHub or Hugging Face download, and a link to each page to download the zip by hand",
+    "Added on-the-fly rewriting of Termux packages for AntiGem, so pkg/apt installs work under the new package name",
+    "Added Skills and Plugins management for Codex, OpenCode and Claude: install, update and remove from GitHub",
+    "Added Setup with AI for skill and plugin repositories that cannot be added directly",
+    "Added project checkpoints: snapshot a project and restore it later",
+    "Added agent memory and chat history screens",
+    "Added STEM rendering: math, chemistry notation and figures in chat",
+    "Added m3u8 (HLS) video playback in chat",
+    "Added website analysis tools and browser connection settings in REA",
+    "Added crash screen with details to report the crash",
+    "Added GitHub issue templates for bugs, crashes, install problems, agents and feature requests",
+    "Fixed chat crashes when a web view renderer died, chat web views are now cached and reused",
+    "Improved file search and file tree speed, with symlink support",
+    "Improved mini app permissions: hidden folders handling and official app verification",
+    "Improved Android dev, REA and X11 desktop setup to work with the new package name",
+    "Improved chat context instructions for the agents",
+    "Improved anonymous install and update counting, session tracking is off"
   ],
   "is_critical": false
 }
