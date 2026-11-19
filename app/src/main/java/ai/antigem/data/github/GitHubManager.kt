@@ -405,7 +405,8 @@ object GitHubManager {
 
     // ---------------- sign in ----------------
 
-    private val codeRegex = Regex("""one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})""")
+    // "First copy your one-time code: XXXX-XXXX", or "One-time code (XXXX-XXXX) copied to clipboard" when gh copied it itself
+    private val codeRegex = Regex("""one-time code\W+([A-Z0-9]{4}-[A-Z0-9]{4})""", RegexOption.IGNORE_CASE)
     private val urlRegex = Regex("""https://\S*/login/device\S*""")
 
     /**
