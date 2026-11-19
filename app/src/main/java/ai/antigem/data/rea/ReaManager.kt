@@ -53,7 +53,8 @@ object ReaManager {
 
     private const val TERMUX = "/data/data/${BuildConfig.APPLICATION_ID}/files"
     const val LAUNCHER = "$TERMUX/usr/bin/rea-mcp"
-    private const val JAVA_BIN = "usr/lib/jvm/java-21-openjdk-arm64/bin/java"
+    // Ubuntu names the JDK folder after the CPU: -arm64 on phones, -amd64 in the x86_64 build
+    private val JAVA_BIN = "usr/lib/jvm/java-21-openjdk-${if (BuildConfig.TARGET_ABI == "x86_64") "amd64" else "arm64"}/bin/java"
     private const val JADX_JAR = "root/tools/jadx-headless-mcp-0.7.1-all.jar"
     private const val GROUPS_ENV = "REA_GROUPS"
     private const val MODE_ENV = "REA_MODE"

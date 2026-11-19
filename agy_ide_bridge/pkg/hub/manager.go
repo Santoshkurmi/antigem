@@ -450,8 +450,17 @@ func (m *HubManager) Start() error {
 		m.mu.Unlock()
 		return err
 	}
+	// Android x86_64: agy is the Linux build behind a launcher (agy_linux_build.go); keep the launcher current
+	notInstalled := false
+	if UsesAgyLinuxBuild() {
+		if fi, err := os.Stat(AgyLinuxBinary(m.AgyBinPath)); err != nil || fi.IsDir() {
+			notInstalled = true
+		} else if err := EnsureAgyLauncher(m.AgyBinPath); err != nil {
+			log.Printf("[Hub] agy launcher: %v", err)
+		}
+	}
 	// the app names the agy to use even before it is installed (Settings → Antigravity CLI → Install)
-	if fi, statErr := os.Stat(m.AgyBinPath); statErr != nil || fi.IsDir() {
+	if fi, statErr := os.Stat(m.AgyBinPath); notInstalled || statErr != nil || fi.IsDir() {
 		err := fmt.Errorf("agy is not installed at %s (install it in the app: Settings → Antigravity CLI)", m.AgyBinPath)
 		m.setStatusLocked(HubStatusError, err.Error())
 		m.mu.Unlock()
@@ -702,7 +711,8 @@ func (m *HubManager) Stop() {
 			}
 			_ = cmd.Process.Kill()
 			_ = exec.Command("pkill", "-9", "-P", fmt.Sprintf("%d", pid)).Run()
-			_ = exec.Command("pkill", "-9", "-f", "agy --hub").Run()
+			// agy.va39: agy behind the Android x86_64 launcher (agy_linux_build.go)
+			_ = exec.Command("pkill", "-9", "-f", `agy(\.va39)? --hub`).Run()
 			fmt.Println("⚠️  AGY Hub force terminated.")
 		}
 

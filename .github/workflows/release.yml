@@ -66,6 +66,11 @@ jobs:
           chmod +x gradlew scripts/build_all_apks.sh
           ./scripts/build_all_apks.sh --release
 
+      # AntiGem-v<version>-x86_64.apk, for x86_64 devices (emulators, Intel/AMD Chromebooks); the x86_64 app's updater
+      # downloads this one. Its bridge links through the Android NDK's clang, which the runner has (ANDROID_NDK_HOME).
+      - name: Build x86_64 Release APK
+        run: ./scripts/build_all_apks.sh --release --x86_64
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:

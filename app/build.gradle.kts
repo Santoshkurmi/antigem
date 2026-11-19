@@ -26,6 +26,13 @@ plugins {
   alias(libs.plugins.wire)
 }
 
+// The CPU the APK is built for. The normal build is arm64 (phones); `-Pabi=x86_64` makes the x86_64 one (emulators,
+// Intel/AMD Chromebooks). The local environment has to match it: the bridge (GOARCH), the bundled glibc
+// (src/abi/<abi>/assets) and the native libraries packaged.
+val targetAbi = (findProperty("abi") as String?)?.trim()?.ifEmpty { null } ?: "arm64"
+require(targetAbi == "arm64" || targetAbi == "x86_64") { "-Pabi must be arm64 or x86_64, not $targetAbi" }
+val isX86 = targetAbi == "x86_64"
+
 android {
     namespace = "ai.antigem"
     compileSdk = 36
@@ -35,11 +42,16 @@ android {
         targetSdk = 28
         versionCode = appVersionCode
         versionName = appVersionName
-        // The local environment (glibc, proot, IDE bridge, bootstrap) is arm64 only, but armeabi-v7a is kept so 32-bit
-        // ARM phones can install the app and use server mode (bridge on a PC). x86/x86_64 copies of dependency
-        // libraries stay out of the APK
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        // The arm64 build's local environment (glibc, proot, IDE bridge, bootstrap) is arm64 only, but armeabi-v7a is
+        // kept so 32-bit ARM phones can install the app and use server mode (bridge on a PC); x86/x86_64 copies of
+        // dependency libraries stay out of it. The x86_64 build has only x86_64 ones.
+        ndk { abiFilters += if (isX86) listOf("x86_64") else listOf("arm64-v8a", "armeabi-v7a") }
+        // "arm64" or "x86_64": picks the glibc loader, the bundled glibc and the update APK at run time
+        buildConfigField("String", "TARGET_ABI", "\"$targetAbi\"")
     }
+
+    // the glibc runtime of this build's CPU (assets/glibc-min-<abi>.tar.xz)
+    sourceSets.getByName("main").assets.srcDir("src/abi/$targetAbi/assets")
 
     signingConfigs {
         create("release") {
@@ -73,7 +85,7 @@ android {
     }
 
     base {
-        archivesName.set("antiGem")
+        archivesName.set(if (isX86) "antiGem-x86_64" else "antiGem")
     }
 
     compileOptions {
@@ -236,8 +248,21 @@ val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
 
   workingDir = bridgeSourceDir.asFile
   environment("GOOS", "android")
-  environment("GOARCH", "arm64")
-  environment("CGO_ENABLED", "0")
+  environment("GOARCH", if (isX86) "amd64" else "arm64")
+  if (isX86) {
+    // Go links android/amd64 only through cgo (android/arm64 links on its own): the NDK's clang does it, from
+    // ANDROID_NDK_HOME (set on GitHub's runners) or the newest NDK in the SDK
+    val host = if (System.getProperty("os.name").startsWith("Mac")) "darwin-x86_64" else "linux-x86_64"
+    val sdkDir = androidComponents.sdkComponents.sdkDirectory.get().asFile
+    val ndkRoots = listOfNotNull(System.getenv("ANDROID_NDK_HOME"), System.getenv("ANDROID_NDK_LATEST_HOME")).map(::File) +
+      (sdkDir.resolve("ndk").listFiles()?.sortedByDescending { it.name } ?: emptyList())
+    val clang = ndkRoots.map { File(it, "toolchains/llvm/prebuilt/$host/bin/x86_64-linux-android24-clang") }.firstOrNull { it.exists() }
+      ?: throw GradleException("The x86_64 build needs the Android NDK (Go links the bridge with its clang): install one in $sdkDir/ndk or set ANDROID_NDK_HOME")
+    environment("CGO_ENABLED", "1")
+    environment("CC", clang.absolutePath)
+  } else {
+    environment("CGO_ENABLED", "0")
+  }
   commandLine("go", "build", "-ldflags=-s -w", "-o", rawFile.absolutePath, "main.go")
 }
 
@@ -245,6 +270,10 @@ val compressAgyIdeBridge = tasks.register<Exec>("compressAgyIdeBridge") {
   dependsOn(buildAgyIdeBridge)
   val binDir = layout.projectDirectory.dir("src/main/assets/bin").asFile
   val rawFile = agyIdeBridgeRaw.get().asFile
+  // declared, so Gradle knows the asset changed: without it mergeDebugAssets could package the bridge of an earlier
+  // build (seen when switching -Pabi); unchanged bridge bytes skip the compression
+  inputs.file(rawFile)
+  outputs.file(File(binDir, "agy_ide_bridge.xz"))
 
   doFirst {
     binDir.mkdirs()
@@ -442,7 +471,9 @@ androidComponents {
 
         // Debug builds are their own app, ai.antidev ("AntiGem Dev"), so they install next to the release one. It must
         // have the length of com.termux (10): the Termux packages are rewritten for it byte for byte.
-        if (variant.buildType == "debug") variant.applicationId.set("ai.antidev")
+        // TEMPORARY: x86_64 debug builds stay ai.antigem while the x86_64 rootfs is made on the emulator (its backup
+        // must have ai.antigem paths). Remove `&& !isX86` once that rootfs is hosted.
+        if (variant.buildType == "debug" && !isX86) variant.applicationId.set("ai.antidev")
 
         val amBuildType = if (variant.buildType == "release") "release" else "debug"
         val termuxAm = tasks.register<TermuxAmAssetTask>("termuxAm${variant.name.replaceFirstChar { it.uppercase() }}") {
