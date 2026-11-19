@@ -66,3 +66,4 @@ finally.zip
 # STEM & diagrams render bundle (built by scripts/render_bundle/build_render_bundle.sh, uploaded to GitHub releases)
 scripts/render_bundle/out/
 scripts/render_bundle/.work/
+termux-am-build/
