@@ -1,9 +1,0 @@
-{
-  "version_code": 131,
-  "version_name": "2.0.1",
-  "min_supported_version_code": 1,
-  "changelog": [
-    "Finalized and moving to beta state"
-  ],
-  "is_critical": false
-}

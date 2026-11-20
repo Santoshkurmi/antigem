@@ -28,7 +28,8 @@ plugins {
 
 android {
     namespace = "ai.antigem"
-    compileSdk = 36
+    compileSdk = 37
+    compileSdkMinor = 1
     defaultConfig {
         applicationId = "ai.antigem"
         minSdk = 24

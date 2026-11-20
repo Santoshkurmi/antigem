@@ -116,7 +116,7 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
             val uri = Uri.parse("antigem-miniapp://app/" + Uri.encode(appId))
             val task = runCatching {
                 context.getSystemService(ActivityManager::class.java).appTasks.firstOrNull { t ->
-                    val base = t.taskInfo.baseIntent
+                    val base = t.taskInfo?.baseIntent ?: return@firstOrNull false
                     base.data == uri && base.component?.className == MiniAppActivity::class.java.name
                 }
             }.getOrNull()

@@ -1411,9 +1411,9 @@ object LocalEnvironmentManager {
                         progressFraction = 0.88f
                     )
                 }
-                val usr = TermuxRelocation.relocateTree(prefixDir, pkg, onProgress)
+                val usr = TermuxRelocation.relocateTree(prefixDir, pkg, onProgress, releasePaths = true)
                 // the home folder holds the user's own files: only paths there (see TermuxRelocation)
-                val home = TermuxRelocation.relocateTree(homeDir, pkg, onProgress, pathsOnly = true)
+                val home = TermuxRelocation.relocateTree(homeDir, pkg, onProgress, pathsOnly = true, releasePaths = true)
                 log("✓ Adapted ${usr.patchedFiles + home.patchedFiles} files and ${usr.links + home.links} symlinks (${usr.files + home.files} files checked)")
             }
 
