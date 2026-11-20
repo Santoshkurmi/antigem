@@ -134,7 +134,12 @@ class ClaudeAccountManager(
     private var usageJobForced = false
     private var usageGen = 0
 
-    fun refreshUsage(force: Boolean = true) {
+    /**
+     * [recheckSignIn]: check the sign-in again once the usage is in. `claude auth status` keeps saying "logged in" with an
+     * expired login; asking for usage makes the CLI try to renew it, and when that fails it forgets the login, so the
+     * check after it sees the sign-out (the app then shows the sign-in instead of failing the next message).
+     */
+    fun refreshUsage(force: Boolean = true, recheckSignIn: Boolean = false) {
         if (usageJob?.isActive == true) {
             // a manual refresh must not be swallowed by a cached check already on its way (e.g. the sheet opening)
             if (!force || usageJobForced) return
@@ -157,7 +162,10 @@ class ClaudeAccountManager(
                     .onFailure { if (it !is kotlinx.coroutines.CancellationException) _usageError.value = it.message ?: "Cannot reach the bridge" }
             } finally {
                 // a newer refresh that replaced this one owns the spinner
-                if (gen == usageGen) _isRefreshingUsage.value = false
+                if (gen == usageGen) {
+                    _isRefreshingUsage.value = false
+                    if (recheckSignIn) refreshStatus()
+                }
             }
         }
     }

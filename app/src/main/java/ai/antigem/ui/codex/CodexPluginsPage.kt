@@ -119,7 +119,7 @@ private fun parsePluginList(result: JsonElement): CxPluginData {
 private fun friendly(e: Throwable): String {
     val msg = e.message ?: "Codex did not answer"
     return if (msg.contains("method not found", ignoreCase = true) || msg.contains("unknown variant", ignoreCase = true))
-        "This Codex is too old to manage plugins. Update it in Server & install." else msg
+        "This Codex is too old to manage plugins. Update it in Settings → Codex → Account & CLI." else msg
 }
 
 /**

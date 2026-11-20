@@ -227,7 +227,13 @@ class ClaudeTranscript {
         val type = data["type"]?.jsonPrimitive?.contentOrNull ?: return ""
         when (type) {
             "stream_event" -> onStreamEvent(decode(data) ?: return type)
-            "assistant" -> onAssistant(decode(data) ?: return type)
+            "assistant" -> {
+                // the CLI marks a refused sign-in on the message itself ("Not logged in · Please run /login", "Failed to
+                // authenticate: OAuth session expired and could not be refreshed"); a provider's rejected key is not a
+                // Claude sign-in problem
+                if ((data["error"] as? JsonPrimitive)?.contentOrNull == "authentication_failed" && !isCustomProvider()) needsLogin = true
+                onAssistant(decode(data) ?: return type)
+            }
             "user" -> onUser(decode(data) ?: return type, live = true)
             "result" -> onResult(decode(data) ?: return type)
             "system" -> onSystem(decode(data) ?: return type)
@@ -465,8 +471,9 @@ class ClaudeTranscript {
                 val msg = r.errors.joinToString("\n").ifBlank { r.result.orEmpty() }.ifBlank { r.subtype }
                 val custom = isCustomProvider()
                 // a provider's rejected key is not a Claude sign-in problem
+                // "authenticat": "authentication_error" and "Failed to authenticate: OAuth session expired…"
                 if (!custom && (msg.contains("/login", ignoreCase = true) || msg.contains("not logged in", ignoreCase = true) ||
-                        msg.contains("authentication", ignoreCase = true) || msg.contains("OAuth token", ignoreCase = true))
+                        msg.contains("authenticat", ignoreCase = true) || msg.contains("OAuth", ignoreCase = true))
                 ) needsLogin = true
                 // the CLI also writes the same text as a message of its own: show it once
                 (turn.parts.lastOrNull() as? Part.Text)?.takeIf { it.text.toString().trim() == msg.trim() }?.let { turn.parts.remove(it) }

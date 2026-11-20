@@ -48,7 +48,7 @@ if [ "$1" = update ]; then
     exit 0
 fi
 if [ ! -f "$BIN" ]; then
-    echo "agy is not installed ($BIN is missing): install it in AntiGem (Settings > Antigravity CLI)." >&2
+    echo "agy is not installed ($BIN is missing): install it in AntiGem (Settings > Antigravity > Account & CLI)." >&2
     exit 127
 fi
 unset LD_PRELOAD

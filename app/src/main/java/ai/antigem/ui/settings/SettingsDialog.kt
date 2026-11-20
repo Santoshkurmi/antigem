@@ -100,18 +100,18 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     DATA_PROTECTION("Data Loss Protection", "Uninstall shield & App Info clear data protection"),
     PROJECT_CHECKPOINTS("Project checkpoints", "Go back to before any chat message: files restored with a preview"),
     COMMANDS("Commands & Permissions", "Auto-run policy, sandbox mode, and tool approvals"),
-    ANTIGRAVITY("Antigravity", "CLI, MCP servers, skills & plugins, commands & permissions"),
-    AGY_CLI("Antigravity CLI", "agy version and install, on this device or the server"),
+    ANTIGRAVITY("Antigravity", "Account & CLI, MCP servers, skills & plugins, commands & permissions"),
+    AGY_CLI("Account & CLI", "Google sign-in, agy version and install, on this device or the server"),
     AGY_CLOUD("Cloud agents", "Antigravity chats on a Google cloud machine (Remote Agents)"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     /** One Claude Code page (which one: the dialog's claudePage); not a page of its own for Jarvis. */
     CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
-    OPENCODE("OpenCode", "Server, providers, custom OpenAI-compatible endpoints & approvals"),
+    OPENCODE("OpenCode", "CLI, providers, custom OpenAI-compatible endpoints & approvals"),
     /** One OpenCode page (which one: the dialog's openCodePage). */
-    OPENCODE_PAGE("OpenCode", "Server, providers, endpoints, MCP & approvals"),
-    CODEX("Codex", "Account, usage limits, permissions, MCP, server & install"),
+    OPENCODE_PAGE("OpenCode", "CLI, providers, endpoints, MCP & approvals"),
+    CODEX("Codex", "Account & CLI, usage limits, permissions, MCP"),
     /** One Codex page (which one: the dialog's codexPage). */
-    CODEX_PAGE("Codex", "Account, usage limits, permissions, MCP, server & install"),
+    CODEX_PAGE("Codex", "Account & CLI, usage limits, permissions, MCP"),
     AGENTS("Agents", "Run Antigravity, Claude Code, OpenCode, Codex or several"),
     GLOBAL_CONTEXT("Global context", "What every chat is told about this app, and your own instructions"),
     AGENT_MEMORY("Agent memory & history", "Memories every agent keeps across chats, and past chats they can look up"),
@@ -297,11 +297,16 @@ fun SettingsDialog(
     claude: ai.antigem.ui.claude.ClaudeSettingsDeps? = null,
     initialClaudePage: ai.antigem.ui.claude.ClaudeSettingsPage? = null,
     openCode: ai.antigem.data.agent.opencode.OpenCodeChatBackend? = null,
-    /** Opens on this OpenCode page (e.g. Server & install from an Install button). */
+    /** Opens on this OpenCode page (e.g. OpenCode CLI from an Install button). */
     initialOpenCodePage: ai.antigem.ui.opencode.OpenCodeSettingsPage? = null,
     codex: ai.antigem.data.agent.codex.CodexChatBackend? = null,
-    /** Opens on this Codex page (e.g. Server & install from an Install button). */
+    /** Opens on this Codex page (e.g. Account & CLI from an Install button). */
     initialCodexPage: ai.antigem.ui.codex.CodexSettingsPage? = null,
+    /** Antigravity's status and Google account, for its Account & CLI page (null: Antigravity is off). */
+    agyStatus: ai.antigem.ui.agents.AgentStatusEntry? = null,
+    agyAuth: ai.antigem.data.remote.AgyHubClient.AgyAuthInfo = ai.antigem.data.remote.AgyHubClient.AgyAuthInfo(),
+    onAgySignOut: () -> Unit = {},
+    onAgyCancelSignIn: () -> Unit = {},
     /** Opens on this page (e.g. Jarvis asked to show it); also switches to it while the dialog is open. */
     initialSection: SettingsSection? = null,
     enabledAgents: Set<ai.antigem.domain.model.AgentKind> = setOf(ai.antigem.domain.model.AgentKind.AGY),
@@ -664,9 +669,11 @@ fun SettingsDialog(
                         onNavigate = { currentSection = it }
                     )
                     SettingsSection.AGY_CLI -> Column(
-                        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)
+                        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         ai.antigem.ui.agents.AgyCliCard()
+                        ai.antigem.ui.agents.AgyAccountCard(agyStatus, agyAuth, onAgySignOut, onAgyCancelSignIn)
                     }
                     SettingsSection.AGY_CLOUD -> Column(
                         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)

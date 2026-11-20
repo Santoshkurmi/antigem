@@ -208,7 +208,7 @@ fun ChatScreen(
     val openCodeConnected by openCodeBackend.connectedProviders.collectAsState()
     val openCodeModelCount = openCodeBackend.availableModels.collectAsState().value.size
     var openOpenCodeSettings by remember { mutableStateOf(false) }
-    // the OpenCode page Settings opens on (Server & install for the Install button, Providers from the model picker)
+    // the OpenCode page Settings opens on (OpenCode CLI for the Install button, Providers from the model picker)
     var openCodeSettingsPage by remember { mutableStateOf<ai.antigem.ui.opencode.OpenCodeSettingsPage?>(null) }
     LaunchedEffect(Unit) {
         openCodeBackend.toasts.collect {
@@ -223,7 +223,7 @@ fun ChatScreen(
     val codexModelsError by codexBackend.modelsError.collectAsState()
     val codexLimits by codexBackend.rateLimits.collectAsState()
     var openCodexSettings by remember { mutableStateOf(false) }
-    // the Codex page Settings opens on (Server & install for the Install button, Account for Sign in, MCP for /mcp)
+    // the Codex page Settings opens on (Account & CLI for the Install button and Sign in, MCP for /mcp)
     var codexSettingsPage by remember { mutableStateOf<ai.antigem.ui.codex.CodexSettingsPage?>(null) }
     LaunchedEffect(Unit) {
         codexBackend.toasts.collect {
@@ -531,6 +531,12 @@ fun ChatScreen(
         (claudeState == ai.antigem.data.agent.claude.ClaudeStatus.SIGNED_OUT || claudeState == ai.antigem.data.agent.claude.ClaudeStatus.SIGNING_IN)
     ) ai.antigem.data.agent.claude.ClaudeStatus.READY else claudeState
     val claudeStatusError by viewModel.claudeAccount.statusError.collectAsState()
+    // a reply failed because the Claude sign-in expired while the app stayed open: once the re-check confirms the
+    // sign-out, show the sign-in (as after a fresh start) instead of only the error; custom-provider chats need no login
+    val claudeNeedsLogin by claudeBackend.needsLogin.collectAsState()
+    LaunchedEffect(claudeNeedsLogin, claudeChatState) {
+        if (claudeNeedsLogin && isClaudeChat && claudeChatState == ai.antigem.data.agent.claude.ClaudeStatus.SIGNED_OUT) showClaudeLogin = true
+    }
     val openClaudeSetup = {
         claudeSettingsPage = ai.antigem.ui.claude.ClaudeSettingsPage.ACCOUNT
         showSettingsDialog = true
@@ -545,6 +551,15 @@ fun ChatScreen(
         ai.antigem.ui.components.AppToastHelper.showToast("Checking Claude Code…", ai.antigem.ui.components.ChatToastType.INFO)
         viewModel.claudeAccount.refreshStatus()
     }
+    val agyCliInfo by ai.antigem.data.remote.BridgeInfo.agyCli.collectAsState()
+    val agyNotInstalled = ai.antigem.domain.model.AgentKind.AGY in enabledAgents &&
+        ai.antigem.ui.agents.agyNotInstalled(systemConnectionState, agyCliInfo)
+    // installs right away; Settings → Antigravity → Account & CLI shows the progress (the hub starts when it is done)
+    val installAgy = {
+        ai.antigem.data.remote.BridgeInfo.installAgy()
+        requestedSettingsSection = ai.antigem.ui.settings.SettingsSection.AGY_CLI
+        showSettingsDialog = true
+    }
     val agyEntry = if (ai.antigem.domain.model.AgentKind.AGY in enabledAgents) {
         ai.antigem.ui.agents.agyStatusEntry(
             state = systemConnectionState,
@@ -558,7 +573,9 @@ fun ChatScreen(
                 ai.antigem.ui.components.AppToastHelper.showToast("Reconnecting to Antigravity…", ai.antigem.ui.components.ChatToastType.INFO)
                 viewModel.retryConnections()
             },
-            onRestartServer = restartLocalServer
+            onRestartServer = restartLocalServer,
+            notInstalled = agyNotInstalled,
+            onInstall = installAgy
         )
     } else null
     val claudeEntry = if (ai.antigem.domain.model.AgentKind.CLAUDE in enabledAgents) {
@@ -597,7 +614,7 @@ fun ChatScreen(
             // installs right away; Settings → Codex shows the progress
             onSetup = {
                 codexBackend.startCliJob("install")
-                codexSettingsPage = ai.antigem.ui.codex.CodexSettingsPage.SERVER
+                codexSettingsPage = ai.antigem.ui.codex.CodexSettingsPage.ACCOUNT
                 showSettingsDialog = true
             },
             // starts the sign-in; Settings → Codex shows the code or the browser link
@@ -2156,6 +2173,17 @@ fun ChatScreen(
                                         secondaryLabel = if (codexState == ai.antigem.data.agent.codex.CodexState.CHECKING) null else "Server logs",
                                         onSecondary = { showLocalServerOutputDialog = true }
                                     )
+                                } else if (isAgyChat && agyNotInstalled) {
+                                    ai.antigem.ui.agents.AgentSetupPrompt(
+                                        agent = ai.antigem.domain.model.AgentKind.AGY,
+                                        title = "Antigravity is not installed",
+                                        message = agyEntry?.detail ?: "Antigravity (agy) is not installed yet.",
+                                        statusColor = agyEntry?.color,
+                                        actionLabel = agyEntry?.action?.label,
+                                        onAction = { agyEntry?.action?.onClick?.invoke() },
+                                        secondaryLabel = "Server logs",
+                                        onSecondary = { showLocalServerOutputDialog = true }
+                                    )
                                 } else when (if (isClaudeChat || isOpenCodeChat || isCodexChat) null else systemConnectionState.status) {
                                     ai.antigem.data.remote.SystemStatus.CHECKING_AUTH -> {
                                         ai.antigem.ui.components.NewChatCheckingAuthPromptCard()
@@ -2871,7 +2899,8 @@ fun ChatScreen(
                         ai.antigem.data.agent.claude.ClaudeStatus.NOT_INSTALLED -> "Claude Code is not installed. Set it up in Settings."
                         ai.antigem.data.agent.claude.ClaudeStatus.BRIDGE_OUTDATED -> "Restart the local server to use Claude Code."
                         else -> "The local server is offline. Start it to send messages."
-                    } else "Server is offline. Start the server to send messages.",
+                    } else if (agyNotInstalled) "Antigravity (agy) is not installed. Install it in Settings → Antigravity → Account & CLI."
+                    else "Server is offline. Start the server to send messages.",
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
@@ -3085,6 +3114,10 @@ fun ChatScreen(
             onLogout = {
                 viewModel.logout()
             },
+            agyStatus = agyEntry,
+            agyAuth = agyAuthInfo,
+            onAgySignOut = { viewModel.logoutFromAgyHub() },
+            onAgyCancelSignIn = { viewModel.cancelAgyLogin() },
             onToggleModelEnabled = { modelId, isEnabled ->
                 viewModel.setModelEnabled(modelId, isEnabled)
             },

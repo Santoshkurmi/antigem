@@ -358,6 +358,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             claudeBackend.onAppForegrounded()
             // the CLI may have been installed or signed in from a terminal meanwhile
             if (claudeAccount.state.value != ai.antigem.data.agent.claude.ClaudeStatus.READY) claudeAccount.refreshStatus()
+            // back after a while: the login may have expired meanwhile, which `auth status` alone does not notice
+            else if (System.currentTimeMillis() - claudeAccount.usageUpdatedAt.value > 30 * 60_000L)
+                claudeAccount.refreshUsage(force = true, recheckSignIn = true)
         }
         if (isOpenCodeEnabled) openCodeBackend.onAppForegrounded()
         if (isCodexEnabled) codexBackend.onAppForegrounded()

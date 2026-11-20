@@ -92,7 +92,7 @@ private fun toast(msg: String, ok: Boolean = true) =
 
 /** The pages of Settings → OpenCode (each opens from the OpenCode row list). */
 enum class OpenCodeSettingsPage(val title: String, val subtitle: String) {
-    SERVER("Server & install", "Install, update and restart OpenCode"),
+    SERVER("OpenCode CLI", "Install, update and restart OpenCode"),
     DEFAULTS("Permissions", "What OpenCode asks before acting, and the agent of new chats"),
     PROVIDERS("Custom providers", "Sign in or add an API key, or add any OpenAI- or Anthropic-compatible API manually"),
     MCP("MCP servers", "Tools OpenCode can call: presets and your own servers"),

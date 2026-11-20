@@ -80,7 +80,8 @@ func (m *Manager) handleStatus(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	running := m.proc != nil && m.proc.alive() && m.starting == nil
 	resp["starting"] = m.starting != nil
-	if m.startErr != nil && !running {
+	// "codex not found" from a start before it was installed is not true any more
+	if m.startErr != nil && !running && !errors.Is(m.startErr, errNotInstalled) {
 		resp["error"] = m.startErr.Error()
 	}
 	if running {

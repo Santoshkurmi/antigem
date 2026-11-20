@@ -250,10 +250,13 @@ func (m *Manager) ResolveBinary() (string, error) {
 		}
 	}
 	if m.termuxNative() {
-		return "", errors.New("codex not found (install it with `pkg install codex`, or pass --codex-bin)")
+		return "", fmt.Errorf("%w (install it with `pkg install codex`, or pass --codex-bin)", errNotInstalled)
 	}
-	return "", errors.New("codex not found (install it from the app, or pass --codex-bin)")
+	return "", fmt.Errorf("%w (install it from the app, or pass --codex-bin)", errNotInstalled)
 }
+
+// errNotInstalled: ResolveBinary found no codex. A start that failed with it is stale once codex is there.
+var errNotInstalled = errors.New("codex not found")
 
 // command builds the exec.Cmd for bin. The Termux package is a normal Android build (it relies on termux-exec,
 // which stays preloaded, to run /bin/bash); the official Linux build is static, so it runs in proot as is.

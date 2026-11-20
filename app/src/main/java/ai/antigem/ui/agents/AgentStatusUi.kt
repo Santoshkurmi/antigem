@@ -83,13 +83,18 @@ fun agyStatusEntry(
     onSignIn: () -> Unit,
     onCheckAuth: () -> Unit,
     onRetry: () -> Unit,
-    onRestartServer: () -> Unit
+    onRestartServer: () -> Unit,
+    /** The hub could not start because agy is not installed (see [agyNotInstalled]). */
+    notInstalled: Boolean = false,
+    onInstall: () -> Unit = {}
 ): AgentStatusEntry {
     val status = state.status
     fun entry(label: String, color: Color = status.dotColor, detail: String? = null, action: AgentStatusAction? = null, pending: Boolean = false) =
         AgentStatusEntry(AgentKind.AGY, label, color, detail, action, pending, isReady = status == SystemStatus.READY && !isAuthBusy)
     return when {
         serverRestarting -> entry("Restarting…", SystemStatus.STARTING.dotColor, "The local server is restarting.", pending = true)
+        // like Claude Code, OpenCode and Codex: an Install button, not the hub's "agy is not installed at <path>…"
+        notInstalled -> entry("Not installed", detail = "Antigravity (agy) is not installed yet. The app can install it for you.", action = AgentStatusAction("Install", onInstall))
         isAuthBusy -> entry("Signing in…", SystemStatus.ACQUIRING_CSRF.dotColor, "Finish signing in with Google in your browser.", AgentStatusAction("Check", onCheckAuth), pending = true)
         status == SystemStatus.OFFLINE && inStartupGrace -> entry("Starting…", SystemStatus.STARTING.dotColor, "Starting the local server.", pending = true)
         status == SystemStatus.OFFLINE && state is SystemConnectionState.Connected -> entry(
@@ -122,6 +127,14 @@ fun agyStatusEntry(
         )
     }
 }
+
+/**
+ * Antigravity cannot run because agy is missing: the hub stopped with the bridge's "agy is not installed at …" error, or
+ * the bridge said so when asked about the agy CLI.
+ */
+fun agyNotInstalled(state: SystemConnectionState, cli: ai.antigem.data.remote.BridgeInfo.AgyCli?): Boolean =
+    state.status == SystemStatus.ERROR &&
+        ((state as? SystemConnectionState.Connected)?.error?.startsWith("agy is not installed") == true || cli?.installed == false)
 
 fun claudeStatusEntry(
     state: ClaudeStatus,

@@ -204,3 +204,63 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Settings > Antigravity > Account & CLI: the Google account Antigravity uses, under the CLI card (like Claude Code's
+ * Account & CLI). [entry] is Antigravity's status (sign-in, signing in, errors) with its action; null: not known yet.
+ */
+@Composable
+fun AgyAccountCard(
+    entry: AgentStatusEntry?,
+    auth: ai.antigem.data.remote.AgyHubClient.AgyAuthInfo,
+    onSignOut: () -> Unit,
+    onCancelSignIn: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cli by BridgeInfo.agyCli.collectAsState()
+    val subtle = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Spacer(Modifier.height(6.dp))
+            when {
+                entry == null -> Text("Checking…", fontSize = 12.5.sp, color = subtle)
+                cli?.installed == false -> Text("Install agy above, then sign in here with Google.", fontSize = 12.5.sp, color = subtle)
+                entry.isReady -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(auth.displayName.ifBlank { auth.email.ifBlank { "Signed in" } }, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                        listOf(auth.email.takeIf { it != auth.displayName }.orEmpty(), auth.userTier.ifBlank { auth.planName })
+                            .filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotBlank() }
+                            ?.let { Text(it, fontSize = 12.sp, color = subtle) }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = onSignOut) { Text("Sign out", color = MaterialTheme.colorScheme.error) }
+                }
+                entry.isSignedOut -> {
+                    Text("Sign in with Google to chat with Antigravity.", fontSize = 12.5.sp, color = subtle)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { entry.action?.onClick?.invoke() }) { Text("Sign in with Google") }
+                }
+                // signing in: Check (the browser sign-in finished) or Cancel
+                entry.pending && entry.action != null -> {
+                    entry.detail?.let { Text(it, fontSize = 12.5.sp, color = subtle) }
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = entry.action.onClick) { Text(entry.action.label) }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = onCancelSignIn) { Text("Cancel") }
+                    }
+                }
+                else -> {
+                    Text(entry.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = entry.color)
+                    entry.detail?.let { Text(it, fontSize = 12.sp, color = subtle, maxLines = 4) }
+                    Text("Sign-in is available once Antigravity is running.", fontSize = 11.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+}

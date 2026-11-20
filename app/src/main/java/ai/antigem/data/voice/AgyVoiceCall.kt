@@ -212,7 +212,7 @@ object AgyVoiceCall {
                     fail(
                         s,
                         if (remote) "This hub has no voice calls. The server's agy must be 1.5 or newer, and a reverse proxy in front of the hub must pass /voice/ (WebSocket) to it."
-                        else "Voice calls need agy 1.5 or newer. Update agy in Settings → Antigravity CLI → Check for updates (the server restarts by itself).",
+                        else "Voice calls need agy 1.5 or newer. Update agy in Settings → Antigravity → Account & CLI → Check for updates (the server restarts by itself).",
                         Problem.UPDATE_AGY
                     )
                     return@launch

@@ -110,8 +110,11 @@ func (m *Manager) ResolveBinary() (string, error) {
 			return c, nil
 		}
 	}
-	return "", errors.New("opencode not found (install it with `curl -fsSL https://opencode.ai/v2/install | bash`, or pass --opencode-bin)")
+	return "", fmt.Errorf("%w (install it with `curl -fsSL https://opencode.ai/v2/install | bash`, or pass --opencode-bin)", errNotInstalled)
 }
+
+// errNotInstalled: ResolveBinary found no opencode. A start that failed with it is stale once opencode is there.
+var errNotInstalled = errors.New("opencode not found")
 
 // termuxPrefix is Termux's $PREFIX (…/files/usr), or "" when not on Android.
 func (m *Manager) termuxPrefix() string {
@@ -520,7 +523,8 @@ func (m *Manager) handleStatus(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	running := m.runningLocked() && m.starting == nil
 	starting := m.starting != nil
-	if m.startErr != nil && !running {
+	// "opencode not found" from a start before it was installed is not true any more
+	if m.startErr != nil && !running && !errors.Is(m.startErr, errNotInstalled) {
 		resp["error"] = m.startErr.Error()
 	}
 	if running {

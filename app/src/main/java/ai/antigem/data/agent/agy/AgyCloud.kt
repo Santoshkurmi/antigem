@@ -316,7 +316,7 @@ object AgyCloud {
             m.contains("PERMISSION_DENIED", true) && m.contains("terminal", true) -> "The cloud VM has no terminal for apps. Ask the agent to run the command."
             m.contains("PERMISSION_DENIED", true) || m.contains("not eligible", true) ->
                 "Cloud agents need Google AI Pro or Ultra on a personal Google account (and agy 1.5 or newer)."
-            m.contains("unimplemented", true) -> "This agy does not support cloud agents yet. Update agy in Settings → Antigravity CLI."
+            m.contains("unimplemented", true) -> "This agy does not support cloud agents yet. Update agy in Settings → Antigravity → Account & CLI."
             m.isBlank() -> "Something went wrong with the cloud agent."
             else -> m.substringAfterLast("): ").ifBlank { m }.take(300)
         }

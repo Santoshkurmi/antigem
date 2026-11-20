@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.DataUsage
-import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Psychology
@@ -65,20 +64,18 @@ import kotlinx.coroutines.launch
 
 /** The pages of Settings → Codex (each opens from the Codex row list). */
 enum class CodexSettingsPage(val title: String, val subtitle: String) {
-    ACCOUNT("Account", "Sign in with ChatGPT, or sign out"),
+    ACCOUNT("Account & CLI", "Sign in with ChatGPT, install, update and restart Codex"),
     USAGE("Usage limits", "How much of your plan's limits is used, and when they reset"),
     PERMISSIONS("Permissions", "What Codex asks before acting in new chats"),
     MCP("MCP servers", "Tools Codex can call: presets and your own servers"),
     PLUGINS("Plugins", "Install plugins from Codex' catalog or any GitHub marketplace"),
-    SKILLS("Skills", "Add skills from GitHub, update or remove them"),
-    SERVER("Server & install", "Install, update and restart Codex")
+    SKILLS("Skills", "Add skills from GitHub, update or remove them")
 }
 
 /** Settings → Codex: one row per page, each with its current state. */
 @Composable
 fun CodexSettingsGroup(backend: CodexChatBackend, cardBg: Color, onOpen: (CodexSettingsPage) -> Unit) {
     val state by backend.state.collectAsState()
-    val status by backend.status.collectAsState()
     val account by backend.account.collectAsState()
     val limits by backend.rateLimits.collectAsState()
     val mode by backend.prefs.permissionMode.collectAsState()
@@ -104,11 +101,6 @@ fun CodexSettingsGroup(backend: CodexChatBackend, cardBg: Color, onOpen: (CodexS
                 row(CodexSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" }),
                 row(CodexSettingsPage.PLUGINS, Icons.Outlined.Extension),
                 row(CodexSettingsPage.SKILLS, Icons.Outlined.Psychology)
-            ),
-            listOf(
-                row(CodexSettingsPage.SERVER, Icons.Outlined.Dns,
-                    if (state == CodexState.NOT_INSTALLED) state.label else status?.version ?: state.label,
-                    if (state == CodexState.NOT_INSTALLED || state == CodexState.ERROR || state == CodexState.OFFLINE) MaterialTheme.colorScheme.error else CodexAccent)
             )
         )
     )
@@ -170,6 +162,88 @@ fun CodexSettingsScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // ---- CLI (install, update, restart)
+        if (page == CodexSettingsPage.ACCOUNT) ClaudeCard {
+            Text("Codex CLI", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(
+                listOfNotNull(status?.version?.let { "Codex $it" }, if (status?.running == true) "running" else if (status?.installed == true) "starts when needed" else null)
+                    .joinToString(" · ").ifBlank { state.label },
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            status?.binary?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(it, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+            }
+            if (state == CodexState.NOT_INSTALLED) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (status?.termux_package == true) "Codex is not installed on this phone. Install it here (the Termux package: pkg install codex)."
+                    else "Codex is not installed on the server. Install it here: the app downloads OpenAI's official Linux build into ~/.local/bin.",
+                    fontSize = 12.5.sp, lineHeight = 17.sp
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (state == CodexState.NOT_INSTALLED) {
+                    Button(
+                        onClick = { backend.startCliJob("install") },
+                        enabled = !jobRunning,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CodexAccent, contentColor = Color.White)
+                    ) { Text(if (jobRunning) "Installing…" else "Install Codex") }
+                } else {
+                    OutlinedButton(onClick = { backend.startCliJob("update") }, enabled = !jobRunning, shape = RoundedCornerShape(12.dp)) {
+                        Text(if (jobRunning) "Checking…" else "Check for updates")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            restarting = true
+                            backend.restartServer { err ->
+                                restarting = false
+                                ai.antigem.ui.components.AppToastHelper.showToast(
+                                    err?.let { "Restart failed: $it" } ?: "Codex restarted",
+                                    if (err == null) ai.antigem.ui.components.ChatToastType.SUCCESS else ai.antigem.ui.components.ChatToastType.ERROR
+                                )
+                            }
+                        },
+                        enabled = !restarting && !jobRunning,
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(if (restarting) "Restarting…" else "Restart") }
+                }
+                if (jobRunning || restarting) {
+                    Spacer(Modifier.width(10.dp))
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = CodexAccent)
+                }
+            }
+            job?.let { j ->
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    (if (j.kind == "update") "Update" else "Install") + ": " + when {
+                        j.running -> "running…"
+                        j.exit_code == 0 -> "done"
+                        else -> "failed"
+                    },
+                    fontSize = 12.sp,
+                    color = if (!j.running && j.exit_code != 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Text(
+                    j.log.trim().lines().takeLast(14).joinToString("\n"),
+                    fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, lineHeight = 14.sp,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)).padding(8.dp)
+                )
+            }
+            Text(
+                "Restarting ends replies that are running. Codex keeps its chats and sign-in in ~/.codex on the server.",
+                fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 8.dp)
+            )
+            status?.error?.takeIf { state != CodexState.READY }?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 5, overflow = TextOverflow.Ellipsis)
+            }
+        }
+
         // ---- account
         if (page == CodexSettingsPage.ACCOUNT) ClaudeCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -290,88 +364,6 @@ fun CodexSettingsScreen(
                     onClick = { backend.setPermissionMode(m) }
                 )
                 Spacer(Modifier.height(6.dp))
-            }
-        }
-
-        // ---- server
-        if (page == CodexSettingsPage.SERVER) ClaudeCard {
-            Text("Server & install", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(
-                listOfNotNull(status?.version?.let { "Codex $it" }, if (status?.running == true) "running" else if (status?.installed == true) "starts when needed" else null)
-                    .joinToString(" · ").ifBlank { state.label },
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            status?.binary?.let {
-                Spacer(Modifier.height(4.dp))
-                Text(it, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-            }
-            if (state == CodexState.NOT_INSTALLED) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    if (status?.termux_package == true) "Codex is not installed on this phone. Install it here (the Termux package: pkg install codex)."
-                    else "Codex is not installed on the server. Install it here: the app downloads OpenAI's official Linux build into ~/.local/bin.",
-                    fontSize = 12.5.sp, lineHeight = 17.sp
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state == CodexState.NOT_INSTALLED) {
-                    Button(
-                        onClick = { backend.startCliJob("install") },
-                        enabled = !jobRunning,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CodexAccent, contentColor = Color.White)
-                    ) { Text(if (jobRunning) "Installing…" else "Install Codex") }
-                } else {
-                    OutlinedButton(onClick = { backend.startCliJob("update") }, enabled = !jobRunning, shape = RoundedCornerShape(12.dp)) {
-                        Text(if (jobRunning) "Checking…" else "Check for updates")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedButton(
-                        onClick = {
-                            restarting = true
-                            backend.restartServer { err ->
-                                restarting = false
-                                ai.antigem.ui.components.AppToastHelper.showToast(
-                                    err?.let { "Restart failed: $it" } ?: "Codex restarted",
-                                    if (err == null) ai.antigem.ui.components.ChatToastType.SUCCESS else ai.antigem.ui.components.ChatToastType.ERROR
-                                )
-                            }
-                        },
-                        enabled = !restarting && !jobRunning,
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text(if (restarting) "Restarting…" else "Restart") }
-                }
-                if (jobRunning || restarting) {
-                    Spacer(Modifier.width(10.dp))
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = CodexAccent)
-                }
-            }
-            job?.let { j ->
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    (if (j.kind == "update") "Update" else "Install") + ": " + when {
-                        j.running -> "running…"
-                        j.exit_code == 0 -> "done"
-                        else -> "failed"
-                    },
-                    fontSize = 12.sp,
-                    color = if (!j.running && j.exit_code != 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-                Text(
-                    j.log.trim().lines().takeLast(14).joinToString("\n"),
-                    fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, lineHeight = 14.sp,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)).padding(8.dp)
-                )
-            }
-            Text(
-                "Restarting ends replies that are running. Codex keeps its chats and sign-in in ~/.codex on the server.",
-                fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 8.dp)
-            )
-            status?.error?.takeIf { state != CodexState.READY }?.let {
-                Spacer(Modifier.height(6.dp))
-                Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 5, overflow = TextOverflow.Ellipsis)
             }
         }
     }

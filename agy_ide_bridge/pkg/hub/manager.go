@@ -461,7 +461,7 @@ func (m *HubManager) Start() error {
 	}
 	// the app names the agy to use even before it is installed (Settings → Antigravity CLI → Install)
 	if fi, statErr := os.Stat(m.AgyBinPath); notInstalled || statErr != nil || fi.IsDir() {
-		err := fmt.Errorf("agy is not installed at %s (install it in the app: Settings → Antigravity CLI)", m.AgyBinPath)
+		err := fmt.Errorf("agy is not installed at %s (install it in the app: Settings → Antigravity → Account & CLI)", m.AgyBinPath)
 		m.setStatusLocked(HubStatusError, err.Error())
 		m.mu.Unlock()
 		return err

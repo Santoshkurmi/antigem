@@ -327,9 +327,10 @@ fun ClaudeModelSheet(
                 },
                 refreshing = refreshingModels || refreshingUsage,
                 onRefresh = {
-                    // models and the plan limits shown above them (5h / 7d)
+                    // models and the plan limits shown above them (5h / 7d), then the sign-in: Claude lists its models
+                    // signed out too, so without it an expired login still showed them as usable
                     backend.refreshInfo(force = true)
-                    account.refreshUsage(force = true)
+                    account.refreshUsage(force = true, recheckSignIn = true)
                 },
                 actions = if (quotaGroups.size > 1 && rows.isNotEmpty()) {
                     { ai.antigem.ui.models.EditGroupsAction(editingGroups, ClaudeAccent) { editingGroups = !editingGroups } }
