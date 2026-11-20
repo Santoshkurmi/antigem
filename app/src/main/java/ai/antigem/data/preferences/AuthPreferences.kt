@@ -96,6 +96,8 @@ class AuthPreferences(private val context: Context) {
         val AGY_BINARY_PATH = stringPreferencesKey("agy_binary_path")
         val CLAUDE_BINARY_PATH = stringPreferencesKey("claude_binary_path")
         val HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_terminal_launcher_onboarding")
+        val IS_GEMMY_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_gemmy_enabled")
+        val HAS_SEEN_GEMMY_INTRO = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_gemmy_intro")
         val TERMINAL_LAUNCHER_STYLE = stringPreferencesKey("terminal_launcher_style") // "ANTITERM" or "TERMUX"
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
 
@@ -1136,6 +1138,20 @@ class AuthPreferences(private val context: Context) {
 
     suspend fun setHasSeenTerminalLauncherOnboarding(seen: Boolean) {
         context.dataStore.edit { it[HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING] = seen }
+    }
+
+    /** Gemmy, the floating cartoon buddy: on by default (Settings → Appearance). */
+    val isGemmyEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_GEMMY_ENABLED] ?: true }
+
+    suspend fun setGemmyEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[IS_GEMMY_ENABLED] = enabled }
+    }
+
+    /** The one-time "Meet Gemmy" dialog was answered; Gemmy only appears after that. */
+    val hasSeenGemmyIntro: Flow<Boolean> = context.dataStore.data.map { it[HAS_SEEN_GEMMY_INTRO] ?: false }
+
+    suspend fun setHasSeenGemmyIntro(seen: Boolean) {
+        context.dataStore.edit { it[HAS_SEEN_GEMMY_INTRO] = seen }
     }
 
     val terminalLauncherStyle: Flow<String> = context.dataStore.data.map {

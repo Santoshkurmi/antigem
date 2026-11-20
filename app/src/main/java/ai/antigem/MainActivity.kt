@@ -658,6 +658,13 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
+                                // Gemmy: floating cartoon buddy (drag/fling, tap, double-tap, long-press menu; reacts to the agent working).
+                                // Shown after its one-time intro was answered and while on in Settings → Appearance.
+                                ai.antigem.ui.components.GemmyOverlay(
+                                    prefs = chatViewModel.authPreferences,
+                                    agentWorking = chatViewModel.isCurrentChatActivelyRunning
+                                )
+
                                 // Global Network Inspector Dialog
                                 if (showNetworkInspectorDialog) {
                                     ai.antigem.ui.components.NetworkInspectorDialog(
