@@ -14,7 +14,8 @@ object PromptExpansion {
     private val TOKEN = Regex("(?<=^|\\s)/(plu:[A-Za-z0-9_-]+(?::[A-Za-z0-9._-]*)?|[A-Za-z0-9][A-Za-z0-9_-]{0,47})(?=\\s|$)")
     private val BLOCK = Regex("<$TAG command=\"([^\"]*)\">[\\s\\S]*?</$TAG>")
 
-    fun expand(text: String): String {
+    /** [jarvis]: the message goes to a Jarvis chat (the EGM commands then tell Jarvis to run the reviewers as task chats). */
+    fun expand(text: String, jarvis: Boolean = false): String {
         if (!text.contains('/')) return text
         val out = StringBuilder()
         var last = 0
@@ -29,6 +30,14 @@ object PromptExpansion {
                 out.append(text, last, match.range.first).append(block(if (skill == null) "/plu:${parts[0]}" else match.value, guide))
                 last = match.range.last + 1
                 continue
+            }
+            // Settings → Agents → EGM: /egm, /egm-lite and /egm-review take the rest of the message as the task
+            val egm = ai.antigem.data.egm.EgmManager.command(token)
+            if (egm != null) {
+                val args = text.substring(match.range.last + 1).trim()
+                out.append(text, last, match.range.first)
+                out.append(block(if (args.isEmpty()) match.value else "${match.value} $args", ai.antigem.data.egm.EgmManager.expansion(egm, args, jarvis)))
+                return out.toString()
             }
             val command = CustomSlashCommands.find(token) ?: continue
             out.append(text, last, match.range.first)
@@ -53,7 +62,7 @@ object PromptExpansion {
         return TOKEN.findAll(text).filter { match ->
             val token = match.groupValues[1]
             if (token.startsWith("plu:")) enabledPlugin(token.removePrefix("plu:").substringBefore(':')) != null
-            else CustomSlashCommands.find(token) != null
+            else ai.antigem.data.egm.EgmManager.command(token) != null || CustomSlashCommands.find(token) != null
         }.map { it.range }.toList()
     }
 
@@ -141,9 +150,10 @@ object PromptExpansion {
         return if (query.isBlank()) listOf(whole) + skills else skills
     }
 
-    /** The `/plu` entry point and the user's custom commands, shown in the normal `/` list. */
+    /** The `/plu` entry point, the EGM commands (when installed) and the user's custom commands, shown in the normal `/` list. */
     fun baseSlashItems(): List<SlashCommandItem> =
-        listOf(SlashCommandItem("plu", "/plu:", "Use a custom AntiGem plugin and its skills", "plugin")) + CustomSlashCommands.slashItems()
+        listOf(SlashCommandItem("plu", "/plu:", "Use a custom AntiGem plugin and its skills", "plugin")) +
+            ai.antigem.data.egm.EgmManager.slashItems() + CustomSlashCommands.slashItems()
 
     private fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
     private fun unescape(value: String) = value.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")

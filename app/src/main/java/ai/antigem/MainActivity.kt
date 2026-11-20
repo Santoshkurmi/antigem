@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
         ai.antigem.data.jarvis.JarvisPreferences.init(this)
         ai.antigem.data.context.GlobalContext.init(this)
         ai.antigem.data.memory.AgentMemory.init(this)
+        ai.antigem.data.egm.EgmManager.init(this)
         ai.antigem.data.remote.inspector.NetworkInspectorManager.isEnabled =
             chatViewModel.authPreferences.getNetworkInspectorEnabledSync()
         ai.antigem.data.remote.inspector.NetworkInspectorManager.isFloatingBubbleEnabled =

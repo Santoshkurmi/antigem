@@ -116,6 +116,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     GLOBAL_CONTEXT("Global context", "What every chat is told about this app, and your own instructions"),
     AGENT_MEMORY("Agent memory & history", "Memories every agent keeps across chats, and past chats they can look up"),
     AGENT_HISTORY("Saved chats", "The chat history the agents can look up: read, edit or remove it"),
+    EGM("EGM · Elephant-Goldfish", "Plan a design and have fresh reviewers attack it before any code (/egm)"),
     JARVIS("Jarvis", "Hands-free voice control of the whole app"),
     JARVIS_AGENT("Jarvis · Agent", "Which agent and model Jarvis talks to"),
     JARVIS_PERSONALITY("Jarvis · Personality & you", "How Jarvis speaks, and what it should know about you"),
@@ -164,7 +165,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         CODEX_PAGE -> CODEX
         TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
         REA_GROUPS -> REA
-        GLOBAL_CONTEXT, AGENT_MEMORY -> AGENTS
+        GLOBAL_CONTEXT, AGENT_MEMORY, EGM -> AGENTS
         AGENT_HISTORY -> AGENT_MEMORY
         CHANGELOG -> ABOUT
         else -> if (jarvisPage != null) JARVIS else MAIN
@@ -641,9 +642,11 @@ fun SettingsDialog(
                         isApplying = isApplyingAgents,
                         onApply = onApplyAgents,
                         onOpenGlobalContext = { currentSection = SettingsSection.GLOBAL_CONTEXT },
-                        onOpenAgentMemory = { currentSection = SettingsSection.AGENT_MEMORY }
+                        onOpenAgentMemory = { currentSection = SettingsSection.AGENT_MEMORY },
+                        onOpenEgm = { currentSection = SettingsSection.EGM }
                     )
                     SettingsSection.GLOBAL_CONTEXT -> GlobalContextScreen()
+                    SettingsSection.EGM -> EgmScreen(cardBg = cardBg, cardBorder = cardBorder)
                     SettingsSection.AGENT_MEMORY -> AgentMemoryScreen(onOpenHistory = { currentSection = SettingsSection.AGENT_HISTORY })
                     SettingsSection.AGENT_HISTORY -> AgentHistoryScreen()
                     SettingsSection.STEM_RENDERING -> StemRenderingScreen()

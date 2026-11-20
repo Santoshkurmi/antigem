@@ -1286,6 +1286,14 @@ object JarvisController {
         return wrapManagerMessage(chatId, text)
     }
 
+    /**
+     * Whether a message typed into [chatId] on screen goes to Jarvis (the voice Jarvis chat or a Jarvis text chat), as
+     * [interceptScreenMessage] decides. Slash commands that work differently for Jarvis (EGM) ask before expanding.
+     */
+    fun isJarvisTarget(chatId: String?): Boolean =
+        attached && JarvisPreferences.enabled.value && !chatId.isNullOrBlank() &&
+            (chatId == JarvisPreferences.currentChatId.value || JarvisPreferences.isJarvisChat(chatId) || JarvisManagers.isTextManager(chatId))
+
     /** The user's message to a Jarvis text chat with its hidden note in front. */
     fun wrapManagerMessage(chatId: String, text: String): String {
         val m = JarvisManagers.of(chatId)

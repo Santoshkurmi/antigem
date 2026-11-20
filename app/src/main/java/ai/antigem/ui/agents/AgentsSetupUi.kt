@@ -171,7 +171,8 @@ fun AgentsSettingsPage(
     onApply: (Set<AgentKind>) -> Unit,
     modifier: Modifier = Modifier,
     onOpenGlobalContext: (() -> Unit)? = null,
-    onOpenAgentMemory: (() -> Unit)? = null
+    onOpenAgentMemory: (() -> Unit)? = null,
+    onOpenEgm: (() -> Unit)? = null
 ) {
     var selected by remember(enabled) { mutableStateOf(enabled) }
     var confirm by remember { mutableStateOf(false) }
@@ -207,6 +208,10 @@ fun AgentsSettingsPage(
         if (onOpenAgentMemory != null) {
             Spacer(Modifier.height(12.dp))
             ai.antigem.ui.settings.AgentMemoryEntryRow(onClick = onOpenAgentMemory)
+        }
+        if (onOpenEgm != null) {
+            Spacer(Modifier.height(12.dp))
+            ai.antigem.ui.settings.EgmEntryRow(onClick = onOpenEgm)
         }
         Spacer(Modifier.height(12.dp))
         val vibrateOnDone by ai.antigem.data.agent.ChatCompletionMonitor.vibrate.collectAsState()
