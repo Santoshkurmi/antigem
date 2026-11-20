@@ -65,8 +65,8 @@ fun LocalToolsInstallDialog(
         }
     }
 
-    // 0: Auto GitHub, 1: Direct URL, 2: Local ZIP File; no full rootfs for this CPU (x86_64 for now): Minimal
-    var selectedSourceType by remember { mutableStateOf(if (LocalEnvironmentManager.HAS_FULL_ROOTFS) 0 else 1) }
+    // 0: Auto GitHub, 1: Direct URL, 2: Local ZIP File
+    var selectedSourceType by remember { mutableStateOf(0) }
     var directUrlText by remember { mutableStateOf("") }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -301,8 +301,8 @@ fun LocalToolsInstallDialog(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Option 1: Auto Download from GitHub (Recommended); none for this CPU yet on x86_64
-                            if (LocalEnvironmentManager.HAS_FULL_ROOTFS) Surface(
+                            // Option 1: Auto Download from GitHub (Recommended)
+                            Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
                                 border = BorderStroke(
@@ -342,7 +342,7 @@ fun LocalToolsInstallDialog(
                                             }
                                         }
                                         Text(
-                                            text = "Auto-downloads verified AntiGem rootfs (~350MB) with preconfigured tools and environment",
+                                            text = "Auto-downloads verified AntiGem rootfs (${LocalEnvironmentManager.ROOTFS_SIZE_LABEL}) with preconfigured tools and environment",
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )

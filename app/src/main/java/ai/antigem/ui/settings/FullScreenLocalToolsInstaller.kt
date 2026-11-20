@@ -73,8 +73,8 @@ fun FullScreenLocalToolsInstaller(
         }
     }
 
-    // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File; no full rootfs for this CPU (x86_64 for now): Minimal
-    var selectedSourceType by remember { mutableStateOf(if (LocalEnvironmentManager.HAS_FULL_ROOTFS) 0 else 1) }
+    // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File
+    var selectedSourceType by remember { mutableStateOf(0) }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
     var showLogs by remember { mutableStateOf(false) }
     var selectedMirror by remember { mutableStateOf(RootfsMirror.GITHUB) }
@@ -252,7 +252,7 @@ fun FullScreenLocalToolsInstaller(
                     is LocalInstallerState.Idle -> {
                         PrimaryButton(
                             text = when (selectedSourceType) {
-                                0 -> "Install (~350 MB)"
+                                0 -> "Install (${LocalEnvironmentManager.ROOTFS_SIZE_LABEL})"
                                 1 -> "Install minimal (~33 MB)"
                                 else -> if (selectedFileUri != null) "Install from ZIP" else "Choose a ZIP file"
                             },
@@ -424,8 +424,11 @@ private fun InstallerHero(state: LocalInstallerState, mirrorChoice: Boolean = fa
     Text(
         text = when (state) {
             is LocalInstallerState.Success -> "The shell, core tools and AGY tools are installed."
-            is LocalInstallerState.Error -> if (mirrorChoice) {
+            is LocalInstallerState.Error -> if (mirrorChoice && LocalEnvironmentManager.ROOTFS_MIRRORS.size > 1) {
                 "Try again, switch to the other download site, or open its page (↗), download the zip and install it with \"From a ZIP file\"."
+            } else if (mirrorChoice) {
+                // one download site for this CPU (x86_64: GitHub)
+                "Try again, or open the download page (↗), download the zip and install it with \"From a ZIP file\"."
             } else {
                 "You can try again, or install from a ZIP file instead."
             }
@@ -452,10 +455,10 @@ private fun SourcePicker(
     onPickZip: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (LocalEnvironmentManager.HAS_FULL_ROOTFS) SourceOption(
+        SourceOption(
             icon = Icons.Outlined.CloudDownload,
             title = "Full environment",
-            tag = "Recommended · ~350 MB",
+            tag = "Recommended · ${LocalEnvironmentManager.ROOTFS_SIZE_LABEL}",
             description = "Verified rootfs with the tools and environment preconfigured.",
             selected = selected == 0,
             onClick = { onSelect(0) }
@@ -516,7 +519,7 @@ private fun SourcePicker(
 private fun MirrorChooser(selected: RootfsMirror, onSelect: (RootfsMirror) -> Unit) {
     val uriHandler = LocalUriHandler.current
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        RootfsMirror.values().forEach { mirror ->
+        LocalEnvironmentManager.ROOTFS_MIRRORS.forEach { mirror ->
             val isSelected = mirror == selected
             Surface(
                 onClick = { onSelect(mirror) },

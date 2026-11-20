@@ -70,29 +70,27 @@ object LocalEnvironmentManager {
     // Minimum 10 MB required for a real Termux bootstrap archive
     private const val MIN_BOOTSTRAP_SIZE_BYTES = 10 * 1024 * 1024L
 
-    const val HARDCODED_ROOTFS_URL = "https://github.com/Santoshkurmi/antigem/releases/download/rootfs-v2/bootrapz_2026-11-19.zip"
+    /** The full rootfs is per CPU: arm64 (GitHub + Hugging Face) and x86_64 (GitHub only for now), both in rootfs-v2. */
+    private val IS_X86_64: Boolean = ai.antigem.BuildConfig.TARGET_ABI == "x86_64"
     const val HARDCODED_ROOTFS_TAG = "rootfs-v2"
-    const val HARDCODED_ROOTFS_ASSET = "bootrapz_2026-11-19.zip"
-    const val HARDCODED_ROOTFS_SIZE_BYTES = 400_054_861L
-    /**
-     * Whether "Full environment" exists for this build's CPU. The rootfs above is arm64; until an x86_64 one is hosted
-     * the x86_64 build installs the Minimal Termux base instead (its installers hide the option).
-     */
-    val HAS_FULL_ROOTFS: Boolean = ai.antigem.BuildConfig.TARGET_ABI != "x86_64"
+    val HARDCODED_ROOTFS_ASSET: String = if (IS_X86_64) "bootrapz_x86_64_2026-11-20.zip" else "bootrapz_2026-11-19.zip"
+    val HARDCODED_ROOTFS_URL: String = "https://github.com/Santoshkurmi/antigem/releases/download/$HARDCODED_ROOTFS_TAG/$HARDCODED_ROOTFS_ASSET"
+    val HARDCODED_ROOTFS_SIZE_BYTES: Long = if (IS_X86_64) 419_473_812L else 400_054_861L
+    /** The download size the installers show for "Full environment". */
+    val ROOTFS_SIZE_LABEL: String = if (IS_X86_64) "~400 MB" else "~350 MB"
+    /** The mirrors that host this CPU's rootfs: the x86_64 one is only on GitHub. */
+    val ROOTFS_MIRRORS: List<RootfsMirror> = if (IS_X86_64) listOf(RootfsMirror.GITHUB) else RootfsMirror.values().toList()
     const val HUGGINGFACE_ROOTFS_URL = "https://huggingface.co/datasets/santoshkurmi/rootfs-v2/resolve/main/bootrapz_2026-11-19.zip"
     // pages where the user can download the same zip by hand (then install it with "From a ZIP file")
     const val GITHUB_ROOTFS_PAGE = "https://github.com/Santoshkurmi/antigem/releases/tag/rootfs-v2"
     const val HUGGINGFACE_ROOTFS_PAGE = "https://huggingface.co/datasets/santoshkurmi/rootfs-v2/tree/main"
 
-    fun rootfsUrl(mirror: RootfsMirror): String = when (mirror) {
-        RootfsMirror.GITHUB -> HARDCODED_ROOTFS_URL
-        RootfsMirror.HUGGING_FACE -> HUGGINGFACE_ROOTFS_URL
-    }
+    // a mirror without this CPU's rootfs (Hugging Face on x86_64) falls back to GitHub
+    private fun useHuggingFace(mirror: RootfsMirror) = mirror == RootfsMirror.HUGGING_FACE && mirror in ROOTFS_MIRRORS
 
-    fun rootfsPage(mirror: RootfsMirror): String = when (mirror) {
-        RootfsMirror.GITHUB -> GITHUB_ROOTFS_PAGE
-        RootfsMirror.HUGGING_FACE -> HUGGINGFACE_ROOTFS_PAGE
-    }
+    fun rootfsUrl(mirror: RootfsMirror): String = if (useHuggingFace(mirror)) HUGGINGFACE_ROOTFS_URL else HARDCODED_ROOTFS_URL
+
+    fun rootfsPage(mirror: RootfsMirror): String = if (useHuggingFace(mirror)) HUGGINGFACE_ROOTFS_PAGE else GITHUB_ROOTFS_PAGE
 
     private const val NOTIFICATION_CHANNEL_ID = "antigem_bootstrap_install"
     private const val NOTIFICATION_ID = 4096
@@ -599,7 +597,7 @@ object LocalEnvironmentManager {
             assetName = HARDCODED_ROOTFS_ASSET,
             arch = getBootstrapArch(),
             sizeBytes = HARDCODED_ROOTFS_SIZE_BYTES,
-            sizeFormatted = "~350 MB",
+            sizeFormatted = ROOTFS_SIZE_LABEL,
             packageName = context.packageName
         )
         _installerState.value = LocalInstallerState.AwaitingConfirmation(info)
@@ -699,8 +697,7 @@ object LocalEnvironmentManager {
         authPreferences: AuthPreferences,
         requestedSource: BootstrapSource = BootstrapSource.Auto
     ): Boolean = withContext(Dispatchers.IO) {
-        // no full rootfs for this CPU (x86_64 for now): the Minimal Termux base
-        val source = if (requestedSource is BootstrapSource.Auto && !HAS_FULL_ROOTFS) BootstrapSource.BaseMinimum else requestedSource
+        val source = requestedSource
         val appContext = context.applicationContext
         val prefixDir = getPrefixDir(appContext)
         val binDir = getBinDir(appContext)
