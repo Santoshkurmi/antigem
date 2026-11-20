@@ -847,7 +847,9 @@ class AgyChatBackend(
                             for (delId in update.removedIds) {
                                 if (delId != activeId || _messages.value.isEmpty()) {
                                     currentMap.remove(delId)
-                                    knownDaemonCascadeIds.remove(delId)
+                                    // the open chat stays known: one with only a voice call has no steps, so the hub lists
+                                    // it as empty, but it exists there and starting it again fails ("already exists")
+                                    if (delId != activeId) knownDaemonCascadeIds.remove(delId)
                                 }
                             }
 
@@ -1130,6 +1132,9 @@ class AgyChatBackend(
         _currentConversation.value = conv.copy(cloudProjectId = projectId, workspaceUri = if (projectId != null) "" else conv.workspaceUri)
     }
 
+    /** startCascade failed only because the hub already has a chat with that id. */
+    private fun isAlreadyOnHub(err: String?): Boolean = err?.contains("already exists", ignoreCase = true) == true
+
     /** The `Model` number of the model picked for the chat on screen (0 = not known), for voice calls. */
     fun planModelNumber(): Int = runCatching {
         exa.language_server_pb.Model.valueOf(AgyHubClient.resolveModelEnum(_selectedModelId.value)).value
@@ -1151,7 +1156,8 @@ class AgyChatBackend(
         if (!onDaemon) {
             val modelEnum = AgyHubClient.resolveModelEnum(_selectedModelId.value)
             val ws = conv.workspaceUri.takeIf { it.isNotBlank() }?.let { if (it.startsWith("file://")) it else "file://$it" } ?: ""
-            agyHubClient.startCascade(cascadeId = id, modelEnum = modelEnum, workspaceUri = ws, cloudProjectId = conv.cloudProjectId).getOrThrow()
+            agyHubClient.startCascade(cascadeId = id, modelEnum = modelEnum, workspaceUri = ws, cloudProjectId = conv.cloudProjectId)
+                .exceptionOrNull()?.let { if (!isAlreadyOnHub(it.message)) throw it }
             knownDaemonCascadeIds.add(id)
             // no longer an unsaved "New Chat": the live stream may start (the hub names the chat later)
             val named = conv.copy(title = if (conv.title == "New Chat") "Voice chat" else conv.title, workspaceUri = ws)
@@ -2021,7 +2027,8 @@ class AgyChatBackend(
                         hubUrl = hubUrl,
                         cloudProjectId = conv.cloudProjectId
                     )
-                    if (startRes.isFailure) {
+                    // already on the hub (e.g. a voice call started it): nothing to start, carry on and send
+                    if (startRes.isFailure && !isAlreadyOnHub(startRes.exceptionOrNull()?.message)) {
                         val rawErr = startRes.exceptionOrNull()?.message ?: "Failed to start conversation on daemon"
                         val err = if (conv.isCloud) AgyCloud.friendlyError(rawErr) else rawErr
                         Log.e("ChatViewModel", "startCascade error: $rawErr")
