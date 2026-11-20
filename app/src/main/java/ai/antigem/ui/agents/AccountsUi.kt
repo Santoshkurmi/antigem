@@ -1,7 +1,5 @@
 package ai.antigem.ui.agents
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -180,6 +177,7 @@ fun AccountsDialog(
     claudeStatus: ClaudeCliStatus?,
     onAgySignOut: () -> Unit,
     onAgyCancelSignIn: () -> Unit,
+    onAgySettings: () -> Unit = {},
     onClaudeSignOut: () -> Unit,
     onClaudeSettings: () -> Unit,
     onDismiss: () -> Unit,
@@ -194,7 +192,6 @@ fun AccountsDialog(
     onCodexSignOut: () -> Unit = {},
     onCodexSettings: () -> Unit = {}
 ) {
-    val context = LocalContext.current
     // `agy --version`, asked from the bridge (this phone's or the server's) each time the dialog opens
     val agyCli by ai.antigem.data.remote.BridgeInfo.agyCli.collectAsState()
     LaunchedEffect(Unit) { ai.antigem.data.remote.BridgeInfo.refreshAgyCli() }
@@ -215,11 +212,6 @@ fun AccountsDialog(
                         Icon(Icons.Outlined.Close, "Close", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
-                Text(
-                    "Each agent signs in on its own.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                )
                 Spacer(Modifier.height(14.dp))
 
                 agy?.let { entry ->
@@ -227,7 +219,7 @@ fun AccountsDialog(
                         entry = entry,
                         avatar = { AccountAvatar(AgentKind.AGY, entry, agyAuth.displayName.firstOrNull(), agyAuth.profilePictureUrl?.takeIf { it.isNotBlank() }, size = 44.dp) },
                         title = if (entry.isReady) agyAuth.displayName.ifBlank { AgentKind.AGY.label() } else AgentKind.AGY.label(),
-                        subtitle = if (entry.isReady) agyAuth.email.ifBlank { null } else entry.detail,
+                        subtitle = agyAuth.email.ifBlank { null }?.takeIf { entry.isReady },
                         facts = if (entry.isReady) listOfNotNull(
                             agyAuth.userTier.ifBlank { agyAuth.planName }.ifBlank { null },
                             agyVersion?.let { "CLI $it" }
@@ -235,11 +227,6 @@ fun AccountsDialog(
                     ) {
                         when {
                             entry.isReady -> {
-                                if (agyAuth.upgradeSubscriptionUri.isNotBlank()) {
-                                    SectionButton(agyAuth.upgradeSubscriptionText.ifBlank { "Manage plan" }, Icons.AutoMirrored.Outlined.OpenInNew) {
-                                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(agyAuth.upgradeSubscriptionUri))) }
-                                    }
-                                }
                                 SectionButton("Sign out", Icons.AutoMirrored.Outlined.Logout, danger = true) {
                                     onAgySignOut()
                                     onDismiss()
@@ -256,6 +243,10 @@ fun AccountsDialog(
                                 }
                             }
                         }
+                        SectionButton("Settings", Icons.Outlined.Settings) {
+                            onAgySettings()
+                            onDismiss()
+                        }
                     }
                 }
 
@@ -267,18 +258,13 @@ fun AccountsDialog(
                         entry = entry,
                         avatar = { AccountAvatar(AgentKind.CLAUDE, entry, auth?.email?.firstOrNull(), size = 44.dp) },
                         title = AgentKind.CLAUDE.label(),
-                        subtitle = if (entry.isReady) auth?.email else entry.detail,
+                        subtitle = if (entry.isReady) auth?.email else null,
                         facts = if (entry.isReady) listOfNotNull(
                             auth?.subscriptionType?.let { claudePlanLabel(it) },
-                            auth?.authMethod?.let { claudeAuthMethodLabel(it) },
                             claudeStatus?.version?.substringBefore(" ")?.let { "CLI $it" }
                         ) else listOfNotNull(claudeStatus?.version?.substringBefore(" ")?.let { "CLI $it" })
                     ) {
                         if (entry.isReady) {
-                            SectionButton("Claude settings", Icons.Outlined.Settings) {
-                                onClaudeSettings()
-                                onDismiss()
-                            }
                             SectionButton("Sign out", Icons.AutoMirrored.Outlined.Logout, danger = true) { onClaudeSignOut() }
                         } else {
                             entry.action?.let {
@@ -287,10 +273,10 @@ fun AccountsDialog(
                                     onDismiss()
                                 }
                             }
-                            if (!entry.pending) SectionButton("Claude settings", Icons.Outlined.Settings) {
-                                onClaudeSettings()
-                                onDismiss()
-                            }
+                        }
+                        SectionButton("Settings", Icons.Outlined.Settings) {
+                            onClaudeSettings()
+                            onDismiss()
                         }
                     }
                 }
@@ -322,14 +308,10 @@ private fun CodexAccountSection(
         entry = entry,
         avatar = { AccountAvatar(AgentKind.CODEX, entry, email?.firstOrNull(), size = 44.dp) },
         title = AgentKind.CODEX.label(),
-        subtitle = if (entry.isReady) email ?: "Signed in" else entry.detail,
+        subtitle = if (entry.isReady) email else null,
         facts = facts
     ) {
         if (entry.isReady) {
-            SectionButton("Codex settings", Icons.Outlined.Settings) {
-                onSettings()
-                onDismiss()
-            }
             SectionButton("Sign out", Icons.AutoMirrored.Outlined.Logout, danger = true) { onSignOut() }
         } else {
             entry.action?.let {
@@ -338,10 +320,10 @@ private fun CodexAccountSection(
                     onDismiss()
                 }
             }
-            if (!entry.pending) SectionButton("Codex settings", Icons.Outlined.Settings) {
-                onSettings()
-                onDismiss()
-            }
+        }
+        SectionButton("Settings", Icons.Outlined.Settings) {
+            onSettings()
+            onDismiss()
         }
     }
 }
@@ -352,7 +334,7 @@ private fun OpenCodeAccountSection(entry: AgentStatusEntry, facts: List<String>,
         entry = entry,
         avatar = { AccountAvatar(AgentKind.OPENCODE, entry, null, size = 44.dp) },
         title = AgentKind.OPENCODE.label(),
-        subtitle = if (entry.isReady) "No sign-in: each provider uses its own API key (free models need none)." else entry.detail,
+        subtitle = null,
         facts = facts
     ) {
         if (!entry.isReady) entry.action?.let {
@@ -361,17 +343,11 @@ private fun OpenCodeAccountSection(entry: AgentStatusEntry, facts: List<String>,
                 onDismiss()
             }
         }
-        SectionButton(if (entry.isReady) "Providers & settings" else "OpenCode settings", Icons.Outlined.Settings) {
+        SectionButton("Settings", Icons.Outlined.Settings) {
             onSettings()
             onDismiss()
         }
     }
-}
-
-private fun claudeAuthMethodLabel(raw: String): String = when (raw.lowercase()) {
-    "claude.ai", "claudeai", "oauth" -> "Claude account"
-    "console", "api_key", "apikey" -> "Anthropic Console"
-    else -> raw
 }
 
 @OptIn(ExperimentalLayoutApi::class)

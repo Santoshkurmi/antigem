@@ -205,8 +205,6 @@ fun ChatScreen(
     val openCodeState by openCodeBackend.state.collectAsState()
     val openCodeStatus by openCodeBackend.status.collectAsState()
     val openCodeModelsError by openCodeBackend.modelsError.collectAsState()
-    val openCodeConnected by openCodeBackend.connectedProviders.collectAsState()
-    val openCodeModelCount = openCodeBackend.availableModels.collectAsState().value.size
     var openOpenCodeSettings by remember { mutableStateOf(false) }
     // the OpenCode page Settings opens on (OpenCode CLI for the Install button, Providers from the model picker)
     var openCodeSettingsPage by remember { mutableStateOf<ai.antigem.ui.opencode.OpenCodeSettingsPage?>(null) }
@@ -221,7 +219,6 @@ fun ChatScreen(
     val codexStatus by codexBackend.status.collectAsState()
     val codexAccount by codexBackend.account.collectAsState()
     val codexModelsError by codexBackend.modelsError.collectAsState()
-    val codexLimits by codexBackend.rateLimits.collectAsState()
     var openCodexSettings by remember { mutableStateOf(false) }
     // the Codex page Settings opens on (Account & CLI for the Install button and Sign in, MCP for /mcp)
     var codexSettingsPage by remember { mutableStateOf<ai.antigem.ui.codex.CodexSettingsPage?>(null) }
@@ -3285,17 +3282,21 @@ fun ChatScreen(
             claudeStatus = claudeStatus,
             onAgySignOut = { viewModel.logoutFromAgyHub() },
             onAgyCancelSignIn = { viewModel.cancelAgyLogin() },
+            onAgySettings = {
+                scope.launch { drawerState.close() }
+                requestedSettingsSection = ai.antigem.ui.settings.SettingsSection.ANTIGRAVITY
+                showSettingsDialog = true
+            },
             onClaudeSignOut = { viewModel.claudeAccount.logout() },
             onClaudeSettings = {
                 scope.launch { drawerState.close() }
-                openClaudeSetup()
+                requestedSettingsSection = ai.antigem.ui.settings.SettingsSection.CLAUDE
+                showSettingsDialog = true
             },
             onDismiss = { showAccountsDialog = false },
             openCode = openCodeEntry,
             openCodeFacts = listOfNotNull(
-                openCodeStatus?.version?.let { "OpenCode $it" },
-                openCodeConnected.takeIf { it.isNotEmpty() }?.let { if (it.size <= 2) it.joinToString(", ") else "${it.size} providers" },
-                openCodeModelCount.takeIf { it > 0 }?.let { "$it models" }
+                openCodeStatus?.version?.let { "CLI $it" }
             ),
             onOpenCodeSettings = {
                 scope.launch { drawerState.close() }
@@ -3306,8 +3307,7 @@ fun ChatScreen(
             codexEmail = codexAccount?.email,
             codexFacts = listOfNotNull(
                 codexAccount?.plan?.replaceFirstChar { it.uppercase() }?.let { "$it plan" },
-                codexStatus?.version?.let { "Codex $it" },
-                codexLimits?.primary?.let { "${it.usedPercent.toInt()}% of limit used" }
+                codexStatus?.version?.let { "CLI $it" }
             ),
             onCodexSignOut = { viewModel.codexBackend.logout() },
             onCodexSettings = {
