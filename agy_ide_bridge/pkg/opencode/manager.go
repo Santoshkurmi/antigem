@@ -148,11 +148,18 @@ func glibcInterp(bin string) bool {
 func (m *Manager) command(ctx context.Context, bin string, args ...string) (*exec.Cmd, error) {
 	prefix := m.termuxPrefix()
 	var cmd *exec.Cmd
+	shim := ""
 	if prefix != "" && glibcInterp(bin) {
 		lib := filepath.Join(prefix, "glibc", "lib")
 		loader := filepath.Join(lib, "ld-linux-aarch64.so.1")
 		if runtime.GOARCH == "amd64" {
 			loader = filepath.Join(lib, "ld-linux-x86-64.so.2")
+			// Android's x86_64 seccomp filter blocks syscalls glibc and Bun use there (access, mkdir, rename…): the
+			// app's shim rewrites them (scripts/x86_64-glibc in the app's repo). arm64 has no such syscalls.
+			shim = filepath.Join(lib, "libantigem_sigsys.so")
+			if _, err := os.Stat(shim); err != nil {
+				return nil, fmt.Errorf("opencode needs the app's x86_64 glibc shim, which is missing (%s): reopen the app to restore it", shim)
+			}
 		}
 		if _, err := os.Stat(loader); err != nil {
 			return nil, fmt.Errorf("opencode needs glibc, but the app's glibc runtime is missing (%s): reopen the app to restore it", loader)
@@ -161,10 +168,13 @@ func (m *Manager) command(ctx context.Context, bin string, args ...string) (*exe
 	} else {
 		cmd = exec.CommandContext(ctx, bin, args...)
 	}
-	env := make([]string, 0, len(os.Environ())+4)
+	env := make([]string, 0, len(os.Environ())+5)
+	if shim != "" {
+		env = append(env, "LD_AUDIT="+shim)
+	}
 	hasTmp := false
 	for _, e := range os.Environ() {
-		if prefix != "" && strings.HasPrefix(e, "LD_PRELOAD=") {
+		if prefix != "" && strings.HasPrefix(e, "LD_PRELOAD=") || shim != "" && strings.HasPrefix(e, "LD_AUDIT=") {
 			continue
 		}
 		if strings.HasPrefix(e, "TMPDIR=") && len(e) > len("TMPDIR=") {

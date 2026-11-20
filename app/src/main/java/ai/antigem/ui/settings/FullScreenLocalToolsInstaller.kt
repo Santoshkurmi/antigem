@@ -73,7 +73,8 @@ fun FullScreenLocalToolsInstaller(
         }
     }
 
-    var selectedSourceType by remember { mutableStateOf(0) } // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File
+    // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File; no full rootfs for this CPU (x86_64 for now): Minimal
+    var selectedSourceType by remember { mutableStateOf(if (LocalEnvironmentManager.HAS_FULL_ROOTFS) 0 else 1) }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
     var showLogs by remember { mutableStateOf(false) }
     var selectedMirror by remember { mutableStateOf(RootfsMirror.GITHUB) }
@@ -451,7 +452,7 @@ private fun SourcePicker(
     onPickZip: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SourceOption(
+        if (LocalEnvironmentManager.HAS_FULL_ROOTFS) SourceOption(
             icon = Icons.Outlined.CloudDownload,
             title = "Full environment",
             tag = "Recommended · ~350 MB",

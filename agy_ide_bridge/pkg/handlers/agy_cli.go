@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -81,7 +82,15 @@ func (h *Handler) agyPath() string {
 
 func agyInstalled(path string) bool {
 	fi, err := os.Stat(path)
-	return err == nil && !fi.IsDir()
+	if err != nil || fi.IsDir() {
+		return false
+	}
+	// Android x86_64: path is the launcher, agy is the Linux build next to it (hub/agy_linux_build.go)
+	if hub.UsesAgyLinuxBuild() && fi.Size() < 10<<20 {
+		bin, err := os.Stat(hub.AgyLinuxBinary(path))
+		return err == nil && !bin.IsDir()
+	}
+	return true
 }
 
 // agyVersion runs `agy --version` (cached until the file changes).
@@ -152,6 +161,17 @@ func (h *Handler) AgyCliInstallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cmd := exec.Command("bash", "-lc", agyInstallCommand)
+	if hub.UsesAgyLinuxBuild() {
+		// Google's installer asks for android_amd64, which does not exist: install the Linux x64 build behind
+		// AntiGem's launcher at the agy path the app uses (`agy update` there downloads and checks it)
+		launcher := h.agyPath()
+		if err := hub.EnsureAgyLauncher(launcher); err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		cmd = exec.Command(launcher, "update")
+		cmd.Dir = filepath.Dir(launcher)
+	}
 	h.runAgyJob(w, "install", cmd, func(job *agyCliJob, code int) {
 		if code != 0 {
 			return
@@ -184,6 +204,13 @@ func (h *Handler) AgyCliUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if !agyInstalled(bin) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "agy is not installed at " + bin})
 		return
+	}
+	if hub.UsesAgyLinuxBuild() {
+		// a launcher written by an older bridge is replaced first (its `update` is the one that runs)
+		if err := hub.EnsureAgyLauncher(bin); err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
 	}
 	before := agyVersion(bin)
 	cmd := exec.Command(bin, "update")

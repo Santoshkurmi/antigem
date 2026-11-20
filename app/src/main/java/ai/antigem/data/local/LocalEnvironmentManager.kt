@@ -74,6 +74,11 @@ object LocalEnvironmentManager {
     const val HARDCODED_ROOTFS_TAG = "rootfs-v2"
     const val HARDCODED_ROOTFS_ASSET = "bootrapz_2026-11-19.zip"
     const val HARDCODED_ROOTFS_SIZE_BYTES = 400_054_861L
+    /**
+     * Whether "Full environment" exists for this build's CPU. The rootfs above is arm64; until an x86_64 one is hosted
+     * the x86_64 build installs the Minimal Termux base instead (its installers hide the option).
+     */
+    val HAS_FULL_ROOTFS: Boolean = ai.antigem.BuildConfig.TARGET_ABI != "x86_64"
     const val HUGGINGFACE_ROOTFS_URL = "https://huggingface.co/datasets/santoshkurmi/rootfs-v2/resolve/main/bootrapz_2026-11-19.zip"
     // pages where the user can download the same zip by hand (then install it with "From a ZIP file")
     const val GITHUB_ROOTFS_PAGE = "https://github.com/Santoshkurmi/antigem/releases/tag/rootfs-v2"
@@ -223,6 +228,11 @@ object LocalEnvironmentManager {
             val home = getHomeDir(context).absolutePath
             val bin = getBinDir(context)
             if (!bin.exists()) return
+            // x86_64: the seccomp shim (GLIBC_SIGSYS_SHIM); LD_AUDIT also reaches glibc programs Claude starts
+            val shimLine = GLIBC_SIGSYS_SHIM?.let {
+                "# x86_64: rewrites the syscalls Android blocks there for glibc programs (scripts/x86_64-glibc)\n" +
+                    "export LD_AUDIT=\"${'$'}GLIBC_LIB/$it\"\n"
+            } ?: ""
             val script = """
                 |#!$prefix/bin/bash
                 |# Claude Code launcher written by AntiGem on every start (edits are overwritten).
@@ -230,7 +240,7 @@ object LocalEnvironmentManager {
                 |# Claude's updater only changes ~/.local/share/claude/versions and ~/.local/bin/claude, never this file.
                 |VERSIONS_DIR="$home/.local/share/claude/versions"
                 |GLIBC_LIB="$prefix/glibc/lib"
-                |LOADER="${'$'}GLIBC_LIB/ld-linux-aarch64.so.1"
+                |LOADER="${'$'}GLIBC_LIB/$GLIBC_LOADER"
                 |TARGET=""
                 |if [ -d "${'$'}VERSIONS_DIR" ]; then
                 |    for v in ${'$'}(ls -1 "${'$'}VERSIONS_DIR" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+${'$'}' | sort -V -r); do
@@ -258,7 +268,7 @@ object LocalEnvironmentManager {
                 |fi
                 |# termux-exec is a bionic library: it must not be preloaded into the glibc process
                 |unset LD_PRELOAD
-                |exec "${'$'}LOADER" --library-path "${'$'}GLIBC_LIB" "${'$'}TARGET" "${'$'}@"
+                |${shimLine}exec "${'$'}LOADER" --library-path "${'$'}GLIBC_LIB" "${'$'}TARGET" "${'$'}@"
                 |""".trimMargin()
             val wrapper = getClaudeWrapperFile(context)
             if (!wrapper.exists() || isSymlink(wrapper) || wrapper.readText() != script) {
@@ -485,6 +495,17 @@ object LocalEnvironmentManager {
     /** A 32-bit-only phone (no 64-bit ABI): the local Linux environment cannot run on it. */
     fun isUnsupported32BitDevice(): Boolean = Build.SUPPORTED_64_BIT_ABIS.isNullOrEmpty()
 
+    /** The bundled glibc's loader, for the CPU this APK was built for (Gradle `-Pabi`, see app/build.gradle.kts). */
+    val GLIBC_LOADER: String =
+        if (ai.antigem.BuildConfig.TARGET_ABI == "x86_64") "ld-linux-x86-64.so.2" else "ld-linux-aarch64.so.1"
+
+    /**
+     * x86_64 only, in the same bundle: Android's x86_64 seccomp filter blocks syscalls glibc programs use there (access,
+     * mkdir, rename…; arm64 has none of them), and this library, loaded with LD_AUDIT, rewrites them
+     * (scripts/x86_64-glibc). The bridge loads it into OpenCode and agy the same way.
+     */
+    val GLIBC_SIGSYS_SHIM: String? = if (ai.antigem.BuildConfig.TARGET_ABI == "x86_64") "libantigem_sigsys.so" else null
+
     fun getBootstrapArch(): String {
         val abis = Build.SUPPORTED_ABIS ?: emptyArray()
         for (abi in abis) {
@@ -676,8 +697,10 @@ object LocalEnvironmentManager {
     suspend fun installLocalEnvironment(
         context: Context,
         authPreferences: AuthPreferences,
-        source: BootstrapSource = BootstrapSource.Auto
+        requestedSource: BootstrapSource = BootstrapSource.Auto
     ): Boolean = withContext(Dispatchers.IO) {
+        // no full rootfs for this CPU (x86_64 for now): the Minimal Termux base
+        val source = if (requestedSource is BootstrapSource.Auto && !HAS_FULL_ROOTFS) BootstrapSource.BaseMinimum else requestedSource
         val appContext = context.applicationContext
         val prefixDir = getPrefixDir(appContext)
         val binDir = getBinDir(appContext)
@@ -1626,8 +1649,8 @@ object LocalEnvironmentManager {
 
     private fun extractGlibcMinAsset(context: Context, prefixDir: File): Boolean {
         log("Checking for bundled minimal Glibc runtime...")
-        // shipped xz-compressed: 4.3 MB -> 1.2 MB in the APK
-        val assetName = "glibc-min-arm64.tar.xz"
+        // shipped xz-compressed: 4.3 MB -> 1.2 MB in the APK; one per CPU (app/src/abi/<abi>/assets)
+        val assetName = "glibc-min-${ai.antigem.BuildConfig.TARGET_ABI}.tar.xz"
         val inStream = try {
             context.assets.open(assetName)
         } catch (e: Exception) {
@@ -1691,9 +1714,10 @@ object LocalEnvironmentManager {
         val prefixDir = getPrefixDir(context)
         val glibcDir = File(prefixDir, "glibc")
         val glibcLib = File(glibcDir, "lib")
-        val ldLinux = File(glibcLib, "ld-linux-aarch64.so.1")
+        val ldLinux = File(glibcLib, GLIBC_LOADER)
 
-        if (!ldLinux.exists()) {
+        // an x86_64 install made before the shim was in the bundle gets it here
+        if (!ldLinux.exists() || GLIBC_SIGSYS_SHIM != null && !File(glibcLib, GLIBC_SIGSYS_SHIM).exists()) {
             extractGlibcMinAsset(context, prefixDir)
         }
 
@@ -1980,7 +2004,7 @@ object LocalEnvironmentManager {
         val bashrc = File(homeDir, ".bashrc")
         if (!bashrc.exists()) {
             bashrc.writeText(
-                """# Gemini Local Linux Environment
+                """# AntiGem Local Linux Environment
 export PREFIX="${prefixDir.absolutePath}"
 export HOME="${homeDir.absolutePath}"
 export PATH="${homeDir.absolutePath}/.local/bin:${binDir.absolutePath}:${binDir.absolutePath}/applets:/system/bin:/system/xbin"
@@ -2002,10 +2026,22 @@ alias cls='clear'
 alias proj='cd ${projectsDir.absolutePath}'
 
 # Termux styled color prompt
-PS1='\[\033[01;32m\]gemini\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+PS1='\[\033[01;32m\]antigem\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 """.trimIndent()
             )
             try { Os.chmod(bashrc.absolutePath, 420) } catch (_: Exception) {} // 0644
+        } else {
+            // the rootfs zip (a backup) brings the .bashrc of the app's old name: its prompt said "gemini". Only that
+            // exact line changes; a prompt the user set stays
+            try {
+                val oldPrompt = """PS1='\[\033[01;32m\]gemini\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '"""
+                val text = bashrc.readText()
+                if (text.contains(oldPrompt)) {
+                    bashrc.writeText(text.replace(oldPrompt, oldPrompt.replace("]gemini\\[", "]antigem\\[")))
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not update the prompt in ${bashrc.absolutePath}: ${e.message}")
+            }
         }
 
         val profile = File(homeDir, ".profile")

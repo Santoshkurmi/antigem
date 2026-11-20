@@ -188,10 +188,17 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "Installed with Google's official installer (antigravity.google/cli/install.sh) into ~/.local/bin on " +
-                    (if (remote) "the server" else "this device") + ". agy updates itself when you run it in a terminal; " +
-                    "Check for updates runs `agy update` and, when a newer agy was installed, restarts the server so it is used " +
-                    "(voice calls need agy 1.5 or newer).",
+                // x86_64 build on this device: the bridge installs agy's Linux build behind a launcher (hub/agy_linux_build.go)
+                if (!remote && ai.antigem.BuildConfig.TARGET_ABI == "x86_64")
+                    "Google has no Android build of agy for x86_64, so its Linux x64 build is installed into ~/.local/bin " +
+                        "and runs through the app's glibc. Its own updater is off; Check for updates installs Google's newest " +
+                        "Linux x64 release and, when it is newer, restarts the server so it is used " +
+                        "(voice calls need agy 1.5 or newer)."
+                else
+                    "Installed with Google's official installer (antigravity.google/cli/install.sh) into ~/.local/bin on " +
+                        (if (remote) "the server" else "this device") + ". agy updates itself when you run it in a terminal; " +
+                        "Check for updates runs `agy update` and, when a newer agy was installed, restarts the server so it is used " +
+                        "(voice calls need agy 1.5 or newer).",
                 fontSize = 11.sp, color = subtle
             )
         }

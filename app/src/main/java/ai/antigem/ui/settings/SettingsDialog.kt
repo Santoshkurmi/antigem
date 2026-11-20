@@ -1076,6 +1076,8 @@ private fun rememberReaRow(onNavigate: (SettingsSection) -> Unit): SettingsRowIt
 /** The Android Development row of the main settings page, with the setup state. */
 @Composable
 private fun rememberAndroidDevRow(onNavigate: (SettingsSection) -> Unit): SettingsRowItem? {
+    // its setup (arm64 aapt2, rebuilt NDK, qemu for x86-only tools) is for arm64 phones only: hidden in the x86_64 build
+    if (ai.antigem.BuildConfig.TARGET_ABI == "x86_64") return null
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         ai.antigem.data.androiddev.AndroidDevManager.init(context)
