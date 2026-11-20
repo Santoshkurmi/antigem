@@ -177,6 +177,14 @@ class AgyBridgeService(
     private val _loginUrlEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
     val loginUrlEvents: SharedFlow<String> = _loginUrlEvents.asSharedFlow()
 
+    private val _agyAccountEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+    /** The agy account changed (the bridge's watcher saw it, or the app switched it): re-check sign-in, quotas, models. */
+    val agyAccountEvents: SharedFlow<Unit> = _agyAccountEvents.asSharedFlow()
+
+    fun notifyAgyAccountChanged() {
+        _agyAccountEvents.tryEmit(Unit)
+    }
+
     /**
      * Suspends until the IDE Bridge (:1234) is connected and online, or returns false on timeout.
      */
@@ -484,6 +492,7 @@ class AgyBridgeService(
                                 _loginUrlEvents.tryEmit(url)
                             }
                         }
+                        "agy_account_changed" -> notifyAgyAccountChanged()
                         "hub_status" -> {
                             val st = root.optString("status", "idle")
                             val p = root.optString("port").takeIf { it.isNotBlank() }

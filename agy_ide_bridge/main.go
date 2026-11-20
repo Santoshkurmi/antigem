@@ -413,6 +413,8 @@ func main() {
 	mux.HandleFunc("/api/agy/cli/install", h.AgyCliInstallHandler)
 	mux.HandleFunc("/api/agy/cli/update", h.AgyCliUpdateHandler)
 	mux.HandleFunc("/api/agy/hub/diag", h.AgyHubDiagHandler)
+	mux.HandleFunc("/api/agy/accounts", h.AgyAccountsHandler)
+	mux.HandleFunc("/api/agy/accounts/", h.AgyAccountsHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)
 	mux.HandleFunc("/api/models/refresh", h.ModelsHandler)
 	mux.HandleFunc("/api/quotas", h.QuotasHandler)
@@ -701,6 +703,10 @@ func main() {
 	hubMgr.OnLoginURL = h.HandleLoginURL
 	hubMgr.OnStatusChange = func(status string, csrfToken string, errorMsg string, logs []string) {
 		wsHub.BroadcastHubStatus(status, hubPort, csrfToken, errorMsg, logs)
+		// agy runs, so it is installed: watch its login for account changes (no-op when already watching)
+		if status == hub.HubStatusOnline {
+			h.EnsureAgyAccountWatcher()
+		}
 	}
 	if !skipHub {
 		hubMgr.StartContinuousMonitor()
@@ -716,6 +722,7 @@ func main() {
 	fmt.Println("\n🛑 Shutting down antiGem server gracefully...")
 
 	// 1. Close all active WebSocket client connections immediately
+	h.StopAgyAccountWatcher()
 	wsHub.Close()
 
 	// 2. Stop Claude Code sessions, then the AGY Hub process group and continuous background monitor

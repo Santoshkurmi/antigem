@@ -677,6 +677,7 @@ fun SettingsDialog(
                     ) {
                         ai.antigem.ui.agents.AgyCliCard()
                         ai.antigem.ui.agents.AgyAccountCard(agyStatus, agyAuth, onAgySignOut, onAgyCancelSignIn)
+                        ai.antigem.ui.agents.AgyAccountsCard(agyStatus, agyAuth)
                     }
                     SettingsSection.AGY_CLOUD -> Column(
                         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)

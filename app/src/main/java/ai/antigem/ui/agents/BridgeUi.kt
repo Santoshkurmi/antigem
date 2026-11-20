@@ -250,7 +250,11 @@ fun AgyAccountCard(
                     entry.detail?.let { Text(it, fontSize = 12.5.sp, color = subtle) }
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = entry.action.onClick) { Text(entry.action.label) }
+                        // tapped: shows "Checking…" until the sign-in state changes (agy needs a few seconds after the browser)
+                        var checking by remember(entry.label) { mutableStateOf(false) }
+                        Button(enabled = !checking, onClick = { checking = true; entry.action.onClick() }) {
+                            Text(if (checking) "Checking…" else entry.action.label)
+                        }
                         Spacer(Modifier.width(8.dp))
                         TextButton(onClick = onCancelSignIn) { Text("Cancel") }
                     }

@@ -269,8 +269,10 @@ class AgyChatBackend(
         checkAgyAuthStatus(userInitiated = false)
     }
 
-    fun checkAgyAuthStatus(userInitiated: Boolean = false) {
+    /** [accountChanged]: the agy login was swapped; quotas and models are reloaded for the new account. */
+    fun checkAgyAuthStatus(userInitiated: Boolean = false, accountChanged: Boolean = false) {
         backendScope.launch {
+            val emailBefore = _agyAuthInfo.value.email.takeIf { _agyAuthInfo.value.isLoggedIn }
             // "Checking sign-in…" only while the sign-in state is unknown (or the user asked). A background re-check of
             // a confirmed sign-in stays silent: the status only changes if the answer differs (signed out).
             val alreadySignedIn = _agyAuthInfo.value.isLoggedIn && !_agyAuthInfo.value.isOffline
@@ -316,8 +318,10 @@ class AgyChatBackend(
                     loginPollJob?.cancel()
                     if (userInitiated) {
                         _authFeedbackMessage.tryEmit("Signed in as ${info.displayName.ifBlank { info.email }}")
+                    } else if (accountChanged && info.email.isNotBlank() && !info.email.equals(emailBefore, ignoreCase = true)) {
+                        _authFeedbackMessage.tryEmit("Antigravity now uses ${info.email}")
                     }
-                    refreshQuotas(force = false)
+                    refreshQuotas(force = accountChanged)
                 } else if (userInitiated) {
                     _authFeedbackMessage.tryEmit("Not signed in.")
                 }
@@ -633,6 +637,18 @@ class AgyChatBackend(
                     if (!_isAuthBusy.value && !_agyAuthInfo.value.isLoggedIn) startLoginPoll(AuthPreferences.currentHubUrl)
                 }
             }
+        }
+
+        // The agy account changed (switched in Settings, the Agy Accounts mini app or a terminal): agy already uses the
+        // new login, so ask it now instead of waiting for the next check. collectLatest: a burst becomes one check.
+        backendScope.launch {
+            agyBridgeService.agyAccountEvents.collectLatest {
+                delay(300)
+                checkAgyAuthStatus(userInitiated = false, accountChanged = true)
+            }
+        }
+        ai.antigem.data.remote.AgyAccounts.replyRunning = {
+            _activeInstances.value.isNotEmpty() || _conversations.value.any { it.isRunning }
         }
 
         backendScope.launch {
@@ -2745,5 +2761,7 @@ class AgyChatBackend(
     fun dispose() {
         persistentStreamJob?.cancel()
         streamingJob?.cancel()
+        // the singleton must not keep this backend (and its ViewModel) alive
+        ai.antigem.data.remote.AgyAccounts.replyRunning = { false }
     }
 }
