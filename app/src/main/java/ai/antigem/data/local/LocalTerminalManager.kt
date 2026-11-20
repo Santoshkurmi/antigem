@@ -137,10 +137,7 @@ class LocalPtySession(
             )
 
             hookEmulatorForSsh(terminalSession)
-
-            sessionScope.launch {
-                connectSsh()
-            }
+            // connectSsh() is started by the init block at the end of the class, once every property is set
         } else {
             val safeCols = if (ptyCols > 0) ptyCols else if (LocalTerminalManager.lastKnownCols > 0) LocalTerminalManager.lastKnownCols else 80
             val safeRows = if (ptyRows > 0) ptyRows else if (LocalTerminalManager.lastKnownRows > 0) LocalTerminalManager.lastKnownRows else 24
@@ -1063,6 +1060,18 @@ class LocalPtySession(
             }
             terminalSession.finishIfRunning()
         } catch (_: Exception) {
+        }
+    }
+
+    // Kept last: Kotlin runs property initializers and init blocks in file order, and connectSsh() runs on an IO thread
+    // and reads tmuxParser (declared after the first init block). Started from the first init block, a connection that
+    // failed at once (SSH host or user blank, connection refused) reached `finally` before the constructor had set
+    // tmuxParser, and the NullPointerException there crashed the app.
+    init {
+        if (isSsh) {
+            sessionScope.launch {
+                connectSsh()
+            }
         }
     }
 }

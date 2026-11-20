@@ -1981,7 +1981,10 @@ fun ChatScreen(
                     // existing chats too: while one loads, show the loading skeleton like for any other chat
                     val isExistingConversation = currentConv != null && currentConv?.title != "New Chat" &&
                         (conversations.any { it.id == currentConv?.id } || jarvisConversations.any { it.id == currentConv?.id })
-                    val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation
+                    // agy missing: the hub's "agy is not installed" error is also this chat's error, and an existing chat
+                    // never finishes loading. Both step aside for the empty view's "not installed" card with Install.
+                    val agyMissingHere = isAgyChat && agyNotInstalled
+                    val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation && !agyMissingHere
                     Log.d("CHAT_OPEN_DEBUG", "🖥️ [ChatScreen Render] convId=${currentConv?.id}, title='${currentConv?.title}', isLoading=$isLoadingConversation, isExisting=$isExistingChat, msgCount=${messages.size}, error=$conversationError, isServerStopped=$isServerStopped")
 
                     if (isAgyChat && isServerStopped && messages.isEmpty()) {
@@ -2040,7 +2043,7 @@ fun ChatScreen(
                         } else {
                             ai.antigem.ui.components.EngineWarmingUpView()
                         }
-                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty() && (isExistingConversation || currentConv != null)) {
+                    } else if (!conversationError.isNullOrBlank() && messages.isEmpty() && (isExistingConversation || currentConv != null) && !agyMissingHere) {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()

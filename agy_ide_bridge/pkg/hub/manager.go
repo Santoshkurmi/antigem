@@ -38,6 +38,19 @@ const (
 	HubStatusStopped  = "stopped"
 )
 
+// While agy is not installed (HubManager.agyMissing) the monitor looks for agy every agyMissingCheckInterval and, every
+// agyMissingProbeEvery checks, at the hub port too (a hub someone started by hand). A new agy is started only once its
+// files were not written for agyInstallSettle, so an install still writing them is not started half-done.
+const (
+	agyMissingCheckInterval = 5 * time.Second
+	agyMissingProbeEvery    = 3
+	agyInstallSettle        = 5 * time.Second
+)
+
+// An online hub counts as stopped once its port refused hubOfflineProbes checks in a row (one a second), not at the
+// first one: a busy phone (app launch) can miss one.
+const hubOfflineProbes = 3
+
 // HubManager supervises the background `agy --hub` process on port 1235.
 type HubManager struct {
 	HubPort        string
@@ -62,6 +75,11 @@ type HubManager struct {
 	processDone chan struct{}
 	monitorStop chan struct{}
 	recentLogs  []string
+	// agyMissing: the last Start found no agy to run (not installed yet). The monitor then watches for agy to appear
+	// instead of probing the hub port every second, and starts the hub once it is there.
+	agyMissing bool
+	// stopping: Stop is ending the hub this manager started, so its exit ("signal: killed") is a stop, not an error
+	stopping bool
 	// for the app's diagnostics after a failed call: when this hub process started, how the last one ended, and
 	// what a crash printed (kept apart from recentLogs, whose 50 lines a long goroutine dump would fill)
 	startedAt    time.Time
@@ -250,6 +268,68 @@ func (m *HubManager) isHubReady() bool {
 	return true
 }
 
+// hubPortOpen is isHubReady without the log line, for the occasional check while agy is not installed.
+func (m *HubManager) hubPortOpen() bool {
+	if m.Disabled {
+		return false
+	}
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+m.HubPort, 400*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// agyFilesSettled reports whether agy at path (on Android x86_64 also the Linux build behind its launcher, like Start
+// checks) is there and was not written for agyInstallSettle.
+func agyFilesSettled(path string) bool {
+	files := []string{path}
+	if UsesAgyLinuxBuild() {
+		files = append(files, AgyLinuxBinary(path))
+	}
+	for _, f := range files {
+		fi, err := os.Stat(f)
+		if err != nil || fi.IsDir() || fi.Size() == 0 || time.Since(fi.ModTime()) < agyInstallSettle {
+			return false
+		}
+	}
+	return true
+}
+
+// startIfAgyInstalled starts the hub when agy, missing at the last Start, is there now: installed from a terminal or
+// copied by hand (the app's Install starts the hub itself; Start skips a hub that is already starting). Reports whether
+// it started it.
+func (m *HubManager) startIfAgyInstalled() bool {
+	m.mu.Lock()
+	path := m.AgyBinPath
+	m.mu.Unlock()
+	if path == "" {
+		// a bridge started by hand that found no agy at all: look where agy gets installed
+		bins := FindAllAgyBinaries()
+		if len(bins) == 0 {
+			return false
+		}
+		path = bins[0]
+	}
+	if !agyFilesSettled(path) {
+		return false
+	}
+	if path != m.GetAgyBin() {
+		m.SetAgyBin(path)
+	}
+	m.mu.Lock()
+	m.agyMissing = false
+	m.mu.Unlock()
+	log.Printf("\033[1;32m[Hub Monitor]\033[0m agy is installed now (%s): starting the AGY Hub", path)
+	go func() {
+		if err := m.Start(); err != nil {
+			log.Printf("\033[1;31m[Hub Monitor]\033[0m Could not start the AGY Hub: %v", err)
+		}
+	}()
+	return true
+}
+
 // FetchCsrfToken attempts to retrieve the active CSRF token directly from the Hub root endpoint.
 func (m *HubManager) FetchCsrfToken() string {
 	url := fmt.Sprintf("http://127.0.0.1:%s/", m.HubPort)
@@ -343,15 +423,38 @@ func (m *HubManager) setStatusLocked(status string, errorMsg string) {
 	}
 }
 
+// ownHubAliveLocked reports whether the agy --hub this manager started is still running (its exit is reported by
+// Start's supervisor goroutine). Call with mu held.
+func (m *HubManager) ownHubAliveLocked() bool {
+	if m.cmd == nil || m.isExternal || m.processDone == nil {
+		return false
+	}
+	select {
+	case <-m.processDone:
+		return false
+	default:
+		return true
+	}
+}
+
 // StartContinuousMonitor actively checks AGY Hub state in the background and broadcasts updates.
 // When online and CSRF token is present, it checks every 10 seconds; when offline, starting, or missing CSRF token, it checks every 1 second.
+// While agy is not installed it looks for agy every 5 seconds instead (and starts the hub when it appears), checking the
+// hub port only every 15 seconds and without a log line.
+// The hub this manager is starting is not reported stopped while its port is still closed (agy takes a few seconds to
+// open it), and an online hub only after hubOfflineProbes refused checks in a row.
 func (m *HubManager) StartContinuousMonitor() {
 	go func() {
+		missingTicks := 0
+		failedProbes := 0
 		for {
 			interval := 1 * time.Second
 			m.mu.Lock()
-			if m.status == HubStatusOnline && m.csrfToken != "" {
+			missing := m.agyMissing
+			if m.status == HubStatusOnline && m.csrfToken != "" && failedProbes == 0 {
 				interval = 10 * time.Second
+			} else if missing {
+				interval = agyMissingCheckInterval
 			}
 			m.mu.Unlock()
 
@@ -359,10 +462,27 @@ func (m *HubManager) StartContinuousMonitor() {
 			case <-m.monitorStop:
 				return
 			case <-time.After(interval):
-				active := m.isHubReady()
+				var active bool
+				if missing {
+					missingTicks++
+					if m.startIfAgyInstalled() {
+						missingTicks = 0
+						continue
+					}
+					// a hub started by hand (another agy) is still picked up, now and then
+					if missingTicks%agyMissingProbeEvery != 0 {
+						continue
+					}
+					active = m.hubPortOpen()
+				} else {
+					missingTicks = 0
+					active = m.isHubReady()
+				}
 				m.mu.Lock()
 				currentStatus := m.status
 				if active {
+					failedProbes = 0
+					m.agyMissing = false
 					tokenAcquired := false
 					if m.csrfToken == "" {
 						m.mu.Unlock()
@@ -379,11 +499,22 @@ func (m *HubManager) StartContinuousMonitor() {
 						log.Printf("\033[1;32m[Hub Monitor]\033[0m ✅ AGY Hub detected ONLINE on http://127.0.0.1:%s (CSRF token present: %t)", m.HubPort, m.csrfToken != "")
 					}
 				} else {
-					if currentStatus == HubStatusOnline || currentStatus == HubStatusStarting {
-						m.isRunning = false
+					ownAlive := m.ownHubAliveLocked()
+					switch {
+					case currentStatus == HubStatusStarting && ownAlive:
+						// our agy is still starting: its port opens when it is ready (an exit is reported right away)
+						failedProbes = 0
+					case currentStatus == HubStatusOnline && failedProbes+1 < hubOfflineProbes:
+						failedProbes++
+					case currentStatus == HubStatusOnline || currentStatus == HubStatusStarting:
+						failedProbes = 0
+						// a hub of ours that stopped answering still runs: Stop must still end it
+						m.isRunning = ownAlive
 						m.csrfToken = ""
 						m.setStatusLocked(HubStatusStopped, "")
 						log.Printf("\033[1;33m[Hub Monitor]\033[0m ⚠️ AGY Hub port %s became unreachable -> marked STOPPED", m.HubPort)
+					default:
+						failedProbes = 0
 					}
 				}
 				m.mu.Unlock()
@@ -426,6 +557,13 @@ func (m *HubManager) Start() error {
 		return fmt.Errorf("Antigravity is turned off in the app")
 	}
 	m.mu.Lock()
+	m.agyMissing = false
+	// our own agy --hub is already starting or running: the app's Install and the monitor (agy appeared) can both start
+	// it. The second one must not launch another, nor take ours for an outside hub below (Stop would then leave it running)
+	if m.isRunning && !m.isExternal && m.cmd != nil {
+		m.mu.Unlock()
+		return nil
+	}
 	// 1. Check if already active and responding to RPC requests
 	if m.isHubReady() {
 		m.isRunning = true
@@ -446,6 +584,7 @@ func (m *HubManager) Start() error {
 
 	if m.AgyBinPath == "" {
 		err := fmt.Errorf("AGY executable binary not specified or found")
+		m.agyMissing = true
 		m.setStatusLocked(HubStatusError, err.Error())
 		m.mu.Unlock()
 		return err
@@ -462,6 +601,7 @@ func (m *HubManager) Start() error {
 	// the app names the agy to use even before it is installed (Settings → Antigravity CLI → Install)
 	if fi, statErr := os.Stat(m.AgyBinPath); notInstalled || statErr != nil || fi.IsDir() {
 		err := fmt.Errorf("agy is not installed at %s (install it in the app: Settings → Antigravity → Account & CLI)", m.AgyBinPath)
+		m.agyMissing = true
 		m.setStatusLocked(HubStatusError, err.Error())
 		m.mu.Unlock()
 		return err
@@ -556,6 +696,7 @@ func (m *HubManager) Start() error {
 	m.cmd = cmd
 	m.isRunning = true
 	m.isExternal = false
+	m.stopping = false
 	m.startedAt = time.Now()
 	m.processDone = make(chan struct{})
 	doneChan := m.processDone
@@ -598,7 +739,8 @@ func (m *HubManager) Start() error {
 		} else {
 			m.lastExitErr = "exited normally"
 		}
-		if err != nil {
+		// killed by Stop: stopped, not an error (the app showed "Error" during every restart)
+		if err != nil && !m.stopping {
 			m.setStatusLocked(HubStatusError, err.Error())
 		} else {
 			m.setStatusLocked(HubStatusStopped, "")
@@ -626,6 +768,12 @@ func (m *HubManager) Start() error {
 
 		select {
 		case err := <-processExited:
+			m.mu.Lock()
+			stopping := m.stopping
+			m.mu.Unlock()
+			if stopping {
+				return nil
+			}
 			fmt.Printf("\r\033[K \033[31m[✗]\033[0m AGY Hub process terminated: %v\n", err)
 			m.dumpRecentLogs()
 			m.setStatus(HubStatusError, fmt.Sprintf("Process exited: %v", err))
@@ -667,6 +815,9 @@ func (m *HubManager) Stop() {
 	isExternal := m.isExternal
 	doneChan := m.processDone
 	m.isRunning = false
+	if isRunning && !isExternal {
+		m.stopping = true
+	}
 	select {
 	case <-m.monitorStop:
 	default:
