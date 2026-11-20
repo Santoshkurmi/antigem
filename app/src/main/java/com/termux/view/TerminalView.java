@@ -809,10 +809,6 @@ public final class TerminalView extends View {
             /* ctrl+space does not work on some ROMs without this workaround.
                However, this breaks it on devices where it works out of the box. */
             return onKeyDown(keyCode, event);
-        } else if (mClient.shouldEnforceCharBasedInput()) {
-            // Avoid issues with some soft keyboards, such as the LG keyboard on the LG G6:
-            // https://github.com/termux/termux-app/issues/403
-            return true;
         }
         return super.onKeyPreIme(keyCode, event);
     }
