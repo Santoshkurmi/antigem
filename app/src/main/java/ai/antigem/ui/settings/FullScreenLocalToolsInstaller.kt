@@ -76,6 +76,17 @@ fun FullScreenLocalToolsInstaller(
     // 0: Auto GitHub, 1: Base minimum, 2: Local ZIP File
     var selectedSourceType by remember { mutableStateOf(0) }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
+    // the rooted Ubuntu chroot has its own full-page setup
+    var showChrootSetup by remember { mutableStateOf(false) }
+    if (showChrootSetup) {
+        ai.antigem.ui.settings.chroot.ChrootSetupDialog(
+            onDismiss = { showChrootSetup = false },
+            onDone = {
+                showChrootSetup = false
+                onComplete()
+            }
+        )
+    }
     var showLogs by remember { mutableStateOf(false) }
     var selectedMirror by remember { mutableStateOf(RootfsMirror.GITHUB) }
     // the site of the last full-rootfs download started here; null when the last install was something else
@@ -171,7 +182,8 @@ fun FullScreenLocalToolsInstaller(
                             selectedMirror = selectedMirror,
                             onSelectMirror = { selectedMirror = it },
                             onSelect = { selectedSourceType = it },
-                            onPickZip = { zipPickerLauncher.launch("*/*") }
+                            onPickZip = { zipPickerLauncher.launch("*/*") },
+                            onOpenChroot = { showChrootSetup = true }
                         )
 
                         is LocalInstallerState.Discovering -> InstallerCard {
@@ -452,7 +464,8 @@ private fun SourcePicker(
     selectedMirror: RootfsMirror,
     onSelectMirror: (RootfsMirror) -> Unit,
     onSelect: (Int) -> Unit,
-    onPickZip: () -> Unit
+    onPickZip: () -> Unit,
+    onOpenChroot: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SourceOption(
@@ -476,6 +489,14 @@ private fun SourcePicker(
             description = "Clean Termux base for ${LocalEnvironmentManager.getBootstrapArch()}: core utilities and the package manager.",
             selected = selected == 1,
             onClick = { onSelect(1) }
+        )
+        SourceOption(
+            icon = Icons.Outlined.Storage,
+            title = "Ubuntu chroot (root)",
+            tag = "Rooted phones · Magisk / KernelSU / APatch",
+            description = "A real Ubuntu instead of AntiGem's built-in environment: apt, glibc, sudo. Opens its own setup: release, location, user, packages, or an install already on this phone.",
+            selected = false,
+            onClick = onOpenChroot
         )
         SourceOption(
             icon = Icons.Outlined.FolderOpen,

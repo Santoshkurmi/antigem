@@ -100,6 +100,8 @@ class AuthPreferences(private val context: Context) {
         val HAS_SEEN_GEMMY_INTRO = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_gemmy_intro")
         val TERMINAL_LAUNCHER_STYLE = stringPreferencesKey("terminal_launcher_style") // "ANTITERM" or "TERMUX"
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
+        val ENVIRONMENT_TYPE = stringPreferencesKey("environment_type") // "TERMUX" or "UBUNTU_CHROOT"
+        val CHROOT_USERNAME = stringPreferencesKey("chroot_username")
 
         const val DEFAULT_BRIDGE_BINARY_PATH = "~/../usr/bin/agy_ide_bridge"
         const val DEFAULT_AGY_BINARY_PATH = "~/.local/bin/agy"
@@ -178,6 +180,18 @@ class AuthPreferences(private val context: Context) {
         // ai.antigem uses other ports than the old com.termux build (see build.gradle.kts) so both can run together
         val DEFAULT_HUB_URL = "http://127.0.0.1:${ai.antigem.BuildConfig.HUB_PORT}"
         val DEFAULT_BRIDGE_HTTP_URL = "http://127.0.0.1:${ai.antigem.BuildConfig.BRIDGE_PORT}"
+
+        /**
+         * The rooted Ubuntu chroot listens on ports of its own (Termux's + this): its bridge can outlive the app, so a
+         * chroot bridge still running never blocks the Termux one after a switch (and both could run at once).
+         */
+        const val CHROOT_PORT_OFFSET = 100
+        val DEFAULT_CHROOT_HUB_URL = "http://127.0.0.1:${ai.antigem.BuildConfig.HUB_PORT + CHROOT_PORT_OFFSET}"
+        val DEFAULT_CHROOT_BRIDGE_HTTP_URL = "http://127.0.0.1:${ai.antigem.BuildConfig.BRIDGE_PORT + CHROOT_PORT_OFFSET}"
+
+        /** This phone's default addresses for the Termux environment or the Ubuntu chroot. */
+        fun defaultLocalHubUrl(chroot: Boolean) = if (chroot) DEFAULT_CHROOT_HUB_URL else DEFAULT_HUB_URL
+        fun defaultLocalBridgeUrl(chroot: Boolean) = if (chroot) DEFAULT_CHROOT_BRIDGE_HTTP_URL else DEFAULT_BRIDGE_HTTP_URL
 
         /** The defaults every install used before ports became per app; a saved copy of them follows the new default. */
         private const val LEGACY_HUB_URL = "http://127.0.0.1:1235"
@@ -661,6 +675,32 @@ class AuthPreferences(private val context: Context) {
 
     fun isRemoteModeSync(): Boolean = currentRemoteMode
 
+    fun isChrootModeSync(): Boolean = syncPrefs.getString("environment_type", "TERMUX") == "UBUNTU_CHROOT"
+
+    fun saveEnvironmentTypeSync(type: String) {
+        syncPrefs.edit().putString("environment_type", type).commit()
+    }
+
+    suspend fun setEnvironmentType(type: String) {
+        context.dataStore.edit { prefs ->
+            prefs[ENVIRONMENT_TYPE] = type
+        }
+        saveEnvironmentTypeSync(type)
+    }
+
+    fun getChrootUsernameSync(): String = syncPrefs.getString("chroot_username", "ubuntu") ?: "ubuntu"
+
+    fun saveChrootUsernameSync(username: String) {
+        syncPrefs.edit().putString("chroot_username", username).commit()
+    }
+
+    suspend fun setChrootUsername(username: String) {
+        context.dataStore.edit { prefs ->
+            prefs[CHROOT_USERNAME] = username
+        }
+        saveChrootUsernameSync(username)
+    }
+
     fun saveRemoteModeSync(enabled: Boolean) {
         currentRemoteMode = enabled
         syncPrefs.edit().putBoolean("remote_mode", enabled).commit()
@@ -729,6 +769,23 @@ class AuthPreferences(private val context: Context) {
     }
 
     /** Paths ON THE SERVER (blank = automatic: the bridge the app installs, `agy`/`claude` found by the bridge). */
+    /** The Ubuntu chroot's agent paths, inside the chroot ("" = the default: where each agent's own installer puts it). */
+    fun getChrootBridgeBinSync(): String = syncPrefs.getString("chroot_bridge_bin", "") ?: ""
+    fun getChrootAgyBinSync(): String = syncPrefs.getString("chroot_agy_bin", "") ?: ""
+    fun getChrootClaudeBinSync(): String = syncPrefs.getString("chroot_claude_bin", "") ?: ""
+    fun getChrootOpenCodeBinSync(): String = syncPrefs.getString("chroot_opencode_bin", "") ?: ""
+    fun getChrootCodexBinSync(): String = syncPrefs.getString("chroot_codex_bin", "") ?: ""
+
+    fun saveChrootBinariesSync(bridge: String, agy: String, claude: String, openCode: String, codex: String) {
+        syncPrefs.edit()
+            .putString("chroot_bridge_bin", bridge.trim())
+            .putString("chroot_agy_bin", agy.trim())
+            .putString("chroot_claude_bin", claude.trim())
+            .putString("chroot_opencode_bin", openCode.trim())
+            .putString("chroot_codex_bin", codex.trim())
+            .apply()
+    }
+
     fun getRemoteBridgeBinSync(): String = syncPrefs.getString("remote_bridge_bin", "") ?: ""
     fun getRemoteAgyBinSync(): String = syncPrefs.getString("remote_agy_bin", "") ?: ""
     fun getRemoteClaudeBinSync(): String = syncPrefs.getString("remote_claude_bin", "") ?: ""
@@ -803,6 +860,18 @@ class AuthPreferences(private val context: Context) {
                 prefs[AGY_BRIDGE_HTTP_URL] = trimmed
             }
         }
+    }
+
+    /**
+     * The phone's runtime changed (Termux ↔ Ubuntu chroot): addresses that were the other runtime's defaults become
+     * this one's. An address the user set stays as it is; server mode keeps its server addresses.
+     */
+    suspend fun applyLocalRuntimeUrls(chroot: Boolean) {
+        if (currentRemoteMode) return
+        val hub = storedHubUrl.trim().trimEnd('/')
+        val bridge = storedBridgeHttpUrl.trim().trimEnd('/')
+        if (hub.isEmpty() || hub == defaultLocalHubUrl(!chroot)) saveAgyHubUrl(defaultLocalHubUrl(chroot))
+        if (bridge.isEmpty() || bridge == defaultLocalBridgeUrl(!chroot)) saveAgyBridgeHttpUrl(defaultLocalBridgeUrl(chroot))
     }
 
     suspend fun saveThemeMode(mode: String) {

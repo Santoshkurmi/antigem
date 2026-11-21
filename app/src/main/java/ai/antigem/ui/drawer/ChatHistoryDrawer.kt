@@ -157,6 +157,12 @@ fun ChatHistoryDrawer(
         isInitialGracePeriod = false
     }
     val context = LocalContext.current
+    // the Ubuntu chroot in use: the Exit dialog asks whether it stops too (preset from its exit setting)
+    val chrootInUse = remember(showExitConfirmDialog) { ai.antigem.data.local.chroot.ChrootManager.isActiveNow() }
+    var stopChrootOnExit by remember(showExitConfirmDialog) {
+        mutableStateOf(ai.antigem.data.local.chroot.ChrootManager.isActiveNow() &&
+            ai.antigem.data.local.chroot.ChrootManager.exitBehavior(context) != ai.antigem.data.local.chroot.ChrootExitBehavior.KEEP_RUNNING)
+    }
     // pinned chats (app level, by conversation id) sit at the top of the list
     remember { ai.antigem.data.preferences.PinnedChats.init(context) }
     val pinnedIds by ai.antigem.data.preferences.PinnedChats.ids.collectAsState()
@@ -492,17 +498,43 @@ fun ChatHistoryDrawer(
                 )
             },
             text = {
-                Text(
-                    text = "Do you want to exit the app? This will stop all active background services, servers, and terminals.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
-                )
+                Column {
+                    Text(
+                        text = if (chrootInUse) "Do you want to exit the app? Its background services and terminals stop."
+                        else "Do you want to exit the app? This will stop all active background services, servers, and terminals.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 20.sp
+                    )
+                    // the Ubuntu chroot runs outside the app: keep it working, or stop it too (this exit only)
+                    if (chrootInUse) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 8.dp).clickable { stopChrootOnExit = !stopChrootOnExit }
+                        ) {
+                            Checkbox(checked = stopChrootOnExit, onCheckedChange = { stopChrootOnExit = it })
+                            Text(
+                                if (stopChrootOnExit) "Also stop the Ubuntu chroot (its bridge and agents)"
+                                else "Also stop the Ubuntu chroot (off: agents keep working while AntiGem is closed)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         showExitConfirmDialog = false
+                        if (chrootInUse) {
+                            val saved = ai.antigem.data.local.chroot.ChrootManager.exitBehavior(context)
+                            ai.antigem.data.local.chroot.ChrootManager.exitOverride = when {
+                                !stopChrootOnExit -> ai.antigem.data.local.chroot.ChrootExitBehavior.KEEP_RUNNING
+                                saved != ai.antigem.data.local.chroot.ChrootExitBehavior.KEEP_RUNNING -> saved
+                                else -> ai.antigem.data.local.chroot.ChrootExitBehavior.STOP_ALL
+                            }
+                        }
                         try {
                             ai.antigem.data.service.AntiGemService.stop(context)
                         } catch (e: Exception) {

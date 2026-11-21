@@ -3981,6 +3981,9 @@ fun ChatScreen(
         )
     }
 
+    // Connect to PC: a PC in use that cannot be reached after the app opened asks what to do
+    if (pcConnectEnabled) ai.antigem.ui.pc.PcUnreachablePrompt()
+
     // Connect to PC: the side bar's sheet (switch PC, add one, back to this phone)
     if (showPcSheet) {
         ai.antigem.ui.pc.PcQuickSheet(

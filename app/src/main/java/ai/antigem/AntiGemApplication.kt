@@ -56,6 +56,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         Thread { ai.antigem.ui.miniapps.MiniAppShortcuts.migrate(this) }.start()
         // Reconnects adb when Wireless debugging turns back on (it gets a new port every time)
         AdbConnectManager.init(this)
+        // the rooted Ubuntu chroot runtime: its installs and which one is in use (no root call here)
+        ai.antigem.data.local.chroot.ChrootManager.init(this)
         ai.antigem.data.ssh.SshSessionFactory.init(this)
         // Connect to PC: the paired PCs and the one in use (AuthPreferences reads the latter on its own too)
         ai.antigem.data.pc.PcConnect.init(this)

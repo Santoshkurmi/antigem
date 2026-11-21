@@ -95,14 +95,17 @@ fun GlobalContextScreen() {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Tells the agent " + (if (GlobalContext.runsOnPhone) "that it runs in AntiGem's Linux system on Android (use \$TMPDIR, not /tmp; pkg, not sudo) and " else "") +
-                        "how to show images, videos and files in this chat. Jarvis and the chats it starts get it too.",
+                    "Tells the agent where it runs (" + when (GlobalContext.runPlace) {
+                        GlobalContext.RunPlace.ANTIGEM -> "AntiGem's built-in environment on this phone: \$TMPDIR, not /tmp; pkg, not sudo"
+                        GlobalContext.RunPlace.CHROOT -> "the Ubuntu chroot on this phone: apt, and sudo is root of the whole phone"
+                        GlobalContext.RunPlace.SERVER -> "your server"
+                        GlobalContext.RunPlace.PC -> "your computer, through Connect to PC"
+                    } + "), never to use sudo, su or root on its own (only when you ask), and how to show images, videos and files in " +
+                        "this chat. Jarvis and the chats it starts get it too.",
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
-                if (!GlobalContext.runsOnPhone) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("The Android part is added only while the bridge runs on this phone.", fontSize = 11.5.sp, color = muted)
-                }
+                Spacer(Modifier.height(4.dp))
+                Text("The \"Where you run\" part follows Settings → Where agents run.", fontSize = 11.5.sp, color = muted)
                 TextButton(onClick = { showBuiltIn = !showBuiltIn }, contentPadding = PaddingValues(horizontal = 0.dp)) {
                     Text(if (showBuiltIn) "Hide the text" else "Show exactly what is sent")
                 }

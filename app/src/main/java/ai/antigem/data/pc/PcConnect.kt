@@ -548,8 +548,13 @@ object PcConnect {
 
     // ------------------------------------------------------------------------------------------------ switching
 
-    /** Label of the way back: this phone's own agents, or the server set in Settings > Servers. */
-    fun ownModeLabel(): String = if (AuthPreferences.storedRemoteMode) "Use my server" else "Use this phone"
+    /** Label of the way back: the server set in Where agents run, or this phone's own runtime (Termux or Ubuntu chroot). */
+    fun ownModeLabel(): String = when {
+        AuthPreferences.storedRemoteMode -> "Use my server"
+        ai.antigem.data.local.chroot.ChrootManager.isActiveNow() -> "Use this phone (Ubuntu chroot)"
+        appContext?.let { ai.antigem.data.local.LocalEnvironmentManager.isTermuxInstalled(it) } == true -> "Use this phone (AntiGem)"
+        else -> "Use this phone"
+    }
 
     /**
      * Switches to [pcId] (null = back to this phone / the user's own server) and reopens the app, which then connects

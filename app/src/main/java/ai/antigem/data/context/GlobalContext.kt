@@ -108,17 +108,58 @@ object GlobalContext {
 
     // ------------------------------------------------------------------ the built-in text
 
-    /** The bridge on this phone: the agent runs in the app's Linux system (Termux packages), not on a server. */
+    /** Where the agents run right now: what the built-in context tells them. */
+    enum class RunPlace { ANTIGEM, CHROOT, SERVER, PC }
+
+    val runPlace: RunPlace
+        get() = when {
+            AuthPreferences.pcOverride != null -> RunPlace.PC
+            AuthPreferences.isRemoteEndpoint() -> RunPlace.SERVER
+            ai.antigem.data.local.chroot.ChrootManager.isActiveNow() -> RunPlace.CHROOT
+            else -> RunPlace.ANTIGEM
+        }
+
+    /** The bridge runs on this phone: AntiGem's built-in environment or the Ubuntu chroot. */
     val runsOnPhone: Boolean
-        get() = !AuthPreferences.isRemoteEndpoint()
+        get() = runPlace == RunPlace.ANTIGEM || runPlace == RunPlace.CHROOT
+
+    /** The agents can read files in the app's own folder: only in AntiGem's built-in environment (not the chroot, a server or a PC). */
+    val canReadAppFiles: Boolean
+        get() = runPlace == RunPlace.ANTIGEM
+
+    /** Every place: root only when the user asks. */
+    private const val ROOT_RULE = "- Root: never use `sudo`, `su` or any other root access on your own. Only when the user asks you to; if a task needs it, ask the user first.\n"
 
     /** The built-in context for the current setup (Settings shows exactly this). [h]: the heading level of its sections. */
     fun builtInText(h: String = "##"): String = buildString {
-        if (runsOnPhone) {
-            append("$h Where you run\n")
-            append("- Android, in the AntiGem app's Linux system (Termux packages): no root, no sudo; /tmp, /usr, /etc are not usable.\n")
-            append("- Temporary files: use \$TMPDIR ($filesDir/usr/tmp), never /tmp. Install packages with `pkg install <name>`.\n")
-            append("- Home is \$HOME ($filesDir/home); phone storage is /sdcard.\n\n")
+        append("$h Where you run\n")
+        when (runPlace) {
+            RunPlace.ANTIGEM -> {
+                append("- Android, in the AntiGem app's built-in Linux environment (Termux packages), as the app's own user. There is no sudo; /tmp, /usr and /etc are not usable.\n")
+                append("- Temporary files: use \$TMPDIR ($filesDir/usr/tmp), never /tmp. Install packages with `pkg install <name>`.\n")
+                append("- Home is \$HOME ($filesDir/home); phone storage is /sdcard.\n")
+                append("- Root: the phone may be rooted (`su` may exist). Never use `su` or any root access on your own; only when the user asks you to.\n\n")
+            }
+            RunPlace.CHROOT -> {
+                val inst = ai.antigem.data.local.chroot.ChrootManager.activeInstallNow()
+                val user = inst?.user ?: "ubuntu"
+                append("- An Android phone, inside a rooted Ubuntu chroot (${inst?.os?.takeIf { it.isNotBlank() } ?: "Ubuntu"}): a normal glibc Ubuntu where apt, /tmp, /usr and /etc work. It shares Android's kernel and has no systemd (`systemctl` does not work): start services yourself.\n")
+                append("- You run as user `$user` (home /home/$user). `sudo` (often without a password) gives root of the WHOLE PHONE, not only of Ubuntu.\n")
+                append("- Root: never use `sudo`, `su` or root on your own; only when the user asks you to. A task needs a package? Ask the user before running `sudo apt install <name>`.\n")
+                append("- Phone storage is /sdcard and USB drives are under /storage, when the user shared them into the chroot. Folders shared into the chroot are the phone's real folders: what you delete there is deleted on the phone.\n")
+                append("- Android's own tools (`termux-*`, `am`, `pm`) are not available here.\n\n")
+            }
+            RunPlace.SERVER -> {
+                append("- On the user's own server (not the phone): the user reads and answers in the AntiGem app on their phone. Paths are paths on the server.\n")
+                append(ROOT_RULE)
+                append("\n")
+            }
+            RunPlace.PC -> {
+                val pc = AuthPreferences.pcOverride?.pcName?.takeIf { it.isNotBlank() }
+                append("- On the user's computer${pc?.let { " ($it)" } ?: ""}, through AntiGem for VS Code: right now the user reads and answers on their phone (AntiGem's Connect to PC). Paths are paths on that computer.\n")
+                append(ROOT_RULE)
+                append("\n")
+            }
         }
         append("$h Showing things in this chat (paths absolute, no spaces, each on its own line)\n")
         append("- Image: `![caption](/abs/path/pic.png)` · Video: `![caption](/abs/path/clip.mp4)` (plays in the chat)\n")
@@ -143,7 +184,7 @@ object GlobalContext {
         val parts = mutableListOf<String>()
         if (_builtInEnabled.value) parts += builtInText()
         // Settings → STEM & diagrams: the extra blocks this chat renders (normal chats only, not Jarvis)
-        ai.antigem.data.render.RenderBundle.promptSection(canReadFiles = runsOnPhone)?.let { parts += it }
+        ai.antigem.data.render.RenderBundle.promptSection(canReadFiles = canReadAppFiles)?.let { parts += it }
         val own = active().filter { !it.everyMessage }
         if (own.isNotEmpty()) parts += "## The user's own instructions\n" + entriesBlock(own)
         return parts.takeIf { it.isNotEmpty() }?.joinToString("\n\n")

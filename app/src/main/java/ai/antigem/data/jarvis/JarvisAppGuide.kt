@@ -10,7 +10,8 @@ object JarvisAppGuide {
 
     private fun settingsPages(): String = runCatching {
         ai.antigem.ui.settings.SettingsSection.values()
-            .filter { it != ai.antigem.ui.settings.SettingsSection.MAIN && it != ai.antigem.ui.settings.SettingsSection.CLAUDE_PAGE }
+            .filter { it != ai.antigem.ui.settings.SettingsSection.MAIN && it != ai.antigem.ui.settings.SettingsSection.CLAUDE_PAGE &&
+                it != ai.antigem.ui.settings.SettingsSection.TERMUX_ONLY }
             .joinToString("\n") { "- ${it.title} (jarvis_open_settings section=${it.name.lowercase()}): ${it.subtitle}" }
     }.getOrDefault("")
 

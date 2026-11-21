@@ -67,6 +67,23 @@ fun LocalToolsInstallDialog(
 
     // 0: Auto GitHub, 1: Direct URL, 2: Local ZIP File
     var selectedSourceType by remember { mutableStateOf(0) }
+    // the rooted Ubuntu chroot has its own full-page setup
+    var showChrootSetup by remember { mutableStateOf(false) }
+    if (showChrootSetup) {
+        ai.antigem.ui.settings.chroot.ChrootSetupDialog(
+            onDismiss = { showChrootSetup = false },
+            onDone = {
+                showChrootSetup = false
+                // the bridge moves into the chroot (it was installed as this phone's runtime)
+                ai.antigem.data.local.chroot.ChrootManager.scope.launch {
+                    ai.antigem.data.local.LocalServerManager.stopServerCompletely()
+                    ai.antigem.data.local.LocalTerminalManager.closeAll()
+                    ai.antigem.data.local.LocalServerManager.startServer(context, forceRestart = true)
+                }
+                onDismiss()
+            }
+        )
+    }
     var directUrlText by remember { mutableStateOf("") }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -347,6 +364,37 @@ fun LocalToolsInstallDialog(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
+                                }
+                            }
+
+                            // The rooted Ubuntu chroot: opens its own full-page setup
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showChrootSetup = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Outlined.Storage, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.padding(horizontal = 12.dp).size(20.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Ubuntu chroot (root)",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "A real Ubuntu for rooted phones (Magisk / KernelSU / APatch): opens its own setup page",
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
 

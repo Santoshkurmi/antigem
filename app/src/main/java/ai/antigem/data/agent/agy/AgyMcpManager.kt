@@ -290,7 +290,8 @@ class AgyMcpManager(
                             val envMap = spec.env.toMutableMap()
                             // Ensure Termux stdio binaries (npx, python3, etc.) have proper loader and PATH on Android.
                             // A server runs the MCP on its own Linux: those Termux paths would break it there.
-                            if (!AuthPreferences.currentRemoteMode) {
+                            // the Ubuntu chroot is a plain Linux too: no Termux loader or paths there
+                            if (!AuthPreferences.currentRemoteMode && !ai.antigem.data.local.chroot.ChrootManager.isActiveNow()) {
                                 if (!envMap.containsKey("LD_PRELOAD")) {
                                     envMap["LD_PRELOAD"] = "/data/data/${ai.antigem.BuildConfig.APPLICATION_ID}/files/usr/lib/libtermux-exec.so"
                                 }

@@ -459,22 +459,101 @@ private fun CodeEntry(name: String, host: String, port: Int, onBack: () -> Unit,
 
 // ------------------------------------------------------------------------------------------------ side bar
 
-/** The side bar's PC button (next to Themes): green dot while a PC is in use. */
+/**
+ * The side bar's PC button (next to Themes): green while the PC in use is connected, the warning color while it
+ * cannot be reached (its SSH connection is down).
+ */
 @Composable
 fun PcDrawerButton(onClick: () -> Unit) {
     val pcs by PcConnect.pcs.collectAsState()
     val activeId by PcConnect.activeId.collectAsState()
-    val inUse = pcs.any { it.id == activeId }
+    val ssh by ai.antigem.data.remote.RemoteServerManager.sshState.collectAsState()
+    val inUse = pcs.any { it.id == activeId } && PcConnect.active() != null
+    val color = when {
+        !inUse -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        ssh.connected -> QuotaGreen
+        else -> ai.antigem.theme.AppColors.warning
+    }
     Surface(onClick = onClick, shape = RoundedCornerShape(8.dp), color = Color.Transparent, modifier = Modifier.padding(end = 4.dp)) {
         Box {
             Icon(
-                Icons.Outlined.Computer, contentDescription = "Connect to PC",
-                tint = if (inUse) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                Icons.Outlined.Computer,
+                contentDescription = if (!inUse) "Connect to PC" else if (ssh.connected) "PC connected" else "PC not reachable",
+                tint = color,
                 modifier = Modifier.padding(8.dp).size(20.dp)
             )
-            if (inUse) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(7.dp).background(QuotaGreen, CircleShape))
+            if (inUse) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(7.dp).background(color, CircleShape))
         }
     }
+}
+
+/**
+ * A PC is in use but cannot be reached a while after the app opens (PC off, VS Code closed, another Wi-Fi): says so
+ * once, and offers to keep trying or to go back to this phone's own agents (Termux, Ubuntu chroot) or the server.
+ */
+@Composable
+fun PcUnreachablePrompt() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pcs by PcConnect.pcs.collectAsState()
+    val activeId by PcConnect.activeId.collectAsState()
+    val enabled by PcConnect.enabled.collectAsState()
+    val pc = pcs.firstOrNull { it.id == activeId }?.takeIf { enabled }
+    val ssh by ai.antigem.data.remote.RemoteServerManager.sshState.collectAsState()
+    var show by remember { mutableStateOf(false) }
+    var asked by remember { mutableStateOf(false) }
+    var retryTick by remember { mutableStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pc?.id, retryTick) {
+        if (pc == null || asked) return@LaunchedEffect
+        // the connection gets its chance first
+        delay(12_000)
+        while (true) {
+            if (ai.antigem.data.remote.RemoteServerManager.sshState.value.connected) return@LaunchedEffect
+            if (PcConnect.reachableAddress(pc, 2_000) == null) {
+                show = true
+                asked = true
+                return@LaunchedEffect
+            }
+            delay(5_000)
+        }
+    }
+    // it came back while the question was open
+    LaunchedEffect(ssh.connected) { if (ssh.connected) show = false }
+
+    if (!show || pc == null) return
+    val back = PcConnect.ownModeLabel()
+    AlertDialog(
+        onDismissRequest = { if (!busy) show = false },
+        icon = { Icon(osIcon(pc.os), null, tint = ai.antigem.theme.AppColors.warning) },
+        title = { Text("${pc.name} is not reachable", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+        text = {
+            Text(
+                "AntiGem uses the agents on ${pc.name} (${pc.orderedAddresses().joinToString(", ")}, port ${pc.sshPort}), but cannot reach it. " +
+                    "Is the PC on, with VS Code and AntiGem running, and on the same Wi-Fi as this phone?" +
+                    (ssh.message.takeIf { it.isNotBlank() && !ssh.connected }?.let { "\n\nLast try: $it" } ?: ""),
+                fontSize = 13.5.sp, lineHeight = 19.sp
+            )
+        },
+        confirmButton = {
+            Button(enabled = !busy, onClick = {
+                busy = true
+                scope.launch { PcConnect.switchTo(context, null) }
+            }) { Text(if (busy) "Reopening…" else back, fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(enabled = !busy, onClick = {
+                    show = false
+                    asked = false
+                    ai.antigem.data.remote.RemoteServerManager.start(context, force = false)
+                    retryTick++
+                }) { Text("Retry") }
+                TextButton(enabled = !busy, onClick = { show = false }) { Text("Keep waiting") }
+            }
+        }
+    )
 }
 
 /** The side bar's PC sheet: what is in use, switch to a paired PC or back, add a PC, open the settings page. */
@@ -487,6 +566,7 @@ fun PcQuickSheet(onDismiss: () -> Unit, onManage: () -> Unit) {
     val activeId by PcConnect.activeId.collectAsState()
     val active = pcs.firstOrNull { it.id == activeId }
     val reach = rememberReachability(pcs)
+    val sshState by ai.antigem.data.remote.RemoteServerManager.sshState.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
     var switchTarget by remember { mutableStateOf<PairedPc?>(null) }
     var switchBack by remember { mutableStateOf(false) }
@@ -500,6 +580,10 @@ fun PcQuickSheet(onDismiss: () -> Unit, onManage: () -> Unit) {
                 Spacer(Modifier.width(6.dp))
                 Text(active?.name ?: if (ai.antigem.data.preferences.AuthPreferences.storedRemoteMode) "Your server" else "This phone",
                     fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            }
+            // the PC in use cannot be reached: why, and the way back is the button below
+            if (active != null && !sshState.connected) {
+                Text("Not reachable: ${sshState.message}", fontSize = 12.sp, color = ai.antigem.theme.AppColors.warning)
             }
             if (pcs.isEmpty()) Hint("No PC paired yet.")
             pcs.forEach { pc ->
@@ -518,7 +602,8 @@ fun PcQuickSheet(onDismiss: () -> Unit, onManage: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
                         }
                         val (label, color) = when {
-                            inUse -> "In use" to QuotaGreen
+                            inUse && sshState.connected -> "In use · connected" to QuotaGreen
+                            inUse -> "In use · not reachable" to ai.antigem.theme.AppColors.warning
                             reach[pc.id] == true -> "Reachable" to QuotaGreen
                             reach[pc.id] == false -> "Not reachable" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                             else -> "…" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)

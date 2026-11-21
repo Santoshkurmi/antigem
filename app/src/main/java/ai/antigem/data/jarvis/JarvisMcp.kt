@@ -1079,7 +1079,7 @@ object JarvisMcp {
     private fun openSettings(args: JSONObject): JSONObject {
         val want = args.optString("section").trim().lowercase().replace(' ', '_')
         val all = ai.antigem.ui.settings.SettingsSection.values()
-            .filter { it != ai.antigem.ui.settings.SettingsSection.CLAUDE_PAGE }
+            .filter { it != ai.antigem.ui.settings.SettingsSection.CLAUDE_PAGE && it != ai.antigem.ui.settings.SettingsSection.TERMUX_ONLY }
         val s = all.firstOrNull { it.name.lowercase() == want }
             ?: all.firstOrNull { it.title.lowercase().contains(want.replace('_', ' ')) }
             ?: all.firstOrNull { it.name.lowercase().contains(want) || want.contains(it.name.lowercase()) }

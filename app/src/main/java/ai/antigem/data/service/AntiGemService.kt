@@ -329,6 +329,12 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
         } catch (e: Exception) {
             Log.w(TAG, "Error closing terminal sessions: ${e.message}")
         }
+        // the Ubuntu chroot runs outside the app's processes: Settings → Ubuntu chroot says what happens to it now
+        try {
+            ai.antigem.data.local.chroot.ChrootManager.onAppExit(this)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error applying the chroot exit setting: ${e.message}")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {

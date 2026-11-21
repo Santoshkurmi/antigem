@@ -171,7 +171,11 @@ internal fun ServersSubScreen(
     isBridgeOnline: Boolean = false,
     cardBg: Color,
     cardBorder: BorderStroke,
-    onSaveServerUrls: (String, String) -> Unit
+    onSaveServerUrls: (String, String) -> Unit,
+    /** Opens the Termux environment's installer. */
+    onInstallTermux: () -> Unit = {},
+    /** Opens the page of the Ubuntu chroot at this path. */
+    onManageChroot: (String) -> Unit = {}
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -183,15 +187,26 @@ internal fun ServersSubScreen(
     var remote by remember { mutableStateOf(AuthPreferences.currentRemoteMode) }
     // only with remote: reach the server's bridge/hub through the SSH connection instead of a domain or open ports
     var tunnel by remember { mutableStateOf(AuthPreferences.currentRemoteMode && AuthPreferences.currentRemoteTunnel) }
+    // on this phone: the Termux environment or the rooted Ubuntu chroot
+    var phoneChroot by remember { mutableStateOf(authPrefs.isChrootModeSync()) }
+    var showFactoryReset by remember { mutableStateOf(false) }
     var hubText by remember { mutableStateOf(currentHubUrl.ifBlank { AuthPreferences.DEFAULT_HUB_URL }) }
     var bridgeText by remember { mutableStateOf(currentBridgeUrl.ifBlank { AuthPreferences.DEFAULT_BRIDGE_HTTP_URL }) }
 
     // local binaries
-    var bridgeBinPath by remember { mutableStateOf(authPrefs.getAgyBridgeBinaryPathSync()) }
-    var agyBinPath by remember { mutableStateOf(authPrefs.getAgyBinaryPathSync()) }
-    var claudeBinPath by remember { mutableStateOf(authPrefs.getClaudeBinaryPathSync()) }
-    var openCodeBinPath by remember { mutableStateOf(authPrefs.getOpenCodeBinaryPathSync()) }
-    var codexBinPath by remember { mutableStateOf(authPrefs.getCodexBinaryPathSync()) }
+    // every path field is empty unless the user set a path: empty = the default (shown as the field's hint)
+    fun custom(value: String, default: String) = value.trim().takeIf { it != default.trim() }.orEmpty()
+    var bridgeBinPath by remember { mutableStateOf(custom(authPrefs.getAgyBridgeBinaryPathSync(), authPrefs.getDefaultBridgeBinaryPath())) }
+    var agyBinPath by remember { mutableStateOf(custom(authPrefs.getAgyBinaryPathSync(), authPrefs.getDefaultAgyBinaryPath())) }
+    var claudeBinPath by remember { mutableStateOf(custom(authPrefs.getClaudeBinaryPathSync(), authPrefs.getDefaultClaudeBinaryPath())) }
+    var openCodeBinPath by remember { mutableStateOf(custom(authPrefs.getOpenCodeBinaryPathSync(), authPrefs.getDefaultOpenCodeBinaryPath())) }
+    var codexBinPath by remember { mutableStateOf(custom(authPrefs.getCodexBinaryPathSync(), authPrefs.getDefaultCodexBinaryPath())) }
+    // the Ubuntu chroot's own agent paths (blank = the default, where the agent's installer puts it)
+    var chrootBridgeBin by remember { mutableStateOf(authPrefs.getChrootBridgeBinSync()) }
+    var chrootAgyBin by remember { mutableStateOf(authPrefs.getChrootAgyBinSync()) }
+    var chrootClaudeBin by remember { mutableStateOf(authPrefs.getChrootClaudeBinSync()) }
+    var chrootOpenCodeBin by remember { mutableStateOf(authPrefs.getChrootOpenCodeBinSync()) }
+    var chrootCodexBin by remember { mutableStateOf(authPrefs.getChrootCodexBinSync()) }
 
     // SSH (loaded from the saved settings)
     var sshHost by remember { mutableStateOf("") }
@@ -203,11 +218,11 @@ internal fun ServersSubScreen(
 
     // server side paths and ports (blank = automatic)
     // a blank saved value means "the default", so the default itself is shown (and saved) instead of an empty box
-    fun storedBridgeBin() = authPrefs.getRemoteBridgeBinSync().ifBlank { RemoteServerManager.defaultBridgeBin(authPrefs.getRemoteInstallDirSync()) }
-    fun storedAgyBin() = authPrefs.getRemoteAgyBinSync().ifBlank { RemoteServerManager.DEFAULT_AGY_BIN }
-    fun storedClaudeBin() = authPrefs.getRemoteClaudeBinSync().ifBlank { RemoteServerManager.DEFAULT_CLAUDE_BIN }
-    fun storedOpenCodeBin() = authPrefs.getRemoteOpenCodeBinSync().ifBlank { RemoteServerManager.DEFAULT_OPENCODE_BIN }
-    fun storedCodexBin() = authPrefs.getRemoteCodexBinSync().ifBlank { RemoteServerManager.DEFAULT_CODEX_BIN }
+    fun storedBridgeBin() = custom(authPrefs.getRemoteBridgeBinSync(), RemoteServerManager.defaultBridgeBin(authPrefs.getRemoteInstallDirSync()))
+    fun storedAgyBin() = custom(authPrefs.getRemoteAgyBinSync(), RemoteServerManager.DEFAULT_AGY_BIN)
+    fun storedClaudeBin() = custom(authPrefs.getRemoteClaudeBinSync(), RemoteServerManager.DEFAULT_CLAUDE_BIN)
+    fun storedOpenCodeBin() = custom(authPrefs.getRemoteOpenCodeBinSync(), RemoteServerManager.DEFAULT_OPENCODE_BIN)
+    fun storedCodexBin() = custom(authPrefs.getRemoteCodexBinSync(), RemoteServerManager.DEFAULT_CODEX_BIN)
     var remoteBridgeBin by remember { mutableStateOf(storedBridgeBin()) }
     var remoteAgyBin by remember { mutableStateOf(storedAgyBin()) }
     var remoteClaudeBin by remember { mutableStateOf(storedClaudeBin()) }
@@ -248,7 +263,8 @@ internal fun ServersSubScreen(
     var profileTick by remember { mutableIntStateOf(0) }
 
     fun snapshot() = listOf(
-        remote, tunnel, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(), openCodeBinPath.trim(), codexBinPath.trim(),
+        remote, tunnel, phoneChroot, hubText.trim(), bridgeText.trim(), bridgeBinPath.trim(), agyBinPath.trim(), claudeBinPath.trim(), openCodeBinPath.trim(), codexBinPath.trim(),
+        chrootBridgeBin.trim(), chrootAgyBin.trim(), chrootClaudeBin.trim(), chrootOpenCodeBin.trim(), chrootCodexBin.trim(),
         securityToken.trim(), sshHost.trim(), sshPort.trim(), sshUser.trim(), sshPass, sshKey.trim(), sshPassphrase,
         remoteBridgeBin.trim(), remoteAgyBin.trim(), remoteClaudeBin.trim(), remoteOpenCodeBin.trim(), remoteCodexBin.trim(), remoteInstallDir.trim(),
         listenBridge.trim(), listenHub.trim(), listenBind.trim(), edgeName.trim(), edgeValue.trim()
@@ -284,17 +300,18 @@ internal fun ServersSubScreen(
             edgeName = o.optString("edgeName").ifBlank { AuthPreferences.DEFAULT_EDGE_HEADER_NAME }
             if (o.has("edgeValue")) edgeValue = o.optString("edgeValue")
             remoteInstallDir = o.optString("installDir").ifBlank { ".antigem" }
-            remoteBridgeBin = o.optString("bridgeBin").ifBlank { RemoteServerManager.defaultBridgeBin(remoteInstallDir) }
-            remoteAgyBin = o.optString("agyBin").ifBlank { RemoteServerManager.DEFAULT_AGY_BIN }
-            remoteClaudeBin = o.optString("claudeBin").ifBlank { RemoteServerManager.DEFAULT_CLAUDE_BIN }
-            remoteOpenCodeBin = o.optString("openCodeBin").ifBlank { RemoteServerManager.DEFAULT_OPENCODE_BIN }
-            remoteCodexBin = o.optString("codexBin").ifBlank { RemoteServerManager.DEFAULT_CODEX_BIN }
+            remoteBridgeBin = custom(o.optString("bridgeBin"), RemoteServerManager.defaultBridgeBin(remoteInstallDir))
+            remoteAgyBin = custom(o.optString("agyBin"), RemoteServerManager.DEFAULT_AGY_BIN)
+            remoteClaudeBin = custom(o.optString("claudeBin"), RemoteServerManager.DEFAULT_CLAUDE_BIN)
+            remoteOpenCodeBin = custom(o.optString("openCodeBin"), RemoteServerManager.DEFAULT_OPENCODE_BIN)
+            remoteCodexBin = custom(o.optString("codexBin"), RemoteServerManager.DEFAULT_CODEX_BIN)
             listenBridge = o.optString("listenBridge"); listenHub = o.optString("listenHub"); listenBind = o.optString("listenBind")
         } else {
-            bridgeBinPath = o.optString("bridgeBin", bridgeBinPath); agyBinPath = o.optString("agyBin", agyBinPath)
-            claudeBinPath = o.optString("claudeBin", claudeBinPath)
-            openCodeBinPath = o.optString("openCodeBin", openCodeBinPath)
-            codexBinPath = o.optString("codexBin", codexBinPath)
+            bridgeBinPath = custom(o.optString("bridgeBin", bridgeBinPath), authPrefs.getDefaultBridgeBinaryPath())
+            agyBinPath = custom(o.optString("agyBin", agyBinPath), authPrefs.getDefaultAgyBinaryPath())
+            claudeBinPath = custom(o.optString("claudeBin", claudeBinPath), authPrefs.getDefaultClaudeBinaryPath())
+            openCodeBinPath = custom(o.optString("openCodeBin", openCodeBinPath), authPrefs.getDefaultOpenCodeBinaryPath())
+            codexBinPath = custom(o.optString("codexBin", codexBinPath), authPrefs.getDefaultCodexBinaryPath())
         }
     }
 
@@ -315,6 +332,18 @@ internal fun ServersSubScreen(
             bridgeLoopback -> { hubText = ""; bridgeText = "" }
         }
         remote = r; tunnel = r && t
+    }
+
+    /** This phone, with the Termux environment or the Ubuntu chroot: each has its own default ports (an address set by hand stays). */
+    fun selectPhone(chroot: Boolean) {
+        if (!remote && chroot == phoneChroot) return
+        val wasRemote = remote
+        selectMode(false, false)
+        phoneChroot = chroot
+        val h = hubText.trim().trimEnd('/')
+        val b = bridgeText.trim().trimEnd('/')
+        if (wasRemote || h.isEmpty() || h == AuthPreferences.defaultLocalHubUrl(!chroot)) hubText = AuthPreferences.defaultLocalHubUrl(chroot)
+        if (wasRemote || b.isEmpty() || b == AuthPreferences.defaultLocalBridgeUrl(!chroot)) bridgeText = AuthPreferences.defaultLocalBridgeUrl(chroot)
     }
 
     var savedSnapshot by remember { mutableStateOf<String?>(null) }
@@ -372,11 +401,11 @@ internal fun ServersSubScreen(
                     hubText = currentHubUrl
                     bridgeText = currentBridgeUrl
                     securityToken = initSecurityToken
-                    bridgeBinPath = authPrefs.getAgyBridgeBinaryPathSync()
-                    agyBinPath = authPrefs.getAgyBinaryPathSync()
-                    claudeBinPath = authPrefs.getClaudeBinaryPathSync()
-                    openCodeBinPath = authPrefs.getOpenCodeBinaryPathSync()
-                    codexBinPath = authPrefs.getCodexBinaryPathSync()
+                    bridgeBinPath = custom(authPrefs.getAgyBridgeBinaryPathSync(), authPrefs.getDefaultBridgeBinaryPath())
+                    agyBinPath = custom(authPrefs.getAgyBinaryPathSync(), authPrefs.getDefaultAgyBinaryPath())
+                    claudeBinPath = custom(authPrefs.getClaudeBinaryPathSync(), authPrefs.getDefaultClaudeBinaryPath())
+                    openCodeBinPath = custom(authPrefs.getOpenCodeBinaryPathSync(), authPrefs.getDefaultOpenCodeBinaryPath())
+                    codexBinPath = custom(authPrefs.getCodexBinaryPathSync(), authPrefs.getDefaultCodexBinaryPath())
                     sshKey = AuthPreferences.currentSshPrivateKey
                     sshPassphrase = AuthPreferences.currentSshKeyPassphrase
                     remoteBridgeBin = storedBridgeBin()
@@ -599,10 +628,11 @@ internal fun ServersSubScreen(
                     Icon(Icons.Outlined.Dns, null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Where the server runs", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("Agents run on", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             when {
-                                !remote -> "The bridge and the agents run on this phone."
+                                !remote && phoneChroot -> "This phone, in the rooted Ubuntu chroot: the bridge, the agents and the terminal (apt, glibc, sudo)."
+                                !remote -> "This phone, in AntiGem's built-in environment: the bridge, the agents and the terminal (no root needed)."
                                 tunnel -> "On your server, reached through the SSH connection: no open ports, no domain, no reverse proxy."
                                 else -> "The bridge and the agents run on your server, reached by a domain or open ports. The app manages them over SSH."
                             },
@@ -611,8 +641,16 @@ internal fun ServersSubScreen(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                Text("This phone", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)
+                Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ModeOption("This phone", !remote, Modifier.weight(1f)) { selectMode(false, false) }
+                    ModeOption("AntiGem", !remote && !phoneChroot, Modifier.weight(1f)) { selectPhone(false) }
+                    ModeOption("Ubuntu chroot", !remote && phoneChroot, Modifier.weight(1f)) { selectPhone(true) }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Your server", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)
+                Spacer(Modifier.height(4.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ModeOption("Server", remote && !tunnel, Modifier.weight(1f)) { selectMode(true, false) }
                     ModeOption("SSH tunnel", remote && tunnel, Modifier.weight(1f)) { selectMode(true, true) }
                 }
@@ -636,6 +674,29 @@ internal fun ServersSubScreen(
                 Text("Picking a profile switches to its mode. Profiles are saved only when you tap Save as profile, and only on this phone.", fontSize = 10.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
             }
         }
+
+        // ----- the chosen runtime of this phone -----
+        if (!remote) {
+            if (phoneChroot) {
+                ai.antigem.ui.settings.chroot.ChrootRuntimeCard(cardBg, cardBorder, onManage = onManageChroot, onInstalled = {
+                    // installed and made the runtime: the saved addresses moved to the chroot's ports
+                    hubText = AuthPreferences.currentHubUrl
+                    bridgeText = AuthPreferences.currentBridgeHttpUrl
+                    savedSnapshot = snapshot()
+                    if (!AuthPreferences.currentRemoteMode) showRestartDialog = true
+                })
+            } else {
+                ai.antigem.ui.settings.chroot.TermuxRuntimeCard(cardBg, cardBorder, onInstall = onInstallTermux, onFactoryReset = { showFactoryReset = true },
+                    onInstalled = {
+                        // the install switched the phone to Termux (and its addresses) already
+                        phoneChroot = false
+                        hubText = AuthPreferences.currentHubUrl
+                        bridgeText = AuthPreferences.currentBridgeHttpUrl
+                        savedSnapshot = snapshot()
+                    })
+            }
+        }
+        FactoryResetDialogs(showFactoryReset) { showFactoryReset = false }
 
         // ----- The two addresses -----
         Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
@@ -941,19 +1002,19 @@ internal fun ServersSubScreen(
                         )
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteBridgeBin, { remoteBridgeBin = it; saveFeedback = null }, label = { Text("Bridge binary on the server") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            placeholder = { Text(RemoteServerManager.defaultBridgeBin(remoteInstallDir)) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteAgyBin, { remoteAgyBin = it; saveFeedback = null }, label = { Text("agy binary on the server") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            placeholder = { Text(RemoteServerManager.DEFAULT_AGY_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteClaudeBin, { remoteClaudeBin = it; saveFeedback = null }, label = { Text("claude binary on the server") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            placeholder = { Text(RemoteServerManager.DEFAULT_CLAUDE_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteOpenCodeBin, { remoteOpenCodeBin = it; saveFeedback = null }, label = { Text("opencode binary on the server") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            placeholder = { Text(RemoteServerManager.DEFAULT_OPENCODE_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteCodexBin, { remoteCodexBin = it; saveFeedback = null }, label = { Text("codex binary on the server") },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                            placeholder = { Text(RemoteServerManager.DEFAULT_CODEX_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteInstallDir, {
                             // while the bridge path is still the default of the old folder, it follows the folder
@@ -981,16 +1042,65 @@ internal fun ServersSubScreen(
                 RemoteServerManager.refreshLog(context)
                 showServerLog = true
             })
-        } else {
-            // ----- local binaries -----
+        } else if (phoneChroot) {
+            // ----- the Ubuntu chroot's agent paths (paths inside the chroot) -----
             Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Terminal, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Binary Executable Paths", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            Text("Custom paths used when auto-starting IDE Bridge, AGY Hub, Claude Code and OpenCode", fontSize = 11.5.sp, color = subtle)
+                            Text("Agent paths in the Ubuntu chroot", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("For advanced use only: leave them empty and the defaults (shown in grey) are used", fontSize = 11.5.sp, color = subtle)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(chrootBridgeBin, { chrootBridgeBin = it; saveFeedback = null }, label = { Text("IDE Bridge") },
+                        placeholder = { Text(ai.antigem.data.local.chroot.ChrootManager.BRIDGE_IN_CHROOT) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(chrootAgyBin, { chrootAgyBin = it; saveFeedback = null }, label = { Text("AGY Hub (agy)") },
+                        placeholder = { Text(RemoteServerManager.DEFAULT_AGY_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(chrootClaudeBin, { chrootClaudeBin = it; saveFeedback = null }, label = { Text("Claude Code") },
+                        placeholder = { Text(RemoteServerManager.DEFAULT_CLAUDE_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(chrootOpenCodeBin, { chrootOpenCodeBin = it; saveFeedback = null }, label = { Text("OpenCode") },
+                        placeholder = { Text(RemoteServerManager.DEFAULT_OPENCODE_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(chrootCodexBin, { chrootCodexBin = it; saveFeedback = null }, label = { Text("Codex") },
+                        placeholder = { Text(RemoteServerManager.DEFAULT_CODEX_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("• Passed to the bridge on launch (--bin, --claude-bin, --opencode-bin, --codex-bin). The bridge also finds an agent in the usual folders when its path is wrong.",
+                        fontSize = 11.sp, color = subtle)
+                    Text("• Installing from the app (Settings → each agent → Install) uses the agents' official Linux installers, which put them at these defaults.",
+                        fontSize = 11.sp, color = subtle)
+                    Text("• IDE Bridge: AntiGem puts this app version's bridge at ${ai.antigem.data.local.chroot.ChrootManager.BRIDGE_IN_CHROOT} at every start. Another path runs your own bridge instead.",
+                        fontSize = 11.sp, color = subtle)
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = {
+                            chrootBridgeBin = ""; chrootAgyBin = ""; chrootClaudeBin = ""; chrootOpenCodeBin = ""; chrootCodexBin = ""
+                            saveFeedback = "Agent paths reset to the defaults (click Save to apply)."
+                            saveIsError = false
+                        },
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Reset to defaults", fontSize = 12.sp)
+                    }
+                }
+            }
+        } else {
+            // ----- local binaries (AntiGem's built-in environment) -----
+            Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Terminal, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Agent paths in AntiGem", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("For advanced use only: leave them empty and the defaults (shown in grey) are used", fontSize = 11.5.sp, color = subtle)
                         }
                     }
                     Spacer(Modifier.height(14.dp))
@@ -1028,13 +1138,9 @@ internal fun ServersSubScreen(
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = {
-                            hubText = AuthPreferences.DEFAULT_HUB_URL
-                            bridgeText = AuthPreferences.DEFAULT_BRIDGE_HTTP_URL
-                            bridgeBinPath = authPrefs.getDefaultBridgeBinaryPath()
-                            agyBinPath = authPrefs.getDefaultAgyBinaryPath()
-                            claudeBinPath = authPrefs.getDefaultClaudeBinaryPath()
-                            openCodeBinPath = authPrefs.getDefaultOpenCodeBinaryPath()
-                            codexBinPath = authPrefs.getDefaultCodexBinaryPath()
+                            hubText = AuthPreferences.defaultLocalHubUrl(phoneChroot)
+                            bridgeText = AuthPreferences.defaultLocalBridgeUrl(phoneChroot)
+                            bridgeBinPath = ""; agyBinPath = ""; claudeBinPath = ""; openCodeBinPath = ""; codexBinPath = ""
                             saveFeedback = "Settings reset to defaults (click Save to apply)."
                             saveIsError = false
                         },
@@ -1117,6 +1223,8 @@ internal fun ServersSubScreen(
                 val hub = AuthPreferences.normalizeServerUrl(hubText, BuildConfig.HUB_PORT)
                 val bridge = AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT)
                 val problem = when {
+                    !remote && phoneChroot && ai.antigem.data.local.chroot.ChrootManager.activeInstall(context) == null ->
+                        "Install the Ubuntu chroot first (Install or find, above), or choose AntiGem."
                     bridge == null -> "The IDE Bridge address is not valid."
                     hub == null -> "The AGY Hub address is not valid."
                     remote && tunnel && (!AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(bridge)) || !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(hub))) ->
@@ -1149,8 +1257,16 @@ internal fun ServersSubScreen(
                 securityToken = tokenToSave
                 coroutineScope.launch {
                     authPrefs.saveSecurityToken(tokenToSave)
+                    val wasChroot = authPrefs.isChrootModeSync()
                     authPrefs.saveRemoteModeSync(remote)
                     authPrefs.saveRemoteTunnelSync(remote && tunnel)
+                    if (!remote) {
+                        if (phoneChroot) ai.antigem.data.local.chroot.ChrootManager.activeInstall(context)?.let {
+                            ai.antigem.data.local.chroot.ChrootManager.activate(context, it)
+                        } else ai.antigem.data.local.chroot.ChrootManager.useTermux(context)
+                    }
+                    // the chroot's bridge outlives the app: stop it when the agents no longer run there
+                    if (wasChroot && (remote || !phoneChroot)) ai.antigem.data.local.chroot.ChrootManager.stopBridge(context)
                     if (remote) {
                         authPrefs.saveSshSettings(sshHost.trim(), sshPort.toIntOrNull() ?: 22, sshUser.trim(), sshPass)
                         authPrefs.saveSshKeySync(sshKey, sshPassphrase)
@@ -1164,6 +1280,7 @@ internal fun ServersSubScreen(
                         authPrefs.saveClaudeBinaryPath(claudeBinPath.trim().ifBlank { authPrefs.getDefaultClaudeBinaryPath() })
                         authPrefs.saveOpenCodeBinaryPath(openCodeBinPath.trim().ifBlank { authPrefs.getDefaultOpenCodeBinaryPath() })
                         authPrefs.saveCodexBinaryPath(codexBinPath.trim().ifBlank { authPrefs.getDefaultCodexBinaryPath() })
+                        authPrefs.saveChrootBinariesSync(chrootBridgeBin, chrootAgyBin, chrootClaudeBin, chrootOpenCodeBin, chrootCodexBin)
                     }
                 }
                 savedSnapshot = snapshot()

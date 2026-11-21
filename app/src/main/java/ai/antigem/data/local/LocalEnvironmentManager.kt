@@ -192,7 +192,16 @@ object LocalEnvironmentManager {
     fun getTmpDir(context: Context): File = File(getPrefixDir(context), "tmp")
     fun getHomeDir(context: Context): File = File(context.filesDir, "home")
     fun getProjectsDir(context: Context): File = File(getHomeDir(context), "projects")
+    /** The phone's runtime is installed: the Ubuntu chroot when it is the chosen one, else the Termux environment. */
     fun isInstalled(context: Context): Boolean {
+        if (AuthPreferences(context).isChrootModeSync()) {
+            return ai.antigem.data.local.chroot.ChrootManager.activeInstall(context) != null
+        }
+        return isTermuxInstalled(context)
+    }
+
+    /** The Termux environment (bootstrap / rootfs in the app's files) is installed, whichever runtime is chosen. */
+    fun isTermuxInstalled(context: Context): Boolean {
         val binDir = getBinDir(context)
         val homeDir = getHomeDir(context)
         return (binDir.exists() && binDir.isDirectory && (File(binDir, "sh").exists() || File(binDir, "dash").exists() || File(binDir, "bash").exists() || File(binDir, "busybox").exists())) &&
@@ -221,6 +230,8 @@ object LocalEnvironmentManager {
      * an update replaced it. Called on every server start and new terminal; only rewrites what changed.
      */
     fun ensureClaudeWrapper(context: Context) {
+        val authPrefs = AuthPreferences(context)
+        if (authPrefs.isChrootModeSync()) return
         try {
             val prefix = getPrefixDir(context).absolutePath
             val home = getHomeDir(context).absolutePath
@@ -1494,7 +1505,18 @@ object LocalEnvironmentManager {
                 return@withContext false
             }
 
-            // Save installation state in preferences
+            // Save installation state in preferences; the environment just installed becomes the phone's runtime
+            // (an Ubuntu chroot stays installed and can be chosen again in Settings → Where agents run).
+            // Coming from the chroot: its bridge outlives the app, so it is stopped (and its terminals closed) first
+            val wasChroot = authPreferences.isChrootModeSync()
+            if (wasChroot) {
+                log("Stopping the Ubuntu chroot's bridge: the agents move to AntiGem's built-in environment…")
+                runCatching { LocalServerManager.stopServerCompletely() }
+                runCatching { ai.antigem.data.local.chroot.ChrootManager.stopBridge(appContext) }
+                runCatching { LocalTerminalManager.closeAll() }
+            }
+            authPreferences.setEnvironmentType(ai.antigem.data.local.chroot.ChrootManager.ENV_TERMUX)
+            authPreferences.applyLocalRuntimeUrls(chroot = false)
             authPreferences.setLocalToolsInstalled(true, BOOTSTRAP_VERSION)
             authPreferences.setLocalToolsEnabled(true)
             authPreferences.setTerminalToolEnabled(true)
@@ -1506,7 +1528,11 @@ object LocalEnvironmentManager {
             )
             updateInstallNotification(appContext, "Installation Complete", "Termux Linux environment is verified and ready!", 100, ongoing = false, force = true)
             log("✅ Local environment ready and verified! Total space: ${getFormattedDiskSpace(appContext)}")
-            LocalTerminalManager.autoLaunchServerIfReady(appContext)
+            if (wasChroot && ai.antigem.data.agent.AgentPreferences.hasChosenSync(appContext)) {
+                LocalServerManager.startServer(appContext, forceRestart = true)
+            } else {
+                LocalTerminalManager.autoLaunchServerIfReady(appContext)
+            }
             return@withContext true
 
         } catch (e: Exception) {
@@ -1708,6 +1734,8 @@ object LocalEnvironmentManager {
     }
 
     fun ensureGlibcEnvironment(context: Context): Boolean {
+        val authPrefs = AuthPreferences(context)
+        if (authPrefs.isChrootModeSync()) return true
         val prefixDir = getPrefixDir(context)
         val glibcDir = File(prefixDir, "glibc")
         val glibcLib = File(glibcDir, "lib")
@@ -2271,6 +2299,10 @@ All files created here persist inside the application.
         Log.d(TAG, "[Reset] Triggering Android OS application data wipe...")
         try {
             LocalServerManager.forceKillAll()
+        } catch (_: Exception) {}
+        // nothing of an Ubuntu chroot may run (or stay mounted) while Android deletes the app's data
+        try {
+            ai.antigem.data.local.chroot.ChrootManager.stopAllBlocking(context)
         } catch (_: Exception) {}
 
         try {

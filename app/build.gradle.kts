@@ -267,6 +267,39 @@ val buildAgyIdeBridge = tasks.register<Exec>("buildAgyIdeBridge") {
   commandLine("go", "build", "-ldflags=-s -w", "-o", rawFile.absolutePath, "main.go")
 }
 
+// The rooted Ubuntu chroot runs a plain Linux build of the bridge: the Android one asks for Android's linker
+// (/system/bin/linker64), which a chroot does not have. Static (no cgo), so it runs on any glibc or musl rootfs.
+val agyIdeBridgeLinuxRaw = layout.buildDirectory.file("intermediates/agyIdeBridge/agy_ide_bridge_linux")
+val buildAgyIdeBridgeLinux = tasks.register<Exec>("buildAgyIdeBridgeLinux") {
+  dependsOn(syncBridgeVersion)
+  val bridgeSourceDir = layout.projectDirectory.dir("../agy_ide_bridge")
+  val rawFile = agyIdeBridgeLinuxRaw.get().asFile
+
+  doFirst {
+    rawFile.parentFile.mkdirs()
+  }
+
+  workingDir = bridgeSourceDir.asFile
+  environment("GOOS", "linux")
+  environment("GOARCH", if (isX86) "amd64" else "arm64")
+  environment("CGO_ENABLED", "0")
+  commandLine("go", "build", "-ldflags=-s -w", "-o", rawFile.absolutePath, "main.go")
+}
+
+val compressAgyIdeBridgeLinux = tasks.register<Exec>("compressAgyIdeBridgeLinux") {
+  dependsOn(buildAgyIdeBridgeLinux)
+  val binDir = layout.projectDirectory.dir("src/main/assets/bin").asFile
+  val rawFile = agyIdeBridgeLinuxRaw.get().asFile
+  inputs.file(rawFile)
+  outputs.file(File(binDir, "agy_ide_bridge_linux.xz"))
+
+  doFirst {
+    binDir.mkdirs()
+  }
+
+  commandLine("sh", "-c", "xz -6 -T1 -c \"$1\" > \"$2\"", "sh", rawFile.absolutePath, File(binDir, "agy_ide_bridge_linux.xz").absolutePath)
+}
+
 val compressAgyIdeBridge = tasks.register<Exec>("compressAgyIdeBridge") {
   dependsOn(buildAgyIdeBridge)
   val binDir = layout.projectDirectory.dir("src/main/assets/bin").asFile
@@ -308,7 +341,7 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
 }
 
 tasks.named("preBuild") {
-  dependsOn(compressAgyIdeBridge, copyScriptsToAssets)
+  dependsOn(compressAgyIdeBridge, compressAgyIdeBridgeLinux, copyScriptsToAssets)
 }
 
 

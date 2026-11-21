@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,11 +23,17 @@ import (
 
 // Installing Codex from the app:
 //   - native Termux: the Termux package (`pkg install codex`), a normal Android build kept up to date by Termux;
-//   - elsewhere (Linux, proot Ubuntu): the official static Linux build from the latest GitHub release, checked
-//     against the release's sha256, into ~/.local/bin/codex. A copy managed by Codex's own installer (a link into
-//     ~/.codex/packages) is updated with `codex update` instead.
+//   - Linux (the phone's rooted Ubuntu chroot, a server): Codex's own installer (chatgpt.com/codex/install.sh). It
+//     installs the whole package (codex, its ripgrep, its bwrap sandbox, the exec server) into
+//     ~/.codex/packages/standalone with ~/.local/bin/codex linked to it, checked against the release's sha256. A copy
+//     installed that way is updated with `codex update`;
+//   - when the installer cannot run, and elsewhere (proot Ubuntu): the static Linux binary from the latest GitHub
+//     release, checked against the release's sha256, into ~/.local/bin/codex.
 
 const latestReleaseURL = "https://api.github.com/repos/openai/codex/releases/latest"
+
+// officialInstallerURL is Codex's own installer script (releases.openai.com, GitHub Releases as its fallback).
+const officialInstallerURL = "https://chatgpt.com/codex/install.sh"
 
 // installJob is the one install / update that can run at a time; the app polls it.
 type installJob struct {
@@ -61,22 +68,126 @@ func (m *Manager) install(ctx context.Context, j *installJob, update bool) error
 	if update {
 		if bin, err := m.ResolveBinary(); err == nil {
 			if real, err := filepath.EvalSymlinks(bin); err == nil && strings.Contains(real, filepath.Join(".codex", "packages")) {
-				if err := m.runLogged(ctx, j, bin, "update"); err != nil {
+				err := m.runLogged(ctx, j, bin, "update")
+				if err == nil {
+					m.afterInstall(j)
+					return nil
+				}
+				if runtime.GOOS != "linux" {
 					return err
 				}
-				m.afterInstall(j)
-				return nil
+				// the installer installs the latest version as well
+				j.logf("`codex update` did not work (%v): running Codex's installer instead", err)
 			}
 		}
+	}
+	if runtime.GOOS == "linux" {
+		err := m.installOfficial(ctx, j)
+		if err == nil {
+			m.afterInstall(j)
+			return nil
+		}
+		if ctx.Err() != nil {
+			return err
+		}
+		j.logf("Codex's installer did not work (%v): installing the binary from GitHub instead", err)
 	}
 	return m.installRelease(ctx, j, update)
 }
 
+// installOfficial runs Codex's own installer (downloaded first, so a cut download is never run half) without
+// prompts, then checks that ~/.local/bin/codex starts. A plain binary there from an earlier GitHub install is moved
+// aside for it, and put back when the installer fails.
+func (m *Manager) installOfficial(ctx context.Context, j *installJob) error {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		return errors.New("no sh")
+	}
+	_, curlErr := exec.LookPath("curl")
+	_, wgetErr := exec.LookPath("wget")
+	if curlErr != nil && wgetErr != nil {
+		return errors.New("it needs curl or wget (sudo apt install curl)")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, officialInstallerURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("could not download the installer: %w", err)
+	}
+	script, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not download the installer: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(string(script), "#!") {
+		return fmt.Errorf("could not download the installer (HTTP %d)", resp.StatusCode)
+	}
+	tmp, err := os.CreateTemp("", "codex-install-*.sh")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(script); err != nil {
+		tmp.Close()
+		return err
+	}
+	tmp.Close()
+
+	binDir := filepath.Join(m.HomeDir, ".local", "bin")
+	dest := filepath.Join(binDir, "codex")
+	// a plain file (the GitHub binary) is replaced by the installer's link; keep it until the installer succeeded
+	var aside string
+	if fi, err := os.Lstat(dest); err == nil && fi.Mode().IsRegular() {
+		aside = dest + ".before-installer"
+		if err := os.Rename(dest, aside); err != nil {
+			return err
+		}
+	}
+	restore := func() {
+		if aside == "" {
+			return
+		}
+		if _, err := os.Lstat(dest); err != nil {
+			os.Rename(aside, dest)
+		}
+	}
+
+	j.logf("Running Codex's installer (%s)", officialInstallerURL)
+	err = m.runLoggedEnv(ctx, j, []string{
+		"CODEX_NON_INTERACTIVE=1",
+		"CODEX_INSTALL_DIR=" + binDir,
+		"HOME=" + m.HomeDir,
+	}, sh, tmp.Name())
+	if err != nil {
+		restore()
+		return err
+	}
+	m.verMu.Lock()
+	m.version = ""
+	m.verMu.Unlock()
+	if v := m.Version(dest); v == "" {
+		restore()
+		return fmt.Errorf("the installer finished, but %s does not start on this device", dest)
+	}
+	if aside != "" {
+		os.Remove(aside)
+	}
+	return nil
+}
+
 // runLogged runs a command and copies its output into the job log line by line.
 func (m *Manager) runLogged(ctx context.Context, j *installJob, bin string, args ...string) error {
+	return m.runLoggedEnv(ctx, j, nil, bin, args...)
+}
+
+// runLoggedEnv is runLogged with [env] added to the command's environment.
+func (m *Manager) runLoggedEnv(ctx context.Context, j *installJob, env []string, bin string, args ...string) error {
 	j.logf("$ %s %s", filepath.Base(bin), strings.Join(args, " "))
 	cmd := m.command(ctx, bin, args...)
 	cmd.Env = append(cmd.Env, "DEBIAN_FRONTEND=noninteractive")
+	cmd.Env = append(cmd.Env, env...)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

@@ -207,6 +207,14 @@ Each one is a one-tap preset in **Settings → MCP Servers**, for every agent.
 - **ADB Connect**: connects the terminal's `adb` to the same phone over Wireless debugging, with pairing from a notification and automatic reconnects.
 - **Linux desktop (X11)**: run an XFCE or LXQt desktop and Linux GUI apps through Termux:X11, set up from **Settings → Termux Support → X11 Desktop**. See [X11 desktop](#x11-desktop).
 
+### Ubuntu chroot (rooted phones)
+On a rooted phone (Magisk, KernelSU or APatch), the agents and the terminal can run in a **real Ubuntu** instead of the built-in environment: `apt`, `glibc` and `sudo`, at full speed, with no proot.
+- **One setup page:** official Ubuntu 24.04, 26.04 or 22.04 (checksum checked), AntiGem's prebuilt image, a URL or a file; where it is installed, its user, phone storage, USB drives, shared folders and packages.
+- **Switch any time** between **AntiGem**, **Ubuntu chroot** and **your server** in **Settings → Where agents run**. Both phone environments can be installed side by side.
+- **Its own page:** start and stop, live mounts, disk use, packages, backup and restore, and a safe delete that never touches your files.
+- **Safe by default:** its mounts live in a private namespace, so nothing outside the chroot can reach your files through it. USB drives plugged in later still show up, and fastboot / adb over OTG work.
+- **Root inside the chroot is root of the phone**, so read the risks first. Full guide: **[docs/chroot.md](docs/chroot.md)**.
+
 ### Code editor and Git
 - Syntax highlighting for Python, Go, Kotlin, Java, JS/TS, Rust, C/C++, HTML/CSS, JSON, YAML, Markdown and more.
 - Tabs, line numbers, find and replace, undo and redo, auto-indent and a file explorer.
@@ -244,7 +252,7 @@ Use the agents running on your PC from your phone. [AntiGem for VS Code](https:/
 
 Get the latest APK from [Releases](https://github.com/santoshkurmi/antigem/releases). There is one app, with the package name `ai.antigem`. It sets up its own Linux environment from the Termux packages, so it doesn't need the Termux app, and it can be installed next to it.
 
-**Server mode** (a mode, not another build): the bridge, the agents (`agy`, Claude Code, OpenCode, Codex), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Servers**. See [Server mode](#server-mode-run-it-on-a-vps) below.
+**Server mode** (a mode, not another build): the bridge, the agents (`agy`, Claude Code, OpenCode, Codex), your projects and the terminal run on **your own server (a VPS)**, and the phone is only the screen. Switch it on in **Settings → Where agents run**. See [Server mode](#server-mode-run-it-on-a-vps) below.
 
 > [!NOTE]
 > **Coming from the old `com.termux` build of AntiGem?** Android treats `ai.antigem` as a different app, so your files don't move over by themselves:
@@ -345,7 +353,7 @@ Then open Termux:X11. Don't install `termux-x11-nightly` from x11-repo: it only 
 
 By default everything runs on the phone. In **Server mode** the heavy part moves to a Linux server that you own (a VPS, a home server, a spare PC): the **IDE bridge**, the **Antigravity hub (`agy`)**, **Claude Code**, your **projects, files, git and the shell** all live there, and AntiGem on the phone only shows the UI. It is the same app and the same interface, but the chats, the files and the agents' accounts live on the server (they are separate from any chats you have in local mode), so the agents keep working when the phone sleeps, and the phone stays light.
 
-It is **not a separate APK**. Both the `termux` and the `standard` variant can use it: open **Settings → Servers** and pick **SSH tunnel** or **Server** under *Where the server runs*. The Linux environment on the phone is not needed in this mode. (Default ports differ per variant: `termux` uses 1234 / 1235 for the bridge / hub, `standard` uses 1236 / 1237.)
+It is **not a separate APK**. Both the `termux` and the `standard` variant can use it: open **Settings → Where agents run** and pick **SSH tunnel** or **Server** under *Your server*. The Linux environment on the phone is not needed in this mode. (Default ports differ per variant: `termux` uses 1234 / 1235 for the bridge / hub, `standard` uses 1236 / 1237.)
 
 ### Two ways to connect: start with the SSH tunnel
 
@@ -378,7 +386,7 @@ phone (AntiGem app)                              your server
  └─ SSH                          ──────────────►  sshd (start / stop, terminal, reverse tunnels, as above)
 ```
 
-**Port forwards:** in both modes, *Settings → Servers → Port forwards* makes any port of the server reachable on the phone's `127.0.0.1` over SSH. Start `npm run dev` on the server, forward 5173, and open `http://127.0.0.1:5173` in the app's browser.
+**Port forwards:** in both modes, *Settings → Where agents run → Port forwards* makes any port of the server reachable on the phone's `127.0.0.1` over SSH. Start `npm run dev` on the server, forward 5173, and open `http://127.0.0.1:5173` in the app's browser.
 
 ### How to set it up (short version)
 
@@ -386,7 +394,7 @@ phone (AntiGem app)                              your server
 2. **Get the bridge on the server:** the app does **not** contain it and never uploads anything. Build it once with Go (`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build` in `agy_ide_bridge/`, or `arm64`), copy it to `~/.antigem/agy_ide_bridge` and `chmod +x` it. Build it from the **same version as your app**: the app compares versions on every launch and tells you when the bridge is out of date.
 3. **Install the agents on the server:** `curl -fsSL https://antigravity.google/cli/install.sh | bash` for Antigravity, `curl -fsSL https://claude.ai/install.sh | bash` for Claude Code (both end up in `~/.local/bin`). You can also install `agy` from the app (**Settings → Agents**) once the bridge is running.
 4. **Choose how the phone reaches it.** *SSH tunnel* (recommended): nothing to do, skip to step 5. *Server* mode: put a reverse proxy with TLS in front (nginx, Caddy or Apache) on two sub-domains, one for the bridge and one for the hub, add the **proxy access header** (a second secret that the proxy checks), and open only SSH, 80 and 443 in the firewall.
-5. **In the app (Settings → Servers):** pick **SSH tunnel** (the addresses are filled in as `http://127.0.0.1:<port>`; keep the default ports unless you changed them) or **Server** (enter your two addresses and, optionally, the proxy access header). Then enter the SSH host, user and key, check the server paths (they are pre-filled with the defaults), **Save**, **Reopen**. The app connects over SSH, opens the tunnels, starts the bridge, and shows its state and log.
+5. **In the app (Settings → Where agents run):** pick **SSH tunnel** (the addresses are filled in as `http://127.0.0.1:<port>`; keep the default ports unless you changed them) or **Server** (enter your two addresses and, optionally, the proxy access header). Then enter the SSH host, user and key, check the server paths (they are pre-filled with the defaults), **Save**, **Reopen**. The app connects over SSH, opens the tunnels, starts the bridge, and shows its state and log.
 6. **Sign in** to Antigravity (a Google redirect page that you paste back into the app) and to Claude Code, and start chatting.
 
 **The full, step-by-step guide, with the two connection modes compared, ready-to-paste nginx, Caddy and Apache configurations, the app settings explained field by field, adb from the server to the phone, updating, and debugging, is here: 👉 [docs/remote-server.md](docs/remote-server.md).**

@@ -2,6 +2,7 @@ package ai.antigem.data.miniapps
 
 import android.content.Context
 import ai.antigem.BuildConfig
+import ai.antigem.data.preferences.AuthPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -19,6 +20,8 @@ object MiniAppPermissions {
     /** AntiGem's own local servers: never reachable from a mini app, even with the localhost permission. */
     val BLOCKED_PORTS: Set<Int> get() = setOf(
         BuildConfig.BRIDGE_PORT, BuildConfig.HUB_PORT, BuildConfig.BROWSER_MCP_PORT, BuildConfig.BROWSER_MCP_PORT + 100,
+        // the Ubuntu chroot's bridge and hub
+        BuildConfig.BRIDGE_PORT + AuthPreferences.CHROOT_PORT_OFFSET, BuildConfig.HUB_PORT + AuthPreferences.CHROOT_PORT_OFFSET,
     )
 
     private fun prefs(context: Context) = context.getSharedPreferences("mini_app_permissions", Context.MODE_PRIVATE)
