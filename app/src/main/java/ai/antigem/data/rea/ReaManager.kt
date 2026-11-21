@@ -99,7 +99,7 @@ object ReaManager {
         APKTOOL("apktool", "apktool", "The official apktool jar (latest): manifest, resources and strings.", "≈16 MB", true),
         LAUNCHER("launcher", "MCP launcher", "rea-mcp (the command agents start), rea-shell and the tool group filter.", "<1 MB", true),
         NATIVE("native", "Native code tools", "objdump and rizin for .so libraries (libapp.so, libflutter.so, JNI code).", "≈40 MB", false,
-            chrootDescription = "objdump for .so libraries (libapp.so, libflutter.so, JNI code), and rizin when this Ubuntu has a package for it (Ubuntu 24.04 has none: install rizin yourself and REA finds it on PATH)."),
+            chrootDescription = "objdump and rizin for .so libraries (libapp.so, libflutter.so, JNI code). Ubuntu has no rizin package, so it comes from the rizin project's own Ubuntu repository (added for you)."),
         ADB("adb", "adb", "adb in the terminal for REA's phone tools (installed apps, logcat, screenshots). Connect it in ADB Connect.", "≈10 MB", false,
             "adb and fastboot", "Ubuntu's adb and fastboot for REA's phone tools (installed apps, logcat, screenshots); no sudo needed. Connect adb in ADB Connect."),
         HERMES("hermes", "React Native (hermes-dec)", "Decompiles Hermes bytecode, the index.android.bundle of most React Native apps.", "≈40 MB", false),
@@ -139,8 +139,6 @@ object ReaManager {
         val bootstrapInstalled: Boolean = false,
         /** REA lives in the Ubuntu chroot (the phone's runtime), not in a proot container of AntiGem's environment. */
         val chroot: Boolean = false,
-        /** rizin found in the chroot (Ubuntu 24.04 has no package for it); null outside the chroot. */
-        val chrootRizin: Boolean? = null,
         val source: String = DEFAULT_SOURCE,
         /** Version of the downloaded setup files, null when not downloaded. */
         val filesVersion: String? = null,
@@ -334,7 +332,6 @@ object ReaManager {
                 ready = true,
                 bootstrapInstalled = LocalEnvironmentManager.isInstalled(ctx),
                 chroot = false,
-                chrootRizin = null,
                 filesVersion = filesVersion,
                 filesUpdate = it.filesUpdate?.takeIf { v -> v != filesVersion },
                 installed = installed,
@@ -380,7 +377,6 @@ object ReaManager {
                 ready = true,
                 bootstrapInstalled = true,
                 chroot = true,
-                chrootRizin = status["rizin"]?.let { v -> v == "yes" },
                 filesVersion = filesVersion,
                 filesUpdate = it.filesUpdate?.takeIf { v -> v != filesVersion },
                 installed = installed,
