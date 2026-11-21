@@ -891,6 +891,32 @@ cmd__mount() {
     do_mounts
 }
 
+# The X11 desktop: AntiGem's Termux:X11 X server runs as the app, outside the chroot, and puts its socket in a folder of
+# the app's own storage (--path). Bound onto the chroot's /tmp/.X11-unix (in the chroot's mount namespace), X programs
+# in the chroot reach it as display :0. The chroot user has the app's uid, so the socket is theirs to use.
+cmd_x11_bind() {
+    read_conf
+    src="${TARGET%/}"
+    plain "$src" || die "unsupported characters in the path: $src"
+    case "$src" in */../*|*/..|*/./*|*/.|*//*) die "the path must be normalized: $src";; esac
+    case "$src" in
+        /data/data/*/files/*|/data/user/[0-9]*/*/files/*) ;;
+        *) die "not a folder of an app's own storage: $src";;
+    esac
+    [ -d "$src" ] && [ ! -L "$src" ] || die "no folder $src"
+    start_mounts
+    pre=$(ns_prefix) || exit 1
+    $pre /system/bin/sh "$SELF" _x11_mount --root "$ROOT" --path "$src" || die "could not share the X11 socket folder"
+}
+
+cmd__x11_mount() {  # inside the chroot's mount namespace
+    dst="$ROOT/tmp/.X11-unix"
+    safe_target "$dst"
+    is_mp "$dst" && $UMOUNT -l "$dst" 2>/dev/null
+    $MOUNT -o bind "$TARGET" "$dst" || die "cannot bind $TARGET onto /tmp/.X11-unix"
+    echo "x11=bound"
+}
+
 cmd__bridge_run() {
     echo $$ > "$RUN/bridge.pid"
     leave_app_cgroup
@@ -927,6 +953,8 @@ case "$CMD" in
             delete) cmd_delete;;
             _holder) cmd__holder;;
             _mount) cmd__mount;;
+            x11-bind) require_rootfs; cmd_x11_bind;;
+            _x11_mount) cmd__x11_mount;;
             _bridge_run) cmd__bridge_run;;
             *) die "unknown command: $CMD";;
         esac

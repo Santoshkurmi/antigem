@@ -134,6 +134,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         StepCard(
             2, "termux-x11 command",
             when {
+                state.chroot -> "Not needed"
                 state.companionOk -> "Installed"
                 state.companion != null -> "Wrong package"
                 else -> null
@@ -141,6 +142,11 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
             cardBg, cardBorder,
             badgeColor = if (state.companionOk) QuotaGreen else Amber
         ) {
+            if (state.chroot) {
+                // the app starts the X server itself and shares its display with the chroot
+                Hint("Not needed in the Ubuntu chroot: AntiGem starts the X server itself (from the Termux:X11 app) and shares its display with the chroot.")
+                return@StepCard
+            }
             Hint("The terminal part: the termux-x11 command that starts the X server. ${state.neededCompanion} goes with ${if (app == null) "the Termux:X11 above" else "the installed Termux:X11"}.")
             if (state.companion != null && !state.companionOk) {
                 Text(
@@ -174,7 +180,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                 when (state.desktop) {
                     Desktop.XFCE -> "XFCE is a full, light desktop and a good place to start."
                     Desktop.LXQT -> "LXQt is a light Qt desktop."
-                } + " It comes from x11-repo and is a large download."
+                } + if (state.chroot) " It comes from Ubuntu (apt) and runs in the Ubuntu chroot as your user. A large download." else " It comes from x11-repo and is a large download."
             )
             if (!state.desktopOk) {
                 Button(enabled = !busy, onClick = X11DesktopManager::installDesktop) {
@@ -187,7 +193,8 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         // Step 4: start / open / stop
         StepCard(4, "Start the desktop", if (state.running) "Running" else null, cardBg, cardBorder) {
             if (state.running) {
-                Hint("The X server is running on display :0. Programs started from the terminal with DISPLAY=:0 show up on the desktop.")
+                Hint(if (state.chroot) "The X server is running on display :0, shared with the Ubuntu chroot. Programs started in the chroot's terminal with DISPLAY=:0 show up on the desktop."
+                    else "The X server is running on display :0. Programs started from the terminal with DISPLAY=:0 show up on the desktop.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(enabled = !busy, onClick = { X11DesktopManager.open(context) }) {
                         Icon(Icons.Outlined.DesktopWindows, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open desktop")
@@ -225,7 +232,8 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                         )
                     }
                 }
-                Hint("Install a browser from tur-repo to browse the web on your desktop.")
+                Hint(if (state.chroot) "Installs Chromium or Firefox in the Ubuntu chroot from the xtradeb/apps PPA (Ubuntu's own packages of both are snaps, which do not run in a chroot)."
+                    else "Install a browser from tur-repo to browse the web on your desktop.")
                 if (!state.desktopOk) {
                     Hint("Install a desktop above first.")
                 }

@@ -177,11 +177,11 @@ enum class SettingsSection(val title: String, val subtitle: String) {
 }
 
 /**
- * Pages that run the Termux environment's own tools (Termux:API, X11, backups, the GitHub CLI). REA and Android
- * development work in the Ubuntu chroot too (their setups install into it), so they are not here.
+ * Pages that run the Termux environment's own tools (Termux:API, backups, the GitHub CLI). REA, Android development
+ * and the X11 desktop work in the Ubuntu chroot too (they install into it), so they are not here.
  */
 private val TERMUX_ONLY_SECTIONS = setOf(
-    SettingsSection.TERMUX_SUPPORT, SettingsSection.TERMUX_API, SettingsSection.X11_DESKTOP, SettingsSection.BACKUPS, SettingsSection.GITHUB
+    SettingsSection.TERMUX_SUPPORT, SettingsSection.TERMUX_API, SettingsSection.BACKUPS, SettingsSection.GITHUB
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

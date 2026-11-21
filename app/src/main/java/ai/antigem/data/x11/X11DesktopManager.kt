@@ -11,6 +11,9 @@ import android.util.Log
 import ai.antigem.BuildConfig
 import ai.antigem.data.local.LocalCommandResult
 import ai.antigem.data.local.LocalEnvironmentManager
+import ai.antigem.data.local.chroot.ChrootInstall
+import ai.antigem.data.local.chroot.ChrootManager
+import ai.antigem.data.local.chroot.ChrootSetup
 import ai.antigem.data.updater.AppUpdateManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +42,12 @@ import java.util.concurrent.TimeUnit
  * desktop at full speed while it is on screen. Its companion package is antigem-termux-x11 from the same
  * release; the official termux-x11-nightly's loader only starts the official Termux:X11, so it is replaced when
  * found. The fork keeps its Java names (com.termux.x11.*): its intent actions below are those.
+ *
+ * In AntiGem's Ubuntu chroot (when it is the phone's runtime) the desktop and its programs come from Ubuntu (apt) and
+ * run in the chroot as its user, while the X server stays outside: the app starts it itself (app_process with the
+ * Termux:X11 APK, as the app's own user, so no companion package and no Termux environment are needed), with its socket
+ * in the app's storage, bind-mounted onto the chroot's /tmp/.X11-unix (chrootctl x11-bind), and the keyboard files
+ * (xkb) copied once from the chroot's xkb-data.
  */
 object X11DesktopManager {
     private const val TAG = "X11Desktop"
@@ -55,6 +64,12 @@ object X11DesktopManager {
     private const val FORK_RELEASE_API = "https://api.github.com/repos/$FORK_REPO/releases/latest"
 
     private const val DISPLAY = ":0"
+
+    /**
+     * The xtradeb/apps PPA: Chromium and Firefox as real .deb packages for Ubuntu (arm64 too). Ubuntu's own packages of
+     * both only install the snap, which does not run in a chroot. Its signing key is pinned by fingerprint.
+     */
+    private const val XTRADEB_KEY_FINGERPRINT = "5301FA4FD93244FBC6F6149982BB6851C64F6880"
     private const val LOG_FILE = "antigem-x11.log"
     private const val KEEP_CONFIGS = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
 
@@ -113,6 +128,8 @@ object X11DesktopManager {
         val installedBrowsers: Set<Browser> = emptySet(),
         val browser: Browser = Browser.CHROMIUM,
         val running: Boolean = false,
+        /** The desktop runs in the Ubuntu chroot (the phone's runtime): no companion package, packages from Ubuntu. */
+        val chroot: Boolean = false,
         val task: Task? = null,
         val progress: String? = null,
         val log: List<String> = emptyList(),
@@ -125,7 +142,8 @@ object X11DesktopManager {
 
         /** Only AntiGem's Termux:X11, sharing AntiGem's UID, runs inside AntiGem. */
         val appOk: Boolean get() = app?.sameProcess == true
-        val companionOk: Boolean get() = companion == neededCompanion
+        /** The chroot needs no companion: the app starts the X server itself. */
+        val companionOk: Boolean get() = chroot || companion == neededCompanion
         val desktopOk: Boolean get() = desktop in installedDesktops && dbusInstalled
         val canStart: Boolean get() = appOk && companionOk && desktopOk
     }
@@ -177,14 +195,66 @@ object X11DesktopManager {
     // ---------------- state ----------------
 
     /** Re-reads everything from the phone: cheap (package manager, a few files and /proc), safe to poll. */
-    fun refresh() = scope.launch { refreshNow() }
+    fun refresh(force: Boolean = false) = scope.launch { refreshNow(force) }
 
     /** Set while [stop] stops the desktop, so that isn't reported as the desktop stopping by itself. */
     @Volatile
     private var stopRequested = false
 
-    private fun refreshNow() {
+    // ---------------- the Ubuntu chroot ----------------
+
+    /** The chroot the desktop runs in, or null (AntiGem's environment, or server mode). */
+    private val chroot: ChrootInstall? get() = ChrootSetup.install()
+
+    private val x11Dir get() = File(appContext.filesDir, "x11")
+    /** The X server's TMPDIR in the chroot setup: its socket folder .X11-unix is bound into the chroot. */
+    private val x11Tmp get() = File(x11Dir, "tmp")
+    private val x11Sockets get() = File(x11Tmp, ".X11-unix")
+    private val xkbDir get() = File(x11Dir, "xkb")
+
+    private const val CHROOT_STATUS_MS = 15_000L
+    @Volatile private var chrootStatus: Map<String, String>? = null
+    @Volatile private var chrootStatusFor: String? = null
+    @Volatile private var chrootStatusAt = 0L
+
+    /** Which of the desktop's commands the chroot has (a root call, cached unless [force]). */
+    private suspend fun chrootStatus(install: ChrootInstall, force: Boolean): Map<String, String> {
+        val fresh = chrootStatusFor == install.path && System.currentTimeMillis() - chrootStatusAt < CHROOT_STATUS_MS
+        if (!force && fresh) chrootStatus?.let { return it }
+        val names = (listOf("dbus-launch") + Desktop.entries.map { it.sessionBinary } + Browser.entries.map { it.binaryName }).distinct()
+        val r = ChrootSetup.asRoot(appContext, install,
+            "for b in ${names.joinToString(" ")}; do if command -v \$b >/dev/null 2>&1; then echo \$b=yes; else echo \$b=no; fi; done", timeoutMs = 30_000L)
+        val status = r.out.mapNotNull { line -> line.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+        if (r.ok) {
+            chrootStatus = status
+            chrootStatusFor = install.path
+            chrootStatusAt = System.currentTimeMillis()
+        }
+        return status
+    }
+
+    private suspend fun refreshNow(force: Boolean = false) {
         val ctx = appContext
+        val install = chroot
+        if (install != null) {
+            val status = chrootStatus(install, force)
+            val running = xServerPids().isNotEmpty()
+            val previous = _state.getAndUpdate {
+                it.copy(
+                    ready = true,
+                    bootstrapInstalled = true,
+                    chroot = true,
+                    app = readAppInfo(ctx),
+                    companion = null,
+                    dbusInstalled = status["dbus-launch"] == "yes",
+                    installedDesktops = Desktop.entries.filter { d -> status[d.sessionBinary] == "yes" }.toSet(),
+                    installedBrowsers = Browser.entries.filter { b -> status[b.binaryName] == "yes" }.toSet(),
+                    running = running
+                )
+            }
+            if (previous.running && !running && !stopRequested && job?.isActive != true) reportStopped()
+            return
+        }
         val prefix = LocalEnvironmentManager.getPrefixDir(ctx)
         val bin = LocalEnvironmentManager.getBinDir(ctx)
         val dpkgInfo = File(prefix, "var/lib/dpkg/info")
@@ -195,6 +265,7 @@ object X11DesktopManager {
             it.copy(
                 ready = true,
                 bootstrapInstalled = LocalEnvironmentManager.isInstalled(ctx),
+                chroot = false,
                 app = readAppInfo(ctx),
                 companion = companion,
                 dbusInstalled = File(bin, "dbus-launch").exists(),
@@ -223,7 +294,7 @@ object X11DesktopManager {
 
     /** The last lines of the X server's log (it grows while a desktop runs, so only its end is read). */
     private fun xLogTail(maxLines: Int = 20): List<String> {
-        val file = File(LocalEnvironmentManager.getTmpDir(appContext), LOG_FILE)
+        val file = if (chroot != null) File(x11Dir, LOG_FILE) else File(LocalEnvironmentManager.getTmpDir(appContext), LOG_FILE)
         val text = runCatching {
             java.io.RandomAccessFile(file, "r").use { raf ->
                 val from = (raf.length() - 16 * 1024).coerceAtLeast(0)
@@ -304,6 +375,10 @@ object X11DesktopManager {
     // ---------------- step 2: the companion package (termux-x11 command) ----------------
 
     fun installCompanion() = runTask(Task.COMPANION) {
+        if (chroot != null) {
+            appendLog("Not needed in the Ubuntu chroot: AntiGem starts the X server itself.")
+            return@runTask
+        }
         val enableRepo = "apt-get update && apt-get install -y $KEEP_CONFIGS x11-repo && apt-get update"
         val deb = File(LocalEnvironmentManager.getTmpDir(appContext), "$COMPANION_ANTIGEM.deb")
         appendLog("Finding the latest $COMPANION_ANTIGEM package…")
@@ -319,8 +394,22 @@ object X11DesktopManager {
 
     // ---------------- step 3: a desktop ----------------
 
+    /** Ubuntu's packages of each desktop (without recommends: they would pull a whole Xorg the chroot does not need). */
+    private fun ubuntuPackages(desktop: Desktop): String = when (desktop) {
+        Desktop.XFCE -> "xfce4 xfce4-terminal xfce4-notifyd"
+        Desktop.LXQT -> "lxqt-core openbox qterminal"
+    } + " dbus-x11 xkb-data x11-utils adwaita-icon-theme fonts-dejavu-core"
+
     fun installDesktop() = runTask(Task.DESKTOP) {
         val desktop = _state.value.desktop
+        chroot?.let { install ->
+            chrootTask(install, "Installing ${desktop.label} in the Ubuntu chroot… (a large download, this can take a while)",
+                "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends $KEEP_CONFIGS ${ubuntuPackages(desktop)}",
+                asRoot = true, timeoutSeconds = 3600)
+            // the keyboard files may be new or updated: copied again at the next start
+            xkbDir.deleteRecursively()
+            return@runTask
+        }
         shellTask(
             "Updating installed packages, then installing ${desktop.label}… (a large download, this can take a while)",
             "apt-get update && apt-get install -y $KEEP_CONFIGS x11-repo && apt-get update && " +
@@ -333,6 +422,20 @@ object X11DesktopManager {
 
     fun installBrowser() = runTask(Task.BROWSER) {
         val browser = _state.value.browser
+        chroot?.let { install ->
+            // the PPA's key (pinned fingerprint), its source, and a pin so its Chromium / Firefox win over Ubuntu's snap ones
+            val ppa = "https://ppa.launchpadcontent.net/xtradeb/apps/ubuntu"
+            val command = "export DEBIAN_FRONTEND=noninteractive; set -e; " +
+                ". /etc/os-release; command -v curl >/dev/null || { apt-get update && apt-get install -y --no-install-recommends ca-certificates curl; }; " +
+                "mkdir -p /etc/apt/keyrings; " +
+                "curl -fsSL --retry 3 'https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$XTRADEB_KEY_FINGERPRINT' -o /etc/apt/keyrings/xtradeb.asc.part; " +
+                "mv -f /etc/apt/keyrings/xtradeb.asc.part /etc/apt/keyrings/xtradeb.asc; chmod 644 /etc/apt/keyrings/xtradeb.asc; " +
+                "echo \"deb [signed-by=/etc/apt/keyrings/xtradeb.asc] $ppa \$VERSION_CODENAME main\" > /etc/apt/sources.list.d/xtradeb-apps.list; " +
+                "printf 'Package: chromium* firefox*\\nPin: release o=LP-PPA-xtradeb-apps\\nPin-Priority: 1001\\n' > /etc/apt/preferences.d/antigem-xtradeb; " +
+                "apt-get update && apt-get install -y $KEEP_CONFIGS ${browser.packageName}"
+            chrootTask(install, "Installing ${browser.label} in the Ubuntu chroot (from the xtradeb/apps PPA)…", command, asRoot = true, timeoutSeconds = 3600)
+            return@runTask
+        }
         shellTask(
             "Updating installed packages, then installing ${browser.label}…",
             "apt-get update && apt-get install -y $KEEP_CONFIGS tur-repo && apt-get update && " +
@@ -349,6 +452,10 @@ object X11DesktopManager {
      * that, and when the desktop session fails, termux-x11 stops the server too.) Otherwise the end of its log says why.
      */
     fun start(context: Context) = runTask(Task.START) {
+        chroot?.let { install ->
+            if (startInChroot(install)) withContext(Dispatchers.Main) { open(context) }
+            return@runTask
+        }
         if (xServerPids().isEmpty()) {
             stopRequested = false
             val tmp = LocalEnvironmentManager.getTmpDir(appContext)
@@ -398,8 +505,135 @@ object X11DesktopManager {
         withContext(Dispatchers.Main) { open(context) }
     }
 
+    /**
+     * Start in the Ubuntu chroot: keyboard files, the X server (as the app), its socket shared into the chroot, then the
+     * desktop session in the chroot as its user. True when the desktop is up.
+     */
+    private suspend fun startInChroot(install: ChrootInstall): Boolean {
+        val desktop = _state.value.desktop
+        if (xServerPids().isEmpty()) {
+            stopRequested = false
+            if (!ensureXkb(install)) return false
+            _state.update { it.copy(progress = "Starting the X server…") }
+            val apk = runCatching { appContext.packageManager.getApplicationInfo(X11_PACKAGE, 0).sourceDir }.getOrNull()
+                ?: run { report("Termux:X11 is not installed.", isError = true); return false }
+            x11Sockets.mkdirs()
+            runCatching { Os.chmod(x11Tmp.absolutePath, "700".toInt(8)) }
+            runCatching { Os.chmod(x11Sockets.absolutePath, "1777".toInt(8)) }
+            // left behind when the X server was killed: it would refuse to start
+            File(x11Tmp, ".X0-lock").delete()
+            val socket = File(x11Sockets, "X0")
+            socket.delete()
+            val log = File(x11Dir, LOG_FILE)
+            // what the termux-x11 command does, without the Termux environment: the X server from the Termux:X11 APK
+            val pb = ProcessBuilder("/system/bin/setsid", "/system/bin/app_process", "-Xnoimage-dex2oat", "/",
+                "--nice-name=termux-x11 $X11_PACKAGE $DISPLAY", "com.termux.x11.CmdEntryPoint", DISPLAY)
+                .directory(x11Dir)
+                .redirectErrorStream(true)
+                .redirectOutput(log)
+                .redirectInput(File("/dev/null"))
+            pb.environment().apply {
+                remove("LD_PRELOAD"); remove("LD_LIBRARY_PATH")
+                put("CLASSPATH", apk)
+                put("TMPDIR", x11Tmp.absolutePath)
+                put("XKB_CONFIG_ROOT", xkbDir.absolutePath)
+            }
+            appendLog("$ app_process … com.termux.x11.CmdEntryPoint $DISPLAY   (TMPDIR=${x11Tmp.absolutePath})")
+            pb.start()
+            val startedAt = System.currentTimeMillis()
+            var listening = false
+            while (System.currentTimeMillis() - startedAt < START_TIMEOUT_MS) {
+                delay(250)
+                if (xServerPids().isNotEmpty() && socket.exists()) { listening = true; break }
+                if (xServerPids().isEmpty() && System.currentTimeMillis() - startedAt > 5_000) break
+            }
+            if (!listening) {
+                failStart(desktop, seen = xServerPids().isNotEmpty())
+                return false
+            }
+            appendLog("✓ X server listening on display $DISPLAY")
+        }
+
+        // the socket folder into the chroot's /tmp/.X11-unix (again after a restart of the chroot)
+        _state.update { it.copy(progress = "Sharing the display with the Ubuntu chroot…") }
+        val bind = ChrootManager.runCtl(appContext, listOf("x11-bind", "--root", install.path, "--path", x11Sockets.absolutePath))
+        if (!bind.ok) {
+            report("Could not share the display with the Ubuntu chroot: ${bind.message()}", isError = true)
+            return false
+        }
+
+        // the desktop session, in the chroot as its user (it ends when the X server stops)
+        val session = desktop.sessionBinary
+        if (!chrootSessionRunning(install, session)) {
+            _state.update { it.copy(progress = "Starting ${desktop.label}…") }
+            val command = "export DISPLAY=$DISPLAY; d=/tmp/runtime-\$(id -u); mkdir -p \$d && chmod 700 \$d; export XDG_RUNTIME_DIR=\$d; " +
+                "mkdir -p ~/.cache; cd ~; setsid nohup ${desktop.startCommand} > ~/.cache/antigem-x11-session.log 2>&1 < /dev/null & echo started"
+            val r = ChrootSetup.asUser(appContext, install, command, timeoutMs = 30_000L)
+            if (!r.ok) {
+                report("Could not start ${desktop.label} in the Ubuntu chroot: ${r.message()}", isError = true)
+                return false
+            }
+            delay(SETTLE_MS)
+            if (!chrootSessionRunning(install, session)) {
+                val tail = ChrootSetup.asUser(appContext, install, "tail -n 20 ~/.cache/antigem-x11-session.log 2>/dev/null").out
+                if (tail.isNotEmpty()) {
+                    appendLog("End of ~/.cache/antigem-x11-session.log:")
+                    tail.forEach(::appendLog)
+                }
+                report("${desktop.label} stopped right after starting. The reason is at the end of the log above.", isError = true)
+                return false
+            }
+        }
+        appendLog("✓ ${desktop.label} running on display $DISPLAY")
+        refreshNow(force = true)
+        return true
+    }
+
+    /** Whether the chroot's user runs [session] (procps' pgrep; without it, assumed running). */
+    private suspend fun chrootSessionRunning(install: ChrootInstall, session: String): Boolean {
+        val r = ChrootSetup.asUser(appContext, install,
+            "if command -v pgrep >/dev/null 2>&1; then pgrep -u \$(id -u) -x $session >/dev/null && echo yes || echo no; else echo yes; fi")
+        return r.out.lastOrNull()?.trim() == "yes"
+    }
+
+    /** The chroot's keyboard files (xkb-data) in the app's storage, where the X server reads them: copied once. */
+    private suspend fun ensureXkb(install: ChrootInstall): Boolean {
+        if (File(xkbDir, "rules").isDirectory && File(xkbDir, "keycodes").isDirectory) return true
+        _state.update { it.copy(progress = "Copying the keyboard files from the Ubuntu chroot…") }
+        val staging = File(x11Dir, "xkb.new")
+        staging.deleteRecursively()
+        staging.mkdirs()
+        val base = staging.canonicalPath + File.separator
+        val r = ChrootManager.streamAsRoot(appContext, install, "[ -d /usr/share/X11/xkb ] || exit 3; exec tar -C /usr/share/X11 -cf - xkb") { input ->
+            org.apache.commons.compress.archivers.tar.TarArchiveInputStream(input).use { tar ->
+                while (true) {
+                    val entry = tar.nextEntry ?: break
+                    val target = File(staging, entry.name)
+                    // only inside the staging folder
+                    if (!target.canonicalPath.startsWith(base) && target.canonicalPath != staging.canonicalPath) continue
+                    when {
+                        entry.isDirectory -> target.mkdirs()
+                        entry.isSymbolicLink -> { target.parentFile?.mkdirs(); runCatching { Os.symlink(entry.linkName, target.absolutePath) } }
+                        else -> { target.parentFile?.mkdirs(); target.outputStream().use { tar.copyTo(it) } }
+                    }
+                }
+            }
+        }
+        val copied = File(staging, "xkb")
+        if (!r.ok || !File(copied, "rules").isDirectory) {
+            staging.deleteRecursively()
+            report("The Ubuntu chroot has no keyboard files (/usr/share/X11/xkb). Install the desktop (step 3) again.", isError = true)
+            return false
+        }
+        xkbDir.deleteRecursively()
+        if (!copied.renameTo(xkbDir)) { report("Could not keep the keyboard files.", isError = true); return false }
+        staging.deleteRecursively()
+        appendLog("✓ Keyboard files copied from the Ubuntu chroot")
+        return true
+    }
+
     /** Start failed: the end of the X server's log goes into step 4's log, and the message says what happened. */
-    private fun failStart(desktop: Desktop, seen: Boolean) {
+    private suspend fun failStart(desktop: Desktop, seen: Boolean) {
         val tail = xLogTail()
         if (tail.isNotEmpty()) {
             appendLog("End of $LOG_FILE:")
@@ -441,7 +675,14 @@ object X11DesktopManager {
                 delay(250)
             }
             xServerPids().forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGKILL) } }
-            refreshNow()
+            // in the chroot the session loses its display and ends; its D-Bus helper is ended too
+            chroot?.let { install ->
+                runCatching {
+                    ChrootSetup.asUser(appContext, install,
+                        "command -v pkill >/dev/null 2>&1 && pkill -u \$(id -u) -f 'dbus-launch --exit-with-session'; true", timeoutMs = 20_000L)
+                }
+            }
+            refreshNow(force = true)
             report("Desktop stopped.")
         } finally {
             stopRequested = false
@@ -460,7 +701,9 @@ object X11DesktopManager {
             "/system/bin/settings put global settings_enable_monitor_phantom_procs false; " +
             "echo max_phantom_processes=\$(/system/bin/device_config get activity_manager max_phantom_processes); " +
             "echo settings_enable_monitor_phantom_procs=\$(/system/bin/settings get global settings_enable_monitor_phantom_procs)"
-        shellTask("Changing the limit over adb…", "adb -s '$serial' shell '$inner'", 60)
+        val install = chroot
+        if (install != null) chrootTask(install, "Changing the limit over adb…", "adb -s '$serial' shell '$inner'", asRoot = false, timeoutSeconds = 60)
+        else shellTask("Changing the limit over adb…", "adb -s '$serial' shell '$inner'", 60)
     }
 
     // ---------------- helpers ----------------
@@ -478,7 +721,7 @@ object X11DesktopManager {
                 appendLog("✗ ${e.message ?: e.javaClass.simpleName}")
                 report(e.message ?: "Failed", isError = true)
             } finally {
-                refreshNow()
+                withContext(kotlinx.coroutines.NonCancellable) { runCatching { refreshNow(force = true) } }
                 _state.update { it.copy(task = null, progress = null) }
             }
         }
@@ -494,6 +737,17 @@ object X11DesktopManager {
         } else {
             appendLog("✓ Done")
         }
+    }
+
+    /** [shellTask] in the Ubuntu chroot: [command] as root (apt) or as the chroot's user. */
+    private suspend fun chrootTask(install: ChrootInstall, progress: String, command: String, asRoot: Boolean, timeoutSeconds: Long) {
+        _state.update { it.copy(progress = progress) }
+        appendLog("$ $command   (in the Ubuntu chroot${if (asRoot) ", as root" else ""})")
+        val onLine: (String) -> Unit = { line -> if (line.isNotBlank()) appendLog(line) }
+        val wrapped = "( $command ) < /dev/null 2>&1"
+        val r = if (asRoot) ChrootSetup.asRoot(appContext, install, wrapped, timeoutMs = timeoutSeconds * 1000, onLine = onLine)
+        else ChrootSetup.asUser(appContext, install, wrapped, timeoutMs = timeoutSeconds * 1000, onLine = onLine)
+        if (!r.ok) report("Failed (exit ${r.exitCode}). Check the log above.", isError = true) else appendLog("✓ Done")
     }
 
     private suspend fun shell(command: String, timeoutSeconds: Long, onLine: ((String) -> Unit)? = null): LocalCommandResult =

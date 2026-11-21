@@ -595,6 +595,10 @@ object ChrootManager {
         return r
     }
 
+    /** Runs [script] as root in the chroot and hands its (binary) output to [consume], e.g. a tar of a folder. */
+    suspend fun streamAsRoot(context: Context, install: ChrootInstall, script: String, consume: (java.io.InputStream) -> Unit): SuResult =
+        runCtlStreaming(context, listOf("exec", "--root", install.path, "--as-root", "--term", "dumb", "--cmd", b64(script)), null, consume)
+
     /** Runs a root task with its log shown on the chroot page. */
     fun runTask(context: Context, title: String, block: suspend ((String) -> Unit) -> SuResult) {
         if (_task.value?.running == true) return
