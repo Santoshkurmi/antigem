@@ -154,7 +154,7 @@ fun AndroidDevScreen(
 
         // Check
         DevInfoCard("Check the tools", cardBg, cardBorder) {
-            Hint("Prints the version of every tool in the container: Java, the SDK platforms, aapt2, adb, Node.js, Flutter, CMake.")
+            Hint("Prints the version of every tool in Ubuntu: Java, the SDK platforms, aapt2, adb, Node.js, Flutter, CMake.")
             OutlinedButton(enabled = !busy && Component.CONTAINER in state.installed && state.filesReady, onClick = AndroidDevManager::runDoctor) {
                 Icon(Icons.Outlined.HealthAndSafety, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Check")
             }
@@ -203,7 +203,8 @@ private fun IntroCard(state: AndroidDevManager.State, cardBg: Color, cardBorder:
                     else -> Pill("Not set up", MaterialTheme.colorScheme.primary)
                 }
             }
-            Hint("Let agents (and you) create, build and install Android apps right here: Kotlin or Java with Jetpack Compose, Flutter, and React Native. Gradle, the Android SDK and Flutter run in an Ubuntu container (proot-distro) inside the terminal, the same container REA uses.")
+            Hint("Let agents (and you) create, build and install Android apps right here: Kotlin or Java with Jetpack Compose, Flutter, and React Native. Gradle, the Android SDK and Flutter run " +
+                if (state.chroot) "in this phone's Ubuntu chroot, like REA." else "in an Ubuntu container (proot-distro) inside the terminal, the same container REA uses.")
             Hint("Install only what you need: Kotlin / Java first (the others build on it), then Flutter or React Native.")
         }
     }
@@ -433,7 +434,7 @@ private fun UseGuide(state: AndroidDevManager.State) {
     if (Component.LAUNCHER !in state.installed) Hint("Install Kotlin / Java above first.")
     DevCopyLine("adev-new compose ~/${AndroidDevManager.PROJECTS_DIR}/my-app", mono = true)
     DevCopyLine("cd ~/${AndroidDevManager.PROJECTS_DIR}/my-app && adev ./gradlew assembleDebug", mono = true)
-    Hint("adev runs a command in the container with Java, the SDK, Gradle, Flutter and Node.js on PATH, in the current folder. adev-new also makes Flutter (flutter) and React Native (rn) projects. Keep projects in the Termux home, not on shared storage.")
+    Hint("adev runs a command with Java, the SDK, Gradle, Flutter and Node.js on PATH (in the Ubuntu container or chroot), in the current folder. adev-new also makes Flutter (flutter) and React Native (rn) projects. Keep projects in the Termux home, not on shared storage.")
     Text("Try in chat", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     listOf(
         "Create a Jetpack Compose app called Notes in ~/AndroidProjects/notes with a list and an add button, build it and give me the APK.",

@@ -1,6 +1,6 @@
 {
-  "version_code": 132,
-  "version_name": "2.0.1",
+  "version_code": 133,
+  "version_name": "2.0.2",
   "min_supported_version_code": 2,
   "changelog": [
    "Added chroot support for Linux environments.(rooted android)"

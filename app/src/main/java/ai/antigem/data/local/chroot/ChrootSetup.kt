@@ -28,7 +28,8 @@ object ChrootSetup {
      * environment and in server mode.
      */
     fun install(): ChrootInstall? =
-        if (AuthPreferences.currentRemoteMode) null else ChrootManager.activeInstallNow()
+        // the active install alone is not enough: it stays selected when the user switches back to AntiGem's environment
+        if (AuthPreferences.currentRemoteMode || !ChrootManager.isActiveNow()) null else ChrootManager.activeInstallNow()
 
     fun quote(value: String) = "'" + value.replace("'", "'\\''") + "'"
 

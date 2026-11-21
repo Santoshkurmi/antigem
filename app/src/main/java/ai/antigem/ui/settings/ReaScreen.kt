@@ -173,7 +173,7 @@ fun ReaScreen(
 
         // Step 5: health check
         StepCard(5, "Check it works", null, cardBg, cardBorder) {
-            Hint("Runs rea doctor in the container: it reports which engines REA can use (JADX, apktool, objdump, rizin, adb…). Engines you did not install show as missing, which is fine.")
+            Hint("Runs rea doctor in Ubuntu: it reports which engines REA can use (JADX, apktool, objdump, rizin, adb…). Engines you did not install show as missing, which is fine.")
             OutlinedButton(enabled = !busy && state.usable, onClick = ReaManager::runDoctor) {
                 Icon(Icons.Outlined.HealthAndSafety, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Run health check")
             }
@@ -206,7 +206,9 @@ fun ReaScreen(
         val (title, text, action) = when (what) {
             "uninstall" -> Triple(
                 "Remove REA?",
-                "Removes REA, the JADX and apktool jars, hermes-dec and the rea-mcp launcher. The Ubuntu container, Java, Node.js and your tool groups stay. REA servers in your agents stop working until you install it again.",
+                "Removes REA, the JADX and apktool jars, hermes-dec and the rea-mcp launcher. " +
+                    (if (state.chroot) "Java, Node.js and your tool groups stay in the Ubuntu chroot." else "The Ubuntu container, Java, Node.js and your tool groups stay.") +
+                    " REA servers in your agents stop working until you install it again.",
                 { ReaManager.uninstallRea() }
             )
             else -> Triple(
@@ -242,7 +244,8 @@ private fun ReaIntroCard(state: ReaManager.State, cardBg: Color, cardBorder: Bor
                     else -> Pill("Not set up", MaterialTheme.colorScheme.primary)
                 }
             }
-            Hint("Let agents take apart Android apps (APK, Flutter, React Native) and native code: decompile classes, read manifests and resources, inspect .so libraries, look at installed apps. REA is an open-source MCP server; AntiGem runs it in an Ubuntu container (proot-distro) inside the terminal.")
+            Hint("Let agents take apart Android apps (APK, Flutter, React Native) and native code: decompile classes, read manifests and resources, inspect .so libraries, look at installed apps. REA is an open-source MCP server; AntiGem runs it " +
+                if (state.chroot) "in this phone's Ubuntu chroot." else "in an Ubuntu container (proot-distro) inside the terminal.")
             Hint("Install only the parts you need. Everything for APK analysis takes about 1 GB.")
             TextButton(onClick = { openReaUrl(context, ReaManager.REA_HOMEPAGE) }, contentPadding = PaddingValues(0.dp)) {
                 Text("About REA (github.com/morluto/rea)", fontSize = 12.5.sp)
