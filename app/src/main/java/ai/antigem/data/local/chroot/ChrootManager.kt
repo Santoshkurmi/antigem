@@ -563,11 +563,25 @@ object ChrootManager {
         val r = runCtl(context, listOf("delete", "--root", install.path), onLine = onLine, timeoutMs = 30 * 60_000L)
         if (r.ok) {
             forget(context, install.path)
-            if (AuthPreferences(context).isChrootModeSync() && activeInstall(context) == null) useTermux(context)
+            if (AuthPreferences(context).isChrootModeSync() && activeInstall(context) == null) {
+                useTermux(context)
+                // the chroot marked the phone's environment as installed: without AntiGem's own one it is not
+                if (!ai.antigem.data.local.LocalEnvironmentManager.isTermuxInstalled(context)) AuthPreferences(context).setLocalToolsInstalled(false)
+            }
             _status.value = null
             _usage.value = null
         }
         return r
+    }
+
+    /**
+     * Reopens the app, e.g. after the chroot in use was deleted: the bridge, agents and terminals then start in AntiGem's
+     * environment. Writes the settings saved with apply() first, which exit() would otherwise lose.
+     */
+    fun reopenApp(context: Context) {
+        prefs(context).edit().commit()
+        AuthPreferences(context).flushSync()
+        ai.antigem.data.pc.PcConnect.reopen(context)
     }
 
     suspend fun writeMeta(context: Context, root: String, name: String, content: String): SuResult =

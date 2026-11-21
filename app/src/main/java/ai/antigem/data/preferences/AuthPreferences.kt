@@ -677,6 +677,11 @@ class AuthPreferences(private val context: Context) {
 
     fun isChrootModeSync(): Boolean = syncPrefs.getString("environment_type", "TERMUX") == "UBUNTU_CHROOT"
 
+    /** Waits until the settings saved with apply() are on disk (an empty commit writes after them), e.g. before exit(). */
+    fun flushSync() {
+        syncPrefs.edit().commit()
+    }
+
     fun saveEnvironmentTypeSync(type: String) {
         syncPrefs.edit().putString("environment_type", type).commit()
     }

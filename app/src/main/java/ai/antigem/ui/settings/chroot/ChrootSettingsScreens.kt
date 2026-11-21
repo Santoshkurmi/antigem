@@ -329,7 +329,7 @@ fun ChrootManageScreen(
                             onFailure = { Text("Could not check: ${it.message}", fontSize = 12.sp, color = AppColors.danger) }
                         )
                     }
-                    if (isActiveRuntime) ChrootNote("It is in use: the bridge and the agents stop, and the phone goes back to AntiGem's built-in environment.", AppColors.warning)
+                    if (isActiveRuntime) ChrootNote("It is in use: the bridge and the agents stop, and the phone goes back to AntiGem's built-in environment. AntiGem reopens when the delete is done.", AppColors.warning)
                     Spacer(Modifier.height(10.dp))
                     Text("Type ${install.name} to confirm:", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(deleteText, { deleteText = it }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -342,7 +342,11 @@ fun ChrootManageScreen(
                         val wasActive = isActiveRuntime
                         ChrootManager.runTask(context, "Deleting ${install.name}") { log ->
                             if (wasActive) LocalServerManager.stopServerCompletely()
-                            ChrootManager.delete(context, install, log).also { r -> if (r.ok) scope.launch { onDeleted() } }
+                            ChrootManager.delete(context, install, log).also { r ->
+                                // the phone is back on AntiGem's environment: reopen so everything starts there
+                                if (r.ok && wasActive) ChrootManager.reopenApp(context)
+                                else if (r.ok) scope.launch { onDeleted() }
+                            }
                         }
                     },
                     enabled = deleteText.trim() == install.name && deleteMounts != null,
