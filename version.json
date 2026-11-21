@@ -3,7 +3,8 @@
   "version_name": "2.0.2",
   "min_supported_version_code": 2,
   "changelog": [
-   "Added chroot support for Linux environments.(rooted android)"
+   "Added chroot support for Linux environments.(rooted android)",
+   "Fixed notification causing app crash in android 7"
   ],
   "is_critical": false
 }
