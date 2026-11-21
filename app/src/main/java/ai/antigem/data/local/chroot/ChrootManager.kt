@@ -581,6 +581,20 @@ object ChrootManager {
                            timeoutMs: Long = 60 * 60_000L): SuResult =
         runCtl(context, listOf("exec", "--root", root, "--as-root", "--term", "dumb", "--cmd", b64(script)), onLine = onLine, timeoutMs = timeoutMs)
 
+    /**
+     * Copies the file [path] of the chroot (read as root) to [dest] in the app's own storage, e.g. an APK built in the
+     * chroot for Android's installer: the app cannot read the rootfs itself.
+     */
+    suspend fun copyOut(context: Context, install: ChrootInstall, path: String, dest: File): SuResult {
+        val quoted = "'" + path.replace("'", "'\\''") + "'"
+        dest.parentFile?.mkdirs()
+        val r = runCtlStreaming(context, listOf("exec", "--root", install.path, "--as-root", "--term", "dumb", "--cmd", b64("exec cat -- $quoted")), null) { input ->
+            dest.outputStream().use { input.copyTo(it) }
+        }
+        if (!r.ok) dest.delete()
+        return r
+    }
+
     /** Runs a root task with its log shown on the chroot page. */
     fun runTask(context: Context, title: String, block: suspend ((String) -> Unit) -> SuResult) {
         if (_task.value?.running == true) return

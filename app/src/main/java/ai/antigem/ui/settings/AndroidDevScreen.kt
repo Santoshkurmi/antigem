@@ -172,7 +172,8 @@ fun AndroidDevScreen(
             "clean-cache" -> Triple("Delete Gradle's caches?", "Frees the space Gradle's downloads use. The next build of every project downloads them again (slow).", { AndroidDevManager.cleanCache() })
             else -> Triple(
                 "Remove the Android tools?",
-                "Deletes the Android SDK, Flutter, Gradle's files and the adev commands. The Ubuntu container, Java, Node.js (REA uses them) and your projects stay.",
+                if (state.chroot) "Deletes the Android SDK, Flutter, Gradle's files and the adev commands. Java, Node.js, adb and fastboot (REA uses them) and your projects stay in the Ubuntu chroot."
+                else "Deletes the Android SDK, Flutter, Gradle's files and the adev commands. The Ubuntu container, Java, Node.js (REA uses them) and your projects stay.",
                 { AndroidDevManager.uninstall() }
             )
         }
@@ -256,7 +257,7 @@ private fun InstallStep(state: AndroidDevManager.State, cardBg: Color, cardBorde
     ) {
         Hint("Pick what you want to build. Everything it needs is installed for you, one part after another.")
         val facts = listOfNotNull(
-            state.containerName?.let { "Container: $it" },
+            state.containerName?.let { if (state.chroot) "Ubuntu chroot: $it" else "Container: $it" },
             state.platforms.takeIf { it.isNotEmpty() }?.let { "SDK platforms: ${it.joinToString()}" },
             state.flutterVersion?.let { "Flutter $it" },
             state.nodeVersion?.let { "Node.js $it" }
@@ -338,7 +339,7 @@ private fun PartRow(c: Component, state: AndroidDevManager.State, checked: Boole
                 Column(Modifier.weight(1f)) {
                     Text(c.label, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        c.size + when {
+                        if (state.chroot && c == Component.CONTAINER) "this phone's runtime" else c.size + when {
                             running -> " · installing…"
                             installed -> " · installed"
                             else -> ""
@@ -349,7 +350,8 @@ private fun PartRow(c: Component, state: AndroidDevManager.State, checked: Boole
                 }
                 if (running) {
                     CircularProgressIndicator(Modifier.padding(end = 12.dp).size(18.dp), strokeWidth = 2.dp)
-                } else {
+                } else if (!(state.chroot && c == Component.CONTAINER)) {
+                    // the Ubuntu chroot is the phone's runtime: nothing to install or reinstall here
                     TextButton(enabled = !busy, onClick = { AndroidDevManager.install(c) }) {
                         Text(if (installed) (if (c == Component.FLUTTER) "Update" else "Reinstall") else "Install", fontSize = 12.5.sp)
                     }
@@ -467,7 +469,14 @@ private fun TerminalCard(state: AndroidDevManager.State, cardBg: Color, cardBord
     val repo = runCatching { ai.antigem.ui.browser.PluginRepositories.parse(state.source) }.getOrNull()
     val raw = "https://raw.githubusercontent.com/${repo?.slug ?: "Santoshkurmi/antigem_plugins"}/${repo?.ref?.ifBlank { "main" } ?: "main"}/android-dev/skills/android-dev/scripts"
     val s = "\$PREFIX/share/antigem-android/android-setup.sh"
-    val steps = listOf(
+    // In the Ubuntu chroot the script runs inside it, as root (AntiGem copies the files to /opt/antigem/share/antigem-android)
+    val c = "sudo env ANTIGEM_RUNTIME=chroot bash /opt/antigem/share/antigem-android/android-setup.sh"
+    val steps = if (state.chroot) listOf(
+        "1. The setup files are in /opt/antigem/share/antigem-android (Get setup files above copies them there). See every step" to "$c help",
+        "2. Kotlin / Java / Compose (base java sdk launcher)" to "$c kotlin",
+        "3. Flutter (with release builds) and / or React Native (Node.js and the NDK)" to "$c flutter flutter-release node ndk",
+        "4. Check it, and build a test app (in ~/AndroidProjects)" to "$c doctor && $c test compose"
+    ) else listOf(
         "1. Download the setup files" to
             "mkdir -p \$PREFIX/share/antigem-android && cd \$PREFIX/share/antigem-android && for f in files.json android-setup.sh adev adev-new; do curl -fsSLO $raw/\$f; done",
         "2. See every step" to "bash $s help",
@@ -506,7 +515,8 @@ private fun RemoveCard(state: AndroidDevManager.State, busy: Boolean, cardBg: Co
                 TextButton(onClick = { open = !open }) { Text(if (open) "Hide" else "Show", fontSize = 12.5.sp) }
             }
             if (!open) return@Column
-            Hint("Your projects are never deleted. The Ubuntu container itself is removed on the REA page (Delete container), since both use it.")
+            Hint(if (state.chroot) "Your projects are never deleted. The Ubuntu chroot itself is deleted on its own page (Where agents run → Ubuntu chroot)."
+                else "Your projects are never deleted. The Ubuntu container itself is removed on the REA page (Delete container), since both use it.")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedButton(enabled = !busy && state.filesReady, onClick = { onConfirm("clean-cache") }) { Text("Clean Gradle cache") }
                 if (Component.FLUTTER in state.installed) OutlinedButton(enabled = !busy && state.filesReady, onClick = { onConfirm("uninstall-flutter") }) { Text("Remove Flutter") }

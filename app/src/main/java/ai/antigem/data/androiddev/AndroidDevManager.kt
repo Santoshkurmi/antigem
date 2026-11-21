@@ -8,12 +8,16 @@ import android.util.Log
 import ai.antigem.BuildConfig
 import ai.antigem.data.local.LocalEnvironmentManager
 import ai.antigem.data.local.TermuxRelocation
+import ai.antigem.data.local.chroot.ChrootInstall
+import ai.antigem.data.local.chroot.ChrootManager
+import ai.antigem.data.local.chroot.ChrootSetup
 import ai.antigem.data.rea.ReaManager
 import ai.antigem.ui.browser.BrowserExtensionManager
 import ai.antigem.ui.browser.PluginRepositories
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +42,9 @@ import java.util.concurrent.TimeUnit
  * install step runs `android-setup.sh <step>`, the same script the Android Development skill tells agents to run.
  * Agents build with the `adev` command (a command in the container with the tools on PATH) and create projects
  * with `adev-new`.
+ *
+ * When AntiGem's Ubuntu chroot is the phone's runtime, the tools install into the chroot itself instead (the same
+ * script, run there as root: see [ChrootSetup]), with Ubuntu's own arm64 aapt2, adb, fastboot and qemu-user.
  */
 object AndroidDevManager {
     private const val TAG = "AndroidDevManager"
@@ -50,6 +57,8 @@ object AndroidDevManager {
     const val CONTAINER = ReaManager.CONTAINER
     /** Where the test builds (and, by default, agents' new projects) go, under the Termux home. */
     const val PROJECTS_DIR = "AndroidProjects"
+    /** Where the setup files go in the Ubuntu chroot. */
+    private val CHROOT_SHARE = ChrootSetup.shareDir("antigem-android")
 
     private const val JAVA_HOME = "usr/lib/jvm/java-21-openjdk-arm64"
     private const val SDK = "root/android-sdk"
@@ -66,17 +75,33 @@ object AndroidDevManager {
      * One part of the setup, installed by `android-setup.sh <step>`. [needs] are installed first when missing.
      * [size] is the approximate disk use.
      */
-    enum class Component(val step: String, val label: String, val description: String, val size: String) {
-        CONTAINER("container", "Ubuntu container", "proot-distro and an Ubuntu 24.04 container the tools run in (the same one REA uses).", "≈150 MB"),
+    enum class Component(
+        val step: String,
+        private val termuxLabel: String,
+        private val termuxDescription: String,
+        val size: String,
+        /** The wording when the tools install into the Ubuntu chroot (null: the same). */
+        private val chrootLabel: String? = null,
+        private val chrootDescription: String? = null
+    ) {
+        CONTAINER("container", "Ubuntu container", "proot-distro and an Ubuntu 24.04 container the tools run in (the same one REA uses).", "≈150 MB",
+            "Ubuntu chroot", "This phone's Ubuntu chroot: the tools install right into it, nothing to add."),
         BASE("base", "Base tools", "curl, git, zip, unzip, xz, Python and binutils in Ubuntu. Flutter, the SDK download and stripping .so files need them.", "≈70 MB"),
         JAVA("java", "Java 21", "OpenJDK 21, headless. Gradle and the Android SDK tools run on it (shared with REA).", "≈290 MB"),
-        SDK("sdk", "Android SDK", "Command-line tools, the Android 16 (API 36) platform and build-tools 36, Termux's arm64 aapt2 (Google's is x86_64 only) and Gradle settings that suit the phone.", "≈500 MB"),
-        LAUNCHER("launcher", "adev commands", "adev runs a command in the container with every tool on PATH (adev ./gradlew assembleDebug); adev-new creates a working hello-world project.", "<1 MB"),
+        SDK("sdk", "Android SDK", "Command-line tools, the Android 16 (API 36) platform and build-tools 36, Termux's arm64 aapt2 (Google's is x86_64 only) and Gradle settings that suit the phone.", "≈500 MB",
+            chrootDescription = "Command-line tools, the Android 16 (API 36) platform and build-tools 36, Ubuntu's arm64 aapt2 (Google's is x86_64 only) and Gradle settings that suit the phone."),
+        LAUNCHER("launcher", "adev commands", "adev runs a command in the container with every tool on PATH (adev ./gradlew assembleDebug); adev-new creates a working hello-world project.", "<1 MB",
+            chrootDescription = "adev runs a command with every tool on PATH (adev ./gradlew assembleDebug); adev-new creates a working hello-world project."),
         FLUTTER("flutter", "Flutter", "Flutter stable, cloned from GitHub, and its Android engine files. Install again to update it.", "≈1.5 GB"),
-        FLUTTER_RELEASE("flutter-release", "Flutter release builds", "Flutter's release compiler (gen_snapshot) only exists for x86-64 PCs. This runs it through qemu (Termux) with Ubuntu's x86-64 C library, so flutter build apk --release works; each release build takes a few minutes longer. Debug builds do not need it.", "≈110 MB"),
+        FLUTTER_RELEASE("flutter-release", "Flutter release builds", "Flutter's release compiler (gen_snapshot) only exists for x86-64 PCs. This runs it through qemu (Termux) with Ubuntu's x86-64 C library, so flutter build apk --release works; each release build takes a few minutes longer. Debug builds do not need it.", "≈110 MB",
+            chrootDescription = "Flutter's release compiler (gen_snapshot) only exists for x86-64 PCs. This runs it through Ubuntu's qemu-user with Ubuntu's x86-64 C library, so flutter build apk --release works; each release build takes a few minutes longer. Debug builds do not need it."),
         NODE("node", "Node.js 24", "Installed with nvm (the same Node.js REA uses). React Native and Expo run on it.", "≈240 MB"),
         NDK("ndk", "C/C++ (NDK)", "The Android NDK and CMake for C/C++ code: React Native's new architecture, apps and plugins with CMake. Google builds them for x86-64 PCs only, so their programs are swapped for Ubuntu's arm64 LLVM, CMake and Ninja.", "≈1.5 GB"),
-        ADB("adb", "adb", "adb in the terminal, to install and debug the apps you build on this phone. Connect it in ADB Connect.", "≈10 MB");
+        ADB("adb", "adb", "adb in the terminal, to install and debug the apps you build on this phone. Connect it in ADB Connect.", "≈10 MB",
+            "adb and fastboot", "Ubuntu's adb and fastboot, to install and debug the apps you build on this phone; no sudo needed (USB / OTG devices too). Connect adb in ADB Connect.");
+
+        val label: String get() = chrootLabel?.takeIf { ChrootSetup.install() != null } ?: termuxLabel
+        val description: String get() = chrootDescription?.takeIf { ChrootSetup.install() != null } ?: termuxDescription
 
         val needs: List<Component>
             get() = when (this) {
@@ -101,6 +126,10 @@ object AndroidDevManager {
     data class State(
         val ready: Boolean = false,
         val bootstrapInstalled: Boolean = false,
+        /** The tools live in the Ubuntu chroot (the phone's runtime), not in a proot container of AntiGem's environment. */
+        val chroot: Boolean = false,
+        /** Where projects go: ~/AndroidProjects of the Termux home, or of the chroot user's home. */
+        val projectsDir: String? = null,
         val source: String = DEFAULT_SOURCE,
         /** Version of the downloaded setup files, null when not downloaded. */
         val filesVersion: String? = null,
@@ -168,11 +197,94 @@ object AndroidDevManager {
 
     // ---------------- state ----------------
 
-    /** Re-reads what is installed and the setup files: only files, cheap enough to poll. */
-    fun refresh() = scope.launch { refreshNow() }
+    /**
+     * Re-reads what is installed and the setup files: only files, cheap enough to poll. In the Ubuntu chroot what is
+     * installed comes from the setup script (a root call), at most every [CHROOT_STATUS_MS] unless [force].
+     */
+    fun refresh(force: Boolean = false) = scope.launch { refreshNow(force) }
 
-    private fun refreshNow() {
+    private const val CHROOT_STATUS_MS = 15_000L
+    @Volatile private var chrootStatus: Map<String, String>? = null
+    @Volatile private var chrootStatusFor: String? = null
+    @Volatile private var chrootStatusAt = 0L
+
+    /** The setup script's `status` in [install] (cached); null when the chroot can't be asked. */
+    private suspend fun chrootStatus(install: ChrootInstall, force: Boolean): Map<String, String>? {
+        val fresh = chrootStatusFor == install.path && System.currentTimeMillis() - chrootStatusAt < CHROOT_STATUS_MS
+        if (!force && fresh) return chrootStatus
+        var status = ChrootSetup.status(appContext, install, CHROOT_SHARE, "android-setup.sh")
+        // the setup files were downloaded but never copied into this chroot (e.g. it became the runtime later)
+        if (status == null && File(shareDir, "android-setup.sh").exists() && copyFilesToChroot(install)) {
+            status = ChrootSetup.status(appContext, install, CHROOT_SHARE, "android-setup.sh")
+        }
+        chrootStatus = status
+        chrootStatusFor = install.path
+        chrootStatusAt = System.currentTimeMillis()
+        return status
+    }
+
+    /** [refreshNow] for the Ubuntu chroot: everything from the setup script's status. */
+    private suspend fun refreshChroot(install: ChrootInstall, force: Boolean) {
+        val status = chrootStatus(install, force).orEmpty()
+        val installed = buildSet {
+            // the chroot is the container
+            add(Component.CONTAINER)
+            Component.entries.filter { status[it.step] == "yes" }.forEach { add(it) }
+        }
+        val filesVersion = runCatching { JSONObject(File(shareDir, "files.json").readText()).optString("version").ifBlank { null } }
+            .getOrNull()?.takeIf { File(shareDir, "android-setup.sh").exists() }
+        val testApks = Framework.entries.mapNotNull { f -> status["apk_${f.key}"]?.ifBlank { null }?.let { f.key to it } }.toMap()
+        val plugin = BrowserExtensionManager.instance.extensions.firstOrNull { it.id == PLUGIN_ID }
+        _state.update {
+            it.copy(
+                ready = true,
+                bootstrapInstalled = true,
+                chroot = true,
+                projectsDir = status["projects"]?.ifBlank { null },
+                filesVersion = filesVersion,
+                filesUpdate = it.filesUpdate?.takeIf { v -> v != filesVersion },
+                installed = installed,
+                containerName = status["os"]?.ifBlank { null } ?: install.os,
+                flutterVersion = status["flutter_version"]?.ifBlank { null },
+                nodeVersion = status["node_version"]?.ifBlank { null },
+                platforms = status["platforms"].orEmpty().split(' ').filter { p -> p.isNotBlank() }.sorted(),
+                testApks = testApks,
+                pluginInstalled = plugin != null,
+                pluginVersion = plugin?.version
+            )
+        }
+    }
+
+    /**
+     * Whether the downloaded setup files know the Ubuntu chroot (1.1.0 and newer list adev-chroot). Older ones only know
+     * Termux and would run their Termux steps inside the chroot.
+     */
+    private fun filesSupportChroot(): Boolean = runCatching {
+        val arr = JSONObject(File(shareDir, "files.json").readText()).optJSONArray("files")
+        (0 until (arr?.length() ?: 0)).any { arr!!.getString(it) == "adev-chroot" }
+    }.getOrDefault(false)
+
+    private fun chrootFilesError(): String {
+        val v = runCatching { JSONObject(File(shareDir, "files.json").readText()).optString("version") }.getOrNull()?.ifBlank { null }
+        return "These setup files (${v ?: "unknown version"}) are from before the Ubuntu chroot was supported. Get the setup files again " +
+            "once their source has version 1.1.0 or newer."
+    }
+
+    /** The downloaded setup files, copied into the chroot's [CHROOT_SHARE] (they run there). */
+    private suspend fun copyFilesToChroot(install: ChrootInstall): Boolean {
+        if (!filesSupportChroot()) return false
+        val names = runCatching {
+            val arr = JSONObject(File(shareDir, "files.json").readText()).optJSONArray("files")
+            (0 until (arr?.length() ?: 0)).map { arr!!.getString(it) }
+        }.getOrDefault(emptyList()).filter { Regex("[A-Za-z0-9._-]+").matches(it) } + "files.json"
+        val r = ChrootSetup.copyIn(appContext, install, shareDir, names.distinct(), CHROOT_SHARE) { name -> !name.endsWith(".json") }
+        if (!r.ok) Log.w(TAG, "copying the setup files into the chroot: ${r.message()}")
+        return r.ok
+    }
+
+    private suspend fun refreshNow(force: Boolean = false) {
         val ctx = appContext
+        ChrootSetup.install()?.let { refreshChroot(it, force); return }
         val root = rootfs()
         val bin = File(prefix, "bin")
         val sdk = File(root, SDK)
@@ -202,6 +314,8 @@ object AndroidDevManager {
             it.copy(
                 ready = true,
                 bootstrapInstalled = LocalEnvironmentManager.isInstalled(ctx),
+                chroot = false,
+                projectsDir = projectsPath,
                 filesVersion = filesVersion,
                 filesUpdate = it.filesUpdate?.takeIf { v -> v != filesVersion },
                 installed = installed,
@@ -270,6 +384,11 @@ object AndroidDevManager {
         File(shareDir, "files.json").writeText(index.toString(1))
         relocateSetupFiles()
         appendLog("✓ Setup files $version in ${shareDir.absolutePath}")
+        ChrootSetup.install()?.let { install ->
+            if (!filesSupportChroot()) throw IllegalStateException(chrootFilesError())
+            if (!copyFilesToChroot(install)) throw IllegalStateException("Could not copy the setup files into the Ubuntu chroot")
+            appendLog("✓ Copied into the Ubuntu chroot: $CHROOT_SHARE")
+        }
         _state.update { it.copy(filesUpdate = null) }
         // New adev / adev-new versions reach the terminal through the launcher step
         if (Component.LAUNCHER in _state.value.installed) shellTask("Updating the adev commands…", "launcher", 600)
@@ -279,7 +398,9 @@ object AndroidDevManager {
         runCatching { JSONObject(httpGet(rawUrl("files.json"))).optString("version") }
             .onSuccess { remote ->
                 val local = _state.value.filesVersion
-                _state.update { it.copy(filesUpdate = remote.takeIf { v -> v.isNotBlank() && v != local }) }
+                // only a newer version is an update (a repository behind the downloaded files is no downgrade offer)
+                val newer = remote.isNotBlank() && (local == null || (ai.antigem.ui.browser.PluginVersions.compare(remote, local) ?: 0) > 0)
+                _state.update { it.copy(filesUpdate = remote.takeIf { newer }) }
             }
             .onFailure { Log.w(TAG, "update check failed: ${it.message}") }
     }
@@ -313,7 +434,7 @@ object AndroidDevManager {
                 _state.update { it.copy(installing = c, batchIndex = i) }
                 val label = if (components.size > 1) "Step ${i + 1} of ${components.size} · ${c.label}" else c.label
                 if (!shellTask("$label…", c.step, 3600)) return@runTask
-                refreshNow()
+                refreshNow(force = true)
             }
             report(if (components.size == 1) "${components[0].label} installed." else "Installed ${components.size} parts.")
         }
@@ -322,12 +443,33 @@ object AndroidDevManager {
     /** Creates (once) and builds a hello-world app of [framework] in ~/AndroidProjects, to check the setup works. */
     fun testBuild(framework: Framework) = runTask("test-${framework.key}") {
         if (shellTask("Building a ${framework.label} hello world (the first build downloads a lot and takes several minutes)…", "test ${framework.key}", 3600)) {
-            report("${framework.label} works: the test APK is ${testApk(framework)}")
+            refreshNow(force = true)
+            report("${framework.label} works: the test APK is ${_state.value.testApks[framework.key] ?: testApk(framework)}")
         }
     }
 
-    /** Opens Android's package installer for a built APK; first asks for "install unknown apps" when not allowed yet. */
+    /**
+     * Opens Android's package installer for a built APK; first asks for "install unknown apps" when not allowed yet.
+     * An APK in the Ubuntu chroot is copied out into the app's cache first (the app cannot read the chroot).
+     */
     fun installApk(path: String) {
+        val chroot = ChrootSetup.install()
+        if (chroot != null) {
+            scope.launch {
+                val dest = File(appContext.cacheDir, "chroot-apk/${File(path).name}")
+                val r = ChrootManager.copyOut(appContext, chroot, path, dest)
+                if (!r.ok || !dest.isFile) {
+                    report("Could not copy the APK out of the Ubuntu chroot: ${r.message()}", isError = true)
+                    return@launch
+                }
+                withContext(Dispatchers.Main) { openInstaller(dest.absolutePath) }
+            }
+            return
+        }
+        openInstaller(path)
+    }
+
+    private fun openInstaller(path: String) {
         val ctx = appContext
         runCatching {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && !ctx.packageManager.canRequestPackageInstalls()) {
@@ -348,8 +490,13 @@ object AndroidDevManager {
     }
 
     fun stop() {
-        val pid = runCatching { pidFile.readText().trim().toInt() }.getOrNull()
-        if (pid != null) scope.launch { killTree(pid) }
+        val chroot = ChrootSetup.install()
+        if (chroot != null) {
+            scope.launch { ChrootSetup.stopScript(appContext, chroot, CHROOT_SHARE) }
+        } else {
+            val pid = runCatching { pidFile.readText().trim().toInt() }.getOrNull()
+            if (pid != null) scope.launch { killTree(pid) }
+        }
         job?.cancel()
         report("Stopped. Run the step again to finish it: it picks up where it left off.", isError = true)
     }
@@ -424,7 +571,8 @@ object AndroidDevManager {
             } finally {
                 releaseWakeLock()
                 pidFile.delete()
-                refreshNow()
+                // also after Stop (the job is cancelled; reading the chroot's status still has to happen)
+                withContext(NonCancellable) { runCatching { refreshNow(force = true) } }
                 _state.update { it.copy(task = null, progress = null, installing = null) }
             }
         }
@@ -444,6 +592,7 @@ object AndroidDevManager {
     private suspend fun shellTask(progress: String, step: String, timeoutSeconds: Long): Boolean {
         val script = File(shareDir, "android-setup.sh")
         if (!script.exists()) throw IllegalStateException("The setup files are missing. Tap Get setup files first.")
+        ChrootSetup.install()?.let { return chrootTask(it, progress, step, timeoutSeconds) }
         relocateSetupFiles()
         _state.update { it.copy(progress = progress) }
         appendLog("$ bash android-setup.sh $step")
@@ -457,6 +606,22 @@ object AndroidDevManager {
         if (result.exitCode != 0) {
             val last = _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
             report(last ?: "The $step step failed (exit ${result.exitCode}). Check the log, then run it again.", isError = true)
+            return false
+        }
+        return true
+    }
+
+    /** [shellTask] in the Ubuntu chroot: the same `android-setup.sh <step>`, run inside the chroot as root. */
+    private suspend fun chrootTask(install: ChrootInstall, progress: String, step: String, timeoutSeconds: Long): Boolean {
+        if (!filesSupportChroot()) throw IllegalStateException(chrootFilesError())
+        if (!copyFilesToChroot(install)) throw IllegalStateException("Could not copy the setup files into the Ubuntu chroot (root access?)")
+        _state.update { it.copy(progress = progress) }
+        appendLog("$ bash android-setup.sh $step   (in the Ubuntu chroot, as root)")
+        val r = ChrootSetup.runScript(appContext, install, CHROOT_SHARE, "android-setup.sh", step.split(' ').filter { it.isNotBlank() },
+            timeoutSeconds * 1000) { line -> if (line.isNotBlank()) appendLog(line.trimEnd()) }
+        if (!r.ok) {
+            val last = _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
+            report(last ?: "The $step step failed (exit ${r.exitCode}). Check the log, then run it again.", isError = true)
             return false
         }
         return true

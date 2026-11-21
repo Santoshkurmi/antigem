@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import ai.antigem.R
 import ai.antigem.data.local.LocalCommandResult
 import ai.antigem.data.local.LocalEnvironmentManager
+import ai.antigem.data.local.chroot.ChrootInstall
+import ai.antigem.data.local.chroot.ChrootSetup
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.data.remote.AdbTunnel
 import ai.antigem.data.remote.RemoteServerManager
@@ -182,8 +184,18 @@ object AdbConnectManager {
     /** In server mode adb means the SERVER's adb: everything here runs there, over the app's SSH connection. */
     private val remote get() = AuthPreferences.currentRemoteMode
 
+    /**
+     * When the Ubuntu chroot is this phone's runtime, adb means the chroot's adb (Ubuntu's adb and fastboot): the agents
+     * there use it, so it runs as the chroot's user and its pairing keys live in their ~/.android. Null otherwise.
+     */
+    private val chroot: ChrootInstall? get() = ChrootSetup.install()
+
+    /** Whether adb lives in the Ubuntu chroot (for the screen's wording). */
+    val inChroot: Boolean get() = chroot != null
+
     private suspend fun shell(command: String, timeoutSeconds: Long = 30, onLine: ((String) -> Unit)? = null): LocalCommandResult {
         if (remote) return serverShell(command, timeoutSeconds, onLine)
+        chroot?.let { return chrootShell(it, command, timeoutSeconds, onLine) }
         return LocalEnvironmentManager.executeCommand(
             "( $command ) < /dev/null", appContext, timeoutSeconds = timeoutSeconds,
             customEnv = mapOf("DEBIAN_FRONTEND" to "noninteractive"), onOutputLine = onLine
@@ -198,6 +210,14 @@ object AdbConnectManager {
             .getOrElse { 255 to (it.message ?: "SSH error") }
         if (onLine != null) out.lineSequence().forEach(onLine)
         LocalCommandResult(code, out, System.currentTimeMillis() - started)
+    }
+
+    private suspend fun chrootShell(install: ChrootInstall, command: String, timeoutSeconds: Long, onLine: ((String) -> Unit)?): LocalCommandResult {
+        val started = System.currentTimeMillis()
+        val r = ChrootSetup.asUser(appContext, install, "( $command ) < /dev/null 2>&1", timeoutMs = (timeoutSeconds + 15) * 1000, onLine = onLine)
+        // chrootctl's own errors (no root, chroot not there) come on stderr
+        val output = r.out.joinToString("\n").ifBlank { if (r.ok) "" else r.message() }
+        return LocalCommandResult(r.exitCode, output, System.currentTimeMillis() - started)
     }
 
     // `timeout` keeps a stuck adb from blocking the output reader forever
@@ -242,6 +262,22 @@ object AdbConnectManager {
                 appendInstallLog(r.fold({ it }, { it.message ?: "Install failed" }))
                 refreshNow()
                 _state.update { it.copy(installing = false, installError = r.exceptionOrNull()?.message) }
+                return@launch
+            }
+            chroot?.let { install ->
+                // Ubuntu's own adb and fastboot: they run as the user without sudo (the user is in Android's usb group)
+                appendInstallLog("Installing adb and fastboot in the Ubuntu chroot (Ubuntu's packages)…")
+                val keep = "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+                val command = "export DEBIAN_FRONTEND=noninteractive; dpkg --configure -a >/dev/null 2>&1; " +
+                    "apt-get update -q && apt-get install -y -q --no-install-recommends $keep adb fastboot"
+                appendInstallLog("$ apt-get install adb fastboot")
+                val r = ChrootSetup.asRoot(appContext, install, "( $command ) 2>&1", timeoutMs = 900_000L) { line -> if (line.isNotBlank()) appendInstallLog(line) }
+                refreshNow()
+                val ok = _state.value.adbInstalled == true
+                _state.update {
+                    it.copy(installing = false, installError = if (ok) null else "Install failed (exit ${r.exitCode}). Check the log above.")
+                }
+                if (ok) appendInstallLog("✓ ${_state.value.adbVersion ?: "adb installed"} (and fastboot)")
                 return@launch
             }
             // Termux is rolling-release: installing only android-tools can leave older libraries (libprotobuf…) that the new
@@ -423,6 +459,11 @@ object AdbConnectManager {
         val out = if (remote) AdbTunnel.pairServer(appContext, code, port).fold({ "Successfully paired" }, { it.message ?: "Pairing failed" })
         else adb("pair $host:$port $code", 25).output.trim()
         if (!out.contains("Successfully paired")) {
+            // Ubuntu 22.04's adb (29) has no `adb pair`: Wi-Fi pairing needs adb 30 or newer
+            if (out.contains("unknown command", ignoreCase = true)) {
+                setPairing(Pairing.Failed("This adb is too old to pair over Wi-Fi (it needs adb 30 or newer; the Ubuntu chroot needs Ubuntu 24.04 or newer).", port))
+                return@launch
+            }
             val reason = out.lineSequence().lastOrNull { it.isNotBlank() }?.removePrefix("error: ") ?: "No response from adb"
             setPairing(Pairing.Failed("$reason. Check the code and try again.", port))
             return@launch

@@ -312,7 +312,7 @@ private fun InstallStep(state: ReaManager.State, cardBg: Color, cardBorder: Bord
     ) {
         Hint("Pick the parts you need and install them together, or install them one at a time with the button on each. Anything a part needs is added for you.")
         val facts = listOfNotNull(
-            state.containerName?.let { "Container: $it" },
+            state.containerName?.let { if (state.chroot) "Ubuntu chroot: $it" else "Container: $it" },
             state.nodeVersion?.let { "Node.js $it" },
             state.reaVersion?.let { "REA $it" }
         )
@@ -368,7 +368,7 @@ private fun ComponentRow(c: Component, state: ReaManager.State, checked: Boolean
                 Column(Modifier.weight(1f)) {
                     Text(c.label, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        c.size + when {
+                        if (state.chroot && c == Component.CONTAINER) "this phone's runtime" else c.size + when {
                             running -> " · installing…"
                             installed -> " · installed"
                             else -> ""
@@ -379,7 +379,8 @@ private fun ComponentRow(c: Component, state: ReaManager.State, checked: Boolean
                 }
                 if (running) {
                     CircularProgressIndicator(Modifier.padding(end = 12.dp).size(18.dp), strokeWidth = 2.dp)
-                } else {
+                } else if (!(state.chroot && c == Component.CONTAINER)) {
+                    // the Ubuntu chroot is the phone's runtime: nothing to install or reinstall here
                     TextButton(enabled = !busy, onClick = { ReaManager.install(c) }) {
                         Text(if (installed) (if (c == Component.REA) "Update" else "Reinstall") else "Install", fontSize = 12.5.sp)
                     }
@@ -554,7 +555,17 @@ private fun ManualSetupCard(state: ReaManager.State, cardBg: Color, cardBorder: 
     var open by remember { mutableStateOf(false) }
     val repo = runCatching { ai.antigem.ui.browser.PluginRepositories.parse(state.source) }.getOrNull()
     val raw = "https://raw.githubusercontent.com/${repo?.slug ?: "Santoshkurmi/antigem_plugins"}/${repo?.ref?.ifBlank { "main" } ?: "main"}/rea/skills/rea/scripts"
-    val steps = listOf(
+    // In the Ubuntu chroot the scripts run inside it, as root (AntiGem copies the files to /opt/antigem/share/antigem-rea)
+    val chrootSetup = "sudo env ANTIGEM_RUNTIME=chroot bash /opt/antigem/share/antigem-rea/rea-setup.sh"
+    val steps = if (state.chroot) listOf(
+        "1. The setup files are in /opt/antigem/share/antigem-rea (Get setup files above copies them there). See every step" to "$chrootSetup help",
+        "2. Install what APK analysis needs (or name single steps: base java node rea jadx apktool native launcher)" to "$chrootSetup android",
+        "3. Optional extras (adb and fastboot, hermes-dec, gdb, binwalk)" to "$chrootSetup adb hermes debug firmware",
+        "4. Check it" to "rea-mcp --doctor",
+        "5. Connect it to an agent: in the app, use the REA preset in the agent's MCP settings. By hand, a stdio MCP server with this command and env (REA_MODE lazy = on demand, ≈0.7k tokens; direct = every tool, each costs context; REA_GROUPS all or group ids from ~/.config/antigem/rea/groups.json)" to
+            "${ReaManager.CHROOT_LAUNCHER}   REA_MODE=lazy  REA_GROUPS=all",
+        "6. Run REA's tools by hand (hbc-decompiler, apktool, rea …)" to "rea-shell"
+    ) else listOf(
         "1. Download the setup files" to
             "mkdir -p \$PREFIX/share/antigem-rea && cd \$PREFIX/share/antigem-rea && for f in files.json rea-setup.sh rea-mcp rea-shell rea-filter.mjs groups.default.json; do curl -fsSLO $raw/\$f; done",
         "2. See every step" to "bash \$PREFIX/share/antigem-rea/rea-setup.sh help",
@@ -596,10 +607,12 @@ private fun RemoveCard(state: ReaManager.State, busy: Boolean, cardBg: Color, ca
                 TextButton(onClick = { open = !open }) { Text(if (open) "Hide" else "Show", fontSize = 12.5.sp) }
             }
             if (!open) return@Column
-            Hint("Remove REA keeps the Ubuntu container (and Java and Node.js in it) for other uses. Deleting the container frees all the space.")
+            Hint(if (state.chroot) "Remove REA keeps Java and Node.js in the Ubuntu chroot for other uses. The chroot itself is deleted on its own page (Where agents run → Ubuntu chroot)."
+                else "Remove REA keeps the Ubuntu container (and Java and Node.js in it) for other uses. Deleting the container frees all the space.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(enabled = !busy && state.filesReady && (Component.REA in state.installed || Component.LAUNCHER in state.installed), onClick = { onConfirm("uninstall") }) { Text("Remove REA") }
-                OutlinedButton(
+                // the chroot is the phone's runtime, not REA's container: never deleted from here
+                if (!state.chroot) OutlinedButton(
                     enabled = !busy && state.filesReady && Component.CONTAINER in state.installed,
                     onClick = { onConfirm("remove-container") },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)

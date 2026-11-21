@@ -3,19 +3,7 @@
   "version_name": "2.0.1",
   "min_supported_version_code": 2,
   "changelog": [
-    "Added x86_64 build for emulators and Intel/AMD Chromebooks, with its own full Linux environment download (GitHub)",
-    "Added multiple Antigravity accounts: save your Google accounts and switch between them in Settings → Antigravity → Account & CLI",
-    "Added pinning chats to the top of the chat list, for every agent",
-    "Added Gemmy, a floating buddy that reacts while your agent works (turn it off in Settings → Appearance)",
-    "Added EGM (Elephant-Goldfish) design reviews: install it and manage its /egm commands from Settings",
-    "Added Account & CLI pages for Antigravity and Codex: sign-in, install, update and restart in one place",
-    "Fixed a crash while typing with some keyboards",
-    "Fixed a crash when an SSH terminal failed to connect right away",
-    "Fixed typing not reaching the terminal on emulators",
-    "Fixed Claude Code messages failing after the sign-in expired, the app now asks you to sign in again",
-    "Fixed Codex and OpenCode still showing \"not found\" after they were installed",
-    "Fixed Antigravity showing Error during every server restart, and dropping offline for a moment on a busy phone",
-    "Improved the Accounts dialog: simpler, with a Settings button for each agent"
+   "Added chroot support for Linux environments.(rooted android)"
   ],
   "is_critical": false
 }
