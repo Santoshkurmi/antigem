@@ -166,7 +166,9 @@ enum class SettingsSection(val title: String, val subtitle: String) {
         CLAUDE_PAGE -> CLAUDE
         OPENCODE_PAGE -> OPENCODE
         CODEX_PAGE -> CODEX
-        TERMUX_API, X11_DESKTOP -> TERMUX_SUPPORT
+        TERMUX_API -> TERMUX_SUPPORT
+        // with the Ubuntu chroot the X11 row is on the main page (Termux Support is Termux-only there)
+        X11_DESKTOP -> if (chrootRunsPhone()) MAIN else TERMUX_SUPPORT
         REA_GROUPS -> REA
         UBUNTU_CHROOT -> SERVERS
         GLOBAL_CONTEXT, AGENT_MEMORY, EGM -> AGENTS
@@ -183,6 +185,10 @@ enum class SettingsSection(val title: String, val subtitle: String) {
 private val TERMUX_ONLY_SECTIONS = setOf(
     SettingsSection.TERMUX_SUPPORT, SettingsSection.TERMUX_API, SettingsSection.BACKUPS, SettingsSection.GITHUB
 )
+
+/** The Ubuntu chroot is this phone's runtime (not server mode): Termux-only pages show a notice instead. */
+private fun chrootRunsPhone(): Boolean =
+    !ai.antigem.data.preferences.AuthPreferences.currentRemoteMode && ai.antigem.data.local.chroot.ChrootManager.isActiveNow()
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -976,8 +982,10 @@ private fun MainSettingsMenu(
                 deviceTools.automation,
                 reaRow,
                 androidDevRow,
-                // Termux:API and X11, used by the Termux packages in the terminal
-                row(SettingsSection.TERMUX_SUPPORT, Icons.Outlined.Cable, c.accentIndigo),
+                // Termux:API and X11, used by the Termux packages in the terminal; with the Ubuntu chroot only X11
+                // works (Termux Support is Termux-only there), so its row takes the place of the menu
+                if (chrootRunsPhone()) rememberX11Row(onNavigate)
+                else row(SettingsSection.TERMUX_SUPPORT, Icons.Outlined.Cable, c.accentIndigo),
                 // Utilities only shows once it has something in it (its old items are rows of their own now)
                 if (utilityRows(onNavigate).isNotEmpty()) row(SettingsSection.UTILITIES, Icons.Outlined.Handyman, c.accentTeal) else null,
                 row(SettingsSection.DIAGNOSTICS, Icons.Outlined.Speed, c.success,
@@ -1075,6 +1083,22 @@ private fun TermuxSupportMenu(
             )
         )
     )
+}
+
+/** The X11 Desktop row of the main settings page (Ubuntu chroot mode), with whether the X server runs. */
+@Composable
+private fun rememberX11Row(onNavigate: (SettingsSection) -> Unit): SettingsRowItem {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        ai.antigem.data.x11.X11DesktopManager.init(context)
+        ai.antigem.data.x11.X11DesktopManager.refresh()
+    }
+    val x11 by ai.antigem.data.x11.X11DesktopManager.state.collectAsState()
+    val c = ai.antigem.theme.AppColors
+    return SettingsRowItem(Icons.Outlined.DesktopWindows, c.accentIndigo, SettingsSection.X11_DESKTOP.title,
+        if (x11.running) "Running" else null, if (x11.running) QuotaGreen else null) {
+        onNavigate(SettingsSection.X11_DESKTOP)
+    }
 }
 
 /** What Settings → Utilities lists. Empty for now: when it is, the Utilities row is hidden. Add future handy tools here. */
