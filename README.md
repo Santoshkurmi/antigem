@@ -461,6 +461,16 @@ AntiGem comes in parts that link to each other:
 | **AntiGem Browser Bridge** (Chrome extension) | Lets agents in AntiGem for VS Code use your real Chrome. Not needed by the Android app, which has its own browser. | [Santoshkurmi/antigem-browser-extension](https://github.com/Santoshkurmi/antigem-browser-extension) · not in the Chrome Web Store yet: installed with *Load unpacked* from AntiGem for VS Code |
 | **AntiGem mini apps** | The official mini apps (Habits, Pocket Notes, Sky, Gallery, Focus, Dev Toolbox, Explorer, Showcase), installed from **Mini Apps → Get apps**. Also the guide to building and publishing your own: real app sources using every SDK feature, signed `.agapp` packages, the catalog format and the `agapp.mjs publish` tool. | [Santoshkurmi/antigem_mini_apps](https://github.com/Santoshkurmi/antigem_mini_apps) |
 This is not polished app they are only for showcase only not for use and will be removed in future.
+
+---
+
+## Other similar apps
+
+AntiGem not the right fit? These apps do similar things and might suit you better:
+
+- [**Mobile Harness**](https://github.com/techjarves/Mobile-Harness): Claude Code, DeepSeek and Antigravity agents in an Ubuntu (PRoot) workspace, with a terminal, editor and web preview.
+- [**AndroidHarness**](https://github.com/Sanuu7/AndroidHarness): a native app with its own coding agent and chat, free built-in models, offline models and Shizuku shell access.
+
 ## Contributing
 
 Issues, ideas and pull requests are welcome. For help, join the [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4).
