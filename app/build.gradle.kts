@@ -33,6 +33,24 @@ val targetAbi = (findProperty("abi") as String?)?.trim()?.ifEmpty { null } ?: "a
 require(targetAbi == "arm64" || targetAbi == "x86_64") { "-Pabi must be arm64 or x86_64, not $targetAbi" }
 val isX86 = targetAbi == "x86_64"
 
+// The rooted Ubuntu chroot runs a Linux build of the bridge (~4 MB), so the normal arm64 release leaves it out and the
+// chroot one carries it: `-Pchroot=true` (AntiGem-v<version>-chroot.apk). The x86_64 APK always has it (there is one
+// x86_64 APK). Without the flag debug builds have it and release builds don't; `-Pchroot=false` leaves it out of debug
+// builds too (to see the normal build's "Get the chroot build" page).
+val chrootProp = (findProperty("chroot") as String?)?.trim()?.lowercase()?.ifEmpty { null }
+require(chrootProp == null || chrootProp == "true" || chrootProp == "false") { "-Pchroot must be true or false, not $chrootProp" }
+fun hasChroot(buildType: String): Boolean = isX86 || when (chrootProp) {
+    "true" -> true
+    "false" -> false
+    else -> buildType == "debug"
+}
+// the APK's name suffix in a release: the in-app updater downloads the file of its own kind
+val apkSuffix = when {
+    isX86 -> "-x86_64"
+    chrootProp == "true" -> "-chroot"
+    else -> ""
+}
+
 android {
     namespace = "ai.antigem"
     compileSdk = 37
@@ -47,8 +65,10 @@ android {
         // kept so 32-bit ARM phones can install the app and use server mode (bridge on a PC); x86/x86_64 copies of
         // dependency libraries stay out of it. The x86_64 build has only x86_64 ones.
         ndk { abiFilters += if (isX86) listOf("x86_64") else listOf("arm64-v8a", "armeabi-v7a") }
-        // "arm64" or "x86_64": picks the glibc loader, the bundled glibc and the update APK at run time
+        // "arm64" or "x86_64": picks the glibc loader and the bundled glibc at run time
         buildConfigField("String", "TARGET_ABI", "\"$targetAbi\"")
+        // "", "-chroot" or "-x86_64": the release file the in-app updater downloads (AntiGem-v<version><suffix>.apk)
+        buildConfigField("String", "APK_SUFFIX", "\"$apkSuffix\"")
     }
 
     // the glibc runtime of this build's CPU (assets/glibc-min-<abi>.tar.xz)
@@ -70,11 +90,14 @@ android {
             buildConfigField("int", "BRIDGE_PORT", "1238")
             buildConfigField("int", "HUB_PORT", "1239")
             buildConfigField("int", "BROWSER_MCP_PORT", "8768")
+            // the Linux bridge for the Ubuntu chroot is packed (see hasChroot)
+            buildConfigField("boolean", "HAS_CHROOT", "${hasChroot("debug")}")
         }
         release {
             buildConfigField("int", "BRIDGE_PORT", "1236")
             buildConfigField("int", "HUB_PORT", "1237")
             buildConfigField("int", "BROWSER_MCP_PORT", "8767")
+            buildConfigField("boolean", "HAS_CHROOT", "${hasChroot("release")}")
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
@@ -86,7 +109,8 @@ android {
     }
 
     base {
-        archivesName.set(if (isX86) "antiGem-x86_64" else "antiGem")
+        // antiGem, antiGem-chroot or antiGem-x86_64
+        archivesName.set("antiGem$apkSuffix")
     }
 
     compileOptions {
@@ -286,18 +310,11 @@ val buildAgyIdeBridgeLinux = tasks.register<Exec>("buildAgyIdeBridgeLinux") {
   commandLine("go", "build", "-ldflags=-s -w", "-o", rawFile.absolutePath, "main.go")
 }
 
-val compressAgyIdeBridgeLinux = tasks.register<Exec>("compressAgyIdeBridgeLinux") {
-  dependsOn(buildAgyIdeBridgeLinux)
-  val binDir = layout.projectDirectory.dir("src/main/assets/bin").asFile
-  val rawFile = agyIdeBridgeLinuxRaw.get().asFile
-  inputs.file(rawFile)
-  outputs.file(File(binDir, "agy_ide_bridge_linux.xz"))
-
-  doFirst {
-    binDir.mkdirs()
-  }
-
-  commandLine("sh", "-c", "xz -6 -T1 -c \"$1\" > \"$2\"", "sh", rawFile.absolutePath, File(binDir, "agy_ide_bridge_linux.xz").absolutePath)
+// It is packed only into the builds with the Ubuntu chroot (hasChroot): from each variant's own generated folder
+// (LinuxBridgeAssetTask, androidComponents below), so a build without it can't pick up a copy. Builds before that
+// wrote it into src/main/assets/bin, where every build would package it: removed.
+val deleteLegacyLinuxBridgeAsset = tasks.register<Delete>("deleteLegacyLinuxBridgeAsset") {
+  delete(layout.projectDirectory.file("src/main/assets/bin/agy_ide_bridge_linux.xz"))
 }
 
 val compressAgyIdeBridge = tasks.register<Exec>("compressAgyIdeBridge") {
@@ -341,7 +358,7 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
 }
 
 tasks.named("preBuild") {
-  dependsOn(compressAgyIdeBridge, compressAgyIdeBridgeLinux, copyScriptsToAssets)
+  dependsOn(compressAgyIdeBridge, deleteLegacyLinuxBridgeAsset, copyScriptsToAssets)
 }
 
 
@@ -395,6 +412,33 @@ abstract class TermuxAmAssetTask : DefaultTask() {
         bin.deleteRecursively()
         bin.mkdirs()
         apk.copyTo(File(bin, "am.apk"), overwrite = true)
+    }
+}
+
+/**
+ * The Linux build of the bridge for the Ubuntu chroot, xz-compressed into <outputDir>/bin/agy_ide_bridge_linux.xz (the
+ * app unpacks it in ChrootManager.linuxBridgeFile). Only the variants with the chroot get it (hasChroot).
+ */
+abstract class LinuxBridgeAssetTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val rawBridge: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun compress() {
+        val bin = outputDir.get().asFile.resolve("bin")
+        bin.deleteRecursively()
+        bin.mkdirs()
+        val out = File(bin, "agy_ide_bridge_linux.xz")
+        // preset 6 with an 8 MB dictionary, like the Android bridge: little memory to unpack
+        val xz = ProcessBuilder("xz", "-6", "-T1", "-c", rawBridge.get().asFile.absolutePath)
+            .redirectOutput(out)
+            .redirectError(ProcessBuilder.Redirect.INHERIT)
+            .start()
+        if (xz.waitFor() != 0) throw GradleException("xz failed to compress ${rawBridge.get().asFile}")
     }
 }
 
@@ -515,5 +559,14 @@ androidComponents {
             apkDir.set(project(":termux-am").layout.buildDirectory.dir("outputs/apk/$amBuildType"))
         }
         variant.sources.assets?.addGeneratedSourceDirectory(termuxAm, TermuxAmAssetTask::outputDir)
+
+        // the Ubuntu chroot's Linux bridge: only in the builds with the chroot (the -chroot and x86_64 APKs, debug)
+        if (hasChroot(variant.buildType ?: "release")) {
+            val linuxBridge = tasks.register<LinuxBridgeAssetTask>("linuxBridgeAsset${variant.name.replaceFirstChar { it.uppercase() }}") {
+                dependsOn(buildAgyIdeBridgeLinux)
+                rawBridge.set(agyIdeBridgeLinuxRaw)
+            }
+            variant.sources.assets?.addGeneratedSourceDirectory(linuxBridge, LinuxBridgeAssetTask::outputDir)
+        }
     }
 }

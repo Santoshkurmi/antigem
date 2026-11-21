@@ -82,28 +82,14 @@ class AppUpdateManager(private val context: Context) {
             }
             val isCritical = json.optBoolean("is_critical", false) || (BuildConfig.VERSION_CODE < minSupportedCode)
 
-            // each release (tag v<version>) has the app as AntiGem-v<version>.apk and the x86_64 build as
-            // AntiGem-v<version>-x86_64.apk (scripts/build_all_apks.sh)
-            val apkSuffix = if (BuildConfig.TARGET_ABI == "x86_64") "-x86_64" else ""
-            val downloadUrl = "https://github.com/santoshkurmi/antigem/releases/download/v$remoteVersionName/AntiGem-v$remoteVersionName$apkSuffix.apk"
+            // each release (tag v<version>) has the app as AntiGem-v<version>.apk, the chroot build as
+            // AntiGem-v<version>-chroot.apk and the x86_64 build as AntiGem-v<version>-x86_64.apk
+            // (scripts/build_all_apks.sh): an install keeps getting its own kind
+            val downloadUrl = apkUrl(remoteVersionName, BuildConfig.APK_SUFFIX)
 
             if (remoteVersionCode > BuildConfig.VERSION_CODE && downloadUrl.isNotBlank()) {
                 // Verify that the APK asset is actually published and downloadable on GitHub
-                val probeRequest = Request.Builder()
-                    .url(downloadUrl)
-                    .head()
-                    .header("User-Agent", "antiGem-Updater/${BuildConfig.VERSION_NAME}")
-                    .build()
-
-                val isAvailable = try {
-                    httpClient.newCall(probeRequest).execute().use { probeResponse ->
-                        probeResponse.isSuccessful || probeResponse.isRedirect
-                    }
-                } catch (_: Exception) {
-                    false
-                }
-
-                if (!isAvailable) {
+                if (!isPublished(downloadUrl)) {
                     // Release is not yet fully published or APK is still building on CI
                     return@withContext Result.success(null)
                 }
@@ -125,6 +111,53 @@ class AppUpdateManager(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to check for updates: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun apkUrl(versionName: String, suffix: String) =
+        "https://github.com/santoshkurmi/antigem/releases/download/v$versionName/AntiGem-v$versionName$suffix.apk"
+
+    /** Whether the release file is on GitHub (a release is published before CI has uploaded its APKs). */
+    private fun isPublished(url: String): Boolean = try {
+        val probe = Request.Builder()
+            .url(url)
+            .head()
+            .header("User-Agent", "antiGem-Updater/${BuildConfig.VERSION_NAME}")
+            .build()
+        httpClient.newCall(probe).execute().use { it.isSuccessful || it.isRedirect }
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
+     * The chroot build (AntiGem-v<version>-chroot.apk) for an install of the normal build, which has no Ubuntu chroot:
+     * of the newest release when it has one, else of this app's version. Same app and signing key, so it installs over
+     * this one and keeps all data.
+     */
+    suspend fun findChrootBuild(versionJsonUrl: String = DEFAULT_VERSION_URL): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val latest = runCatching {
+                val request = Request.Builder()
+                    .url(versionJsonUrl)
+                    .header("User-Agent", "antiGem-Updater/${BuildConfig.VERSION_NAME}")
+                    .header("Cache-Control", "no-cache")
+                    .build()
+                httpClient.newCall(request).execute().use { r ->
+                    if (!r.isSuccessful) null else JSONObject(r.body?.string().orEmpty()).let { json ->
+                        json.optInt("version_code", 0) to json.optString("version_name", "")
+                    }
+                }
+            }.getOrNull()
+            val versions = buildList {
+                if (latest != null && latest.first >= BuildConfig.VERSION_CODE && latest.second.isNotBlank()) add(latest.second)
+                add(BuildConfig.VERSION_NAME)
+            }.distinct()
+            val url = versions.map { apkUrl(it, "-chroot") }.firstOrNull { isPublished(it) }
+            if (url != null) Result.success(url)
+            else Result.failure(Exception("The chroot build of AntiGem ${versions.first()} is not on GitHub yet. Try again later, or open the releases page."))
+        } catch (e: Exception) {
+            Log.e(TAG, "Chroot build lookup failed: ${e.message}", e)
             Result.failure(e)
         }
     }

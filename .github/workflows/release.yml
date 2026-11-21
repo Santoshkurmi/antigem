@@ -71,8 +71,18 @@ jobs:
       - name: Save arm64 R8 mapping
         run: zip -j "output/AntiGem-${{ steps.version.outputs.tag }}-mapping.zip" app/build/outputs/mapping/release/mapping.txt
 
-      # AntiGem-v<version>-x86_64.apk, for x86_64 devices (emulators, Intel/AMD Chromebooks); the x86_64 app's updater
-      # downloads this one. Its bridge links through the Android NDK's clang, which the runner has (ANDROID_NDK_HOME).
+      # AntiGem-v<version>-chroot.apk: the arm64 app with the Ubuntu chroot's Linux bridge (rooted phones). The normal
+      # APK above leaves that bridge out and installs this one over itself from its chroot page; the chroot app's
+      # updater downloads this file.
+      - name: Build chroot Release APK
+        run: ./scripts/build_all_apks.sh --release --chroot
+
+      - name: Save chroot R8 mapping
+        run: zip -j "output/AntiGem-${{ steps.version.outputs.tag }}-chroot-mapping.zip" app/build/outputs/mapping/release/mapping.txt
+
+      # AntiGem-v<version>-x86_64.apk, for x86_64 devices (emulators, Intel/AMD Chromebooks), with the chroot's Linux
+      # bridge too; the x86_64 app's updater downloads this one. Its bridge links through the Android NDK's clang,
+      # which the runner has (ANDROID_NDK_HOME).
       - name: Build x86_64 Release APK
         run: ./scripts/build_all_apks.sh --release --x86_64
 

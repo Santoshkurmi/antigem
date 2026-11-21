@@ -98,7 +98,10 @@ fun ChrootSetupDialog(onDismiss: () -> Unit, restore: Boolean = false, onDone: (
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = AppColors.background) {
             Box(Modifier.systemBarsPadding().imePadding()) {
-                ChrootSetupScreen(onClose = onDismiss, restore = restore, onDone = onDone)
+                // the normal build has no Linux bridge for the chroot: every way in (first-launch installer, Settings)
+                // lands on the page that installs the chroot build instead
+                if (ai.antigem.BuildConfig.HAS_CHROOT) ChrootSetupScreen(onClose = onDismiss, restore = restore, onDone = onDone)
+                else ChrootBuildScreen(onClose = onDismiss)
             }
         }
     }

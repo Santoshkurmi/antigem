@@ -473,7 +473,10 @@ object ChrootManager {
         val args = mutableListOf("start", "--root", install.path, "--dns", dnsArg(context))
         tzArg()?.let { args += listOf("--tz", it) }
         if (withBridge) {
-            val bridge = linuxBridgeFile(context) ?: return StartResult(false, "This app has no Linux bridge inside.", false, null)
+            val bridge = linuxBridgeFile(context) ?: return StartResult(false,
+                if (ai.antigem.BuildConfig.HAS_CHROOT) "This app has no Linux bridge inside."
+                else "This is the normal build of AntiGem, without the Ubuntu chroot. Install the chroot build: " +
+                    "Settings → Where agents run → Ubuntu chroot → Get the chroot build (it keeps your data).", false, null)
             args += listOf("--bridge", bridge.absolutePath)
         }
         val r = runCtl(context, args, onLine = onLine, timeoutMs = 60_000L)

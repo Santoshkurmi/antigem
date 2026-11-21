@@ -104,8 +104,12 @@ fun ChrootRuntimeCard(
             onInstalled(inst)
         }
     }
-    ChrootSection("Ubuntu chroot", if (installs.isEmpty()) "Not installed yet: needs a rooted phone (Magisk, KernelSU or APatch)"
-        else "A real Ubuntu (apt, glibc, sudo) through root. Tap one to manage it: status, mounts, folders, packages",
+    ChrootSection("Ubuntu chroot", when {
+            // the normal build has no Linux bridge: the setup page offers the chroot build
+            !ai.antigem.BuildConfig.HAS_CHROOT -> "Needs a rooted phone and the chroot build of AntiGem (the same app with the chroot's bridge, installed over this one)"
+            installs.isEmpty() -> "Not installed yet: needs a rooted phone (Magisk, KernelSU or APatch)"
+            else -> "A real Ubuntu (apt, glibc, sudo) through root. Tap one to manage it: status, mounts, folders, packages"
+        },
         Icons.Outlined.Storage, AppColors.success, cardBg, cardBorder) {
         installs.forEach { inst ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +143,11 @@ fun ChrootRuntimeCard(
         if (installs.size > 1) ChrootNote("The selected one is used. A change applies when the bridge restarts (Save, or Restart below).")
         Spacer(Modifier.height(6.dp))
         Button(onClick = { showSetup = true }, colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(10.dp)) {
-            Text(if (installs.isEmpty()) "Install or find an Ubuntu chroot" else "Install another / find existing")
+            Text(when {
+                !ai.antigem.BuildConfig.HAS_CHROOT -> "Get the chroot build"
+                installs.isEmpty() -> "Install or find an Ubuntu chroot"
+                else -> "Install another / find existing"
+            })
         }
     }
 }

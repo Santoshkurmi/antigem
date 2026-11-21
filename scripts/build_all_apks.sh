@@ -3,7 +3,9 @@ set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # AntiGem APK Build & Output Packager
-# Builds the app (ai.antigem). --x86_64 builds the x86_64 APK instead of the arm64 one (gradle -Pabi=x86_64).
+# Builds the app (ai.antigem). --x86_64 builds the x86_64 APK instead of the arm64 one (gradle -Pabi=x86_64);
+# --chroot builds the arm64 APK with the Ubuntu chroot's Linux bridge (gradle -Pchroot=true). The normal arm64 release
+# leaves that bridge out; the x86_64 APK always has it. Debug builds have it unless gradle -Pchroot=false.
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,24 +14,31 @@ OUTPUT_DIR="${ROOT_DIR}/output"
 
 MODE="debug"
 ABI="arm64"
+CHROOT=""
 for arg in "$@"; do
     case "$arg" in
         --release|-r) MODE="release" ;;
         --x86_64) ABI="x86_64" ;;
+        --chroot) CHROOT="true" ;;
     esac
 done
 # file names: the arm64 build has none of these suffixes (the in-app updater asks for the name of its own build)
 SUFFIX=""
 ARCHIVE="antiGem"
 BRIDGE_ARCH="arm64"
+GRADLE_ARGS=(-Pabi="${ABI}")
 if [[ "${ABI}" == "x86_64" ]]; then
     SUFFIX="-x86_64"
     ARCHIVE="antiGem-x86_64"
     BRIDGE_ARCH="amd64"
+elif [[ "${CHROOT}" == "true" ]]; then
+    SUFFIX="-chroot"
+    ARCHIVE="antiGem-chroot"
+    GRADLE_ARGS+=(-Pchroot=true)
 fi
 
 echo "================================================================="
-echo "🚀 Building AntiGem Packages in [${MODE^^}] mode for ${ABI}"
+echo "🚀 Building AntiGem Packages in [${MODE^^}] mode for ${ABI}${SUFFIX:+ (${SUFFIX#-})}"
 echo "================================================================="
 
 # Extract version from version.json
@@ -46,12 +55,12 @@ mkdir -p "${OUTPUT_DIR}"
 APKS_SRC="${ROOT_DIR}/app/build/outputs/apk"
 if [[ "${MODE}" == "release" ]]; then
     echo "🔨 Compiling Release (:app:assembleRelease)..."
-    "${ROOT_DIR}/gradlew" -p "${ROOT_DIR}" :app:assembleRelease -Pabi="${ABI}"
+    "${ROOT_DIR}/gradlew" -p "${ROOT_DIR}" :app:assembleRelease "${GRADLE_ARGS[@]}"
     # the release asset; the in-app updater downloads releases/download/v<version>/AntiGem-v<version><suffix>.apk
     cp "${APKS_SRC}/release/${ARCHIVE}-release.apk" "${OUTPUT_DIR}/AntiGem-v${VERSION_NAME}${SUFFIX}.apk"
 else
     echo "🔨 Compiling Debug (:app:assembleDebug)..."
-    "${ROOT_DIR}/gradlew" -p "${ROOT_DIR}" :app:assembleDebug -Pabi="${ABI}"
+    "${ROOT_DIR}/gradlew" -p "${ROOT_DIR}" :app:assembleDebug "${GRADLE_ARGS[@]}"
     cp "${APKS_SRC}/debug/${ARCHIVE}-debug.apk" "${OUTPUT_DIR}/AntiGem-v${VERSION_NAME}${SUFFIX}-debug.apk"
 
     # the APK ships the bridge xz-compressed; the uncompressed build is kept under app/build
