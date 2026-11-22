@@ -39,10 +39,24 @@ class JarvisService : Service() {
     private var session: MediaSession? = null
     private var clicks = 0
     private var clickJob: Job? = null
+    private var foreground = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Android's promise comes first: a service started with startForegroundService must reach startForeground in
+        // time (and before it stops), or Android kills the whole app (ForegroundServiceDidNotStartInTimeException).
+        if (!foreground && !enterForeground()) {
+            if (intent?.action == null) {
+                synchronized(lock) { pending = false; stopWhenStarted = false }
+                if (JarvisController.isAttached) {
+                    JarvisController.setHandsFree(false)
+                    JarvisController.showProblem("Hands-free couldn't start: Android doesn't let AntiGem open the microphone from the background. Open AntiGem and turn it on again.")
+                }
+            }
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_TALK -> {
                 if (JarvisController.isAttached) JarvisController.onMicPressed()
@@ -58,10 +72,12 @@ class JarvisService : Service() {
                 return START_NOT_STICKY
             }
         }
-        ensureChannel()
-        val n = notification("Hands-free is on", JarvisController.Phase.IDLE)
-        if (Build.VERSION.SDK_INT >= 30) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        else startForeground(NOTIF_ID, n)
+        // a plain start (start() or Android restarting the sticky service); stop() may have come while it was on its way
+        val stopNow = synchronized(lock) { pending = false; stopWhenStarted.also { stopWhenStarted = false } }
+        if (stopNow) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         acquireWakeLock()
         startMediaSession()
         job?.cancel()
@@ -86,6 +102,25 @@ class JarvisService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    /**
+     * Shows the notification and becomes a microphone foreground service. False when Android refuses: on Android 14+ a
+     * microphone service can't start while AntiGem is in the background (SecurityException /
+     * ForegroundServiceStartNotAllowedException).
+     */
+    private fun enterForeground(): Boolean {
+        ensureChannel()
+        val n = notification("Hands-free is on", JarvisController.Phase.IDLE)
+        return try {
+            if (Build.VERSION.SDK_INT >= 30) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            else startForeground(NOTIF_ID, n)
+            foreground = true
+            synchronized(lock) { running = true }
+            true
+        } catch (e: RuntimeException) {
+            false
+        }
     }
 
     /** Headset and Bluetooth buttons reach Jarvis through a media session (works while no music app holds the button). */
@@ -175,6 +210,7 @@ class JarvisService : Service() {
         runCatching { session?.isActive = false; session?.release() }
         session = null
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        if (foreground) synchronized(lock) { running = false }
         super.onDestroy()
     }
 
@@ -185,11 +221,31 @@ class JarvisService : Service() {
         const val ACTION_SEND = "ai.antigem.jarvis.SEND"
         const val ACTION_STOP = "ai.antigem.jarvis.STOP"
 
+        // start/stop are called from any thread (the Jarvis MCP settings tool runs on a worker thread)
+        private val lock = Any()
+        /** start() was called and its onStartCommand hasn't run yet. */
+        private var pending = false
+        /** stop() came while [pending]: onStartCommand stops right after startForeground instead. */
+        private var stopWhenStarted = false
+        /** The service is up and in the foreground. */
+        private var running = false
+
         fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, JarvisService::class.java))
+            synchronized(lock) { pending = true; stopWhenStarted = false }
+            try {
+                ContextCompat.startForegroundService(context, Intent(context, JarvisService::class.java))
+            } catch (e: RuntimeException) {
+                synchronized(lock) { pending = false }
+                throw e
+            }
         }
 
         fun stop(context: Context) {
+            synchronized(lock) {
+                // stopping before startForeground is exactly what makes Android kill the app
+                if (pending) { stopWhenStarted = true; return }
+                if (!running) return
+            }
             context.stopService(Intent(context, JarvisService::class.java))
         }
     }
