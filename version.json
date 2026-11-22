@@ -1,10 +1,11 @@
 {
-  "version_code": 133,
-  "version_name": "2.0.2",
+  "version_code": 134,
+  "version_name": "2.0.3",
   "min_supported_version_code": 2,
   "changelog": [
-   "Added chroot support for Linux environments.(rooted android)",
-   "Fixed notification causing app crash in android 7"
+   "Fixed crashing bugs",
+   "Added collapse/expand card for tool calls to make chat more readable",
+   "Added voice calling and jarvis outside the app using tiles,shortcuts to open"
   ],
   "is_critical": false
 }
