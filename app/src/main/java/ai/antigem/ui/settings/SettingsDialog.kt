@@ -87,7 +87,7 @@ import ai.antigem.data.daemon.IdeApiClient
 enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     THEMES("Themes", "Light and dark mode, and the theme gallery"),
-    APPEARANCE("Appearance", "Chat text size, chat list, header icons, the app switcher and Gemmy"),
+    APPEARANCE("Appearance", "Chat text size, agent steps, message stats, header icons, the app switcher and Gemmy"),
     STEM_RENDERING("STEM & diagrams", "Chemistry, graphs, geometry, simulations, circuits and offline Mermaid in chats"),
     SERVERS("Where agents run", "This phone (AntiGem or Ubuntu chroot) or your server, and how the app reaches it"),
     CONNECT_PC("Connect to PC", "Use the agents on your PC (AntiGem in VS Code) from this phone"),
@@ -284,8 +284,10 @@ fun SettingsDialog(
     commandSandboxEnabled: Boolean = false,
     requireApprovalForFileEdits: Boolean = false,
     defaultApprovalScope: String = "PERMISSION_SCOPE_ONCE",
-    groupChatsByWorkspace: Boolean = false,
-    onToggleGroupChatsByWorkspace: (Boolean) -> Unit = {},
+    groupAgentSteps: Boolean = true,
+    onToggleGroupAgentSteps: (Boolean) -> Unit = {},
+    showMessageStats: Boolean = true,
+    onToggleShowMessageStats: (Boolean) -> Unit = {},
     globalSecuritySettings: ai.antigem.data.remote.AgyHubClient.GlobalUserSettings? = null,
     globalSettingsError: String? = null,
     isGlobalSettingsLoading: Boolean = false,
@@ -513,20 +515,22 @@ fun SettingsDialog(
 
                     SettingsSection.APPEARANCE -> AppearanceSubScreen(
                         chatFontScale = chatFontScale,
-                        groupChatsByWorkspace = groupChatsByWorkspace,
                         floatingSwitcherOrientation = floatingSwitcherOrientation,
                         floatingSwitcherItems = floatingSwitcherItems,
                         floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSetChatFontScale = onSetChatFontScale,
-                        onToggleGroupChatsByWorkspace = onToggleGroupChatsByWorkspace,
                         onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
                         onSetFloatingSwitcherItems = onSetFloatingSwitcherItems,
                         onSetFloatingSwitcherAutoCollapseSec = onSetFloatingSwitcherAutoCollapseSec,
                         onResetFloatingSwitcherPosition = onResetFloatingSwitcherPosition,
                         chatHeaderItems = chatHeaderItems,
-                        onSetChatHeaderItems = onSetChatHeaderItems
+                        onSetChatHeaderItems = onSetChatHeaderItems,
+                        groupAgentSteps = groupAgentSteps,
+                        onToggleGroupAgentSteps = onToggleGroupAgentSteps,
+                        showMessageStats = showMessageStats,
+                        onToggleShowMessageStats = onToggleShowMessageStats
                     )
 
                     // a PC in use (Connect to PC): the form would show the PC's values, so it waits for the switch back
@@ -1490,20 +1494,22 @@ private fun ThemesSubScreen(
 @Composable
 private fun AppearanceSubScreen(
     chatFontScale: Float,
-    groupChatsByWorkspace: Boolean,
     floatingSwitcherOrientation: String,
     floatingSwitcherItems: List<String>,
     floatingSwitcherAutoCollapseSec: Int,
     cardBg: Color,
     cardBorder: BorderStroke,
     onSetChatFontScale: (Float) -> Unit,
-    onToggleGroupChatsByWorkspace: (Boolean) -> Unit,
     onSetFloatingSwitcherOrientation: (String) -> Unit,
     onSetFloatingSwitcherItems: (List<String>) -> Unit,
     onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
     onResetFloatingSwitcherPosition: () -> Unit,
     chatHeaderItems: List<String>,
-    onSetChatHeaderItems: (List<String>) -> Unit
+    onSetChatHeaderItems: (List<String>) -> Unit,
+    groupAgentSteps: Boolean,
+    onToggleGroupAgentSteps: (Boolean) -> Unit,
+    showMessageStats: Boolean,
+    onToggleShowMessageStats: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1665,7 +1671,7 @@ private fun AppearanceSubScreen(
             }
         }
 
-        // Group Chats By Workspace Switch
+        // Group Agent Steps Switch: runs of a reply's thinking and tool calls fold into one progress pill
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = cardBg,
@@ -1681,21 +1687,60 @@ private fun AppearanceSubScreen(
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(
-                        text = "Group Chats by Workspace",
+                        text = "Group Agent Steps",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Categorize chat history in drawer under workspace folders matching repository paths",
+                        text = "Runs of thinking and tool calls (${ai.antigem.ui.chat.StepGroups.MIN_TOOLS}+ tool calls or ${ai.antigem.ui.chat.StepGroups.MIN_STEPS}+ steps) fold into one pill that shows the progress; tap it to see the steps. Off: every step is its own tile.",
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
                 Switch(
-                    checked = groupChatsByWorkspace,
-                    onCheckedChange = onToggleGroupChatsByWorkspace,
+                    checked = groupAgentSteps,
+                    onCheckedChange = onToggleGroupAgentSteps,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = ClaudeTerracotta
+                    )
+                )
+            }
+        }
+
+        // Message Stats Switch: the token, cache and time stats under each reply
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = cardBg,
+            border = cardBorder,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = "Show Message Stats",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Token counts, cache percentage and time under each reply (tap them for the details)",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = showMessageStats,
+                    onCheckedChange = onToggleShowMessageStats,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = ClaudeTerracotta

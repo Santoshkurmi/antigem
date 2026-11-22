@@ -78,6 +78,8 @@ fun MessageBubble(
     artifactsCount: Int = 0,
     summarizingModelName: String = "AI",
     pendingQueuedUserMessage: String? = null,
+    /** The token, cache and time stats under the reply (Settings → Appearance). */
+    showStats: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -271,7 +273,7 @@ fun MessageBubble(
                             .padding(top = 6.dp)
                     ) {
                         // Token & Cache Telemetry Badge (Displayed just above action icons)
-                        if (message.tokenUsage != null) {
+                        if (showStats && message.tokenUsage != null) {
                             val payloadToShow = message.rawContent ?: message.rawPayload
                             TokenUsageTelemetryPill(
                                 usage = message.tokenUsage,
@@ -681,6 +683,8 @@ fun AssistantMessageFooter(
     artifactsCount: Int = 0,
     /** false in a read-only chat: no "regenerate". */
     canRetry: Boolean = true,
+    /** The token, cache and time stats above the actions (Settings → Appearance). */
+    showStats: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -690,7 +694,7 @@ fun AssistantMessageFooter(
             .padding(horizontal = 16.dp, vertical = 2.dp)
     ) {
         // Token & Cache Telemetry Badge (Displayed just above action icons)
-        if (message.tokenUsage != null) {
+        if (showStats && message.tokenUsage != null) {
             val payloadToShow = message.rawContent ?: message.rawPayload
             TokenUsageTelemetryPill(
                 usage = message.tokenUsage,

@@ -3,6 +3,7 @@ package ai.antigem.ui.chat
 import androidx.compose.runtime.Immutable
 import ai.antigem.domain.model.ChatMessage
 import ai.antigem.domain.model.MessageRole
+import ai.antigem.domain.model.ToolType
 import ai.antigem.ui.components.MarkdownBlock
 import ai.antigem.ui.components.parseMarkdownBlocks
 import ai.antigem.ui.components.CodeBlockCache
@@ -43,6 +44,113 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
         val live: Boolean,
         val record: ai.antigem.data.voice.VoiceChatRecord?
     ) : ChatFeedItem("voicecall_$id", "VOICE_CALL")
+    /**
+     * A run of a reply's thinking and tool steps folded into one pill (Settings → Appearance → Agent steps: Group).
+     * [id] is the key of its first step. When [expanded], the [steps] follow the pill in the list as usual.
+     * [live]: the agent is still working on this run; [startedAt] / [endedAt]: when it was seen to start / end (0 = unknown).
+     */
+    @Immutable
+    data class StepGroup(
+        val id: String,
+        val steps: List<AssistantBlock>,
+        val expanded: Boolean,
+        val live: Boolean,
+        val startedAt: Long,
+        val endedAt: Long
+    ) : ChatFeedItem("steps_$id", "STEP_GROUP")
+}
+
+/**
+ * Folds the thinking and tool steps of replies (Settings → Appearance → Group Agent Steps, on by default; off: every
+ * step is its own tile). A run of steps (no reply text between them) becomes one pill when it has at least
+ * [MIN_TOOLS] tool calls or [MIN_STEPS] steps; shorter runs stay as they are. A pill the user opens stays open while
+ * they stay in that chat (ChatScreen keeps which ones; opening another chat closes them all again).
+ * Steps that need the user (an approval, a question), show a picture or are system notices always stay full tiles.
+ */
+object StepGroups {
+    /** A run is folded with at least this many tool calls ... */
+    const val MIN_TOOLS = 2
+    /** ... or this many steps (thinking + tool calls). */
+    const val MIN_STEPS = 3
+
+    private val startedAt = ConcurrentHashMap<String, Long>()
+    private val endedAt = ConcurrentHashMap<String, Long>()
+
+    private val IMAGE_FILE = Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)
+
+    fun isStep(item: ChatFeedItem): Boolean {
+        if (item !is ChatFeedItem.AssistantBlock) return false
+        return when (val block = item.block) {
+            is MarkdownBlock.AgentThought -> true
+            is MarkdownBlock.AgentTool -> {
+                val t = block.toolCall
+                t.status != "PENDING_APPROVAL" && t.status != "AWAITING_CHOICE" &&
+                    t.toolType != ToolType.ASK_CHOICE && t.toolType != ToolType.GENERATE_IMAGE &&
+                    t.toolType != ToolType.SYSTEM_NOTIFICATION && t.name != "system_notice" &&
+                    !t.output.startsWith("data:image/") && !(t.output.startsWith("file://") && t.output.matches(IMAGE_FILE))
+            }
+            else -> false
+        }
+    }
+
+    fun isRunning(step: ChatFeedItem.AssistantBlock): Boolean = when (val block = step.block) {
+        is MarkdownBlock.AgentThought -> block.isStreaming
+        is MarkdownBlock.AgentTool -> block.toolCall.status == "RUNNING"
+        else -> false
+    }
+
+    /** [items] from [ChatFeedCache.buildFeedItems] with runs of steps folded when [enabled]; [expandedKeys]: the opened pills' keys. */
+    fun apply(items: List<ChatFeedItem>, enabled: Boolean, expandedKeys: Set<String>, messages: List<ChatMessage>): List<ChatFeedItem> {
+        if (!enabled) return items
+        val byId by lazy { messages.associateBy { it.id } }
+        val out = ArrayList<ChatFeedItem>(items.size)
+        val messagesWithRun = HashSet<String>()
+        var i = 0
+        while (i < items.size) {
+            val item = items[i]
+            if (!isStep(item)) {
+                out.add(item)
+                i++
+                continue
+            }
+            var j = i
+            while (j < items.size && isStep(items[j])) j++
+            @Suppress("UNCHECKED_CAST")
+            val run = items.subList(i, j).toList() as List<ChatFeedItem.AssistantBlock>
+            val next = items.getOrNull(j)
+            i = j
+            val first = run.first()
+            val firstOfReply = messagesWithRun.add(first.messageId)
+            if (run.count { it.block is MarkdownBlock.AgentTool } < MIN_TOOLS && run.size < MIN_STEPS) {
+                out.addAll(run)
+                continue
+            }
+            val msg = byId[first.messageId]
+            // still working: a step runs, or the run is the end of a reply that is still coming in (between two steps)
+            val atReplyEnd = next !is ChatFeedItem.AssistantBlock || next.messageId != run.last().messageId
+            val live = run.any { isRunning(it) } || (byId[run.last().messageId]?.isStreaming == true && atReplyEnd)
+            val key = "steps_${first.key}"
+            val now = System.currentTimeMillis()
+            val started: Long
+            val ended: Long
+            if (live) {
+                // the first run of a reply starts with the reply
+                started = startedAt.getOrPut(key) {
+                    val created = msg?.createdAt ?: 0L
+                    if (firstOfReply && created in 1..now) created else now
+                }
+                endedAt.remove(key)
+                ended = 0L
+            } else {
+                started = startedAt[key] ?: 0L
+                ended = if (started > 0) endedAt.getOrPut(key) { now } else 0L
+            }
+            val open = key in expandedKeys
+            out.add(ChatFeedItem.StepGroup(first.key, run, open, live, started, ended))
+            if (open) out.addAll(run)
+        }
+        return out
+    }
 }
 
 object ChatFeedCache {

@@ -315,6 +315,8 @@ fun ChatScreen(
     val projectsList by viewModel.projectsList.collectAsState()
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
+    val groupAgentSteps by viewModel.groupAgentSteps.collectAsState()
+    val showMessageStats by viewModel.showMessageStats.collectAsState()
     val showArchivedChats by viewModel.showArchivedChats.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
@@ -914,9 +916,14 @@ fun ChatScreen(
     openVoiceTranscript?.let { rec ->
         ai.antigem.ui.voice.AgyVoiceTranscriptSheet(rec) { openVoiceTranscript = null }
     }
-    val feedItems = remember(messages, selectedModelId, modelNameOf, voiceCallItems) {
+    // the step pills the user opened (Settings → Appearance → Group Agent Steps): only for this visit of this chat,
+    // so another chat (or coming back) starts with every pill closed
+    val openStepGroups = remember(currentConv?.id) { mutableStateMapOf<String, Boolean>() }
+    val expandedStepGroups = openStepGroups.keys.toSet()
+    val feedItems = remember(messages, selectedModelId, modelNameOf, voiceCallItems, groupAgentSteps, expandedStepGroups) {
         // the date and model dividers are always on
-        ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = true, modelName = modelNameOf, voiceCalls = voiceCallItems)
+        val items = ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = true, modelName = modelNameOf, voiceCalls = voiceCallItems)
+        StepGroups.apply(items, groupAgentSteps, expandedStepGroups, messages)
     }
 
     // Fresh LazyListState per conversation — restores saved position if returning, or initializes directly at bottom
@@ -2354,9 +2361,15 @@ fun ChatScreen(
                                         // with the working animation on, the working row below replaces these dots
                                         // progress shows in the working row under the reply (the working animation is always on)
                                         is ChatFeedItem.AssistantTyping -> Unit
+                                        is ChatFeedItem.StepGroup -> StepGroupPill(
+                                            group = feedItem,
+                                            onToggle = { if (openStepGroups.remove(feedItem.key) == null) openStepGroups[feedItem.key] = true },
+                                            modifier = Modifier.padding(horizontal = 16.dp)
+                                        )
                                         is ChatFeedItem.AssistantFooter -> {
                                             AssistantMessageFooter(
                                                 message = feedItem.message,
+                                                showStats = showMessageStats,
                                                 // fades in where the working row fades out (no pop-in at the end of a turn)
                                                 modifier = Modifier.animateItem(fadeInSpec = tween(220), placementSpec = null, fadeOutSpec = null),
                                                 isDevModeEnabled = isDevModeEnabled,
@@ -2376,6 +2389,7 @@ fun ChatScreen(
                                             MessageBubble(
                                                 message = feedItem.message,
                                                 modelId = selectedModelId,
+                                                showStats = showMessageStats,
                                                 isDevModeEnabled = isDevModeEnabled,
                                                 onApproveTool = { toolCall, msgId ->
                                                     viewModel.approveAndExecuteTerminalTool(toolCall, msgId)
@@ -3213,8 +3227,10 @@ fun ChatScreen(
             onAddPermissionRule = { action, pattern, decision -> viewModel.addGlobalPermissionGrant(action, pattern, decision) },
             onRemovePermissionRule = { rawRule -> viewModel.removeGlobalPermissionGrant(rawRule) },
             onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
-            groupChatsByWorkspace = groupChatsByWorkspace,
-            onToggleGroupChatsByWorkspace = { viewModel.setGroupChatsByWorkspace(it) },
+            groupAgentSteps = groupAgentSteps,
+            onToggleGroupAgentSteps = { viewModel.setGroupAgentSteps(it) },
+            showMessageStats = showMessageStats,
+            onToggleShowMessageStats = { viewModel.setShowMessageStats(it) },
             isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
             onToggleFloatingDiagnostics = { viewModel.setFloatingDiagnosticsEnabled(it) },
             isNetworkInspectorEnabled = isNetworkInspectorEnabled,

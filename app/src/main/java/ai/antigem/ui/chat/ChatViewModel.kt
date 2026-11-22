@@ -1301,6 +1301,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Fold runs of agent steps into pills: see [ai.antigem.ui.chat.StepGroups]. */
+    val groupAgentSteps: StateFlow<Boolean> = authPrefs.groupAgentSteps
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getGroupAgentStepsSync())
+
+    fun setGroupAgentSteps(enabled: Boolean) {
+        viewModelScope.launch { authPrefs.saveGroupAgentSteps(enabled) }
+    }
+
+    val showMessageStats: StateFlow<Boolean> = authPrefs.showMessageStats
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getShowMessageStatsSync())
+
+    fun setShowMessageStats(show: Boolean) {
+        viewModelScope.launch { authPrefs.saveShowMessageStats(show) }
+    }
+
     fun setFloatingBubbleEnabled(enabled: Boolean) {
         viewModelScope.launch {
             authPrefs.saveFloatingBubbleEnabled(enabled)
