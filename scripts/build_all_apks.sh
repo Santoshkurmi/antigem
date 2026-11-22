@@ -41,15 +41,13 @@ echo "================================================================="
 echo "🚀 Building AntiGem Packages in [${MODE^^}] mode for ${ABI}${SUFFIX:+ (${SUFFIX#-})}"
 echo "================================================================="
 
-# Extract version from version.json
-VERSION_NAME="1.0.0"
-VERSION_CODE="1"
-if [[ -f "${ROOT_DIR}/version.json" ]]; then
-    VERSION_NAME=$(python3 -c "import json; print(json.load(open('${ROOT_DIR}/version.json')).get('version_name', '1.0.0'))" 2>/dev/null || echo "1.0.0")
-    VERSION_CODE=$(python3 -c "import json; print(json.load(open('${ROOT_DIR}/version.json')).get('version_code', 1))" 2>/dev/null || echo "1")
-fi
+# The version from version.json: the newer of its stable release and its beta, like the Gradle build. A missing or
+# broken file stops here (Gradle says what is wrong with it).
+VERSION_NAME=$(python3 "${SCRIPT_DIR}/release_version.py" name "${ROOT_DIR}/version.json")
+VERSION_CODE=$(python3 "${SCRIPT_DIR}/release_version.py" code "${ROOT_DIR}/version.json")
+CHANNEL=$(python3 "${SCRIPT_DIR}/release_version.py" channel "${ROOT_DIR}/version.json")
 
-echo "📦 Version Name: v${VERSION_NAME} (Code: ${VERSION_CODE})"
+echo "📦 Version Name: v${VERSION_NAME} (Code: ${VERSION_CODE}, ${CHANNEL})"
 mkdir -p "${OUTPUT_DIR}"
 
 APKS_SRC="${ROOT_DIR}/app/build/outputs/apk"

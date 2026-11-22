@@ -143,6 +143,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     TERMUX_SUPPORT("Termux Support", "Termux:API and the X11 desktop"),
     TERMUX_API("Termux:API", "How termux-api commands are handled"),
     X11_DESKTOP("X11 Desktop", "Linux desktop apps with Termux:X11"),
+    UPDATES("Updates", "Beta updates, and how often AntiGem checks for a new version"),
     CHANGELOG("What's new", "Every AntiGem version and what changed"),
     ABOUT("About & Info", "App version, package details, and bridge export");
 
@@ -287,6 +288,8 @@ fun SettingsDialog(
     defaultApprovalScope: String = "PERMISSION_SCOPE_ONCE",
     groupAgentSteps: Boolean = true,
     onToggleGroupAgentSteps: (Boolean) -> Unit = {},
+    groupStepsMin: Int = 2,
+    onSetGroupStepsMin: (Int) -> Unit = {},
     showMessageStats: Boolean = true,
     onToggleShowMessageStats: (Boolean) -> Unit = {},
     globalSecuritySettings: ai.antigem.data.remote.AgyHubClient.GlobalUserSettings? = null,
@@ -530,6 +533,8 @@ fun SettingsDialog(
                         onSetChatHeaderItems = onSetChatHeaderItems,
                         groupAgentSteps = groupAgentSteps,
                         onToggleGroupAgentSteps = onToggleGroupAgentSteps,
+                        groupStepsMin = groupStepsMin,
+                        onSetGroupStepsMin = onSetGroupStepsMin,
                         showMessageStats = showMessageStats,
                         onToggleShowMessageStats = onToggleShowMessageStats
                     )
@@ -840,6 +845,10 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
+                    SettingsSection.UPDATES -> UpdateSettingsScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                 }
             }
         }
@@ -1008,6 +1017,7 @@ private fun MainSettingsMenu(
                 row(SettingsSection.DATA_PROTECTION, Icons.Outlined.Security, c.success)
             ),
             listOf(
+                row(SettingsSection.UPDATES, Icons.Outlined.SystemUpdateAlt, c.info),
                 row(SettingsSection.ABOUT, Icons.Outlined.Info, c.accentAlt, "v${BuildConfig.VERSION_NAME}")
             )
         )
@@ -1533,6 +1543,8 @@ private fun AppearanceSubScreen(
     onSetChatHeaderItems: (List<String>) -> Unit,
     groupAgentSteps: Boolean,
     onToggleGroupAgentSteps: (Boolean) -> Unit,
+    groupStepsMin: Int,
+    onSetGroupStepsMin: (Int) -> Unit,
     showMessageStats: Boolean,
     onToggleShowMessageStats: (Boolean) -> Unit
 ) {
@@ -1703,35 +1715,74 @@ private fun AppearanceSubScreen(
             border = cardBorder,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text(
-                        text = "Group Agent Steps",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Group Agent Steps",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Runs of thinking and tool calls in a row fold into one pill that shows the progress; tap it to see the steps. Off: every step is its own tile.",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = groupAgentSteps,
+                        onCheckedChange = onToggleGroupAgentSteps,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                }
+                // Fold after: how many steps in a row fold into a pill (1+ = every run, even a single step)
+                if (groupAgentSteps) {
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Runs of thinking and tool calls (${ai.antigem.ui.chat.StepGroups.MIN_TOOLS}+ tool calls or ${ai.antigem.ui.chat.StepGroups.MIN_STEPS}+ steps) fold into one pill that shows the progress; tap it to see the steps. Off: every step is its own tile.",
+                        text = "Fold after (steps in a row)",
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        (1..6).forEach { n ->
+                            val isSelected = groupStepsMin == n
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSetGroupStepsMin(n) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$n+",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-                Switch(
-                    checked = groupAgentSteps,
-                    onCheckedChange = onToggleGroupAgentSteps,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = ClaudeTerracotta
-                    )
-                )
             }
         }
 

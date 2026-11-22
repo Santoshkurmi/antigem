@@ -1370,6 +1370,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { authPrefs.saveGroupAgentSteps(enabled) }
     }
 
+    /** How many steps in a row fold into a pill (Group Agent Steps → Fold after). */
+    val groupStepsMin: StateFlow<Int> = authPrefs.groupStepsMin
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getGroupStepsMinSync())
+
+    fun setGroupStepsMin(steps: Int) {
+        viewModelScope.launch { authPrefs.saveGroupStepsMin(steps) }
+    }
+
     val showMessageStats: StateFlow<Boolean> = authPrefs.showMessageStats
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getShowMessageStatsSync())
 

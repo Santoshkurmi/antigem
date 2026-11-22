@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.update
 /**
  * Settings → Agents → Agent memory: memories the agents keep across chats, and a cleaned copy of every chat they can
  * look up. The IDE bridge keeps both next to the agents (~/.antigem/memory, its pkg/memory), so it works the same with
- * the bridge on this phone or on a server. Off by default; when on, it can still be off for single agents.
+ * the bridge on this phone or on a server. On by default; it can be turned off, also for single agents.
  *
  * - A chat's first message (and, after Claude compacted a chat, its next one) carries the memory text the bridge
  *   builds: the "always" memories in full, the [listLimit] most relevant others by file name, how many more there
@@ -28,7 +28,7 @@ object AgentMemory {
 
     private var sp: SharedPreferences? = null
 
-    private val _enabled = MutableStateFlow(false)
+    private val _enabled = MutableStateFlow(true)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
     private val _agents = MutableStateFlow(AgentKind.entries.toSet())
@@ -39,8 +39,8 @@ object AgentMemory {
     /** How many memories a new chat gets listed by name, besides the "always" ones. */
     val listLimit: StateFlow<Int> = _listLimit.asStateFlow()
 
-    private val _saveHistory = MutableStateFlow(true)
-    /** Keep a cleaned copy of every chat (the user's messages and the replies) the agents can look up. */
+    private val _saveHistory = MutableStateFlow(false)
+    /** Keep a cleaned copy of every chat (the user's messages and the replies) the agents can look up. Off by default. */
     val saveHistory: StateFlow<Boolean> = _saveHistory.asStateFlow()
 
     private val _changes = MutableStateFlow(0)
@@ -53,12 +53,13 @@ object AgentMemory {
     fun init(context: Context) {
         if (sp != null) return
         val p = context.applicationContext.getSharedPreferences("agent_memory", Context.MODE_PRIVATE)
-        _enabled.value = p.getBoolean("enabled", false)
+        _enabled.value = p.getBoolean("enabled", true)
         p.getStringSet("agents", null)?.let { names ->
             _agents.value = names.mapNotNull { n -> AgentKind.entries.firstOrNull { it.name == n } }.toSet()
         }
         _listLimit.value = p.getInt("list_limit", DEFAULT_LIST_LIMIT).coerceIn(0, MAX_LIST_LIMIT)
-        _saveHistory.value = p.getBoolean("save_history", true)
+        // off unless the user turns it on; someone who turned memory on before it was on by default had history with it
+        _saveHistory.value = if (p.contains("save_history")) p.getBoolean("save_history", false) else p.getBoolean("enabled", false)
         synchronized(resend) { p.getStringSet("resend", emptySet())?.let { resend.addAll(it) } }
         sp = p
     }

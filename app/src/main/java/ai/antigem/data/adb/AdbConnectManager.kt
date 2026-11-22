@@ -328,6 +328,27 @@ object AdbConnectManager {
         try { refreshNow() } finally { _state.update { it.copy(refreshing = false) } }
     }
 
+    /**
+     * Refreshes, then connects the way the Connect button does with no port (this phone, port found by itself) when
+     * adb was paired, nothing is connected and Wireless debugging is on. For opening the ADB page (also when switching
+     * back to ADB from Shizuku or Root) and its refresh button: auto-reconnect only reacts to the app starting and to
+     * Wireless debugging turning on, so a connection lost in between would otherwise stay lost. [quiet] hides "couldn't
+     * connect" messages.
+     */
+    fun refreshAndConnect(quiet: Boolean = true) = scope.launch {
+        _state.update { it.copy(refreshing = true) }
+        try { refreshNow() } finally { _state.update { it.copy(refreshing = false) } }
+        val s = _state.value
+        if (s.adbInstalled != true || s.connectedDevice != null || !s.pairedOnce || s.busy != null) return@launch
+        if (pairingJob?.isActive == true || autoConnectJob?.isActive == true || connectJob?.isActive == true) return@launch
+        if (!remote && !isWirelessDebuggingOn(appContext)) {
+            // when AntiGem may turn it on, the Wireless debugging watcher connects as soon as it is on
+            if (!maybeTurnOnWireless() && !quiet) report("Wireless debugging is off. Turn it on to connect.", true)
+            return@launch
+        }
+        connectJob = scope.launch { connectNow(null, quiet) }
+    }
+
     private suspend fun refreshNow() {
         // Run adb itself: a present binary can still fail to start ("CANNOT LINK EXECUTABLE")
         val found = shell("command -v adb >/dev/null 2>&1 || exit 127; adb version", 15)

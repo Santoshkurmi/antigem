@@ -41,12 +41,25 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # The release is the newer of version.json's stable release and its beta (scripts/release_version.py, the same
+      # rule as the Gradle build, which also checks the file). A beta is published as a pre-release that is not
+      # "Latest", so the repo's latest release (and the links to it) stay on the stable version.
       - name: Parse version.json
         id: version
         run: |
-          VERSION_NAME=$(python3 -c "import json; print(json.load(open('version.json')).get('version_name', '1.0.0'))")
-          VERSION_CODE=$(python3 -c "import json; print(json.load(open('version.json')).get('version_code', 1))")
-          CHANGELOG=$(python3 -c "import json; cl = json.load(open('version.json')).get('changelog', ''); print('\n'.join(cl) if isinstance(cl, list) else cl)")
+          VERSION_NAME=$(python3 scripts/release_version.py name)
+          CHANNEL=$(python3 scripts/release_version.py channel)
+          CHANGELOG=$(python3 scripts/release_version.py changelog)
+          if [ "$CHANNEL" = "beta" ]; then
+            CHANGELOG="Beta for testing: it installs over the stable app and keeps your data. Going back to the stable version means waiting for the next stable release (or uninstalling).
+
+          ${CHANGELOG}"
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "make_latest=false" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "make_latest=true" >> $GITHUB_OUTPUT
+          fi
           echo "tag=v${VERSION_NAME}" >> $GITHUB_OUTPUT
           echo "name=v${VERSION_NAME}" >> $GITHUB_OUTPUT
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
@@ -96,6 +109,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: ${{ steps.version.outputs.name }}
           body: ${{ steps.version.outputs.changelog }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          make_latest: ${{ steps.version.outputs.make_latest }}
           generate_release_notes: true
           files: output/*
         env:

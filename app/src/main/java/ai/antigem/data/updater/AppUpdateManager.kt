@@ -18,6 +18,26 @@ import java.util.concurrent.TimeUnit
 
 private const val TAG = "AppUpdateManager"
 private const val DEFAULT_VERSION_URL = "https://raw.githubusercontent.com/santoshkurmi/antigem/standalone/version.json"
+// the updater's prefs (UpdateCheckWorker keeps its "last notified" version there too)
+private const val UPDATE_PREFS = "app_update_prefs"
+private const val KEY_BETA_UPDATES = "beta_updates"
+
+/**
+ * "Get beta updates" (Settings > About). Saved in the app's data, so it stays through updates: someone who turns it on
+ * keeps getting each beta, and the stable releases in between, for good. Never set, it follows the installed APK: a
+ * beta build gets betas, a stable build doesn't (so a tester who installed a beta from a link goes back to stable-only
+ * once the stable release has replaced it).
+ */
+object BetaUpdates {
+    fun isEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+        return if (prefs.contains(KEY_BETA_UPDATES)) prefs.getBoolean(KEY_BETA_UPDATES, false) else BuildConfig.IS_BETA
+    }
+
+    fun setEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_BETA_UPDATES, enabled).apply()
+    }
+}
 
 data class AppUpdateInfo(
     val versionCode: Int,
@@ -72,14 +92,11 @@ class AppUpdateManager(private val context: Context) {
             val rawJson = response.body?.string() ?: return@withContext Result.failure(Exception("Empty version response from server"))
 
             val json = JSONObject(rawJson)
-            val remoteVersionCode = json.optInt("version_code", 0)
-            val remoteVersionName = json.optString("version_name", "1.0.0")
+            val release = releaseFor(json)
+            val remoteVersionCode = release.code
+            val remoteVersionName = release.name
             val minSupportedCode = json.optInt("min_supported_version_code", 0)
-            val changelog = when (val raw = json.opt("changelog")) {
-                is org.json.JSONArray -> (0 until raw.length()).map { raw.optString(it) }
-                is String -> listOf(raw)
-                else -> listOf("General improvements and bug fixes.")
-            }
+            val changelog = release.changelog
             val isCritical = json.optBoolean("is_critical", false) || (BuildConfig.VERSION_CODE < minSupportedCode)
 
             // each release (tag v<version>) has the app as AntiGem-v<version>.apk, the chroot build as
@@ -115,6 +132,30 @@ class AppUpdateManager(private val context: Context) {
         }
     }
 
+    /** One release in version.json: the stable one (top level) or the beta ("beta" block). */
+    private class RemoteRelease(val code: Int, val name: String, val changelog: List<String>)
+
+    /**
+     * The release this install follows in version.json. Without beta updates ([BetaUpdates]) it reads only the top
+     * level, as every installed app always has, so it never sees a beta. With them it takes the newer (higher
+     * version_code) of the stable release and the "beta" block: each next beta and, once a stable release passes it,
+     * the stable one. Turned off on a beta, the app gets nothing until the next stable release, which is higher.
+     */
+    private fun releaseFor(json: JSONObject): RemoteRelease {
+        val stable = RemoteRelease(json.optInt("version_code", 0), json.optString("version_name", "1.0.0"), changelogOf(json))
+        if (!BetaUpdates.isEnabled(context)) return stable
+        val beta = json.optJSONObject("beta") ?: return stable
+        val betaCode = beta.optInt("version_code", 0)
+        val betaName = beta.optString("version_name", "")
+        return if (betaCode > stable.code && betaName.isNotBlank()) RemoteRelease(betaCode, betaName, changelogOf(beta)) else stable
+    }
+
+    private fun changelogOf(json: JSONObject): List<String> = when (val raw = json.opt("changelog")) {
+        is org.json.JSONArray -> (0 until raw.length()).map { raw.optString(it) }
+        is String -> listOf(raw)
+        else -> listOf("General improvements and bug fixes.")
+    }
+
     private fun apkUrl(versionName: String, suffix: String) =
         "https://github.com/santoshkurmi/antigem/releases/download/v$versionName/AntiGem-v$versionName$suffix.apk"
 
@@ -132,8 +173,8 @@ class AppUpdateManager(private val context: Context) {
 
     /**
      * The chroot build (AntiGem-v<version>-chroot.apk) for an install of the normal build, which has no Ubuntu chroot:
-     * of the newest release when it has one, else of this app's version. Same app and signing key, so it installs over
-     * this one and keeps all data.
+     * of the newest release when it has one (with beta updates on: the newest beta, see [releaseFor]), else of this app's
+     * version. Same app and signing key, so it installs over this one and keeps all data.
      */
     suspend fun findChrootBuild(versionJsonUrl: String = DEFAULT_VERSION_URL): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -144,9 +185,7 @@ class AppUpdateManager(private val context: Context) {
                     .header("Cache-Control", "no-cache")
                     .build()
                 httpClient.newCall(request).execute().use { r ->
-                    if (!r.isSuccessful) null else JSONObject(r.body?.string().orEmpty()).let { json ->
-                        json.optInt("version_code", 0) to json.optString("version_name", "")
-                    }
+                    if (!r.isSuccessful) null else releaseFor(JSONObject(r.body?.string().orEmpty())).let { it.code to it.name }
                 }
             }.getOrNull()
             val versions = buildList {

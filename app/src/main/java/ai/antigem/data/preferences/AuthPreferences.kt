@@ -80,6 +80,7 @@ class AuthPreferences(private val context: Context) {
         val DEFAULT_APPROVAL_SCOPE = stringPreferencesKey("default_approval_scope")
         val GROUP_CHATS_BY_WORKSPACE = androidx.datastore.preferences.core.booleanPreferencesKey("group_chats_by_workspace")
         val GROUP_AGENT_STEPS = androidx.datastore.preferences.core.booleanPreferencesKey("group_agent_steps")
+        val GROUP_STEPS_MIN = androidx.datastore.preferences.core.intPreferencesKey("group_steps_min")
         val SHOW_MESSAGE_STATS = androidx.datastore.preferences.core.booleanPreferencesKey("show_message_stats")
         val IS_FLOATING_BUBBLE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_bubble_enabled")
         val AUTO_SHOW_FLOATING_BUBBLE_ON_MINIMIZE = androidx.datastore.preferences.core.booleanPreferencesKey("auto_show_floating_bubble_on_minimize")
@@ -902,6 +903,17 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveGroupAgentSteps(enabled: Boolean) {
         syncPrefs.edit().putBoolean("group_agent_steps", enabled).apply()
         context.dataStore.edit { it[GROUP_AGENT_STEPS] = enabled }
+    }
+
+    /** Group Agent Steps → Fold after: a run folds with at least this many steps (1–10, default 2; 1 = every run). */
+    val groupStepsMin: Flow<Int> = context.dataStore.data.map { (it[GROUP_STEPS_MIN] ?: 2).coerceIn(1, 10) }
+
+    fun getGroupStepsMinSync(): Int = syncPrefs.getInt("group_steps_min", 2).coerceIn(1, 10)
+
+    suspend fun saveGroupStepsMin(steps: Int) {
+        val n = steps.coerceIn(1, 10)
+        syncPrefs.edit().putInt("group_steps_min", n).apply()
+        context.dataStore.edit { it[GROUP_STEPS_MIN] = n }
     }
 
     /** The token, cache and time stats under each reply. */

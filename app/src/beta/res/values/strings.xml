@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- beta releases (app/build.gradle.kts adds this folder when version.json's beta is the newer release): same app,
+         a different name so testers can tell they're on a beta -->
+    <string name="app_name">AntiGem Beta</string>
+</resources>

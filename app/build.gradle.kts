@@ -1,18 +1,97 @@
-import groovy.json.JsonSlurper
-
+// ---------------------------------------------------------------------------------------------------- version.json
+// version.json has the stable release at the top level and, for testers, a beta in "beta" (version_code, version_name
+// like 2.0.4-beta.1, changelog). Every release, beta or stable, takes the next version_code: the biggest one in the
+// file + 1. A build makes the newest of the two (the higher version_code): the beta while it is newer, else the stable
+// release (an older beta block just stays in the file and nobody gets it). Installed stable apps read only the top
+// level; a beta app reads both and updates to the newer one (data/updater/AppUpdateManager.kt). The same rule names the
+// APKs and the GitHub release (scripts/release_version.py) and gives the bridge its version (agy_ide_bridge/pkg/buildinfo).
+// The file's shape is checked here, when the build is configured; its version_codes against its git history by the
+// checkVersionJson task, before every build.
 val versionFile = rootProject.file("version.json")
-val parsedVersion = if (versionFile.exists()) {
-    @Suppress("UNCHECKED_CAST")
-    JsonSlurper().parseText(versionFile.readText()) as Map<String, Any>
-} else {
-    mapOf("version_code" to 1, "version_name" to "1.0.0")
+
+class ReleaseVersion(val code: Int, val name: String, val isBeta: Boolean)
+
+fun versionJsonError(message: String): Nothing = throw GradleException("version.json: $message")
+
+fun shown(value: Any?): String = if (value is String) "\"$value\"" else value.toString()
+
+/** The numbers of "2.0.4", or of the "2.0.4" in "2.0.4-beta.1". */
+fun versionNumbers(name: String): List<Int> = name.substringBefore('-').split('.').map { it.toInt() }
+
+fun compareNumbers(a: List<Int>, b: List<Int>): Int =
+    a.zip(b).map { (x, y) -> x.compareTo(y) }.firstOrNull { it != 0 } ?: a.size.compareTo(b.size)
+
+/** Checks one release of version.json (the top level, or the "beta" block) and reads its version. */
+fun readRelease(json: Map<*, *>, beta: Boolean): ReleaseVersion {
+    val where = if (beta) " in \"beta\"" else ""
+    val allowed = if (beta) listOf("version_code", "version_name", "changelog")
+    else listOf("version_code", "version_name", "min_supported_version_code", "changelog", "is_critical", "beta")
+    val unknown = json.keys.map { it.toString() }.filter { it !in allowed }
+    if (unknown.isNotEmpty()) versionJsonError(
+        "unknown ${unknown.joinToString { "\"$it\"" }}$where (a typo? the keys are ${allowed.joinToString()})")
+
+    val code = json["version_code"]
+    if (code !is Long || code !in 1L..2_100_000_000L) versionJsonError(
+        if (code == null) "\"version_code\" is missing$where"
+        else "\"version_code\"$where must be a whole number without quotes, not ${shown(code)}")
+
+    val name = json["version_name"]
+    val pattern = if (beta) Regex("""\d+\.\d+\.\d+-beta\.[1-9]\d*""") else Regex("""\d+\.\d+\.\d+""")
+    if (name !is String || !pattern.matches(name)) versionJsonError(
+        if (name == null) "\"version_name\" is missing$where"
+        else "\"version_name\"$where must look like ${if (beta) "2.0.4-beta.1" else "2.0.4"}, not ${shown(name)}")
+
+    val changelog = json["changelog"]
+    if (changelog !is List<*> || changelog.isEmpty()) versionJsonError(
+        if (changelog == null) "\"changelog\" is missing$where"
+        else "\"changelog\"$where must be a list of lines, like [\"Fixed X\", \"Added Y\"]")
+    changelog.forEachIndexed { i, line ->
+        if (line !is String || line.isBlank()) versionJsonError("line ${i + 1} of \"changelog\"$where must be text, not ${shown(line)}")
+    }
+
+    if (!beta) {
+        val min = json["min_supported_version_code"]
+        if (min != null && (min !is Long || min < 0 || min > code)) versionJsonError(
+            "\"min_supported_version_code\" must be a whole number from 0 to version_code ($code), not ${shown(min)}")
+        val critical = json["is_critical"]
+        if (critical != null && critical !is Boolean) versionJsonError("\"is_critical\" must be true or false, not ${shown(critical)}")
+    }
+    return ReleaseVersion(code.toInt(), name, beta)
 }
 
-val appVersionCode = (parsedVersion["version_code"] as? Number)?.toInt() ?: 1
-val appVersionName = (parsedVersion["version_name"] as? String) ?: "1.0.0"
+val versionData: Map<*, *> = run {
+    if (!versionFile.exists()) versionJsonError("not found at ${versionFile.path}")
+    val parsed = try {
+        StrictJson.parse(versionFile.readText())
+    } catch (e: IllegalArgumentException) {
+        versionJsonError(e.message ?: "not valid JSON")
+    }
+    parsed as? Map<*, *> ?: versionJsonError("must be one JSON object, { … }")
+}
+val stableRelease = readRelease(versionData, beta = false)
+val betaRelease: ReleaseVersion? = when (val block = versionData["beta"]) {
+    null -> null
+    is Map<*, *> -> readRelease(block, beta = true)
+    else -> versionJsonError("\"beta\" must be a block like { \"version_code\": …, \"version_name\": …, \"changelog\": […] }, not ${shown(block)}")
+}
+
+/** What this build makes: the newer of the stable release and the beta. */
+val appRelease: ReleaseVersion = betaRelease?.let { beta ->
+    if (beta.code == stableRelease.code) versionJsonError(
+        "the beta and the stable release both have version_code ${beta.code}: every release takes its own number, the biggest one in the file + 1")
+    if (beta.code < stableRelease.code) stableRelease
+    else if (compareNumbers(versionNumbers(beta.name), versionNumbers(stableRelease.name)) <= 0) versionJsonError(
+        "the beta ${beta.name} is newer than the stable release ${stableRelease.name} (version_code ${beta.code} > ${stableRelease.code}), " +
+            "so it must be a beta of a later version than ${stableRelease.name}")
+    else beta
+} ?: stableRelease
+
+val appVersionCode = appRelease.code
+val appVersionName = appRelease.name
+val isBetaBuild = appRelease.isBeta
 
 // The IDE bridge (Go) reports the same version as the app: its build embeds a copy of version.json, refreshed here on
-// every Gradle build so the two can never differ and nobody has to remember it.
+// every Gradle build so the two can never differ and nobody has to remember it (it picks the newer release the same way).
 val syncBridgeVersion by tasks.registering(Copy::class) {
     from(versionFile)
     into(rootProject.file("agy_ide_bridge/pkg/buildinfo"))
@@ -69,10 +148,14 @@ android {
         buildConfigField("String", "TARGET_ABI", "\"$targetAbi\"")
         // "", "-chroot" or "-x86_64": the release file the in-app updater downloads (AntiGem-v<version><suffix>.apk)
         buildConfigField("String", "APK_SUFFIX", "\"$apkSuffix\"")
+        // a beta build (version.json's beta is newer than its stable release): its updater follows the betas too
+        buildConfigField("boolean", "IS_BETA", "$isBetaBuild")
     }
 
     // the glibc runtime of this build's CPU (assets/glibc-min-<abi>.tar.xz)
     sourceSets.getByName("main").assets.srcDir("src/abi/$targetAbi/assets")
+    // a beta release is "AntiGem Beta" on the home screen (src/beta/res); debug builds stay "AntiGem Dev"
+    if (isBetaBuild) sourceSets.getByName("release").res.srcDir("src/beta/res")
 
     signingConfigs {
         create("release") {
@@ -449,7 +532,8 @@ abstract class LinuxBridgeAssetTask : DefaultTask() {
 // Changelog: the app's "What's new" page is built from the git history of version.json, one entry per version_code
 // (the newest commit of each wins, dated by that commit). The version.json being built is used for its own version, so
 // an uncommitted bump shows up too. Needs the full history: CI checks out with fetch-depth 0. Without git (or with a
-// shallow clone) only the current version is listed.
+// shallow clone) only the current version is listed. Betas ("beta" in version.json) are listed only in a beta build,
+// and only the ones newer than its stable release (the current beta round): stable users never see them.
 abstract class GenerateChangelogTask : DefaultTask() {
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
@@ -497,6 +581,12 @@ abstract class GenerateChangelogTask : DefaultTask() {
     fun generate() {
         data class Entry(val code: Int, val name: String, val date: String?, val changes: List<String>)
         val byCode = LinkedHashMap<Int, Entry>()
+        val betas = LinkedHashMap<Int, Entry>()
+        fun betaOf(json: Map<String, Any?>, date: String?): Entry? {
+            val beta = json["beta"] as? Map<*, *> ?: return null
+            val code = (beta["version_code"] as? Number)?.toInt() ?: return null
+            return Entry(code, beta["version_name"]?.toString() ?: "?", date, changesOf(beta["changelog"]))
+        }
 
         // newest first: the first commit seen for a version_code is its latest edit
         val log = git("log", "--format=%H %cI", "--", "version.json")
@@ -506,6 +596,7 @@ abstract class GenerateChangelogTask : DefaultTask() {
             val sha = line.substringBefore(' ')
             val date = line.substringAfter(' ').take(10)
             val json = git("show", "$sha:version.json")?.let(::parse) ?: return@forEach
+            betaOf(json, date)?.let { if (it.code !in betas) betas[it.code] = it }
             val code = (json["version_code"] as? Number)?.toInt() ?: return@forEach
             if (code in byCode) return@forEach
             byCode[code] = Entry(code, json["version_name"]?.toString() ?: "?", date, changesOf(json["changelog"]))
@@ -514,6 +605,9 @@ abstract class GenerateChangelogTask : DefaultTask() {
         parse(versionJson.get().asFile.readText())?.let { json ->
             val code = (json["version_code"] as? Number)?.toInt() ?: return@let
             byCode[code] = Entry(code, json["version_name"]?.toString() ?: "?", byCode[code]?.date, changesOf(json["changelog"]))
+            betaOf(json, null)?.let { betas[it.code] = it.copy(date = betas[it.code]?.date) }
+            // the betas after the stable release: none in a stable build, the betas of this round in a beta build
+            betas.values.filter { it.code > code }.forEach { byCode[it.code] = it }
         }
 
         val body = byCode.values.sortedByDescending { it.code }.joinToString(",\n") { e ->
@@ -547,6 +641,112 @@ val generateChangelog = tasks.register<GenerateChangelogTask>("generateChangelog
     repoDir.set(rootProject.layout.projectDirectory)
     outputDir.set(layout.buildDirectory.dir("generated/changelog/kotlin"))
 }
+
+// Checks version.json's version_codes against every version the file has had in git, so a release can't reuse a
+// number or go below one (the file's shape is checked when the build is configured, at the top of this file):
+//  - a new version_code must be higher than every one used before, betas included
+//  - a version_code used before keeps its version_name (re-pushing the same version, e.g. to fix its changelog, is fine)
+//  - a version_name already released (its tag v<name> exists, made by the release workflow) keeps its version_code:
+//    its GitHub release would be overwritten. Only tags: a push whose release build failed was never released.
+// Needs the full history: CI checks out with fetch-depth 0. Without git it is skipped, a shallow clone checks what
+// history there is.
+abstract class CheckVersionJsonTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val versionJson: RegularFileProperty
+
+    @get:Internal
+    abstract val repoDir: DirectoryProperty
+
+    private fun git(stdin: String?, vararg args: String): ByteArray? = try {
+        val process = ProcessBuilder(listOf("git", "-C", repoDir.get().asFile.absolutePath) + args)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+        // written on its own thread: git answers while it reads, so both pipes have to move at once
+        val writer = Thread { runCatching { process.outputStream.use { out -> stdin?.let { out.write(it.toByteArray()) } } } }
+        writer.start()
+        val out = process.inputStream.readBytes()
+        writer.join()
+        if (process.waitFor() == 0) out else null
+    } catch (_: Exception) {
+        null
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parse(text: String): Map<String, Any?>? = try {
+        groovy.json.JsonSlurper().parseText(text) as? Map<String, Any?>
+    } catch (_: Exception) {
+        null
+    }
+
+    /** (version_code, version_name) of the top level and of the "beta" block of one version.json. */
+    private fun releasesOf(json: Map<String, Any?>): List<Pair<Int, String>> =
+        listOfNotNull<Map<*, *>>(json, json["beta"] as? Map<*, *>).mapNotNull { r ->
+            val code = (r["version_code"] as? Number)?.toInt() ?: return@mapNotNull null
+            val name = r["version_name"] as? String ?: return@mapNotNull null
+            code to name
+        }
+
+    private fun fail(message: String): Nothing = throw GradleException("version.json: $message")
+
+    @TaskAction
+    fun check() {
+        val current = parse(versionJson.get().asFile.readText()) ?: return // its shape was checked at configuration
+        val log = git(null, "log", "--format=%H", "--", "version.json")?.toString(Charsets.UTF_8)
+        if (log == null) {
+            logger.warn("version.json: git history unavailable, version_codes not checked against older versions")
+            return
+        }
+        if (git(null, "rev-parse", "--is-shallow-repository")?.toString(Charsets.UTF_8)?.trim() == "true")
+            logger.warn("version.json: shallow clone, version_codes checked only against the history it has")
+
+        // every (version_code, version_name) the file has had, read in one go: `git cat-file --batch` answers each
+        // "<commit>:version.json" with "<id> blob <size>\n<content>\n" ("<name> missing\n" where it didn't exist)
+        val namesOfCode = HashMap<Int, MutableSet<String>>()
+        val request = log.lines().filter { it.isNotBlank() }.joinToString("") { "$it:version.json\n" }
+        val out = git(request, "cat-file", "--batch") ?: ByteArray(0)
+        var i = 0
+        while (i < out.size) {
+            var eol = i
+            while (eol < out.size && out[eol] != '\n'.code.toByte()) eol++
+            if (eol == out.size) break
+            val header = String(out, i, eol - i, Charsets.UTF_8).split(' ')
+            i = eol + 1
+            if (header.size != 3 || header[1] != "blob") continue
+            val size = header[2].toIntOrNull() ?: break
+            if (i + size > out.size) break
+            parse(String(out, i, size, Charsets.UTF_8))?.let { json ->
+                releasesOf(json).forEach { (code, name) -> namesOfCode.getOrPut(code) { mutableSetOf() } += name }
+            }
+            i += size + 1
+        }
+
+        val mine = releasesOf(current)
+        val newest = namesOfCode.keys.maxOrNull()
+        val next = ((namesOfCode.keys + mine.map { it.first }).maxOrNull() ?: 0) + 1
+        mine.forEach { (code, name) ->
+            val what = if ("-beta" in name) "the beta $name" else name
+            val used = namesOfCode[code]
+            if (used != null && name !in used) fail(
+                "$what has version_code $code, which ${used.first()} already used. Every release takes a new number: use $next.")
+            if (used == null && newest != null && code < newest) fail(
+                "$what has version_code $code, lower than $newest (${namesOfCode.getValue(newest).first()}). " +
+                    "Every release takes a new, higher number: use $next.")
+            val tagged = git(null, "show", "refs/tags/v$name:version.json")?.toString(Charsets.UTF_8)?.let(::parse)
+            val released = tagged?.let(::releasesOf)?.firstOrNull { it.second == name }?.first
+            if (released != null && released != code) fail(
+                "$name was already released with version_code $released (tag v$name): this release would overwrite it. " +
+                    "Give it a new version_name, or put back version_code $released if it is the same release.")
+        }
+    }
+}
+
+val checkVersionJson = tasks.register<CheckVersionJsonTask>("checkVersionJson") {
+    versionJson.set(versionFile)
+    repoDir.set(rootProject.layout.projectDirectory)
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(checkVersionJson) }
+
 androidComponents {
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateChangelog, GenerateChangelogTask::outputDir)
@@ -571,6 +771,141 @@ androidComponents {
                 rawBridge.set(agyIdeBridgeLinuxRaw)
             }
             variant.sources.assets?.addGeneratedSourceDirectory(linuxBridge, LinuxBridgeAssetTask::outputDir)
+        }
+    }
+}
+
+// A strict JSON reader for version.json: unlike a lenient parser it stops at what the phones' org.json or CI's Python
+// would refuse or read differently (a key written twice, a comma before } or ], comments, single quotes), and says
+// where. Objects are Map<String, Any?>, arrays List<Any?>, whole numbers Long, other numbers Double.
+object StrictJson {
+    fun parse(text: String): Any? = Reader(text).run {
+        space()
+        val result = value()
+        space()
+        if (i < s.length) fail("unexpected text after the end")
+        result
+    }
+
+    private class Reader(val s: String) {
+        var i = 0
+
+        fun fail(message: String): Nothing {
+            val before = s.substring(0, minOf(i, s.length))
+            val line = before.count { it == '\n' } + 1
+            val column = before.length - before.lastIndexOf('\n')
+            throw IllegalArgumentException("line $line, column $column: $message")
+        }
+
+        fun space() {
+            while (i < s.length && s[i] in " \t\r\n") i++
+        }
+
+        fun value(): Any? {
+            if (i >= s.length) fail("unexpected end of the file")
+            return when (val c = s[i]) {
+                '{' -> obj()
+                '[' -> array()
+                '"' -> string()
+                't' -> word("true", true)
+                'f' -> word("false", false)
+                'n' -> word("null", null)
+                else -> if (c == '-' || c.isDigit()) number() else fail("unexpected '$c'")
+            }
+        }
+
+        fun word(word: String, value: Any?): Any? {
+            if (!s.startsWith(word, i)) fail("unexpected '${s[i]}'")
+            i += word.length
+            return value
+        }
+
+        fun obj(): Map<String, Any?> {
+            i++ // {
+            val map = LinkedHashMap<String, Any?>()
+            space()
+            if (i < s.length && s[i] == '}') { i++; return map }
+            while (true) {
+                space()
+                if (i >= s.length) fail("missing '}'")
+                if (s[i] == '}') fail("comma before '}'")
+                if (s[i] != '"') fail("expected a key in double quotes")
+                val at = i
+                val key = string()
+                if (key in map) { i = at; fail("\"$key\" is written twice") }
+                space()
+                if (i >= s.length || s[i] != ':') fail("expected ':' after \"$key\"")
+                i++
+                space()
+                map[key] = value()
+                space()
+                if (i >= s.length) fail("missing '}'")
+                when (s[i]) {
+                    ',' -> i++
+                    '}' -> { i++; return map }
+                    else -> fail("expected ',' or '}'")
+                }
+            }
+        }
+
+        fun array(): List<Any?> {
+            i++ // [
+            val list = ArrayList<Any?>()
+            space()
+            if (i < s.length && s[i] == ']') { i++; return list }
+            while (true) {
+                space()
+                if (i < s.length && s[i] == ']') fail("comma before ']'")
+                list += value()
+                space()
+                if (i >= s.length) fail("missing ']'")
+                when (s[i]) {
+                    ',' -> i++
+                    ']' -> { i++; return list }
+                    else -> fail("expected ',' or ']'")
+                }
+            }
+        }
+
+        fun string(): String {
+            i++ // "
+            val out = StringBuilder()
+            while (true) {
+                if (i >= s.length) fail("missing closing '\"'")
+                val c = s[i]
+                when {
+                    c == '"' -> { i++; return out.toString() }
+                    c == '\\' -> {
+                        if (i + 1 >= s.length) fail("missing closing '\"'")
+                        when (val e = s[i + 1]) {
+                            '"', '\\', '/' -> out.append(e)
+                            'b' -> out.append('\b')
+                            'f' -> out.append('\u000C')
+                            'n' -> out.append('\n')
+                            'r' -> out.append('\r')
+                            't' -> out.append('\t')
+                            'u' -> {
+                                val hex = s.substring(i + 2, minOf(i + 6, s.length))
+                                if (hex.length != 4 || !hex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) fail("bad \\u escape")
+                                out.append(hex.toInt(16).toChar())
+                                i += 4
+                            }
+                            else -> fail("bad escape '\\$e'")
+                        }
+                        i += 2
+                    }
+                    c < ' ' -> fail("a line break or control character inside a string (write \\n)")
+                    else -> { out.append(c); i++ }
+                }
+            }
+        }
+
+        fun number(): Any {
+            val start = i
+            while (i < s.length && (s[i].isDigit() || s[i] in "+-.eE")) i++
+            val text = s.substring(start, i)
+            if (!Regex("""-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?""").matches(text)) { i = start; fail("bad number '$text'") }
+            return text.toLongOrNull() ?: text.toDouble()
         }
     }
 }

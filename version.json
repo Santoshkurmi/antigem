@@ -7,5 +7,19 @@
    "Added collapse/expand card for tool calls to make chat more readable",
    "Added voice calling and jarvis outside the app using tiles,shortcuts to open"
   ],
-  "is_critical": false
+  "is_critical": false,
+  "beta": {
+    "version_code": 135,
+    "version_name": "2.0.4-beta.1",
+    "changelog": [
+      "Added Shizuku and root access next to ADB: choose how agents reach your phone in Settings → ADB Connect",
+      "Agents now know about adb, Shizuku (rish) and root on your phone, and use them only when you ask",
+      "ADB Connect now reconnects a paired phone by itself when you open it or tap refresh",
+      "Fixed Antigravity sign-in: when your Google account isn't allowed, the app now shows why instead of waiting forever",
+      "Added a \"Fold after\" option for grouped agent steps: how many steps fold into one pill (2 by default)",
+      "Agent memory is now on by default; saving chats for agents to look up is now off by default",
+      "Added Settings → Updates: get beta updates, and choose how often AntiGem checks for updates in the background",
+      "Added a Discord community link in Settings → About"
+    ]
+  }
 }

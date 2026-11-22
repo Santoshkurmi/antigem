@@ -100,7 +100,8 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
     var wirelessOn by remember { mutableStateOf(AdbConnectManager.isWirelessDebuggingOn(context)) }
     var notificationsOn by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
     LaunchedEffect(Unit) {
-        AdbConnectManager.refresh()
+        // opening ADB (or switching back to it) connects a paired phone that isn't connected, like the Connect button
+        AdbConnectManager.refreshAndConnect()
         var tick = 0
         while (true) {
             delay(1500)
@@ -488,7 +489,7 @@ private fun StatusCard(state: AdbConnectManager.State, cardBg: Color, cardBorder
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             if (state.refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
-            else IconButton(onClick = { AdbConnectManager.refresh() }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+            else IconButton(onClick = { AdbConnectManager.refreshAndConnect(quiet = false) }) { Icon(Icons.Outlined.Refresh, "Refresh and connect") }
         }
     }
 }

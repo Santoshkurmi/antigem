@@ -62,17 +62,12 @@ sealed class ChatFeedItem(val key: String, val contentType: String) {
 
 /**
  * Folds the thinking and tool steps of replies (Settings → Appearance → Group Agent Steps, on by default; off: every
- * step is its own tile). A run of steps (no reply text between them) becomes one pill when it has at least
- * [MIN_TOOLS] tool calls or [MIN_STEPS] steps; shorter runs stay as they are. A pill the user opens stays open while
+ * step is its own tile). A run of steps (no reply text between them) becomes one pill when it has at least the
+ * "Fold after" number of steps (AuthPreferences.groupStepsMin, default 2; 1 = every run); shorter runs stay as they are. A pill the user opens stays open while
  * they stay in that chat (ChatScreen keeps which ones; opening another chat closes them all again).
  * Steps that need the user (an approval, a question), show a picture or are system notices always stay full tiles.
  */
 object StepGroups {
-    /** A run is folded with at least this many tool calls ... */
-    const val MIN_TOOLS = 2
-    /** ... or this many steps (thinking + tool calls). */
-    const val MIN_STEPS = 3
-
     private val startedAt = ConcurrentHashMap<String, Long>()
     private val endedAt = ConcurrentHashMap<String, Long>()
 
@@ -99,8 +94,11 @@ object StepGroups {
         else -> false
     }
 
-    /** [items] from [ChatFeedCache.buildFeedItems] with runs of steps folded when [enabled]; [expandedKeys]: the opened pills' keys. */
-    fun apply(items: List<ChatFeedItem>, enabled: Boolean, expandedKeys: Set<String>, messages: List<ChatMessage>): List<ChatFeedItem> {
+    /**
+     * [items] from [ChatFeedCache.buildFeedItems] with runs of at least [minSteps] steps folded when [enabled];
+     * [expandedKeys]: the opened pills' keys.
+     */
+    fun apply(items: List<ChatFeedItem>, enabled: Boolean, minSteps: Int, expandedKeys: Set<String>, messages: List<ChatMessage>): List<ChatFeedItem> {
         if (!enabled) return items
         val byId by lazy { messages.associateBy { it.id } }
         val out = ArrayList<ChatFeedItem>(items.size)
@@ -121,7 +119,7 @@ object StepGroups {
             i = j
             val first = run.first()
             val firstOfReply = messagesWithRun.add(first.messageId)
-            if (run.count { it.block is MarkdownBlock.AgentTool } < MIN_TOOLS && run.size < MIN_STEPS) {
+            if (run.size < minSteps) {
                 out.addAll(run)
                 continue
             }

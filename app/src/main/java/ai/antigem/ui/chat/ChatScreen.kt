@@ -316,6 +316,7 @@ fun ChatScreen(
     val isProjectsLoading by viewModel.isProjectsLoading.collectAsState()
     val groupChatsByWorkspace by viewModel.groupChatsByWorkspace.collectAsState()
     val groupAgentSteps by viewModel.groupAgentSteps.collectAsState()
+    val groupStepsMin by viewModel.groupStepsMin.collectAsState()
     val showMessageStats by viewModel.showMessageStats.collectAsState()
     val showArchivedChats by viewModel.showArchivedChats.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
@@ -942,10 +943,10 @@ fun ChatScreen(
     // so another chat (or coming back) starts with every pill closed
     val openStepGroups = remember(currentConv?.id) { mutableStateMapOf<String, Boolean>() }
     val expandedStepGroups = openStepGroups.keys.toSet()
-    val feedItems = remember(messages, selectedModelId, modelNameOf, voiceCallItems, groupAgentSteps, expandedStepGroups) {
+    val feedItems = remember(messages, selectedModelId, modelNameOf, voiceCallItems, groupAgentSteps, groupStepsMin, expandedStepGroups) {
         // the date and model dividers are always on
         val items = ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = true, modelName = modelNameOf, voiceCalls = voiceCallItems)
-        StepGroups.apply(items, groupAgentSteps, expandedStepGroups, messages)
+        StepGroups.apply(items, groupAgentSteps, groupStepsMin, expandedStepGroups, messages)
     }
 
     // Fresh LazyListState per conversation — restores saved position if returning, or initializes directly at bottom
@@ -3263,6 +3264,8 @@ fun ChatScreen(
             onChangePermissionRuleDecision = { rawRule, newDecision -> viewModel.changeGlobalPermissionGrantDecision(rawRule, newDecision) },
             groupAgentSteps = groupAgentSteps,
             onToggleGroupAgentSteps = { viewModel.setGroupAgentSteps(it) },
+            groupStepsMin = groupStepsMin,
+            onSetGroupStepsMin = { viewModel.setGroupStepsMin(it) },
             showMessageStats = showMessageStats,
             onToggleShowMessageStats = { viewModel.setShowMessageStats(it) },
             isFloatingDiagnosticsEnabled = isFloatingDiagnosticsEnabled,
