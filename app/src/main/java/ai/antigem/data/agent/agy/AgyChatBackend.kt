@@ -235,7 +235,8 @@ class AgyChatBackend(
         _pendingLoginUrl.value = null
     }
 
-    data class AgyLoginIssue(val message: String, val verificationUrl: String)
+    /** Why agy refused the account after the Google sign-in; [verificationUrl] only when the account can fix it there. */
+    data class AgyLoginIssue(val message: String, val verificationUrl: String? = null)
 
     private val _agyLoginIssue = MutableStateFlow<AgyLoginIssue?>(null)
     val agyLoginIssue: StateFlow<AgyLoginIssue?> = _agyLoginIssue.asStateFlow()
@@ -414,14 +415,21 @@ class AgyChatBackend(
                     if (authResult != null && !authResult.has_valid_auth) {
                         val verificationUrl = authResult.ineligible?.verification_url?.takeIf { it.isNotBlank() }
                             ?: authResult.verification_required?.verification_url?.takeIf { it.isNotBlank() }
-                        if (verificationUrl != null) {
+                        // Google sign-in worked but agy refused the account (e.g. "not eligible: must be 18 or
+                        // older", often with no link): say why instead of polling on until "not signed in".
+                        val reason = listOfNotNull(
+                            authResult.ui_message,
+                            authResult.ineligible?.reason,
+                            authResult.general_error?.reason,
+                            authResult.tos_violation?.message
+                        ).firstOrNull { it.isNotBlank() }
+                        if (verificationUrl != null || reason != null) {
                             loginPollJob?.cancel()
                             _isAuthBusy.value = false
                             _pendingLoginUrl.value = null
                             agyBridgeService.updateAuthChecking(false)
                             _agyLoginIssue.value = AgyLoginIssue(
-                                message = authResult.ui_message.takeIf { it.isNotBlank() }
-                                    ?: "Your account needs verification before you can sign in.",
+                                message = reason ?: "Your account needs verification before you can sign in.",
                                 verificationUrl = verificationUrl
                             )
                         }

@@ -1606,11 +1606,12 @@ fun ChatScreen(
             )
         }
         agyLoginIssue?.let { issue ->
+            val verifyUrl = issue.verificationUrl
             AlertDialog(
                 onDismissRequest = { viewModel.clearAgyLoginIssue() },
                 title = {
                     Text(
-                        text = "Account Verification Required",
+                        text = if (verifyUrl != null) "Account Verification Required" else "Can't sign in to Antigravity",
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp
                     )
@@ -1623,28 +1624,39 @@ fun ChatScreen(
                     )
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(issue.verificationUrl)).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (verifyUrl != null) {
+                        Button(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(verifyUrl)).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("ChatScreen", "Failed to open browser: ${e.message}")
                                 }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                android.util.Log.e("ChatScreen", "Failed to open browser: ${e.message}")
-                            }
-                            viewModel.clearAgyLoginIssue()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                    ) {
-                        Text("Verify Account", fontWeight = FontWeight.SemiBold)
+                                viewModel.clearAgyLoginIssue()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("Verify Account", fontWeight = FontWeight.SemiBold)
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.clearAgyLoginIssue() },
+                            colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                        ) {
+                            Text("OK", fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { viewModel.clearAgyLoginIssue() }) {
-                        Text("Cancel")
+                dismissButton = if (verifyUrl != null) {
+                    {
+                        TextButton(onClick = { viewModel.clearAgyLoginIssue() }) {
+                            Text("Cancel")
+                        }
                     }
-                }
+                } else null
             )
         }
         Scaffold(
