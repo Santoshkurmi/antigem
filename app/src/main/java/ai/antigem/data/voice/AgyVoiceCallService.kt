@@ -76,6 +76,9 @@ class AgyVoiceCallService : Service() {
                     runCatching { getSystemService(NotificationManager::class.java).notify(NOTIF_ID, notification(st)) }
                 }
         }
+        // the Voice call tile shows the call; the floating call window (Settings → Antigravity → Voice calls) follows it
+        VoiceCallTileService.refresh(this)
+        ai.antigem.ui.voice.AgyVoiceBubble.attach(this)
         return START_NOT_STICKY
     }
 
@@ -124,6 +127,7 @@ class AgyVoiceCallService : Service() {
 
     override fun onDestroy() {
         job?.cancel()
+        VoiceCallTileService.refresh(this)
         scope.cancel()
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         super.onDestroy()

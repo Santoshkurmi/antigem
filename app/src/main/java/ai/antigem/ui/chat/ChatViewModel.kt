@@ -21,6 +21,8 @@ import ai.antigem.domain.model.ModelQuota
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -431,6 +433,56 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    /**
+     * Voice call tile / shortcut: opens the AGY chat that last had a voice call (a new AGY chat when none did) and waits
+     * until it is the chat on screen. Returns its id (null if it did not open in time).
+     */
+    suspend fun openLastCallChat(): String? {
+        val target = findLastCallChat()
+        withContext(Dispatchers.Main) {
+            when {
+                target == null -> startNewChat(AgentKind.AGY)
+                currentConversation.value?.id != target.id -> selectConversation(target.id)
+            }
+        }
+        return withTimeoutOrNull(15_000) {
+            agyBackend.currentConversation.first { c -> c != null && c.agent == AgentKind.AGY && (target == null || c.id == target.id) }
+        }?.id
+    }
+
+    /** A call started by the Voice call tile or shortcut: [openLastCallChat], then what the call button does for the chat on screen. */
+    suspend fun prepareVoiceCallInLastCallChat(): Pair<String, Int> {
+        openLastCallChat()
+        agyBackend.currentConversation.value?.title?.takeIf { it.isNotBlank() && it != "New Chat" }
+            ?.let { ai.antigem.data.voice.AgyVoiceCall.retitle(it) }
+        return agyBackend.prepareVoiceCall()
+    }
+
+    /**
+     * The newest AGY chat (not a cloud chat) that had a voice call: the ones the app remembers first; calls from before
+     * it remembered them are found by asking the hub about the newest chats (it keeps each chat's calls).
+     */
+    private suspend fun findLastCallChat(): Conversation? {
+        val hub = AuthPreferences.currentHubUrl.trimEnd('/')
+        // right after the app starts, the chat list may still be on its way
+        val all = agyBackend.conversations.value.ifEmpty {
+            withTimeoutOrNull(8_000) { agyBackend.conversations.first { it.isNotEmpty() } } ?: emptyList()
+        }
+        val local = all.filter { it.agent == AgentKind.AGY && !it.isCloud }
+        ai.antigem.data.voice.AgyVoicePreferences.callChats(hub)
+            .firstNotNullOfOrNull { id -> local.firstOrNull { it.id == id } }
+            ?.let { return it }
+        val recent = local.sortedByDescending { it.updatedAt }.take(20)
+        val lastCallAt = coroutineScope {
+            recent.map { c ->
+                async { c to ai.antigem.data.voice.AgyVoiceChats.fetch(c.id)?.maxOfOrNull { it.startedAtMs ?: 0L } }
+            }.awaitAll()
+        }
+        val found = lastCallAt.mapNotNull { (c, at) -> at?.let { c to it } }.maxByOrNull { it.second }?.first ?: return null
+        ai.antigem.data.voice.AgyVoicePreferences.rememberCallChat(hub, found.id)
+        return found
+    }
+
     fun startPersistentStream(conversationId: String) = agyBackend.startPersistentStream(conversationId)
     fun deleteConversation(id: String) {
         when (agentOf(id)) {
@@ -582,10 +634,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return prompt
     }
 
-    /** Editing the first message drops the hidden context with it: send it again with the next message. */
-    private fun forgetContextIfFirst(targetId: String) {
-        val firstUser = messages.value.firstOrNull { it.role == MessageRole.USER } ?: return
-        if (firstUser.id == targetId) ai.antigem.data.context.GlobalContext.forget(currentConversation.value?.id)
+    /**
+     * Undoing a chat's first prompt makes the chat start over: its next message is a first message again, with the
+     * global context and the Agent memory text. Returns what to run once the undo worked (null: not the first prompt).
+     */
+    private fun restartIfFirst(targetId: String): (() -> Unit)? {
+        val firstUser = messages.value.firstOrNull { it.role == MessageRole.USER } ?: return null
+        if (firstUser.id != targetId) return null
+        val chatId = currentConversation.value?.id?.takeIf { it.isNotBlank() } ?: return null
+        return {
+            ai.antigem.data.context.GlobalContext.restart(chatId)
+            ai.antigem.data.memory.AgentMemory.forget(chatId)
+        }
     }
 
     val isTranscribingAudio = agyBackend.isTranscribingAudio
@@ -612,8 +672,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         return agyBackend.prepareEditMessage(messageId)?.let { restoreAttachedFiles(it); editableText(it) }
     }
     fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) {
-        forgetContextIfFirst(targetMsg.id)
-        val restored: (String) -> Unit = { restoreAttachedFiles(it); onRestored(editableText(it)) }
+        val restart = restartIfFirst(targetMsg.id)
+        val restored: (String) -> Unit = { restart?.invoke(); restoreAttachedFiles(it); onRestored(editableText(it)) }
         if (isCodexActive) codexBackend.editMessage(targetMsg.id, restored)
         else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false, restored)
         else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false, restored)
@@ -622,7 +682,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Claude: edit a sent prompt in a copy of the chat that ends before it; optionally restore the files changed since. */
     fun editClaudeMessage(targetMsg: ChatMessage, restoreCode: Boolean, onRestored: (String) -> Unit) {
-        val restored: (String) -> Unit = { restoreAttachedFiles(it); onRestored(editableText(it)) }
+        val restart = restartIfFirst(targetMsg.id)
+        val restored: (String) -> Unit = { restart?.invoke(); restoreAttachedFiles(it); onRestored(editableText(it)) }
         if (isCodexActive) codexBackend.editMessage(targetMsg.id, restored)
         else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreCode, restored)
         else claudeBackend.editMessage(targetMsg.id, restoreCode, restored)

@@ -206,6 +206,8 @@ object AgyVoiceCall {
             _state.update { it.copy(conversationId = cid, statusText = "Checking the hub…") }
 
             val base = AuthPreferences.currentHubUrl.trimEnd('/')
+            // the Voice call tile and shortcut call the last chat that had a call
+            AgyVoicePreferences.rememberCallChat(base, cid)
             when (val h = checkHealth(base)) {
                 is Health.Missing -> {
                     val remote = !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(base))
@@ -321,6 +323,12 @@ object AgyVoiceCall {
     }
 
     fun setMinimized(minimized: Boolean) = _state.update { it.copy(minimized = minimized) }
+
+    /** The call's chat is known now (a call from the Voice call tile or shortcut starts before it is picked). */
+    fun retitle(title: String) {
+        if (title.isBlank()) return
+        _state.update { if (it.active) it.copy(title = title) else it }
+    }
 
     /** Playback speed, applied by the voice service right away. */
     fun setSpeed(speed: Double) {
@@ -513,6 +521,7 @@ object AgyVoiceCall {
             s.conversationId = id
             _state.update { it.copy(conversationId = id) }
             _conversationMoved.tryEmit(id)
+            AgyVoicePreferences.rememberCallChat(AuthPreferences.currentHubUrl, id)
             note(s, "The voice agent moved the call to another chat")
         }
         note(s, "Voice agent: " + when (st.state) {

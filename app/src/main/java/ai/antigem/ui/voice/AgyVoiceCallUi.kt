@@ -2,6 +2,7 @@ package ai.antigem.ui.voice
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,6 +17,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,7 +52,9 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -64,9 +68,11 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -83,13 +89,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -101,6 +112,7 @@ import ai.antigem.data.voice.AgyVoicePreferences
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.sin
 
@@ -792,4 +804,218 @@ fun AgyVoiceCallPill(agentWorking: Boolean, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+// ------------------------------------------------------------------------------------------------ floating window
+
+/**
+ * The floating call window minimized ([AgyVoiceBubble]): the voice's orb, pulsing with the talk, over other apps.
+ * A tap opens the panel ([onTap]); dragging moves the window ([onDrag], raw screen pixels) and letting go docks it to
+ * the nearer side ([onDragEnd]). [onSize] reports the circle's size.
+ */
+@Composable
+fun AgyVoiceFloatingCircle(
+    onTap: () -> Unit,
+    onDrag: (dx: Float, dy: Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onSize: (IntSize) -> Unit
+) {
+    val st by AgyVoiceCall.state.collectAsState()
+    if (!st.active) return
+    val voice = AgyVoicePreferences.voiceOf(st.voice)
+    val level by AgyVoiceCall.voiceLevel.collectAsState()
+    val mic by AgyVoiceCall.micLevel.collectAsState()
+    val pulse by animateFloatAsState(1f + 0.22f * max(level, if (st.muted) 0f else mic * 0.7f), tween(120), label = "circle")
+    val drag = rememberBubbleDrag(onTap = onTap, onDrag = onDrag, onDragEnd = onDragEnd)
+    Box(Modifier.onSizeChanged(onSize).padding(6.dp)) {
+        Box(Modifier.size(58.dp).then(drag), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(48.dp).graphicsLayer { scaleX = pulse; scaleY = pulse }.clip(CircleShape)
+                    .background(Brush.radialGradient(listOf(rgb(voice.glint), rgb(voice.core), rgb(voice.deep))))
+            )
+            when {
+                st.phase == Phase.FAILED -> Box(
+                    Modifier.align(Alignment.BottomEnd).size(20.dp).clip(CircleShape).background(CallRed),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Rounded.Info, "Call ended", tint = Color.White, modifier = Modifier.size(12.dp)) }
+                st.muted -> Box(
+                    Modifier.align(Alignment.BottomEnd).size(20.dp).clip(CircleShape).background(CallRed),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Rounded.MicOff, "Muted", tint = Color.White, modifier = Modifier.size(12.dp)) }
+            }
+        }
+    }
+}
+
+/**
+ * The floating call window open ([AgyVoiceBubble]): the call screen in small, on the lower half of the screen over
+ * other apps. Status (with the agent working, [agentWorking]), the orb, live captions and the call's controls. Drag the
+ * handle down or tap ⌄ to minimize it to the circle ([onMinimize]); [onHide] hides it for the rest of the call. The voice
+ * picker and the call log need the app ([onOpenApp]).
+ */
+@Composable
+fun AgyVoiceFloatingPanel(
+    agentWorking: Boolean,
+    onMinimize: () -> Unit,
+    onHide: () -> Unit,
+    onOpenApp: () -> Unit,
+    onRetry: () -> Unit
+) {
+    val st by AgyVoiceCall.state.collectAsState()
+    if (!st.active) return
+    val voice = AgyVoicePreferences.voiceOf(st.voice)
+    val captionsOn by AgyVoicePreferences.captions.collectAsState()
+    val clock = rememberCallClock(st.connectedAt)
+    val minimize by rememberUpdatedState(onMinimize)
+    val failed = st.phase == Phase.FAILED
+    val shown = remember { MutableTransitionState(false) }.apply { targetState = true }
+    AnimatedVisibility(visibleState = shown, enter = slideInVertically { it / 2 } + fadeIn()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(Brush.verticalGradient(listOf(rgb(voice.deep), Ink, Ink)))
+        ) {
+            // soft colour wash behind the orb
+            Canvas(Modifier.fillMaxSize()) {
+                val c = Offset(size.width / 2, size.height * 0.4f)
+                drawCircle(
+                    Brush.radialGradient(listOf(rgb(voice.core).copy(alpha = 0.2f), Color.Transparent), center = c, radius = size.width * 0.7f),
+                    radius = size.width * 0.7f, center = c
+                )
+            }
+            Column(Modifier.fillMaxSize().padding(horizontal = 14.dp).padding(bottom = 10.dp)) {
+                // ---- handle: drag it down to minimize
+                Box(
+                    Modifier.fillMaxWidth().height(22.dp).pointerInput(Unit) {
+                        var pulled = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { pulled = 0f },
+                            onDragEnd = { if (pulled > 48.dp.toPx()) minimize() }
+                        ) { change, dy ->
+                            change.consume()
+                            pulled += dy
+                        }
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.3f)))
+                }
+                // ---- top bar
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { if (failed) AgyVoiceCall.end() else onMinimize() }) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, "Minimize", tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(26.dp))
+                    }
+                    Column(Modifier.weight(1f).padding(horizontal = 2.dp)) {
+                        Text(
+                            st.title.ifBlank { "Antigravity" }, color = Color.White, fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Text("Antigravity voice · ${voice.name}", color = Color.White.copy(alpha = 0.55f), fontSize = 11.5.sp, maxLines = 1)
+                    }
+                    if (clock != null) {
+                        Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.08f)) {
+                            Row(Modifier.padding(horizontal = 9.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                LiveDot(rgb(voice.core))
+                                Spacer(Modifier.width(6.dp))
+                                Text(clock, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                    IconButton(onClick = onHide) {
+                        Icon(Icons.Rounded.VisibilityOff, "Hide for this call", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                    }
+                }
+                // ---- status
+                Text(
+                    statusLine(st, agentWorking),
+                    color = Color.White.copy(alpha = if (st.phase == Phase.LIVE) 0.8f else 0.6f),
+                    fontSize = 13.5.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                // ---- orb (smaller when the captions or the failure share the space)
+                BoxWithConstraints(
+                    Modifier.fillMaxWidth().weight(if (captionsOn && !failed) 0.42f else 1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VoiceOrb(
+                        voice = voice, phase = st.phase, muted = st.muted, agentWorking = agentWorking && st.phase == Phase.LIVE,
+                        modifier = Modifier.size(minOf(maxWidth, maxHeight) * 0.95f).clickable(
+                            interactionSource = remember { MutableInteractionSource() }, indication = null
+                        ) { if (st.phase == Phase.LIVE) AgyVoiceCall.toggleMute() }
+                    )
+                }
+                // ---- failure, or the captions
+                if (failed) {
+                    FailureCard(
+                        st,
+                        onRetry = onRetry,
+                        onUpdate = onOpenApp,
+                        onDetails = onOpenApp,
+                        onClose = { AgyVoiceCall.end() }
+                    )
+                } else if (captionsOn) {
+                    Captions(st, voice, Modifier.fillMaxWidth().weight(0.58f))
+                }
+                // ---- controls
+                if (!failed) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        RoundControl(if (st.muted) Icons.Rounded.MicOff else Icons.Rounded.Mic, if (st.muted) "Unmute" else "Mute", active = st.muted) { AgyVoiceCall.toggleMute() }
+                        RoundControl(if (st.speaker) Icons.Rounded.VolumeUp else Icons.Rounded.Hearing, if (st.speaker) "Speaker" else "Earpiece", active = st.speaker) { AgyVoiceCall.toggleSpeaker() }
+                        RoundControl(if (captionsOn) Icons.Rounded.ClosedCaption else Icons.Rounded.ClosedCaptionDisabled, "Captions", active = captionsOn) {
+                            AgyVoicePreferences.setCaptions(!captionsOn)
+                        }
+                        RoundControl(Icons.AutoMirrored.Rounded.OpenInNew, "Open", active = false) { onOpenApp() }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(onClick = { AgyVoiceCall.end() }, shape = CircleShape, color = CallRed, modifier = Modifier.size(56.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.CallEnd, "End call", tint = Color.White, modifier = Modifier.size(26.dp)) }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text("End", color = Color.White.copy(alpha = 0.7f), fontSize = 11.5.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The circle's touch handling: drags by raw screen positions (the window moves under the finger, so positions inside it
+ * would jump back and forth); a touch that doesn't move past the touch slop is a tap.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun rememberBubbleDrag(onTap: () -> Unit, onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit): Modifier {
+    val slop = LocalViewConfiguration.current.touchSlop
+    val tap by rememberUpdatedState(onTap)
+    val move by rememberUpdatedState(onDrag)
+    val drop by rememberUpdatedState(onDragEnd)
+    val t = remember { BubbleTouch() }
+    return Modifier.pointerInteropFilter { e ->
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                t.downX = e.rawX; t.downY = e.rawY; t.lastX = e.rawX; t.lastY = e.rawY; t.dragging = false
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                if (!t.dragging && hypot(e.rawX - t.downX, e.rawY - t.downY) > slop) t.dragging = true
+                if (t.dragging) {
+                    move(e.rawX - t.lastX, e.rawY - t.lastY)
+                    t.lastX = e.rawX; t.lastY = e.rawY
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> if (t.dragging) drop() else tap()
+            android.view.MotionEvent.ACTION_CANCEL -> if (t.dragging) drop()
+        }
+        true
+    }
+}
+
+private class BubbleTouch {
+    var downX = 0f
+    var downY = 0f
+    var lastX = 0f
+    var lastY = 0f
+    var dragging = false
 }

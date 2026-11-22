@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -58,18 +59,24 @@ object AgyVoiceChats {
     /** Fetches the voice calls of [conversationId] (quietly does nothing on a hub without them). */
     fun refresh(conversationId: String) {
         if (conversationId.isBlank()) return
-        scope.launch {
-            val base = AuthPreferences.currentHubUrl.trimEnd('/')
-            val url = "$base/voice/chats".toHttpUrlOrNull()?.newBuilder()?.addQueryParameter("conversation_id", conversationId)?.build() ?: return@launch
-            val list = runCatching {
-                client.newCall(Request.Builder().url(url).agyHubHeaders().get().build()).execute().use { r ->
-                    if (!r.isSuccessful) return@launch
-                    json.decodeFromString<VoiceChatsResponse>(r.body?.string().orEmpty()).chats
-                }
-            }.getOrNull() ?: return@launch
-            val sorted = list.filter { it.hasTalk }.sortedBy { it.startedAtMs ?: 0L }
-            _chats.update { if (it[conversationId] == sorted) it else it + (conversationId to sorted) }
-        }
+        scope.launch { fetch(conversationId) }
+    }
+
+    /** The voice calls of [conversationId] (oldest first; null on a hub without them, or when it can't be asked); updates [chats]. */
+    suspend fun fetch(conversationId: String): List<VoiceChatRecord>? = withContext(Dispatchers.IO) {
+        if (conversationId.isBlank()) return@withContext null
+        val base = AuthPreferences.currentHubUrl.trimEnd('/')
+        val url = "$base/voice/chats".toHttpUrlOrNull()?.newBuilder()?.addQueryParameter("conversation_id", conversationId)?.build()
+            ?: return@withContext null
+        val list = runCatching {
+            client.newCall(Request.Builder().url(url).agyHubHeaders().get().build()).execute().use { r ->
+                if (!r.isSuccessful) null
+                else json.decodeFromString<VoiceChatsResponse>(r.body?.string().orEmpty()).chats
+            }
+        }.getOrNull() ?: return@withContext null
+        val sorted = list.filter { it.hasTalk }.sortedBy { it.startedAtMs ?: 0L }
+        _chats.update { if (it[conversationId] == sorted) it else it + (conversationId to sorted) }
+        sorted
     }
 }
 

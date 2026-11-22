@@ -88,6 +88,19 @@ class MainActivity : ComponentActivity() {
         ai.antigem.data.memory.MemorySync.start(chatViewModel)
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
+        handleVoiceCallIntent(intent)
+        // Voice call tile / shortcut: the floating call window stays away while this screen is up; the long-press menu
+        // of the app icon gets "Voice call"
+        lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> ai.antigem.data.voice.VoiceCallLauncher.setAppVisible(true)
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> ai.antigem.data.voice.VoiceCallLauncher.setAppVisible(false)
+                else -> Unit
+            }
+        })
+        ai.antigem.data.voice.AgyVoicePreferences.init(this)
+        ai.antigem.data.voice.VoiceCallLauncher.publishShortcut(this)
+        ai.antigem.ui.voice.AgyVoiceBubble.attach(this)
 
         setContent {
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
@@ -702,6 +715,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
+        handleVoiceCallIntent(intent)
     }
 
     /**
@@ -728,6 +742,13 @@ class MainActivity : ComponentActivity() {
         window.decorView.postDelayed({
             if (ai.antigem.data.jarvis.JarvisController.isAttached) ai.antigem.data.jarvis.JarvisController.startListening()
         }, 700)
+    }
+
+    /** The Voice call tile or shortcut opened the app: the chat screen starts the call once the server is up. */
+    private fun handleVoiceCallIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(ai.antigem.data.voice.VoiceCallLauncher.EXTRA_START_CALL, false) != true) return
+        intent.removeExtra(ai.antigem.data.voice.VoiceCallLauncher.EXTRA_START_CALL)
+        ai.antigem.data.voice.VoiceCallLauncher.requestStart()
     }
 
     /**

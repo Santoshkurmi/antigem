@@ -115,6 +115,44 @@ object AgyVoicePreferences {
         sp?.edit()?.putBoolean("picked", true)?.apply()
     }
 
+    /** The floating call window over other apps while a call runs and AntiGem is not on screen (off by default). */
+    private val _bubble = MutableStateFlow(false)
+    val bubble: StateFlow<Boolean> = _bubble.asStateFlow()
+
+    fun setBubble(on: Boolean) {
+        _bubble.value = on
+        sp?.edit()?.putBoolean("bubble", on)?.apply()
+    }
+
+    private const val CALL_CHATS_MAX = 20
+
+    /**
+     * [conversationId] on [hub] just had a voice call: it goes first in the list the Voice call tile and shortcut pick
+     * from (the hub has no list of chats with calls). Newest first, at most [CALL_CHATS_MAX] over all hubs.
+     */
+    fun rememberCallChat(hub: String, conversationId: String) {
+        val p = sp ?: return
+        if (conversationId.isBlank()) return
+        val key = hubKey(hub)
+        val next = (listOf(key to conversationId) + readCallChats(p).filterNot { it == key to conversationId }).take(CALL_CHATS_MAX)
+        val arr = org.json.JSONArray()
+        next.forEach { (h, id) -> arr.put(org.json.JSONObject().put("hub", h).put("id", id)) }
+        p.edit().putString("call_chats", arr.toString()).apply()
+    }
+
+    /** The chats on [hub] that had a voice call, newest call first. */
+    fun callChats(hub: String): List<String> {
+        val key = hubKey(hub)
+        return readCallChats(sp ?: return emptyList()).filter { it.first == key }.map { it.second }
+    }
+
+    private fun hubKey(hub: String) = hub.trim().trimEnd('/')
+
+    private fun readCallChats(p: SharedPreferences): List<Pair<String, String>> = runCatching {
+        val arr = org.json.JSONArray(p.getString("call_chats", null) ?: "[]")
+        (0 until arr.length()).map { i -> arr.getJSONObject(i).let { it.optString("hub") to it.optString("id") } }.filter { it.second.isNotBlank() }
+    }.getOrDefault(emptyList())
+
     fun init(context: Context) {
         if (sp != null) return
         val p = context.applicationContext.getSharedPreferences("agy_voice_call", Context.MODE_PRIVATE)
@@ -124,6 +162,7 @@ object AgyVoicePreferences {
         _speaker.value = p.getBoolean("speaker", true)
         _captions.value = p.getBoolean("captions", true)
         _picked.value = p.getBoolean("picked", false)
+        _bubble.value = p.getBoolean("bubble", false)
         _language.value = p.getString("language", LANGUAGE_AUTO)?.takeIf { t -> t == LANGUAGE_AUTO || languages.any { it.first == t } } ?: LANGUAGE_AUTO
     }
 

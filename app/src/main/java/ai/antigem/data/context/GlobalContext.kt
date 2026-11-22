@@ -38,6 +38,8 @@ object GlobalContext {
     )
 
     private const val MAX_REMEMBERED_CHATS = 600
+    /** Kept instead of a fingerprint for a chat whose first prompt was undone: its next message is a first message again. */
+    private const val RESTARTED = "restart"
 
     private var sp: SharedPreferences? = null
     private var filesDir: String = "/data/data/${BuildConfig.APPLICATION_ID}/files"
@@ -209,14 +211,16 @@ object GlobalContext {
         val first = firstMessageBody()
         val fp = fingerprint()
         val known = chatId?.takeIf { it.isNotBlank() }?.let { id -> synchronized(sent) { sent[id] } }
-        val sendFirst = first != null && (!hasEarlierMessages || known != fp)
+        // a chat whose first prompt was undone starts over, even while its old messages may still be listed
+        val fresh = !hasEarlierMessages || known == RESTARTED
+        val sendFirst = first != null && (fresh || known != fp)
         val every = everyMessageBody()
         if (!sendFirst && every == null) return text to null
         val note = buildString {
             if (sendFirst) {
                 append(
                     when {
-                        !hasEarlierMessages -> "[AntiGem app context: from the app the user chats through, not written by the user. Follow it for this whole chat; it is not repeated.]"
+                        fresh -> "[AntiGem app context: from the app the user chats through, not written by the user. Follow it for this whole chat; it is not repeated.]"
                         known != null -> "[AntiGem app context, updated: it replaces the earlier copy in this chat. Follow it from now on.]"
                         else -> "[AntiGem app context: from the app the user chats through. Follow it from now on in this chat.]"
                     }
@@ -239,6 +243,12 @@ object GlobalContext {
             while (sent.size > MAX_REMEMBERED_CHATS) sent.remove(sent.keys.first())
         }
         persistSent()
+    }
+
+    /** The chat's first prompt was undone: it starts over, so its next message carries the context as a first message. */
+    fun restart(chatId: String?) {
+        if (chatId.isNullOrBlank()) return
+        markSent(chatId, RESTARTED)
     }
 
     /** The chat lost its first-message context (compacted, first message edited): send it again with the next message. */

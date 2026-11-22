@@ -474,6 +474,28 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         ai.antigem.data.voice.AgyVoiceCall.conversationMoved.collect { id -> viewModel.selectConversation(id) }
     }
+    // the Voice call tile or shortcut opened the app (it was not running, or not ready to call out of sight): once the
+    // server is up, open the last chat that had a call and call as the call button does (voice picker, mic permission)
+    val startVoiceCallNow by rememberUpdatedState(onStartVoiceCall)
+    LaunchedEffect(Unit) {
+        ai.antigem.data.voice.VoiceCallLauncher.pending.collect { at ->
+            if (at == 0L) return@collect
+            val serverUp = kotlinx.coroutines.withTimeoutOrNull(90_000) {
+                viewModel.systemConnectionState.firstOrNull { it.canSend }
+            } != null
+            if (!ai.antigem.data.voice.VoiceCallLauncher.consumePending()) return@collect
+            when {
+                ai.antigem.data.voice.AgyVoiceCall.state.value.active -> ai.antigem.data.voice.AgyVoiceCall.setMinimized(false)
+                !serverUp -> ai.antigem.ui.components.AppToastHelper.showToast(
+                    "Start the server to call Antigravity.", ai.antigem.ui.components.ChatToastType.ERROR
+                )
+                else -> {
+                    viewModel.openLastCallChat()
+                    startVoiceCallNow()
+                }
+            }
+        }
+    }
     // the model picked for the chat changed during the call: the agent plans with it from now on
     LaunchedEffect(agyPickedModel, voiceCall.inCall) {
         if (voiceCall.inCall) ai.antigem.data.voice.AgyVoiceCall.setPlanModel(viewModel.agyBackend.planModelNumber())

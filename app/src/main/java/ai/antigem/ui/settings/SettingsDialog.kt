@@ -106,6 +106,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     ANTIGRAVITY("Antigravity", "Account & CLI, MCP servers, skills & plugins, commands & permissions"),
     AGY_CLI("Account & CLI", "Google sign-in, agy version and install, on this device or the server"),
     AGY_CLOUD("Cloud agents", "Antigravity chats on a Google cloud machine (Remote Agents)"),
+    AGY_VOICE("Voice calls", "The Voice call tile and shortcut, and the floating call window"),
     CLAUDE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
     /** One Claude Code page (which one: the dialog's claudePage); not a page of its own for Jarvis. */
     CLAUDE_PAGE("Claude Code", "Account, models, permissions, MCP, plugins & memory"),
@@ -162,7 +163,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
 
     /** Where Back goes from this section. */
     val parent: SettingsSection get() = when (this) {
-        AGY_CLI, AGY_CLOUD, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
+        AGY_CLI, AGY_CLOUD, AGY_VOICE, MCP, SKILLS_PLUGINS, COMMANDS -> ANTIGRAVITY
         CLAUDE_PAGE -> CLAUDE
         OPENCODE_PAGE -> OPENCODE
         CODEX_PAGE -> CODEX
@@ -734,6 +735,11 @@ fun SettingsDialog(
                     ) {
                         ai.antigem.ui.cloud.AgyCloudSettingsCard()
                     }
+                    SettingsSection.AGY_VOICE -> Column(
+                        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)
+                    ) {
+                        ai.antigem.ui.voice.AgyVoiceCallSettingsCard()
+                    }
                     SettingsSection.CLAUDE -> if (claude != null) {
                         ai.antigem.ui.claude.ClaudeSettingsGroup(claude, cardBg) { page ->
                             claudePage = page
@@ -1039,13 +1045,16 @@ private fun AntigravitySettingsMenu(
         else -> "Not installed" to c.warning
     }
     val cloudOn by ai.antigem.data.agent.agy.AgyCloud.enabled.collectAsState()
+    val voiceBubbleOn by ai.antigem.data.voice.AgyVoicePreferences.bubble.collectAsState()
     SettingsRowList(
         cardBg = cardBg,
         groups = listOf(
             listOf(
                 SettingsRowItem(Icons.Outlined.Terminal, GeminiBlue, SettingsSection.AGY_CLI.title, cliValue, cliColor) { onNavigate(SettingsSection.AGY_CLI) },
                 SettingsRowItem(Icons.Outlined.Cloud, GeminiBlue, SettingsSection.AGY_CLOUD.title,
-                    if (cloudOn) "On" else "Off", if (cloudOn) QuotaGreen else null) { onNavigate(SettingsSection.AGY_CLOUD) }
+                    if (cloudOn) "On" else "Off", if (cloudOn) QuotaGreen else null) { onNavigate(SettingsSection.AGY_CLOUD) },
+                SettingsRowItem(Icons.Outlined.HeadsetMic, GeminiBlue, SettingsSection.AGY_VOICE.title,
+                    if (voiceBubbleOn) "Floating on" else null, if (voiceBubbleOn) QuotaGreen else null) { onNavigate(SettingsSection.AGY_VOICE) }
             ),
             listOf(
                 SettingsRowItem(Icons.Outlined.Hub, GeminiBlue, SettingsSection.MCP.title, mcpValue, mcpColor) { onNavigate(SettingsSection.MCP) },

@@ -310,6 +310,28 @@
             </intent-filter>
         </service>
 
+        <!-- Voice call Quick Settings tile: one tap calls Antigravity in the last chat that had a call -->
+        <service
+            android:name="ai.antigem.data.voice.VoiceCallTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_voice_call"
+            android:label="Voice call"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Voice call tile / shortcut: invisible screen that starts the call while it is in front, then closes -->
+        <activity
+            android:name="ai.antigem.data.voice.VoiceCallLaunchActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden" />
+
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
         <service
             android:name="ai.antigem.data.adb.AdbPairingService"
