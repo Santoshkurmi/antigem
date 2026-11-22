@@ -313,7 +313,7 @@ private fun OrbLayer(
 // ------------------------------------------------------------------------------------------------ card, pill, notice
 
 @Composable
-private fun ActivityCard(
+internal fun ActivityCard(
     phase: Phase, level: Float, steps: List<JarvisController.Step>, line: String, showActivity: Boolean, showTranscript: Boolean,
     sendProgress: Float, holding: Boolean, auto: Boolean, quiet: Boolean, tasks: List<JarvisTasks.Task>, onTap: () -> Unit
 ) {
@@ -396,7 +396,7 @@ private fun SendMeter(progress: Float, holding: Boolean, auto: Boolean) {
 
 /** A slim line with the current step while Jarvis works (tap: the Jarvis panel). */
 @Composable
-private fun StatusPill(phase: Phase, steps: List<JarvisController.Step>) {
+internal fun StatusPill(phase: Phase, steps: List<JarvisController.Step>) {
     val text = steps.lastOrNull()?.text ?: defaultLabel(phase, false)
     val accent = accentOf(phase)
     Row(
@@ -709,7 +709,7 @@ fun IdleOrb(size: Dp, activeTasks: Int, attention: Boolean) {
 
 /** Small marker on the active orb: violet with the number of running tasks, amber when something needs the user. */
 @Composable
-private fun TaskBadge(orb: Dp, count: Int, attention: Boolean) {
+internal fun TaskBadge(orb: Dp, count: Int, attention: Boolean) {
     Box(Modifier.size(orb), contentAlignment = Alignment.TopEnd) {
         Box(
             Modifier.size(16.dp).clip(CircleShape).background(if (attention) Amber else Violet).border(1.5.dp, Color(0xFF0A0F1C), CircleShape),

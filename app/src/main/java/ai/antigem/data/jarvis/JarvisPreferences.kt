@@ -226,6 +226,10 @@ object JarvisPreferences {
     val showTranscript = pref("show_transcript", true)
     /** A small card shows what Jarvis is doing while it works. */
     val showActivity = pref("show_activity", true)
+    /** Outside AntiGem the orb floats over other apps ("Display over other apps"); off by default. */
+    val floating = pref("floating", false)
+    /** The floating orb was dragged onto ✕: hidden until the user talks to Jarvis in the app again. */
+    val floatingHidden = pref("floating_hidden", false)
 
     // ---- state kept between launches
     /** Hands-free mode (microphone service) was switched on. */

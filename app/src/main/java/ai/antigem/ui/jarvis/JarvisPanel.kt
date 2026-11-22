@@ -52,10 +52,10 @@ import kotlinx.coroutines.launch
  * The Jarvis panel (long-press the orb): the quick switches the user pinned (the tune icon opens all quick settings),
  * the voice chat's tasks with open / stop / dismiss, the whole voice conversation (kept across sessions and restarts,
  * with a divider where each new Jarvis chat began, and a way to open the real chat), a box to type to Jarvis, and
- * shortcuts.
+ * shortcuts. [floating]: it fills its own window over other apps (the floating orb's panel): no dimmed backdrop.
  */
 @Composable
-fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
+fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: Boolean = false) {
     val close = { JarvisController.panelOpen.value = false }
     BackHandler(onBack = close)
     val scope = rememberCoroutineScope()
@@ -77,7 +77,8 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
     LaunchedEffect(log.size) { listState.scrollToItem(itemCount - 1) }
 
     Box(
-        Modifier
+        if (floating) Modifier.fillMaxSize()
+        else Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.5f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() },
@@ -87,7 +88,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .widthIn(max = 600.dp)
-                .fillMaxHeight(0.88f)
+                .fillMaxHeight(if (floating) 1f else 0.88f)
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFA111A2C), Color(0xFC070B14))))
                 .border(1.dp, Brush.verticalGradient(listOf(Cyan.copy(alpha = 0.5f), Color.Transparent)), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))

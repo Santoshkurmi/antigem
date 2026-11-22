@@ -310,6 +310,16 @@
             </intent-filter>
         </service>
 
+        <!-- Jarvis tile / shortcut: invisible screen that starts Jarvis listening while it is in front, then closes -->
+        <activity
+            android:name="ai.antigem.data.jarvis.JarvisTalkActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden" />
+
         <!-- Voice call Quick Settings tile: one tap calls Antigravity in the last chat that had a call -->
         <service
             android:name="ai.antigem.data.voice.VoiceCallTileService"

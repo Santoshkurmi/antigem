@@ -10,7 +10,8 @@ import ai.antigem.MainActivity
 
 /**
  * The "Jarvis" Quick Settings tile: one tap talks to Jarvis from anywhere. While hands-free mode runs it starts
- * listening right away (screen off works); otherwise it opens the app and starts listening there.
+ * listening right away (screen off works); while AntiGem runs in the background it listens without opening the app
+ * ([JarvisTalkActivity]); otherwise it opens the app and starts listening there.
  */
 class JarvisTileService : TileService() {
 
@@ -33,11 +34,22 @@ class JarvisTileService : TileService() {
             runCatching { startService(Intent(this, JarvisService::class.java).setAction(JarvisService.ACTION_TALK)) }
             return
         }
+        if (JarvisController.isAttached && JarvisPreferences.enabled.value && JarvisPreferences.voiceAssistant.value) {
+            // AntiGem is running: an invisible screen starts Jarvis' microphone and closes, the app stays in the back
+            val talk = Intent(this, JarvisTalkActivity::class.java).setAction(JarvisLauncher.ACTION_TALK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (isLocked) unlockAndRun { open(talk, 76) } else open(talk, 76)
+            return
+        }
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_TALK, JarvisPreferences.enabled.value)
+        open(intent, 77)
+    }
+
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    private fun open(intent: Intent, code: Int) {
         if (Build.VERSION.SDK_INT >= 34) {
-            startActivityAndCollapse(PendingIntent.getActivity(this, 77, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            startActivityAndCollapse(PendingIntent.getActivity(this, code, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
         } else {
             @Suppress("DEPRECATION")
             startActivityAndCollapse(intent)

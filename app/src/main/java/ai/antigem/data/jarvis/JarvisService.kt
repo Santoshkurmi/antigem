@@ -111,7 +111,8 @@ class JarvisService : Service() {
      */
     private fun enterForeground(): Boolean {
         ensureChannel()
-        val n = notification("Hands-free is on", JarvisController.Phase.IDLE)
+        // started by the floating orb (Settings → Jarvis → Screen & look) when hands-free is off: it only listens now
+        val n = notification(if (JarvisPreferences.handsFree.value) "Hands-free is on" else "Jarvis is listening", JarvisController.Phase.IDLE)
         return try {
             if (Build.VERSION.SDK_INT >= 30) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else startForeground(NOTIF_ID, n)
@@ -238,6 +239,17 @@ class JarvisService : Service() {
                 synchronized(lock) { pending = false }
                 throw e
             }
+        }
+
+        /** The service is up (hands-free, or a talk from the floating orb). */
+        val isRunning: Boolean get() = synchronized(lock) { running }
+
+        /**
+         * Talk from outside the app (the floating orb): starts the microphone service when it isn't up and starts
+         * listening. Android lets it use the microphone because the floating orb is on screen. Stop it with [stop].
+         */
+        fun talk(context: Context) {
+            ContextCompat.startForegroundService(context, Intent(context, JarvisService::class.java).setAction(ACTION_TALK))
         }
 
         fun stop(context: Context) {

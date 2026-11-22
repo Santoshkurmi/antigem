@@ -84,6 +84,8 @@ class MainActivity : ComponentActivity() {
         resetTerminalLauncherOnce()
         ai.antigem.data.remote.AndroidLocalBridgeServer.instance.start(this)
         ai.antigem.data.jarvis.JarvisController.attach(application, chatViewModel)
+        // Jarvis over other apps (Settings → Jarvis → Screen & look → Float over other apps)
+        ai.antigem.ui.jarvis.JarvisFloating.attach(this)
         ai.antigem.data.agent.ChatCompletionMonitor.start(application, chatViewModel)
         ai.antigem.data.memory.MemorySync.start(chatViewModel)
         handleIncomingFileIntent(intent)

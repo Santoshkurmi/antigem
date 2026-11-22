@@ -148,7 +148,7 @@ fun JarvisQuickChip(title: String, value: String, on: Boolean, onClick: () -> Un
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun JarvisQuickSettings(onClose: () -> Unit) {
+fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
     BackHandler(onBack = onClose)
     val P = JarvisPreferences
     val auto by P.autoSend.state.collectAsState()
@@ -167,7 +167,9 @@ fun JarvisQuickSettings(onClose: () -> Unit) {
     val pins = remember(pinsRaw) { QuickSwitch.pinned(pinsRaw) }
 
     Box(
-        Modifier
+        // floating: it fills its own window over other apps (the floating orb's sheet), without the dimmed backdrop
+        if (floating) Modifier.fillMaxSize()
+        else Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.45f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() },
@@ -177,7 +179,7 @@ fun JarvisQuickSettings(onClose: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .widthIn(max = 600.dp)
-                .fillMaxHeight(0.8f)
+                .fillMaxHeight(if (floating) 1f else 0.8f)
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFA111A2C), Color(0xFC070B14))))
                 .border(1.dp, Brush.verticalGradient(listOf(Cyan.copy(alpha = 0.5f), Color.Transparent)), RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))

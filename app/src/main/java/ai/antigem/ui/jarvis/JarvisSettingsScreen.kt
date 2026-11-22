@@ -359,7 +359,14 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     ) { JarvisController.setHandsFree(it) }
                     val headset by P.headsetButton.state.collectAsState()
                     JSwitch("Headset button", "With hands-free on: one press talks (or sends), two presses stop. Works while no music app holds the button.", headset) { P.headsetButton.set(it) }
-                    JHint("Quick Settings tile: pull down the notification shade, edit the tiles and add “Jarvis” to talk from anywhere with one tap.")
+                    JHint("Quick Settings tile: pull down the notification shade, edit the tiles and add “Jarvis” to talk from anywhere with one tap. " +
+                        "While AntiGem runs in the background it listens without opening the app.")
+                    JHint("Also: long-press the AntiGem icon → Jarvis, or put Jarvis on the home screen.")
+                    OutlinedButton(onClick = {
+                        if (!ai.antigem.data.jarvis.JarvisLauncher.pinShortcut(context)) {
+                            Toast.makeText(context, "This launcher can't add shortcuts. Long-press the AntiGem icon instead.", Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text("Add to home screen") }
                 }
             }
             JarvisSettingsPage.LISTEN -> {
@@ -623,6 +630,41 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     JHint("Drag the orb anywhere: it rests on the nearest edge. “Hidden” shows it only while Jarvis is active (use the tile, headset or wake phrase).")
                     val style by P.orbStyle.state.collectAsState()
                     JChips(listOf("floating" to "Floating card", "fullscreen" to "Full screen"), style) { P.orbStyle.set(it) }
+                    // Floating Jarvis: the orb over other apps ("Display over other apps", checked again when the page comes back)
+                    val floating by P.floating.state.collectAsState()
+                    var canDraw by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
+                    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                    DisposableEffect(owner) {
+                        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+                            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) canDraw = android.provider.Settings.canDrawOverlays(context)
+                        }
+                        owner.lifecycle.addObserver(obs)
+                        onDispose { owner.lifecycle.removeObserver(obs) }
+                    }
+                    val openOverlaySettings = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                        Unit
+                    }
+                    JSwitch(
+                        "Float over other apps",
+                        "Outside AntiGem the orb floats over any app: tap it to talk, long-press it for the Jarvis panel. While Jarvis " +
+                            "listens or speaks, its card shows at the bottom of the screen. Drag the orb onto the ✕ at the bottom to hide " +
+                            "it until you talk to Jarvis in AntiGem again. Hidden during Antigravity voice calls.",
+                        floating
+                    ) { on ->
+                        P.floating.set(on)
+                        if (on) P.floatingHidden.set(false)
+                        if (on && !canDraw) openOverlaySettings()
+                    }
+                    if (floating && !canDraw) {
+                        JHint("Needs “Display over other apps” for AntiGem.")
+                        OutlinedButton(onClick = openOverlaySettings) { Text("Allow") }
+                    }
                     val haptics by P.haptics.state.collectAsState()
                     JSwitch("Vibrate when listening starts", null, haptics) { P.haptics.set(it) }
                     val activity by P.showActivity.state.collectAsState()
