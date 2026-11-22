@@ -5,7 +5,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -93,7 +98,12 @@ object AdbConnectManager {
         val pairing: Pairing = Pairing.Idle,
         val host: String = DEFAULT_HOST,
         val autoReconnect: Boolean = true,
-        val pairedOnce: Boolean = false
+        val pairedOnce: Boolean = false,
+        /** Turn Wireless debugging back on by itself (after a reboot or Wi-Fi drop); needs [secureSettings]. */
+        val autoWireless: Boolean = false,
+        /** AntiGem holds WRITE_SECURE_SETTINGS (granted once through adb, Shizuku or root). */
+        val secureSettings: Boolean = false,
+        val grantingSecureSettings: Boolean = false
     ) {
         val connectedDevice: Device? get() = devices.firstOrNull { it.state == "device" }
     }
@@ -117,7 +127,9 @@ object AdbConnectManager {
             it.copy(
                 host = prefs.getString("host", DEFAULT_HOST) ?: DEFAULT_HOST,
                 autoReconnect = prefs.getBoolean("auto_reconnect", true),
-                pairedOnce = prefs.getBoolean("paired_once", false)
+                pairedOnce = prefs.getBoolean("paired_once", false),
+                autoWireless = prefs.getBoolean("auto_wireless", false),
+                secureSettings = hasSecureSettings()
             )
         }
         // adbd picks a new port each time Wireless debugging turns on (also after Wi-Fi drops)
@@ -131,7 +143,18 @@ object AdbConnectManager {
                 }
             )
         }.onFailure { Log.w(TAG, "Cannot watch Wireless debugging: ${it.message}") }
-        if (isWirelessDebuggingOn(appContext)) maybeAutoConnect()
+        // Wireless debugging goes off when Wi-Fi drops: turn it back on when Wi-Fi is back (if the user wants that)
+        runCatching {
+            appContext.getSystemService(ConnectivityManager::class.java).registerNetworkCallback(
+                NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        scope.launch { delay(3000); maybeTurnOnWireless() }
+                    }
+                }
+            )
+        }.onFailure { Log.w(TAG, "Cannot watch Wi-Fi: ${it.message}") }
+        if (isWirelessDebuggingOn(appContext)) maybeAutoConnect() else scope.launch { delay(2000); maybeTurnOnWireless() }
     }
 
     /** Ports of this phone's Wireless debugging "connect" service (changes every time Wireless debugging turns on). */
@@ -175,6 +198,82 @@ object AdbConnectManager {
     }
 
     fun clearMessage() = _state.update { it.copy(message = null, isError = false) }
+
+    // ---------------- Wireless debugging on by itself ----------------
+
+    private const val WRITE_SECURE_SETTINGS = "android.permission.WRITE_SECURE_SETTINGS"
+
+    fun hasSecureSettings(): Boolean =
+        appContext.checkSelfPermission(WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Turns "Wireless debugging on by itself" on or off. Turning it on needs WRITE_SECURE_SETTINGS (only the shell user
+     * can grant it): granted here through whatever is ready, the adb connection, Shizuku or root.
+     */
+    fun setAutoWireless(enabled: Boolean) = scope.launch {
+        if (!enabled) {
+            prefs.edit().putBoolean("auto_wireless", false).apply()
+            _state.update { it.copy(autoWireless = false) }
+            return@launch
+        }
+        if (!hasSecureSettings()) {
+            _state.update { it.copy(grantingSecureSettings = true) }
+            val error = try { grantSecureSettings() } finally { _state.update { it.copy(grantingSecureSettings = false) } }
+            if (error != null) {
+                report(error, true)
+                return@launch
+            }
+        }
+        prefs.edit().putBoolean("auto_wireless", true).apply()
+        _state.update { it.copy(autoWireless = true, secureSettings = true) }
+        report("Wireless debugging will be turned back on by itself while AntiGem runs.")
+        maybeTurnOnWireless()
+    }
+
+    /** `pm grant` of WRITE_SECURE_SETTINGS to AntiGem through adb, Shizuku or root; null when it worked, else why not. */
+    private suspend fun grantSecureSettings(): String? {
+        val command = "pm grant ${appContext.packageName} $WRITE_SECURE_SETTINGS"
+        val device = refreshNow().let { _state.value.connectedDevice }
+        val tried = mutableListOf<String>()
+        if (device != null) {
+            tried += "adb: " + deviceShell(device, command, 20).output.trim().ifBlank { "no output" }
+        }
+        if (!hasSecureSettings() && ShizukuShell.status.value.ready) {
+            tried += "Shizuku: " + DeviceAccess.shell(command, 20, DeviceAccess.Mode.SHIZUKU).output.trim().ifBlank { "no output" }
+        }
+        if (!hasSecureSettings() && RootShell.state.value.check == RootShell.Check.GRANTED) {
+            tried += "root: " + DeviceAccess.shell(command, 20, DeviceAccess.Mode.ROOT).output.trim().ifBlank { "no output" }
+        }
+        if (hasSecureSettings()) return null
+        return if (tried.isEmpty()) "Connect adb first (or set up Shizuku or root): granting this needs one of them once."
+        else "Couldn't grant the permission. ${tried.joinToString("; ")}"
+    }
+
+    private fun onWifi(): Boolean = runCatching {
+        val cm = appContext.getSystemService(ConnectivityManager::class.java)
+        @Suppress("DEPRECATION")
+        cm.allNetworks.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true }
+    }.getOrDefault(false)
+
+    /**
+     * Switches Wireless debugging on when the user asked for that, AntiGem may (WRITE_SECURE_SETTINGS), the phone is on
+     * Wi-Fi and Developer options are on. True when it is on now. On a Wi-Fi network not allowed before, Android asks
+     * the user first and leaves it off until they allow it.
+     */
+    private fun maybeTurnOnWireless(): Boolean {
+        if (!::appContext.isInitialized || !isWirelessDebuggingSupported()) return false
+        if (isWirelessDebuggingOn(appContext)) return true
+        val s = _state.value
+        if (!s.autoWireless || !isDeveloperOptionsOn(appContext) || !onWifi()) return false
+        if (!hasSecureSettings()) {
+            _state.update { it.copy(secureSettings = false) }
+            return false
+        }
+        return runCatching { Settings.Global.putInt(appContext.contentResolver, ADB_WIFI_ENABLED, 1) }
+            .onSuccess { Log.d(TAG, "Turned Wireless debugging on") }
+            .onFailure { Log.w(TAG, "Turning Wireless debugging on failed: ${it.message}") }
+            .isSuccess
+    }
 
     private fun report(message: String, isError: Boolean = false) =
         _state.update { it.copy(message = message, isError = isError) }
@@ -371,7 +470,13 @@ object AdbConnectManager {
         if (!::appContext.isInitialized) return null
         refreshNow()
         _state.value.connectedDevice?.let { return it }
-        if (_state.value.adbInstalled != true || !_state.value.pairedOnce || !isWirelessDebuggingOn(appContext)) return null
+        if (_state.value.adbInstalled != true || !_state.value.pairedOnce) return null
+        if (!isWirelessDebuggingOn(appContext)) {
+            if (!maybeTurnOnWireless()) return null
+            // adbd needs a moment to come up (and Android may still ask about this Wi-Fi network)
+            withTimeoutOrNull(8_000) { while (!isWirelessDebuggingOn(appContext)) delay(250) } ?: return null
+            delay(1500)
+        }
         connectNow(null, quiet = true)
         return _state.value.connectedDevice
     }

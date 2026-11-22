@@ -32,15 +32,67 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import ai.antigem.data.adb.AdbConnectManager
 import ai.antigem.data.adb.AdbConnectManager.Pairing
+import ai.antigem.data.adb.DeviceAccess
+import ai.antigem.data.adb.RootShell
+import ai.antigem.data.adb.ShizukuShell
 import ai.antigem.theme.QuotaGreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal val Amber: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.warning
 
 @Composable
 fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { AdbConnectManager.init(context) }
+    LaunchedEffect(Unit) { AdbConnectManager.init(context); DeviceAccess.init(context) }
+    val mode by DeviceAccess.mode.collectAsState()
+    Column(
+        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ModePicker(mode, cardBg, cardBorder)
+        when (mode) {
+            DeviceAccess.Mode.ADB -> AdbSection(cardBg, cardBorder)
+            DeviceAccess.Mode.SHIZUKU -> ShizukuSection(cardBg, cardBorder)
+            DeviceAccess.Mode.ROOT -> RootSection(cardBg, cardBorder)
+        }
+    }
+}
+
+/** ADB, Shizuku or root: what Android Automation uses. In chat, any of them that is set up can be asked for. */
+@Composable
+private fun ModePicker(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: BorderStroke) {
+    val modes = DeviceAccess.Mode.entries
+    val su = if (AdbConnectManager.inChroot) "android-su -c" else "su -c"
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("How AntiGem reaches this phone", fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                modes.forEachIndexed { i, m ->
+                    SegmentedButton(
+                        selected = m == mode,
+                        onClick = { DeviceAccess.setMode(m) },
+                        shape = SegmentedButtonDefaults.itemShape(i, modes.size)
+                    ) { Text(m.label) }
+                }
+            }
+            Hint(
+                when (mode) {
+                    DeviceAccess.Mode.ADB -> "adb over Wireless debugging: pair once, then AntiGem connects by itself. Runs as the shell user."
+                    DeviceAccess.Mode.SHIZUKU -> "Through the Shizuku app, as the shell user (or root, if Shizuku runs as root). No pairing here."
+                    DeviceAccess.Mode.ROOT -> "Through the phone's su (Magisk, KernelSU, APatch), as root. For rooted phones."
+                }
+            )
+            Hint("Android Automation uses the one picked here. In chat, you can ask for any one that's set up: " +
+                "\"use adb\" (adb shell …), \"use shizuku\" (rish -c …), \"use su\" ($su …).")
+        }
+    }
+}
+
+/** ADB mode: the terminal's adb, connected to this phone over Wireless debugging. */
+@Composable
+private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
+    val context = LocalContext.current
     val state by AdbConnectManager.state.collectAsState()
 
     // System settings can change while the user is away in Developer options; keep them live
@@ -63,10 +115,7 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
     val installed = state.adbInstalled == true
     val connected = state.connectedDevice
 
-    Column(
-        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    run {
         StatusCard(state, cardBg, cardBorder)
 
         state.message?.let { msg ->
@@ -214,6 +263,25 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
                 Spacer(Modifier.width(8.dp))
                 Switch(checked = state.autoReconnect, onCheckedChange = AdbConnectManager::setAutoReconnect)
             }
+            if (AdbConnectManager.isWirelessDebuggingSupported()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Turn Wireless debugging on by itself", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                        Hint("After a reboot or when Wi-Fi comes back, AntiGem switches Wireless debugging on again (while it runs), " +
+                            "so adb reconnects without opening Settings. Turning this on grants AntiGem a system permission " +
+                            "(WRITE_SECURE_SETTINGS) once, through adb, Shizuku or root. On a Wi-Fi network you haven't allowed " +
+                            "before, Android asks you first.")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    if (state.grantingSecureSettings) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    else Switch(checked = state.autoWireless && state.secureSettings, onCheckedChange = { AdbConnectManager.setAutoWireless(it) })
+                }
+                if (state.autoWireless && !state.secureSettings) {
+                    Text("The permission is gone (it is removed when the app is reinstalled). Turn this off and on again.",
+                        fontSize = 12.sp, color = Amber)
+                }
+            }
             if (state.devices.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 Text("Devices", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
@@ -236,6 +304,163 @@ fun AdbConnectScreen(cardBg: Color, cardBorder: BorderStroke) {
                     Mono("adb devices\nadb shell\nadb install app.apk")
                 }
             }
+        }
+    }
+}
+
+/** Shizuku mode: commands go through the Shizuku app, as the shell user (or root when Shizuku runs as root). */
+@Composable
+private fun ShizukuSection(cardBg: Color, cardBorder: BorderStroke) {
+    val context = LocalContext.current
+    val status by ShizukuShell.status.collectAsState()
+    // Shizuku can be started, stopped or allowed while the user is away in its app
+    LaunchedEffect(Unit) {
+        while (true) {
+            ShizukuShell.refresh()
+            delay(1500)
+        }
+    }
+    val (icon, tint, title, subtitle) = when {
+        !status.installed -> Quad(Icons.Outlined.Download, Amber, "Shizuku not installed", "Install it below to get started")
+        !status.running -> Quad(Icons.Outlined.PowerSettingsNew, Amber, "Shizuku not running", "Start it in the Shizuku app")
+        status.tooOld -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, "Shizuku too old", "Update Shizuku (v11 or newer)")
+        !status.granted -> Quad(Icons.Outlined.Lock, Amber, "Permission needed", "Allow AntiGem below")
+        else -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, "Ready", "Commands run as ${status.userLabel} (Shizuku ${status.version})")
+    }
+    HeaderCard(icon, tint, title, subtitle, cardBg, cardBorder) { ShizukuShell.refresh() }
+
+    StepCard(1, "Install Shizuku", if (status.installed) "Installed" else null, cardBg, cardBorder) {
+        Hint("Shizuku is a free app that lets other apps run commands as the shell user (like adb shell), without a PC.")
+        if (!status.installed) Button(onClick = { ShizukuShell.openShizuku(context) }) {
+            Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Get Shizuku")
+        }
+    }
+    StepCard(2, "Start Shizuku", if (status.running) "Running" else null, cardBg, cardBorder) {
+        Hint("In the Shizuku app, start it with Wireless debugging (no PC needed) or with root. Without root it stops at every " +
+            "reboot: start it there again.")
+        if (status.installed && !status.running) OutlinedButton(onClick = { ShizukuShell.openShizuku(context) }) { Text("Open Shizuku") }
+    }
+    StepCard(3, "Allow AntiGem", if (status.granted) "Allowed" else null, cardBg, cardBorder) {
+        Hint("Shizuku asks you once whether AntiGem may use it.")
+        if (status.denied) Text("Denied. Tap Allow again, or allow AntiGem in the Shizuku app's list of apps.", fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.error)
+        if (!status.granted) Button(enabled = status.running && !status.tooOld, onClick = { ShizukuShell.requestPermission() }) {
+            Text("Allow AntiGem")
+        }
+    }
+    if (status.ready) TestCard(DeviceAccess.Mode.SHIZUKU, cardBg, cardBorder)
+    TerminalCard(
+        "rish -c 'pm list packages'\nrish dumpsys battery\nrish            # interactive",
+        "rish runs commands on the phone as ${if (status.uid == 0) "root" else "the shell user"}, through AntiGem (it must be running). " +
+            if (AdbConnectManager.inChroot) "It works the same in the Ubuntu chroot." else "It's also installed in the Ubuntu chroot when that is your runtime.",
+        cardBg, cardBorder
+    )
+}
+
+/** Root mode: commands go through the phone's su. */
+@Composable
+private fun RootSection(cardBg: Color, cardBorder: BorderStroke) {
+    val scope = rememberCoroutineScope()
+    val state by RootShell.state.collectAsState()
+    val (icon, tint, title, subtitle) = when (state.check) {
+        RootShell.Check.GRANTED -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, "Root granted", "Commands run as root through su")
+        RootShell.Check.CHECKING -> Quad(Icons.Outlined.Sync, MaterialTheme.colorScheme.primary, "Checking…", "Answer your root manager's prompt")
+        RootShell.Check.DENIED -> Quad(Icons.Outlined.Block, MaterialTheme.colorScheme.error, "Root denied", "Allow AntiGem in your root manager")
+        RootShell.Check.NO_SU -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, "No su", "This phone isn't rooted")
+        RootShell.Check.UNKNOWN -> Quad(Icons.Outlined.Lock, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), "Not checked", "Check root below")
+    }
+    HeaderCard(icon, tint, title, subtitle, cardBg, cardBorder, refreshing = state.check == RootShell.Check.CHECKING) {
+        scope.launch { RootShell.check() }
+    }
+
+    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)) {
+        Row(Modifier.padding(14.dp)) {
+            Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Root gives the agents full control of the phone, beyond what adb or Shizuku allow. Use it only with agents you trust.",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+        }
+    }
+
+    StepCard(1, "Allow AntiGem root", if (state.check == RootShell.Check.GRANTED) "Granted" else null, cardBg, cardBorder) {
+        Hint("Tap Check root: your root manager (Magisk, KernelSU, APatch) asks you to allow AntiGem. If it shows a message every " +
+            "time AntiGem uses root, you can turn those off for AntiGem in the root manager.")
+        state.message?.let { Text(it, fontSize = 12.sp, color = if (state.check == RootShell.Check.GRANTED) QuotaGreen else MaterialTheme.colorScheme.error) }
+        Button(enabled = state.check != RootShell.Check.CHECKING, onClick = { scope.launch { RootShell.check() } }) {
+            Text(if (state.check == RootShell.Check.GRANTED) "Check again" else "Check root")
+        }
+    }
+    if (state.check == RootShell.Check.GRANTED) TestCard(DeviceAccess.Mode.ROOT, cardBg, cardBorder)
+    if (AdbConnectManager.inChroot) {
+        TerminalCard(
+            "android-su -c 'pm list packages'\nandroid-su            # interactive",
+            "In the Ubuntu chroot, su and sudo are Ubuntu's (no Android commands there): android-su runs commands as root on " +
+                "the phone itself, through AntiGem (it must be running).",
+            cardBg, cardBorder
+        )
+    } else {
+        TerminalCard("su -c 'pm list packages'\nsu", "The terminal uses the phone's own su.", cardBg, cardBorder)
+    }
+}
+
+/** Runs `id` through [mode], to see it work. */
+@Composable
+private fun TestCard(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: BorderStroke) {
+    val scope = rememberCoroutineScope()
+    var running by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+    Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Test", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                OutlinedButton(enabled = !running, onClick = {
+                    running = true
+                    scope.launch {
+                        val r = DeviceAccess.shell("id", 20, mode)
+                        result = r.output.trim().ifBlank { "exit code ${r.exitCode}" }
+                        running = false
+                    }
+                }) { Text(if (running) "Running…" else "Run id") }
+            }
+            result?.let { Mono(it) }
+        }
+    }
+}
+
+@Composable
+private fun TerminalCard(commands: String, hint: String, cardBg: Color, cardBorder: BorderStroke) {
+    Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Use it in the terminal", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Mono(commands)
+            Hint(hint)
+        }
+    }
+}
+
+@Composable
+private fun HeaderCard(
+    icon: ImageVector,
+    tint: Color,
+    title: String,
+    subtitle: String,
+    cardBg: Color,
+    cardBorder: BorderStroke,
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit
+) {
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            }
+            if (refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
+            else IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh") }
         }
     }
 }

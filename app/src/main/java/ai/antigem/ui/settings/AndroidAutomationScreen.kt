@@ -24,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.data.adb.AdbConnectManager
+import ai.antigem.data.adb.DeviceAccess
+import ai.antigem.data.adb.RootShell
+import ai.antigem.data.adb.ShizukuShell
 import ai.antigem.data.automation.AndroidAutomation
 import ai.antigem.theme.QuotaGreen
 import kotlinx.coroutines.delay
@@ -37,8 +40,11 @@ import kotlinx.coroutines.launch
 fun AndroidAutomationScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { AdbConnectManager.init(context); AdbConnectManager.refresh() }
+    LaunchedEffect(Unit) { AdbConnectManager.init(context); DeviceAccess.init(context); AdbConnectManager.refresh() }
     val adb by AdbConnectManager.state.collectAsState()
+    val accessMode by DeviceAccess.mode.collectAsState()
+    val shizuku by ShizukuShell.status.collectAsState()
+    val root by RootShell.state.collectAsState()
 
     var running by remember { mutableStateOf(AndroidAutomation.isServiceRunning()) }
     var enabledInSettings by remember { mutableStateOf(AndroidAutomation.isServiceEnabledInSettings(context)) }
@@ -52,6 +58,23 @@ fun AndroidAutomationScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbCo
     var enablingViaAdb by remember { mutableStateOf(false) }
     var adbError by remember { mutableStateOf<String?>(null) }
     val adbDevice = adb.connectedDevice
+    LaunchedEffect(Unit) {
+        while (true) {
+            ShizukuShell.refresh()
+            delay(2000)
+        }
+    }
+    // the picked way in (Settings → ADB Connect) is usable now; ADB may also connect by itself when it's needed
+    val accessReady = when (accessMode) {
+        DeviceAccess.Mode.ADB -> adbDevice != null
+        DeviceAccess.Mode.SHIZUKU -> shizuku.ready
+        DeviceAccess.Mode.ROOT -> root.check == RootShell.Check.GRANTED
+    }
+    val accessDetail = when (accessMode) {
+        DeviceAccess.Mode.ADB -> adbDevice?.serial
+        DeviceAccess.Mode.SHIZUKU -> if (shizuku.ready) "as ${shizuku.userLabel}" else null
+        DeviceAccess.Mode.ROOT -> if (accessReady) "su" else null
+    }
 
     Column(
         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
@@ -95,16 +118,16 @@ fun AndroidAutomationScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbCo
             if (!running) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { AndroidAutomation.openAccessibilitySettings(context) }) { Text("Open Accessibility") }
-                    if (adbDevice != null) OutlinedButton(
+                    if (accessReady) OutlinedButton(
                         enabled = !enablingViaAdb,
                         onClick = {
                             enablingViaAdb = true; adbError = null
                             scope.launch {
-                                AndroidAutomation.enableViaAdb(context).onFailure { adbError = it.message }
+                                AndroidAutomation.enableViaShell(context).onFailure { adbError = it.message }
                                 enablingViaAdb = false
                             }
                         }
-                    ) { Text(if (enablingViaAdb) "Turning on…" else "Turn on with ADB") }
+                    ) { Text(if (enablingViaAdb) "Turning on…" else "Turn on with ${accessMode.label}") }
                 }
                 adbError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
                 Surface(shape = RoundedCornerShape(10.dp), color = Amber.copy(alpha = 0.1f)) {
@@ -112,7 +135,7 @@ fun AndroidAutomationScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbCo
                         Text("Switch greyed out, or \"Restricted setting\"?", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             "Android 13+ blocks this for apps installed from a file. Open App info, tap ⋮ (top right) → Allow restricted settings, " +
-                                "then turn the service on. Or connect ADB and use Turn on with ADB.",
+                                "then turn the service on. Or set up ADB, Shizuku or root (Settings → ADB Connect) and use the Turn on with… button.",
                             fontSize = 12.sp
                         )
                         TextButton(contentPadding = PaddingValues(0.dp), onClick = {
@@ -137,13 +160,14 @@ fun AndroidAutomationScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbCo
             )
         }
 
-        // 3. ADB (optional)
-        StepCard(3, "ADB (optional)", if (adbDevice != null) "Connected" else "Optional", cardBg, cardBorder,
-            badgeColor = if (adbDevice != null) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) {
-            Hint("Adds what accessibility can't do: pressing any key, installing, uninstalling and force-stopping apps, and running adb shell commands.")
-            CheckRow("ADB connected", adbDevice != null)
-            adbDevice?.let { Text(it.serial, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
-            if (adbDevice == null) OutlinedButton(onClick = onOpenAdbConnect) { Text("Open ADB Connect") }
+        // 3. Shell access (optional): ADB, Shizuku or root, picked in ADB Connect
+        StepCard(3, "Shell access (optional)", if (accessReady) "Ready" else "Optional", cardBg, cardBorder,
+            badgeColor = if (accessReady) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)) {
+            Hint("Adds what accessibility can't do: pressing any key, installing, uninstalling and force-stopping apps, and running shell commands. " +
+                "It goes through the way picked in ADB Connect: ADB, Shizuku or root.")
+            CheckRow("${accessMode.label} ready", accessReady)
+            accessDetail?.let { Text(it, fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
+            if (!accessReady) OutlinedButton(onClick = onOpenAdbConnect) { Text("Open ADB Connect") }
         }
 
         // Next step

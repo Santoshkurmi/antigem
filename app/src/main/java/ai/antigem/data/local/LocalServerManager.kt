@@ -401,6 +401,8 @@ object LocalServerManager {
         // the bridge starts Claude Code through the app's launcher (--claude-bin)
         LocalEnvironmentManager.ensureGlibcEnvironment(appContext)
         LocalEnvironmentManager.ensureClaudeWrapper(appContext)
+        // `rish` (Shizuku) in the terminal, and the local server's port/key it reads
+        ai.antigem.data.adb.DeviceAccess.ensureTerminalCommands(appContext)
         // after an app update the package hooks and the dpkg wrapper are refreshed here too, not only in a new terminal
         TermuxRelocation.ensurePackageHooks(appContext)
         // termux-* commands: AntiGem's dispatcher, and the termux-api package that provides the commands
@@ -475,6 +477,8 @@ object LocalServerManager {
             _status.value = LocalServerStatus.Error("Ubuntu chroot: ${start.message}")
             return
         }
+        // `rish` and `android-su` in the chroot (and the port/key they read), off the start path
+        managerScope.launch { runCatching { ai.antigem.data.adb.DeviceAccess.ensureChrootCommands(context) } }
         // the chroot's own ports (an install from before they existed still had the Termux defaults; set ones stay)
         AuthPreferences(context).applyLocalRuntimeUrls(chroot = true)
         val healthUrl = AuthPreferences.currentBridgeHttpUrl.trimEnd('/') + "/api/health"

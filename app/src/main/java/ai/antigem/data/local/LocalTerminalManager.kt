@@ -187,6 +187,7 @@ class LocalPtySession(
 
                 LocalEnvironmentManager.ensureGlibcEnvironment(context)
                 LocalEnvironmentManager.ensureClaudeWrapper(context)
+                ai.antigem.data.adb.DeviceAccess.ensureTerminalCommands(context)
                 LocalEnvironmentManager.ensureTermuxApiDispatcher(context)
                 TermuxRelocation.ensurePackageHooks(context)
 

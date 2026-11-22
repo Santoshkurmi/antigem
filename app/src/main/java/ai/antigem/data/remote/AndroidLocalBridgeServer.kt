@@ -99,6 +99,8 @@ class AndroidLocalBridgeServer private constructor() {
                 Log.i(TAG, "Bridge MCP / REST Server running on http://127.0.0.1:$boundPort")
                 // a server (Remote mode) reaches this MCP server through an SSH reverse tunnel: point it at the bound port
                 ai.antigem.data.remote.RemoteServerManager.resyncTunnels()
+                // rish reads the port from a file: rewrite it when it isn't the default one
+                appContext?.let { ctx -> runCatching { ai.antigem.data.adb.DeviceAccess.ensureTerminalCommands(ctx) } }
 
                 while (isRunning && !serverSocket!!.isClosed) {
                     val client = serverSocket!!.accept()
@@ -123,8 +125,8 @@ class AndroidLocalBridgeServer private constructor() {
         Log.i(TAG, "Bridge Server stopped")
     }
 
-    /** One HTTP/1.1 request; [body] is the raw body bytes decoded as UTF-8. */
-    private class HttpRequest(val method: String, val rawPath: String, val headers: Map<String, String>, val body: String)
+    /** One HTTP/1.1 request; [body] is the raw body bytes decoded as UTF-8, [bytes] the raw body itself. */
+    private class HttpRequest(val method: String, val rawPath: String, val headers: Map<String, String>, val body: String, val bytes: ByteArray)
 
     /** Remembers whether anything was written, so a failure after a response never writes a second one. */
     private class TrackingOutputStream(private val out: OutputStream) : OutputStream() {
@@ -172,7 +174,7 @@ class AndroidLocalBridgeServer private constructor() {
                 readExactly(input, length.toInt())
             }
         }
-        return HttpRequest(requestLine[0].uppercase(), requestLine[1], headers, String(bodyBytes, Charsets.UTF_8))
+        return HttpRequest(requestLine[0].uppercase(), requestLine[1], headers, String(bodyBytes, Charsets.UTF_8), bodyBytes)
     }
 
     private fun readExactly(input: InputStream, length: Int): ByteArray {
@@ -279,6 +281,9 @@ class AndroidLocalBridgeServer private constructor() {
                     path.startsWith("/api/terminal/") -> {
                         handleTerminalRest(path.removePrefix("/api/terminal/"), method, body, queryString, out)
                     }
+                    // the terminal's rish (Shizuku) and android-su (root): output streamed back, exit code fetched after
+                    path == "/api/device/exec" && method == "POST" -> ai.antigem.data.adb.DeviceAccess.serveExec(headers, req.bytes, input, out)
+                    path == "/api/device/exit" -> ai.antigem.data.adb.DeviceAccess.serveExit(queryString, out)
                     else -> {
                         sendResponse(out, 404, "application/json", "{\"error\": \"Not Found\"}")
                     }

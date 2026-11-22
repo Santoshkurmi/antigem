@@ -198,6 +198,10 @@ dependencies {
   implementation("io.coil-kt:coil-compose:2.7.0")
   implementation("io.coil-kt:coil-svg:2.7.0")
 
+  // Shizuku (Settings → ADB Connect → Shizuku): shell-user commands without adb pairing
+  implementation("dev.rikka.shizuku:api:13.1.5")
+  implementation("dev.rikka.shizuku:provider:13.1.5")
+
   // Native Android JLaTeXMath / LaTeX Renderer (Pure Android Canvas, Zero WebViews)
   implementation("io.noties.markwon:ext-latex:4.6.2")
   implementation("ru.noties:jlatexmath-android:0.2.0")
