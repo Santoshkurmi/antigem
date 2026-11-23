@@ -200,7 +200,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         // Backports java.nio.file / java.time APIs (e.g. StandardOpenOption, used by commons-compress
-        // ZipFile) to minSdk 24 — without it the app crashes on Android 7/8 (API 24/25), see issue #85
+        // ZipFile) to minSdk 24 — without it the app crashes on Android 7.0/7.1 (API 24/25), see issue #85
         isCoreLibraryDesugaringEnabled = true
     }
     lint {
@@ -306,9 +306,9 @@ dependencies {
   // Archive and Compression Utilities (Supports tar, xz, ar, deb extraction)
   implementation("org.apache.commons:commons-compress:1.26.1")
   implementation("org.tukaani:xz:1.9")
-// Core library desugaring runtime: backports the java.nio.file / java.time APIs used above
-// (commons-compress ZipFile needs StandardOpenOption, API 26+) down to minSdk 24 (issue #85)
-coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+  // Core library desugaring runtime: backports the java.nio.file / java.time APIs used above
+  // (commons-compress ZipFile needs StandardOpenOption, API 26+) down to minSdk 24 (issue #85)
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
   // Termux Terminal Emulator with Native PTY Support (Terminal View is compiled from source)
   implementation("com.github.termux.termux-app:terminal-emulator:v0.118.1")
