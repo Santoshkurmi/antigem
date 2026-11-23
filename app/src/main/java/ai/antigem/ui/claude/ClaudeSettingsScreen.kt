@@ -978,7 +978,7 @@ private fun PluginsPage(deps: ClaudeSettingsDeps) {
             when (tab) {
                 0 -> {
                     if (d.plugins.installed.isEmpty()) item { Hint("No plugins installed. Find some in Discover.") }
-                    items(d.plugins.installed.size, key = { "i_" + d.plugins.installed[it].key }) { i ->
+                    items(d.plugins.installed.size, key = { "i_${d.plugins.installed[it].key}_${d.plugins.installed[it].scope}_$it" }) { i ->
                         val p = d.plugins.installed[i]
                         val op = ops[p.key]
                         ClaudeCard {

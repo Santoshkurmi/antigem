@@ -220,7 +220,7 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
             when (tab) {
                 0 -> {
                     if (installed.isEmpty()) item(key = "none") { Hint("No plugins installed. Find some in Discover, or add a marketplace from GitHub.") }
-                    items(installed.size, key = { "i_" + installed[it].id }) { i ->
+                    items(installed.size, key = { "i_${installed[it].id}_$it" }) { i ->
                         val p = installed[i]
                         PluginCard(p, ops[p.id]) {
                             OutlinedButton(onClick = {
