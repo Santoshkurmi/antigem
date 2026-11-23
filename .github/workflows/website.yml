@@ -1,0 +1,75 @@
+# Builds the AntiGem website (its own repository, santoshkurmi/antigem_website) and publishes it to this repository's
+# GitHub Pages: https://santoshkurmi.github.io/antigem/
+#
+# The website's source is not in this repository: this workflow checks it out, builds it and deploys the result.
+# Runs when you press "Run workflow" (Actions → Website → Run workflow), after pushing changes to the website.
+#
+# One-time setup in this repository: Settings → Pages → Build and deployment → Source: GitHub Actions.
+name: Website
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer run replaces a waiting one, but a running deploy is not cut off.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the website
+        uses: actions/checkout@v4
+        with:
+          repository: santoshkurmi/antigem_website
+          ref: main
+          path: website
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: website
+        run: pnpm install --frozen-lockfile
+
+      # The site's base path (/antigem/) and address (website/.env) already match this repository's Pages.
+      - name: Build
+        working-directory: website
+        env:
+          SITE_BASE: /antigem/
+          VITE_SITE_URL: https://santoshkurmi.github.io/antigem
+        run: pnpm build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
