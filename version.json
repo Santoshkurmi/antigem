@@ -1,11 +1,22 @@
 {
-  "version_code": 134,
-  "version_name": "2.0.3",
+  "version_code": 137,
+  "version_name": "2.0.4",
   "min_supported_version_code": 2,
   "changelog": [
-   "Fixed crashing bugs",
-   "Added collapse/expand card for tool calls to make chat more readable",
-   "Added voice calling and jarvis outside the app using tiles,shortcuts to open"
+    "Added Shizuku and root next to ADB: choose how agents reach your phone in Settings → ADB Connect. Agents use adb, Shizuku (rish) or root only when you ask",
+    "ADB Connect now reconnects a paired phone by itself when you open it or tap refresh",
+    "Fixed Antigravity sign-in: when your Google account isn't allowed, the app now shows why instead of waiting forever",
+    "Fixed OpenCode custom providers whose models didn't show up in the model list or in chat (newer OpenCode versions)",
+    "Redesigned OpenCode's custom provider editor: full screen, fast with hundreds of models, with search, filters and select all",
+    "Added Images, Reasoning and Tools switches for each model of an OpenCode custom provider; \"Fetch from endpoint\" fills them in from the endpoint, Ollama or models.dev",
+    "Added Effort and Thinking controls to OpenCode chats for models that support them, and a warning when you attach an image to a model that can't read images",
+    "Added a \"Fold after\" option for grouped agent steps: how many steps fold into one pill (2 by default)",
+    "Agent memory is now on by default; saving chats for agents to look up is now off by default",
+    "Added Settings → Updates: get beta updates, and choose how often AntiGem checks for updates in the background",
+    "Fixed the app not starting on Android 7 and 8",
+    "Back on the main chat screen now moves AntiGem to the background instead of closing it",
+    "Fixed a crash on the Claude Code and Codex Plugins pages when the same plugin was installed more than once",
+    "Added a Discord community link in Settings → About"
   ],
   "is_critical": false,
   "beta": {
