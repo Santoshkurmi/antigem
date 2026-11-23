@@ -104,6 +104,14 @@ class MainActivity : ComponentActivity() {
         ai.antigem.data.voice.VoiceCallLauncher.publishShortcut(this)
         ai.antigem.ui.voice.AgyVoiceBubble.attach(this)
 
+        // Back that no screen handles (the chat root) puts the app in the background instead of closing it, on every
+        // Android version. Registered before setContent, so every screen's own BackHandler still runs first.
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                moveTaskToBack(true)
+            }
+        })
+
         setContent {
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
             val themeMode by chatViewModel.themeMode.collectAsState(initial = initialThemeMode)
