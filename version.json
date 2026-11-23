@@ -9,17 +9,17 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 135,
-    "version_name": "2.0.4-beta.1",
+    "version_code": 136,
+    "version_name": "2.0.4-beta.2",
     "changelog": [
-      "Added Shizuku and root access next to ADB: choose how agents reach your phone in Settings → ADB Connect",
-      "Agents now know about adb, Shizuku (rish) and root on your phone, and use them only when you ask",
-      "ADB Connect now reconnects a paired phone by itself when you open it or tap refresh",
-      "Fixed Antigravity sign-in: when your Google account isn't allowed, the app now shows why instead of waiting forever",
-      "Added a \"Fold after\" option for grouped agent steps: how many steps fold into one pill (2 by default)",
-      "Agent memory is now on by default; saving chats for agents to look up is now off by default",
-      "Added Settings → Updates: get beta updates, and choose how often AntiGem checks for updates in the background",
-      "Added a Discord community link in Settings → About"
+      "Fixed OpenCode custom providers whose models didn't show up in the model list or in chat (newer OpenCode versions)",
+      "Added Images, Reasoning and Tools switches for each model of an OpenCode custom provider",
+      "\"Fetch from endpoint\" now detects which models read images, think or use tools (from the endpoint, Ollama or models.dev)",
+      "Redesigned the custom provider editor: full screen, fast with hundreds of models, with search, filters and select all",
+      "Added Effort and Thinking controls to OpenCode chats for models that support them",
+      "The chat now warns when you attach an image to an OpenCode model that can't read images",
+      "Fixed the app not starting on Android 7 and 8",
+      "Back on the main chat screen now moves AntiGem to the background instead of closing it"
     ]
   }
 }
