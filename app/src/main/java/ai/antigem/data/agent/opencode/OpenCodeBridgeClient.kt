@@ -44,7 +44,9 @@ data class OpenCodeCustomModel(
     val max_output_tokens: Long? = null,
     val reasoning: Boolean = false,
     val no_tools: Boolean = false,
-    val images: Boolean = false
+    val images: Boolean = false,
+    /** Fetched models only: where the bridge found what the model can do ("endpoint", "ollama", "models.dev"); never saved. */
+    val detected: String? = null
 )
 
 @Serializable

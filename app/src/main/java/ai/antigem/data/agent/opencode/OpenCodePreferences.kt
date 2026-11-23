@@ -53,7 +53,18 @@ class OpenCodePreferences(context: Context) {
         _permissionMode.value = mode
     }
 
+    /** The thinking level last picked for [modelId] (one of its OpenCode variants: "high", "none"…); null = its default. */
+    fun variantFor(modelId: String): String? = prefs.getString(KEY_VARIANT_PREFIX + modelId, null)
+
+    fun setVariant(modelId: String, variant: String?) {
+        if (modelId.isBlank()) return
+        prefs.edit().apply {
+            if (variant == null) remove(KEY_VARIANT_PREFIX + modelId) else putString(KEY_VARIANT_PREFIX + modelId, variant)
+        }.apply()
+    }
+
     companion object {
+        private const val KEY_VARIANT_PREFIX = "variant:"
         private const val KEY_MODEL = "model"
         private const val KEY_AGENT = "agent"
         private const val KEY_MODE = "permission_mode"

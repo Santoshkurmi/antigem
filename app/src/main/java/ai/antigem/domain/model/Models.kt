@@ -181,7 +181,9 @@ data class AiModel(
     val isDefault: Boolean = false,
     val key: String = "",
     val baseName: String = "",
-    val tier: String? = null
+    val tier: String? = null,
+    /** Whether the model reads images: false = text only (the chat warns about attached images), null = not known. */
+    val supportsImages: Boolean? = null
 ) {
     companion object {
         val DEFAULT_MODELS = emptyList<AiModel>()

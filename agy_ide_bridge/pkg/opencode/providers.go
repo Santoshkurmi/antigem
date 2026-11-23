@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -106,6 +107,12 @@ func (m *Manager) writeConfig() error {
 	if err != nil {
 		return err
 	}
+	// OpenCode drops a config provider whose id is one it has built in; one saved before the bridge checked gets a free id
+	if renameBuiltinIDs(list, m.builtinProviderIDs()) {
+		if err := writePrivate(m.providersPath(), list); err != nil {
+			return err
+		}
+	}
 	providers := map[string]interface{}{}
 	for _, p := range list {
 		pkg := "@opencode/ai/providers/openai-compatible"
@@ -139,11 +146,12 @@ func (m *Manager) writeConfig() error {
 			if md.Images {
 				input = append(input, "image")
 			}
-			caps := map[string]interface{}{"tools": !md.NoTools, "input": input, "output": []string{"text"}}
-			if md.Reasoning {
-				caps["reasoning"] = true
+			// OpenCode v2 has no "reasoning" capability: one model with it makes OpenCode drop the whole provider. A
+			// reasoning model is told by the field its thinking streams in instead (an Anthropic one sends thinking blocks).
+			entry["capabilities"] = map[string]interface{}{"tools": !md.NoTools, "input": input, "output": []string{"text"}}
+			if md.Reasoning && p.Kind != KindAnthropic {
+				entry["compatibility"] = map[string]interface{}{"reasoningField": reasoningField(p.BaseURL)}
 			}
-			entry["capabilities"] = caps
 			models[md.ID] = entry
 		}
 		entry := map[string]interface{}{
@@ -173,6 +181,61 @@ func (m *Manager) writeConfig() error {
 		cfg["mcp"] = map[string]interface{}{"servers": servers}
 	}
 	return writePrivate(m.configPath(), cfg)
+}
+
+// reasoningField is where an OpenAI-compatible endpoint streams a model's thinking: OpenRouter sends "reasoning",
+// most others (DeepSeek, Qwen, vLLM, LiteLLM…) "reasoning_content".
+func reasoningField(baseURL string) string {
+	if u, err := url.Parse(baseURL); err == nil && strings.HasSuffix(strings.ToLower(u.Hostname()), "openrouter.ai") {
+		return "reasoning"
+	}
+	return "reasoning_content"
+}
+
+// builtinProviderIDs: the providers OpenCode has itself (the models.dev catalog's, and these if the catalog is not
+// there yet). A custom provider must not use one of their ids: OpenCode then drops it, so its models never show.
+func (m *Manager) builtinProviderIDs() map[string]bool {
+	ids := map[string]bool{}
+	for _, id := range []string{
+		"opencode", "openrouter", "openai", "anthropic", "google", "google-vertex", "azure", "amazon-bedrock", "github-copilot",
+		"groq", "mistral", "deepseek", "xai", "togetherai", "fireworks-ai", "cerebras", "deepinfra", "huggingface", "ollama",
+		"lmstudio", "vercel", "zai", "moonshotai", "alibaba", "perplexity", "cohere", "nvidia", "gitlab",
+	} {
+		ids[id] = true
+	}
+	if cat := m.cachedCatalog(); cat != nil {
+		for id := range cat.providers {
+			ids[id] = true
+		}
+	}
+	return ids
+}
+
+// freeProviderID: base, or base-2, base-3… when that is taken or built in.
+func freeProviderID(base string, taken, builtin map[string]bool) string {
+	id := base
+	for n := 2; taken[id] || builtin[id]; n++ {
+		id = fmt.Sprintf("%s-%d", base, n)
+	}
+	return id
+}
+
+// renameBuiltinIDs gives each provider with a built-in id its own ("openrouter" → "openrouter-custom"); whether any changed.
+func renameBuiltinIDs(list []CustomProvider, builtin map[string]bool) bool {
+	taken := map[string]bool{}
+	for _, p := range list {
+		taken[p.ID] = true
+	}
+	changed := false
+	for i := range list {
+		if builtin[list[i].ID] {
+			id := freeProviderID(list[i].ID+"-custom", taken, builtin)
+			taken[id] = true
+			list[i].ID = id
+			changed = true
+		}
+	}
+	return changed
 }
 
 func keyHint(k string) string {
@@ -294,19 +357,15 @@ func (m *Manager) handleCustomProviders(w http.ResponseWriter, r *http.Request, 
 				writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "the id may only use a-z, 0-9, - and _"})
 				return
 			}
-			base := p.ID
-			for n := 2; ; n++ {
-				taken := false
-				for _, q := range list {
-					if q.ID == p.ID {
-						taken = true
-					}
-				}
-				if !taken {
-					break
-				}
-				p.ID = fmt.Sprintf("%s-%d", base, n)
+			taken := map[string]bool{}
+			for _, q := range list {
+				taken[q.ID] = true
 			}
+			builtin := m.builtinProviderIDs()
+			if builtin[p.ID] {
+				p.ID += "-custom"
+			}
+			p.ID = freeProviderID(p.ID, taken, builtin)
 			list = append(list, p)
 		}
 		if err := m.saveProviders(list); err != nil {
@@ -351,7 +410,15 @@ type fetchModelsRequest struct {
 	ID string `json:"id"`
 }
 
-// handleFetchModels lists an endpoint's models (GET {base}/models, the OpenAI and Anthropic shape both have data[].id).
+// fetchedModel is a listed model with what it can do filled in; Detected names where that came from
+// ("endpoint", "ollama", "models.dev", joined by " + "), empty when nothing is known.
+type fetchedModel struct {
+	CustomModel
+	Detected string `json:"detected,omitempty"`
+}
+
+// handleFetchModels lists an endpoint's models (GET {base}/models, the OpenAI and Anthropic shape both have data[].id)
+// and what each can do (capabilities.go).
 func (m *Manager) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 	var req fetchModelsRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
@@ -374,6 +441,9 @@ func (m *Manager) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// the catalog loads while the endpoint answers (downloaded once a day, else read from disk)
+	catalogReady := make(chan *modelCatalog, 1)
+	go func() { catalogReady <- m.loadCatalog(r.Context()) }()
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	hreq, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/models", nil)
@@ -405,14 +475,7 @@ func (m *Manager) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var parsed struct {
-		Data []struct {
-			ID            string `json:"id"`
-			Name          string `json:"name"`
-			DisplayName   string `json:"display_name"`
-			ContextLength int64  `json:"context_length"`
-			// Ollama / LM Studio style
-			MaxContext int64 `json:"max_context_length"`
-		} `json:"data"`
+		Data []map[string]interface{} `json:"data"`
 		// Ollama native /api/tags style
 		Models []struct {
 			Name  string `json:"name"`
@@ -423,20 +486,27 @@ func (m *Manager) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": "the endpoint's model list is not JSON"})
 		return
 	}
-	out := []CustomModel{}
+
+	type found struct {
+		md   CustomModel
+		caps caps
+		from []string
+	}
+	var list []*found
 	for _, d := range parsed.Data {
-		if d.ID == "" {
+		id := strings.TrimSpace(strOf(d["id"]))
+		if id == "" {
 			continue
 		}
-		name := d.DisplayName
+		name := strOf(d["display_name"])
 		if name == "" {
-			name = d.Name
+			name = strOf(d["name"])
 		}
-		ctxLen := d.ContextLength
-		if ctxLen == 0 {
-			ctxLen = d.MaxContext
+		f := &found{md: CustomModel{ID: id, Name: name}}
+		if f.caps.fill(endpointCaps(d)) {
+			f.from = append(f.from, "endpoint")
 		}
-		out = append(out, CustomModel{ID: d.ID, Name: name, ContextLength: ctxLen})
+		list = append(list, f)
 	}
 	for _, d := range parsed.Models {
 		id := d.Model
@@ -444,8 +514,48 @@ func (m *Manager) handleFetchModels(w http.ResponseWriter, r *http.Request) {
 			id = d.Name
 		}
 		if id != "" {
-			out = append(out, CustomModel{ID: id, Name: d.Name})
+			list = append(list, &found{md: CustomModel{ID: id, Name: d.Name}})
 		}
+	}
+
+	// Ollama says per model what it can do
+	ollama := req.Kind != KindAnthropic && looksLikeOllama(base, parsed.Data, len(parsed.Models) > 0)
+	if ollama && len(list) > 0 {
+		ids := make([]string, 0, len(list))
+		for _, f := range list {
+			ids = append(ids, f.md.ID)
+		}
+		octx, ocancel := context.WithTimeout(r.Context(), 15*time.Second)
+		shown := ollamaCaps(octx, base, key, ids)
+		ocancel()
+		for _, f := range list {
+			if c, ok := shown[f.md.ID]; ok && f.caps.fill(c) {
+				f.from = append(f.from, "ollama")
+			}
+		}
+	}
+
+	// the rest from the catalog, by model id
+	if cat := <-catalogReady; cat != nil {
+		for _, f := range list {
+			c, ok := cat.lookup(f.md.ID)
+			if !ok {
+				continue
+			}
+			if ollama {
+				// Ollama runs a model with a smaller context than its maximum
+				c.Context, c.Output = 0, 0
+			}
+			if f.caps.fill(c) {
+				f.from = append(f.from, "models.dev")
+			}
+		}
+	}
+
+	out := make([]fetchedModel, 0, len(list))
+	for _, f := range list {
+		f.caps.apply(&f.md)
+		out = append(out, fetchedModel{CustomModel: f.md, Detected: strings.Join(f.from, " + ")})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "models": out})

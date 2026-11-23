@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Rule
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.TravelExplore
@@ -136,15 +137,27 @@ private fun openCodeAgentDescription(a: ai.antigem.data.agent.opencode.OpenCodeA
     else -> a.description.ifBlank { "Your own agent from the OpenCode config." }
 }
 
-/** OpenCode chat controls above the input: agent (Build / Plan), approval mode, and the retry / compaction notice. */
+/** OpenCode chat controls above the input: agent (Build / Plan), approval mode, effort and thinking, and the retry / compaction notice. */
 @Composable
 fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
     val agents by backend.agents.collectAsState()
     val agent by backend.agent.collectAsState()
     val mode by backend.permissionMode.collectAsState()
     val notice by backend.notice.collectAsState()
+    val selectedModel by backend.selectedModelId.collectAsState()
+    val models by backend.allModels.collectAsState()
+    val variantsByModel by backend.modelVariants.collectAsState()
+    val variant by backend.variant.collectAsState()
+    val androidContext = androidx.compose.ui.platform.LocalContext.current
     var agentSheet by remember { mutableStateOf(false) }
     var modeSheet by remember { mutableStateOf(false) }
+    var effortSheet by remember { mutableStateOf(false) }
+    // thinking levels of the chat's model: "none" (where the model has it) is the Thinking switch, the rest are Effort
+    val model = models.firstOrNull { it.id == selectedModel }
+    val variants = variantsByModel[selectedModel].orEmpty()
+    val canTurnOff = "none" in variants
+    val levels = variants.filter { it != "none" }
+    val thinkingOff = variant == "none"
     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp)) {
         notice?.let {
             Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -169,7 +182,48 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
                 color = if (mode == OpenCodePreferences.MODE_AUTO) openCodeModeColor(mode) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                 onClick = { modeSheet = true }
             )
+            if (levels.isNotEmpty()) {
+                val level = variant?.takeIf { it != "none" }
+                ControlChip(
+                    text = "Effort · ${ai.antigem.ui.claude.effortLabel(level)}",
+                    icon = Icons.Outlined.Speed,
+                    color = if (level != null) OpenCodeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    highlighted = level != null,
+                    onClick = { effortSheet = true }
+                )
+            }
+            if (variants.isNotEmpty() || model?.supportsThinking == true) {
+                ControlChip(
+                    text = if (thinkingOff) "No thinking" else "Thinking",
+                    icon = Icons.Outlined.Lightbulb,
+                    color = if (thinkingOff) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else OpenCodeAccent,
+                    highlighted = !thinkingOff,
+                    onClick = {
+                        when {
+                            // back on: the model's default level
+                            thinkingOff -> backend.setVariant(null)
+                            canTurnOff -> backend.setVariant("none")
+                            else -> android.widget.Toast.makeText(
+                                androidContext,
+                                "${model?.displayName ?: "This model"} always thinks; it can't be turned off.",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                )
+            }
         }
+    }
+    if (effortSheet) {
+        ai.antigem.ui.claude.ClaudeEffortSheet(
+            levels = levels,
+            current = variant?.takeIf { it != "none" },
+            onSelect = { backend.setVariant(it) },
+            onDismiss = { effortSheet = false },
+            agent = AgentKind.OPENCODE,
+            color = OpenCodeAccent,
+            detail = "how hard ${model?.displayName ?: "the model"} thinks on each reply"
+        )
     }
     if (agentSheet) {
         val list = agents.ifEmpty {

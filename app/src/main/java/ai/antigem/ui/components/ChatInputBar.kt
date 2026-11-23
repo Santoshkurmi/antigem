@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ImageNotSupported
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -970,12 +971,7 @@ fun ChatInputBar(
                             }
 
                             for (att in attachments) {
-                                // an image sent only by path (too big to shrink, TIFF, …) shows as a file
-                                val isImg = !(att.reference && att.base64.isNullOrBlank()) && (
-                                    att.isImage || att.name.endsWith(".jpg", true) || att.name.endsWith(".png", true) ||
-                                        att.name.endsWith(".jpeg", true) || att.name.endsWith(".webp", true) ||
-                                        att.name.endsWith(".gif", true) || att.mimeType?.startsWith("image/") == true
-                                )
+                                val isImg = isImageAttachment(att)
                                 val copyProgress = attachmentProgress[att.id]
 
                                 val imgSource = remember(att) {
@@ -1135,6 +1131,33 @@ fun ChatInputBar(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // a text-only model gets no image: OpenCode tells it the file could not be read. Sending stays allowed.
+                    if (selectedModel.supportsImages == false && attachments.any { isImageAttachment(it) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onOpenModelSelector)
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.ImageNotSupported,
+                                contentDescription = null,
+                                tint = ClaudeTerracotta,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "${selectedModel.displayName} can't read images, so it won't see this one. Tap to switch model, or send anyway.",
+                                fontSize = 11.5.sp,
+                                lineHeight = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
 
@@ -1405,3 +1428,10 @@ fun ChatInputBar(
 
 enum class AudioRecordMode { VOICE_NOTE, TRANSCRIBE, LIVE_DICTATION }
 
+/** An attachment shown and sent as a picture; an image sent only by path (too big to shrink, TIFF, …) counts as a file. */
+private fun isImageAttachment(att: ChatAttachment): Boolean =
+    !(att.reference && att.base64.isNullOrBlank()) && (
+        att.isImage || att.name.endsWith(".jpg", true) || att.name.endsWith(".png", true) ||
+            att.name.endsWith(".jpeg", true) || att.name.endsWith(".webp", true) ||
+            att.name.endsWith(".gif", true) || att.mimeType?.startsWith("image/") == true
+        )

@@ -161,6 +161,7 @@ fun ClaudePermissionModeSheet(
 
 private fun effortDescription(level: String?): String = when (level) {
     null -> "The model's own default"
+    "minimal" -> "Barely any reasoning, fastest replies"
     "low" -> "Quick answers with light reasoning"
     "medium" -> "Balanced speed and depth"
     "high" -> "Thorough work on hard tasks"
@@ -187,17 +188,26 @@ private fun EffortBars(filled: Int, total: Int, color: Color) {
 
 /** How much work Claude puts into each reply. */
 @Composable
-fun ClaudeEffortSheet(levels: List<String>, current: String?, onSelect: (String?) -> Unit, onDismiss: () -> Unit) {
-    ClaudePickerSheet("Effort", "how much work Claude puts into each reply", onDismiss) {
+fun ClaudeEffortSheet(
+    levels: List<String>,
+    current: String?,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+    // other agents (OpenCode) show the same sheet in their own colour and words
+    agent: AgentKind = AgentKind.CLAUDE,
+    color: Color = ClaudeAccent,
+    detail: String = "how much work Claude puts into each reply"
+) {
+    ClaudePickerSheet("Effort", detail, onDismiss, agent = agent) {
         (listOf<String?>(null) + levels).forEachIndexed { index, level ->
             PickerOption(
                 title = effortLabel(level),
                 description = effortDescription(level),
-                color = ClaudeAccent,
+                color = color,
                 selected = level == current,
                 leading = {
-                    if (level == null) Icon(Icons.Outlined.AutoMode, null, tint = ClaudeAccent, modifier = Modifier.size(18.dp))
-                    else EffortBars(index, levels.size, ClaudeAccent)
+                    if (level == null) Icon(Icons.Outlined.AutoMode, null, tint = color, modifier = Modifier.size(18.dp))
+                    else EffortBars(index, levels.size, color)
                 },
                 onClick = {
                     onSelect(level)

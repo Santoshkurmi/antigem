@@ -60,6 +60,9 @@ type Manager struct {
 
 	provMu sync.Mutex
 
+	// the models.dev catalog, for what custom endpoints' models can do (capabilities.go)
+	catalog catalogCache
+
 	jobMu sync.Mutex
 	job   *installJob
 }
@@ -469,7 +472,7 @@ func (m *Manager) Call(ctx context.Context, method, path string, body interface{
 //	GET  /api/opencode/credentials       saved accounts per provider (active or not), without their secrets
 //	GET  /api/opencode/mcp; PUT|DELETE /api/opencode/mcp/{name}   MCP servers kept in the bridge's OpenCode config
 //	GET  /api/opencode/cli/job; POST /api/opencode/cli/{install|update}   install or update OpenCode (~/.opencode/bin)
-//	POST /api/opencode/custom-providers/fetch-models   {"kind","base_url","api_key"|"id"} → model ids of an endpoint
+//	POST /api/opencode/custom-providers/fetch-models   {"kind","base_url","api_key"|"id"} → an endpoint's models and what each can do
 //	*    /api/opencode/x/{path}           relayed to OpenCode's /api/{path} (SSE included: /x/event)
 func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/opencode")

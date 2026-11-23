@@ -325,19 +325,23 @@ private fun ModelsCard(backend: OpenCodeChatBackend) {
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                         )
                     }
-                    models.filter { query.isBlank() || it.displayName.contains(query, true) || it.id.contains(query, true) }.forEach { m ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    m.displayName, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (providerOn) 1f else 0.45f)
+                    // a lazy list of its own height: a provider can have hundreds of models (OpenRouter has over 400)
+                    val visible = models.filter { query.isBlank() || it.displayName.contains(query, true) || it.id.contains(query, true) }
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                        items(visible, key = { it.id }) { m ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        m.displayName, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (providerOn) 1f else 0.45f)
+                                    )
+                                    Text(m.id.substringAfter('/'), fontSize = 10.sp, color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Switch(
+                                    checked = m.id !in hiddenModels, onCheckedChange = { backend.setModelEnabled(m.id, it) },
+                                    enabled = providerOn, colors = switchColors
                                 )
-                                Text(m.id.substringAfter('/'), fontSize = 10.sp, color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Switch(
-                                checked = m.id !in hiddenModels, onCheckedChange = { backend.setModelEnabled(m.id, it) },
-                                enabled = providerOn, colors = switchColors
-                            )
                         }
                     }
                 }

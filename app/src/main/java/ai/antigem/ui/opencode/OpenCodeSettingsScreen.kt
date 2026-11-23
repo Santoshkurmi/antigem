@@ -3,14 +3,18 @@ package ai.antigem.ui.opencode
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,9 +27,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Delete
@@ -33,12 +40,12 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,13 +53,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,6 +78,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import ai.antigem.data.agent.opencode.OpenCodeChatBackend
 import ai.antigem.data.agent.opencode.OpenCodeCustomModel
 import ai.antigem.data.agent.opencode.OpenCodeCustomProvider
@@ -84,7 +96,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** A built-in OpenCode provider (integration) and the saved connections the user made for it. */
+/** A built-inn OpenCode provider (integration) and the saved connections the user made for it. */
 private data class Integration(val id: String, val name: String, val keyLogin: Boolean, val envNames: List<String>, val connections: List<Pair<String, String>>)
 
 private fun toast(msg: String, ok: Boolean = true) =
@@ -365,6 +377,7 @@ fun OpenCodeSettingsScreen(
                         Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
                         Text(
                             "${if (p.kind == "anthropic") "Anthropic" else "OpenAI"}-compatible · ${p.models.size} model${if (p.models.size == 1) "" else "s"}" +
+                                p.models.count { it.images }.let { if (it > 0) " · $it with images" else "" } +
                                 (p.api_key_hint?.let { " · key $it" } ?: if (p.has_api_key) " · key set" else ""),
                             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                         )
@@ -412,6 +425,13 @@ private fun SectionTitle(text: String) {
     )
 }
 
+/** Which of a provider's models the list shows. */
+private enum class ModelFilter(val label: String) { ALL("All"), ADDED("Added"), IMAGES("Images"), REASONING("Reasoning") }
+
+/**
+ * Adding or editing a custom provider. Nearly full screen: an endpoint can list hundreds of models (OpenRouter has over
+ * 400), so they sit in a lazy list with search, filters and select all / none, and each added model has its chips.
+ */
 @Composable
 private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCodeCustomProvider, onDismiss: () -> Unit, onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -420,118 +440,264 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
     var kind by remember { mutableStateOf(initial.kind.ifBlank { "openai" }) }
     var baseUrl by remember { mutableStateOf(initial.base_url) }
     var apiKey by remember { mutableStateOf("") }
-    val models = remember { mutableStateListOf<OpenCodeCustomModel>().apply { addAll(initial.models) } }
+    // the models that will be saved, by id
+    val models = remember { mutableStateMapOf<String, OpenCodeCustomModel>().apply { initial.models.forEach { put(it.id, it) } } }
+    var fetched by remember { mutableStateOf<List<OpenCodeCustomModel>>(emptyList()) }
     var newModel by remember { mutableStateOf("") }
-    var fetched by remember { mutableStateOf<List<OpenCodeCustomModel>?>(null) }
+    var query by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf(ModelFilter.ALL) }
     var fetching by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "Add a custom provider" else "Edit ${initial.name}", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = kind == "openai", onClick = { kind = "openai" }, label = { Text("OpenAI-compatible") })
-                    FilterChip(selected = kind == "anthropic", onClick = { kind = "anthropic" }, label = { Text("Anthropic") })
+    // every model the list can show: the endpoint's, then the saved or hand-added ones it does not list
+    val rows by remember {
+        derivedStateOf {
+            val fetchedIds = fetched.mapTo(HashSet()) { it.id }
+            fetched + models.values.filter { it.id !in fetchedIds }.sortedBy { it.id.lowercase() }
+        }
+    }
+    val shown by remember {
+        derivedStateOf {
+            val q = query.trim()
+            rows.filter { m ->
+                val cur = models[m.id] ?: m
+                (q.isEmpty() || m.id.contains(q, true) || m.name?.contains(q, true) == true) && when (filter) {
+                    ModelFilter.ALL -> true
+                    ModelFilter.ADDED -> models.containsKey(m.id)
+                    ModelFilter.IMAGES -> cur.images
+                    ModelFilter.REASONING -> cur.reasoning
                 }
-                Spacer(Modifier.height(4.dp))
-                OutlinedTextField(
-                    baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(if (kind == "anthropic") "https://api.example.com/v1" else "http://localhost:11434/v1") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    apiKey, { apiKey = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if (!isNew && initial.has_api_key) "API key (blank keeps ${initial.api_key_hint ?: "the saved one"})" else "API key (optional for local servers)") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Models", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    TextButton(
-                        onClick = {
-                            fetching = true
-                            error = null
-                            scope.launch {
-                                backend.client.fetchModels(kind, baseUrl.trim(), apiKey.trim(), initial.id)
-                                    .onSuccess { list ->
-                                        fetched = list
-                                        if (list.isEmpty()) error = "The endpoint listed no models."
-                                        // nothing chosen yet (a new provider): every model the endpoint lists is on; untick the unwanted ones
-                                        else if (models.isEmpty()) models.addAll(list.distinctBy { it.id })
-                                    }
-                                    .onFailure { error = it.message }
-                                fetching = false
-                            }
-                        },
-                        enabled = baseUrl.isNotBlank() && !fetching
-                    ) { Text(if (fetching) "Fetching…" else "Fetch from endpoint") }
-                }
-                // models from the endpoint are ticked in its list below; here only the ones added by hand
-                val fetchedIds = fetched.orEmpty().map { it.id }.toSet()
-                models.toList().filter { it.id !in fetchedIds }.forEach { m ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(m.id, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        IconButton(onClick = { models.remove(m) }, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.Delete, "Remove", Modifier.size(16.dp)) }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(newModel, { newModel = it }, singleLine = true, placeholder = { Text("model id, e.g. llama3.1") }, modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        val id = newModel.trim()
-                        if (id.isNotBlank() && models.none { it.id == id }) models.add(OpenCodeCustomModel(id))
-                        newModel = ""
-                    }) { Icon(Icons.Outlined.Add, "Add model") }
-                }
-                fetched?.takeIf { it.isNotEmpty() }?.let { list ->
-                    Spacer(Modifier.height(6.dp))
-                    val chosen = list.count { f -> models.any { it.id == f.id } }
-                    val all = chosen == list.size
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("$chosen of ${list.size} found are added:", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.weight(1f))
-                        TextButton(onClick = {
-                            if (all) models.removeAll { m -> list.any { it.id == m.id } }
-                            else list.forEach { f -> if (models.none { it.id == f.id }) models.add(f) }
-                        }) { Text(if (all) "Select none" else "Select all", fontSize = 12.sp) }
-                    }
-                    Column(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
-                        list.forEach { m ->
-                            val on = models.any { it.id == m.id }
-                            Row(
-                                Modifier.fillMaxWidth().clickable { if (on) models.removeAll { it.id == m.id } else models.add(m) },
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(checked = on, onCheckedChange = { if (on) models.removeAll { it.id == m.id } else models.add(m) })
-                                Text(m.name?.takeIf { it.isNotBlank() && it != m.id }?.let { "$it  (${m.id})" } ?: m.id, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+
+    fun fetch() {
+        fetching = true
+        error = null
+        scope.launch {
+            backend.client.fetchModels(kind, baseUrl.trim(), apiKey.trim(), initial.id)
+                .onSuccess { list ->
+                    fetched = list.distinctBy { it.id }
+                    when {
+                        list.isEmpty() -> error = "The endpoint listed no models."
+                        // nothing chosen yet (a new provider): every model the endpoint lists is on; untick the unwanted ones
+                        models.isEmpty() -> fetched.forEach { models[it.id] = it }
+                        // models already added keep the user's choices: what was found only turns things on and fills in limits
+                        else -> fetched.forEach { f ->
+                            models[f.id]?.let { o ->
+                                models[f.id] = o.copy(
+                                    images = o.images || f.images,
+                                    reasoning = o.reasoning || f.reasoning,
+                                    context_length = o.context_length?.takeIf { it > 0 } ?: f.context_length,
+                                    max_output_tokens = o.max_output_tokens?.takeIf { it > 0 } ?: f.max_output_tokens,
+                                    detected = f.detected ?: o.detected
+                                )
                             }
                         }
                     }
                 }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp)) }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    saving = true
-                    error = null
-                    scope.launch {
-                        backend.client.saveCustomProvider(
-                            initial.copy(name = name.trim(), kind = kind, base_url = baseUrl.trim(), api_key = apiKey.trim().ifBlank { null }, models = models.toList())
-                        ).onSuccess { toast("${it.name} saved"); onSaved() }
-                            .onFailure { error = it.message }
-                        saving = false
+                .onFailure { error = it.message }
+            fetching = false
+        }
+    }
+
+    fun save() {
+        saving = true
+        error = null
+        scope.launch {
+            backend.client.saveCustomProvider(
+                initial.copy(
+                    name = name.trim(), kind = kind, base_url = baseUrl.trim(), api_key = apiKey.trim().ifBlank { null },
+                    models = models.values.sortedBy { it.id.lowercase() }
+                )
+            ).onSuccess { toast("${it.name} saved"); onSaved() }
+                .onFailure { error = it.message }
+            saving = false
+        }
+    }
+
+    val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.94f)
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                // title and Save stay put while the list scrolls
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close") }
+                    Text(
+                        if (isNew) "Add a custom provider" else "Edit ${initial.name}",
+                        fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = { save() },
+                        enabled = !saving && name.isNotBlank() && baseUrl.isNotBlank() && models.isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(containerColor = OpenCodeAccent)
+                    ) { Text(if (saving) "Saving…" else "Save") }
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)) }
+
+                LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
+                    item(key = "fields") {
+                        Column {
+                            OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(selected = kind == "openai", onClick = { kind = "openai" }, label = { Text("OpenAI-compatible") })
+                                FilterChip(selected = kind == "anthropic", onClick = { kind = "anthropic" }, label = { Text("Anthropic") })
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedTextField(
+                                baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text(if (kind == "anthropic") "https://api.example.com/v1" else "http://localhost:11434/v1") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                apiKey, { apiKey = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                label = { Text(if (!isNew && initial.has_api_key) "API key (blank keeps ${initial.api_key_hint ?: "the saved one"})" else "API key (optional for local servers)") },
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                            )
+                        }
                     }
-                },
-                enabled = !saving && name.isNotBlank() && baseUrl.isNotBlank() && models.isNotEmpty()
-            ) { Text(if (saving) "Saving…" else "Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+                    item(key = "models-header") {
+                        Column(Modifier.padding(top = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Models", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                                if (fetching) CircularProgressIndicator(Modifier.size(16.dp).padding(end = 2.dp), strokeWidth = 2.dp, color = OpenCodeAccent)
+                                TextButton(onClick = { fetch() }, enabled = baseUrl.isNotBlank() && !fetching) {
+                                    Icon(Icons.Outlined.Refresh, null, Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(if (fetching) "Fetching…" else "Fetch from endpoint")
+                                }
+                            }
+                            Text(
+                                "Tick the models to add. For each added one, set what it can do: Images lets you attach pictures, Reasoning shows " +
+                                    "its thinking, Tools lets it edit files and run commands. Fetching fills these in where the endpoint or models.dev knows the model.",
+                                fontSize = 11.sp, lineHeight = 14.sp, color = dim
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                                OutlinedTextField(
+                                    newModel, { newModel = it }, singleLine = true, modifier = Modifier.weight(1f),
+                                    placeholder = { Text("Add a model id by hand, e.g. llama3.1", fontSize = 13.sp) }
+                                )
+                                IconButton(onClick = {
+                                    val id = newModel.trim()
+                                    if (id.isNotBlank() && !models.containsKey(id)) models[id] = OpenCodeCustomModel(id)
+                                    newModel = ""
+                                }) { Icon(Icons.Outlined.Add, "Add model") }
+                            }
+                        }
+                    }
+                    if (rows.isNotEmpty()) item(key = "model-tools") {
+                        Column(Modifier.padding(top = 8.dp)) {
+                            if (rows.size > 8) {
+                                OutlinedTextField(
+                                    value = query, onValueChange = { query = it }, singleLine = true, shape = RoundedCornerShape(12.dp),
+                                    leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
+                                    placeholder = { Text("Search ${rows.size} models", fontSize = 13.sp) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ModelFilter.entries.forEach { f ->
+                                    val n = when (f) {
+                                        ModelFilter.ALL -> rows.size
+                                        ModelFilter.ADDED -> models.size
+                                        ModelFilter.IMAGES -> rows.count { (models[it.id] ?: it).images }
+                                        ModelFilter.REASONING -> rows.count { (models[it.id] ?: it).reasoning }
+                                    }
+                                    FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text("${f.label} · $n", fontSize = 12.sp) })
+                                }
+                            }
+                            val allShownAdded = shown.isNotEmpty() && shown.all { models.containsKey(it.id) }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "${models.size} added" + if (shown.size != rows.size) " · ${shown.size} shown" else "",
+                                    fontSize = 11.5.sp, color = dim, modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = {
+                                    if (allShownAdded) shown.forEach { models.remove(it.id) }
+                                    else shown.forEach { if (!models.containsKey(it.id)) models[it.id] = it }
+                                }, enabled = shown.isNotEmpty()) {
+                                    Text(if (allShownAdded) "Select none" else "Select all", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                    items(shown, key = { it.id }) { m ->
+                        ProviderModelRow(
+                            model = m,
+                            added = models[m.id],
+                            onToggle = { if (models.containsKey(m.id)) models.remove(m.id) else models[m.id] = m },
+                            onChange = { models[it.id] = it }
+                        )
+                    }
+                    if (rows.isNotEmpty() && shown.isEmpty()) item(key = "none") {
+                        Text("No models match.", fontSize = 12.5.sp, color = dim, modifier = Modifier.padding(vertical = 12.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One model of a custom provider: ticked = added; an added one shows its capability chips. */
+@Composable
+private fun ProviderModelRow(model: OpenCodeCustomModel, added: OpenCodeCustomModel?, onToggle: () -> Unit, onChange: (OpenCodeCustomModel) -> Unit) {
+    val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    val cur = added ?: model
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = added != null, onCheckedChange = { onToggle() })
+            Column(Modifier.weight(1f)) {
+                val title = model.name?.takeIf { it.isNotBlank() && it != model.id }
+                Text(title ?: model.id, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // not added yet: what it can do, so the list can be read before ticking
+                val facts = listOfNotNull(
+                    model.id.takeIf { title != null },
+                    cur.context_length?.takeIf { it > 0 }?.let { "${it / 1000}K" },
+                    if (added == null) "images".takeIf { cur.images } else null,
+                    if (added == null) "reasoning".takeIf { cur.reasoning } else null,
+                    if (added == null) "no tools".takeIf { cur.no_tools } else null
+                )
+                if (facts.isNotEmpty()) Text(facts.joinToString(" · "), fontSize = 10.5.sp, color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (added != null) ModelCapabilityChips(added, onChange, Modifier.padding(start = 48.dp, bottom = 6.dp))
+    }
+}
+
+/** What a custom model can do, as chips the user turns on and off; [onChange] gets the changed model. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelCapabilityChips(model: OpenCodeCustomModel, onChange: (OpenCodeCustomModel) -> Unit, modifier: Modifier = Modifier) {
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        CapabilityChip("Images", Icons.Outlined.Image, model.images) { onChange(model.copy(images = it)) }
+        CapabilityChip("Reasoning", Icons.Outlined.Psychology, model.reasoning) { onChange(model.copy(reasoning = it)) }
+        CapabilityChip("Tools", Icons.Outlined.Build, !model.no_tools) { onChange(model.copy(no_tools = !it)) }
+        model.detected?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                "auto: $it", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                modifier = Modifier.align(Alignment.CenterVertically)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CapabilityChip(label: String, icon: ImageVector, on: Boolean, onToggle: (Boolean) -> Unit) {
+    FilterChip(
+        selected = on,
+        onClick = { onToggle(!on) },
+        label = { Text(label, fontSize = 11.5.sp) },
+        leadingIcon = { Icon(icon, null, Modifier.size(14.dp)) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = OpenCodeAccent.copy(alpha = 0.16f),
+            selectedLeadingIconColor = OpenCodeAccent
+        )
     )
 }

@@ -116,6 +116,13 @@ class OpenCodeChatBackend(
     private val _providers = MutableStateFlow<List<OpenCodeProviderInfo>>(emptyList())
     val providers: StateFlow<List<OpenCodeProviderInfo>> = _providers.asStateFlow()
 
+    private val _modelVariants = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    /** Each model's thinking levels ("provider/model" → OpenCode's variant ids: "low", "high", "none"…), from the model list. */
+    val modelVariants: StateFlow<Map<String, List<String>>> = _modelVariants.asStateFlow()
+    private val _variant = MutableStateFlow<String?>(null)
+    /** Thinking level of the chat on screen (a variant of its model); null = the model's default. */
+    val variant: StateFlow<String?> = _variant.asStateFlow()
+
     private val _agents = MutableStateFlow<List<OpenCodeAgent>>(emptyList())
     val agents: StateFlow<List<OpenCodeAgent>> = _agents.asStateFlow()
     private val _agent = MutableStateFlow(prefs.agent.value)
@@ -401,10 +408,17 @@ class OpenCodeChatBackend(
                                     isDefault = id == defaultId,
                                     key = id,
                                     baseName = names[provider] ?: provider,
-                                    supportsThinking = m.o("capabilities").bool("reasoning") == true || m.o("compatibility").str("reasoningField") != null
+                                    supportsThinking = m.o("capabilities").bool("reasoning") == true || m.o("compatibility").str("reasoningField") != null,
+                                    // OpenCode does not pass images to a model whose input lacks "image" (it tells the model it cannot read them)
+                                    supportsImages = m.o("capabilities").a("input")?.let { input ->
+                                        input.any { (it as? JsonPrimitive)?.content?.startsWith("image") == true }
+                                    }
                                 )
                             }
                             .sortedWith(compareBy({ !it.isDefault }, { it.baseName.lowercase() }, { it.displayName.lowercase() }))
+                        _modelVariants.value = res.obj().a("data").orEmpty().mapNotNull { it.obj() }.associate { m ->
+                            "${m.str("providerID").orEmpty()}/${m.str("id")}" to m.a("variants").orEmpty().mapNotNull { v -> v.obj().str("id") }
+                        }.filterValues { it.isNotEmpty() }
                         _allModels.value = list
                         defaultModelId = defaultId
                         publishModels()
@@ -461,6 +475,7 @@ class OpenCodeChatBackend(
                 ?: list.firstOrNull()?.id.orEmpty()
             if (store.currentConversation.value?.agent != AgentKind.OPENCODE || store.currentConversation.value?.id !in createdSnapshot()) {
                 _selectedModelId.value = pick
+                _variant.value = rememberedVariant(pick)
             }
         }
     }
@@ -539,6 +554,7 @@ class OpenCodeChatBackend(
             agent = AgentKind.OPENCODE
         )
         _selectedModelId.value = prefs.model.value.takeIf { p -> _availableModels.value.any { it.id == p } } ?: _selectedModelId.value
+        _variant.value = rememberedVariant(_selectedModelId.value)
         _agent.value = prefs.agent.value
         store.currentConversation.value = conv.copy(modelId = _selectedModelId.value)
         _conversationError.value = null
@@ -565,6 +581,7 @@ class OpenCodeChatBackend(
             ?: Conversation(id = id, title = "OpenCode Chat", sessionId = id, agent = AgentKind.OPENCODE)
         store.currentConversation.value = conv
         if (conv.modelId.isNotBlank()) _selectedModelId.value = conv.modelId
+        _variant.value = null
         _conversationError.value = null
         _isLoadingConversation.value = true
         _pendingPermissions.value = emptyList()
@@ -615,7 +632,10 @@ class OpenCodeChatBackend(
                 f.o("metadata") ?: JsonObject(emptyMap())))
         }
         sessionInfo?.let { s ->
-            OpenCodeTranscript.modelRef(s.o("model"))?.let { _selectedModelId.value = it }
+            OpenCodeTranscript.modelRef(s.o("model"))?.let {
+                _selectedModelId.value = it
+                _variant.value = s.o("model").str("variant")
+            }
             s.str("agent")?.let { _agent.value = it }
         }
         if (active) {
@@ -687,7 +707,7 @@ class OpenCodeChatBackend(
                 val body = buildJsonObject {
                     put("id", conv.id)
                     workspacePath(conv)?.let { dir -> put("location", buildJsonObject { put("directory", dir) }) }
-                    modelRefJson(_selectedModelId.value)?.let { put("model", it) }
+                    modelRefJson(_selectedModelId.value, _variant.value)?.let { put("model", it) }
                     if (_agent.value.isNotBlank() && _agent.value != "build") put("agent", _agent.value)
                     sessionRules(prefs.permissionMode.value, _agent.value)?.let { put("permissions", it) }
                 }
@@ -886,16 +906,38 @@ class OpenCodeChatBackend(
 
     fun selectModel(modelId: String) {
         _selectedModelId.value = modelId
+        _variant.value = rememberedVariant(modelId)
         if (rememberChoices) prefs.setModel(modelId)
         val conv = store.currentConversation.value?.takeIf { it.agent == AgentKind.OPENCODE } ?: return
         store.currentConversation.value = conv.copy(modelId = modelId)
         if (conv.id !in createdSnapshot()) return
-        val ref = modelRefJson(modelId) ?: return
+        val ref = modelRefJson(modelId, _variant.value) ?: return
         backendScope.launch {
             client.post("/session/${conv.id}/model", buildJsonObject { put("model", ref) })
                 .onFailure { _toasts.tryEmit("Could not switch the model: ${it.message}") }
         }
     }
+
+    /**
+     * Sets how much the chat's model thinks: one of its variants ([modelVariants]), "none" for no thinking where the model
+     * has it, null for its default. Remembered per model for new chats; applies to the next message of this chat.
+     */
+    fun setVariant(variant: String?) {
+        val modelId = _selectedModelId.value
+        _variant.value = variant
+        if (rememberChoices) prefs.setVariant(modelId, variant)
+        val conv = store.currentConversation.value?.takeIf { it.agent == AgentKind.OPENCODE } ?: return
+        if (conv.id !in createdSnapshot()) return
+        val ref = modelRefJson(modelId, variant) ?: return
+        backendScope.launch {
+            client.post("/session/${conv.id}/model", buildJsonObject { put("model", ref) })
+                .onFailure { _toasts.tryEmit("Could not change thinking: ${it.message}") }
+        }
+    }
+
+    /** The level last picked for [modelId], while the model still has it. */
+    private fun rememberedVariant(modelId: String): String? =
+        prefs.variantFor(modelId)?.takeIf { v -> _modelVariants.value[modelId]?.contains(v) != false }
 
     /** Cancels a provider sign-in that was left open (the settings sheet closed). */
     fun cancelSignIn(integrationId: String, attemptId: String) {
@@ -904,7 +946,7 @@ class OpenCodeChatBackend(
 
     /** Switches the model of any chat (open or not); applies to its next message. */
     suspend fun switchModelOf(sessionId: String, modelId: String): Result<Unit> {
-        val ref = modelRefJson(modelId) ?: return Result.failure(IllegalArgumentException("Not an OpenCode model id: $modelId"))
+        val ref = modelRefJson(modelId, rememberedVariant(modelId)) ?: return Result.failure(IllegalArgumentException("Not an OpenCode model id: $modelId"))
         return client.post("/session/$sessionId/model", buildJsonObject { put("model", ref) }).map { }
     }
 
@@ -1151,7 +1193,10 @@ class OpenCodeChatBackend(
                 }
                 return
             }
-            "session.model.selected" -> OpenCodeTranscript.modelRef(d.o("model"))?.let { _selectedModelId.value = it }
+            "session.model.selected" -> OpenCodeTranscript.modelRef(d.o("model"))?.let {
+                _selectedModelId.value = it
+                _variant.value = d.o("model").str("variant")
+            }
             "session.agent.selected" -> d.str("agent")?.let { _agent.value = it }
         }
         if (changed) emitSoon()
@@ -1200,11 +1245,16 @@ class OpenCodeChatBackend(
 
     private fun workspacePath(conv: Conversation): String? = conv.workspaceUri.removePrefix("file://").takeIf { it.startsWith("/") }
 
-    private fun modelRefJson(modelId: String): JsonObject? {
+    /** OpenCode's model reference: {id, providerID, variant}; no variant = the model's default thinking. */
+    private fun modelRefJson(modelId: String, variant: String? = null): JsonObject? {
         val provider = modelId.substringBefore('/', "")
         val model = modelId.substringAfter('/', "")
         if (provider.isBlank() || model.isBlank()) return null
-        return buildJsonObject { put("id", model); put("providerID", provider) }
+        return buildJsonObject {
+            put("id", model)
+            put("providerID", provider)
+            if (!variant.isNullOrBlank()) put("variant", variant)
+        }
     }
 
     companion object {
