@@ -161,13 +161,20 @@ fun LocalTerminalContent(
         ?: sessions.firstOrNull()
 
     if (activeSession == null) {
+        // the first session is usually ready in well under a second: a spinner flashed for that moment makes the open
+        // feel slow, so show only the background for the first second
+        var showLoading by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            delay(1000)
+            showLoading = true
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(backgroundColor),
             contentAlignment = Alignment.Center
         ) {
-            Column(
+            if (showLoading) Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
