@@ -1866,61 +1866,72 @@ private fun AppearanceSubScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Layout Orientation Selector
-                Text(
-                    text = "Layout Orientation",
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val isVert = floatingSwitcherOrientation.equals("VERTICAL", ignoreCase = true)
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onSetFloatingSwitcherOrientation("VERTICAL") },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Outlined.ExpandLess, contentDescription = null, tint = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Vertical", fontSize = 12.sp, fontWeight = if (isVert) FontWeight.Bold else FontWeight.Normal, color = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onSetFloatingSwitcherOrientation("HORIZONTAL") },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (!isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Horizontal", fontSize = 12.sp, fontWeight = if (!isVert) FontWeight.Bold else FontWeight.Normal, color = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-                }
+                // The page overview (on/off, which pill opens it, its layout) and the pills' size
+                SwitcherOverviewOptions(handleIcon = floatingSwitcherHandleIcon)
+                // The icon panel's own options only while the switcher pill has one (not when its tap opens the overview)
+                val iconPanelInUse = rememberPageOverviewMode() != "SWITCHER"
 
                 Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (iconPanelInUse) {
+                    // Layout Orientation Selector
+                    Text(
+                        text = "Layout Orientation",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val isVert = floatingSwitcherOrientation.equals("VERTICAL", ignoreCase = true)
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onSetFloatingSwitcherOrientation("VERTICAL") },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Outlined.ExpandLess, contentDescription = null, tint = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Vertical", fontSize = 12.sp, fontWeight = if (isVert) FontWeight.Bold else FontWeight.Normal, color = if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onSetFloatingSwitcherOrientation("HORIZONTAL") },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (!isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Horizontal", fontSize = 12.sp, fontWeight = if (!isVert) FontWeight.Bold else FontWeight.Normal, color = if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
 
                 // Collapsed Pill Icon Selector
                 Text(
@@ -1978,52 +1989,54 @@ private fun AppearanceSubScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Auto-Collapse Timeout Selector
-                Text(
-                    text = "Auto-Collapse Timeout",
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Automatically collapses into a small handle after inactivity",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                val timeouts = listOf(0 to "Never", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    timeouts.forEach { (sec, label) ->
-                        val isSelected = floatingSwitcherAutoCollapseSec == sec
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onSetFloatingSwitcherAutoCollapseSec(sec) },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center
+                if (iconPanelInUse) {
+                    // Auto-Collapse Timeout Selector
+                    Text(
+                        text = "Auto-Collapse Timeout",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Automatically collapses into a small handle after inactivity",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val timeouts = listOf(0 to "Never", 3 to "3s", 5 to "5s", 10 to "10s", 15 to "15s")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        timeouts.forEach { (sec, label) ->
+                            val isSelected = floatingSwitcherAutoCollapseSec == sec
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSetFloatingSwitcherAutoCollapseSec(sec) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                             ) {
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                                )
+                                Box(
+                                    modifier = Modifier.padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
 
                 // Customize Items Order & Visibility
                 Text(
@@ -4110,6 +4123,13 @@ private fun TerminalSubScreen(
     var cursorStyleState by remember { mutableStateOf(terminalCursorStyle) }
     var bufferSizeState by remember { mutableIntStateOf(terminalBufferSize) }
     var themeState by remember { mutableStateOf(terminalTheme) }
+    val terminalPrefs = remember(context) { ai.antigem.data.preferences.AuthPreferences(context) }
+    val sessionPillEnabled by terminalPrefs.terminalSessionPillEnabled
+        .collectAsState(initial = terminalPrefs.getTerminalSessionPillEnabledSync())
+    val drawerSwipeArea by terminalPrefs.terminalDrawerSwipeArea
+        .collectAsState(initial = terminalPrefs.getTerminalDrawerSwipeAreaSync())
+    val charBasedInput by terminalPrefs.terminalCharBasedInput
+        .collectAsState(initial = terminalPrefs.getTerminalCharBasedInputSync())
 
 
     Column(
@@ -4419,6 +4439,89 @@ private fun TerminalSubScreen(
                             }
                         }
                     }
+                }
+
+                // Floating session pill on/off
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text("Floating Session Pill", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "The session name at the top right of the terminal, to switch and close sessions. Off: a plain terminal like Termux; swipe right from the left edge for the sessions drawer.",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = sessionPillEnabled,
+                        onCheckedChange = { enabled -> coroutineScope.launch { terminalPrefs.saveTerminalSessionPillEnabled(enabled) } },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
+                }
+
+                // Where on the left edge the drawer swipe beats gesture navigation's Back
+                Column {
+                    Text("Drawer Swipe Area", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "With gesture navigation, a swipe from the left edge is Back. Android lets an app keep only part of the edge (200dp) for itself: in that part, marked by a small line on the edge, the swipe always opens the sessions drawer.",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("TOP" to "Top", "MIDDLE" to "Middle", "BOTTOM" to "Bottom").forEach { (area, label) ->
+                            val isSel = drawerSwipeArea.equals(area, ignoreCase = true)
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { coroutineScope.launch { terminalPrefs.saveTerminalDrawerSwipeArea(area) } },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSel) ClaudeTerracotta else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, if (isSel) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+                            ) {
+                                Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                                    Text(text = label, fontSize = 11.5.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium, color = if (isSel) Color.White else MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Keyboard input mode: text mode (keyboard toolbar + clipboard) or key presses only (TYPE_NULL)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text("Character-Based Input", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "For keyboards that misbehave in the terminal (letters doubled or lost, autocorrect). On: the keyboard sends single key presses only, like Termux; its toolbar and clipboard are hidden, so paste with a long press. Off: the keyboard's clipboard works.",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = charBasedInput,
+                        onCheckedChange = { enabled -> coroutineScope.launch { terminalPrefs.saveTerminalCharBasedInput(enabled) } },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ClaudeTerracotta
+                        )
+                    )
                 }
             }
         }

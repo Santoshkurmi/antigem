@@ -28,6 +28,21 @@ public interface TerminalViewClient {
      */
     void onSingleTapUp(MotionEvent e);
 
+    /**
+     * On a double tap. The second tap of a quick pair never reaches {@link #onSingleTapUp}; AntiGem uses this to still
+     * show the keyboard. Default: nothing (as before).
+     */
+    default void onDoubleTap(MotionEvent e) {
+    }
+
+    /**
+     * Text the keyboard sends in one go (its clipboard / paste key, a swiped word): return true when handled as a
+     * paste (one write). Default false: sent character by character, as before.
+     */
+    default boolean onPasteText(String text) {
+        return false;
+    }
+
     boolean shouldBackButtonBeMappedToEscape();
 
     boolean shouldEnforceCharBasedInput();

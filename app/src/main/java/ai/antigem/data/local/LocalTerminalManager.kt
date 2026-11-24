@@ -31,6 +31,23 @@ data class TmuxWindowInfo(
     val windowId: String? = null
 )
 
+/**
+ * Whether the program in the terminal asked for bracketed paste (DECSET 2004, as bash, zsh and nvim do), so a paste
+ * arrives as one block instead of being typed (and run line by line). The emulator keeps that bit private.
+ */
+private val emulatorDecsetBitMethod: java.lang.reflect.Method by lazy {
+    com.termux.terminal.TerminalEmulator::class.java
+        .getDeclaredMethod("isDecsetInternalBitSet", Int::class.javaPrimitiveType)
+        .apply { isAccessible = true }
+}
+
+private fun com.termux.terminal.TerminalEmulator.isBracketedPasteMode(): Boolean =
+    try {
+        emulatorDecsetBitMethod.invoke(this, 1024) as Boolean // TerminalEmulator.DECSET_BIT_BRACKETED_PASTE_MODE
+    } catch (_: Exception) {
+        false
+    }
+
 fun formatTmuxTitle(winIndex: Int, winName: String): String {
     val displayIndex = winIndex + 1
     val cleanName = winName.trim()
@@ -97,6 +114,11 @@ class LocalPtySession(
 
     private val sessionScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // Keystrokes to the SSH/tmux side, one at a time in the order typed: on the shared IO pool, separate writes could
+    // run out of order (the write lock isn't first-come first-served), scrambling fast typing.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val sshInputDispatcher = Dispatchers.IO.limitedParallelism(1)
+
     private var jschSession: Session? = null
     private var sshChannel: ChannelExec? = null
     private var sshIn: InputStream? = null
@@ -120,6 +142,8 @@ class LocalPtySession(
             TAG,
             "[$id] Initializing session: name=$name, isSsh=$isSsh, winIdx=$tmuxWindowIndex, paneId=$initialPaneId, dir=$workingDirectory"
         )
+        // the local environment's zsh: Bangla/Hindi marks drawn joined, not as <09cd> (both the direct shell and tmux)
+        LocalEnvironmentManager.ensureZshDefaults(context)
         if (isSsh) {
             val safeCwd = context.filesDir.absolutePath
             val dummyBinary = when {
@@ -661,6 +685,33 @@ class LocalPtySession(
         }
     }
 
+    /**
+     * Renames the session (the terminal drawer's long-press). A tmux window is renamed in tmux, so the name survives a
+     * reconnect and tmux stops naming it after the running command; any other session only changes its title here.
+     */
+    fun rename(newName: String) {
+        // ' would end the quoted tmux argument, | splits the ANTIGEM_INFO line the title is read from
+        val clean = newName.replace(Regex("[\\r\\n'|]"), " ").trim()
+        if (clean.isEmpty() || _isExited.value) return
+        if (isSsh && tmuxParser.isControlModeActive) {
+            tmuxWindowIndex?.let { _title.value = formatTmuxTitle(it, clean) }
+            sessionScope.launch(Dispatchers.IO) {
+                synchronized(sshWriteLock) {
+                    try {
+                        val target = assignedPaneId ?: (tmuxWindowIndex?.let { "$tmuxSessionName:$it" } ?: "")
+                        val targetArg = if (target.isNotEmpty()) "-t $target " else ""
+                        sshOut?.write("rename-window $targetArg'$clean'\n".toByteArray(Charsets.UTF_8))
+                        sshOut?.flush()
+                    } catch (_: Exception) {
+                    }
+                }
+                scheduleDebouncedInfoUpdate(150)
+            }
+        } else {
+            _title.value = clean
+        }
+    }
+
     fun requestInfoUpdate() {
         if (!isSsh || !tmuxParser.isControlModeActive || _isExited.value) return
         val now = System.currentTimeMillis()
@@ -697,7 +748,7 @@ class LocalPtySession(
         val repr = String(copy, Charsets.UTF_8).replace("\n", "\\n").replace("\r", "\\r")
         val hex = TmuxControlParser.encodeToHex(copy)
         Log.d(TAG, "[$id] APP -> SSH: \"$repr\" (hex=$hex)")
-        sessionScope.launch(Dispatchers.IO) {
+        sessionScope.launch(sshInputDispatcher) {
             synchronized(sshWriteLock) {
                 try {
                     if (tmuxParser.isControlModeActive) {
@@ -966,7 +1017,7 @@ class LocalPtySession(
             if (clip != null && clip.itemCount > 0) {
                 val text = clip.getItemAt(0).coerceToText(context)?.toString()
                 if (!text.isNullOrEmpty()) {
-                    write(text)
+                    paste(text)
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         android.widget.Toast.makeText(context, "Pasted text", android.widget.Toast.LENGTH_SHORT).show()
                     }
@@ -1018,6 +1069,20 @@ class LocalPtySession(
         } else {
             terminalSession.write(text)
         }
+    }
+
+    /**
+     * Pastes [text] (long-press Paste, or text the keyboard pastes or commits in one go) like Termux's own paste: Esc
+     * and C1 control characters removed, line ends as Enter (\r), wrapped in bracketed-paste markers when the program
+     * asked for them (so bash, zsh, nvim take it as one pasted block and run nothing). Sent as ONE write: typed in
+     * character by character, the shell redraws its line after every character and the app has to draw all of it.
+     */
+    fun paste(text: String) {
+        if (_isExited.value || text.isEmpty()) return
+        val clean = text.replace(Regex("[\\u001B\\u0080-\\u009F]"), "").replace(Regex("\r?\n"), "\r")
+        if (clean.isEmpty()) return
+        val bracketed = terminalSession.emulator?.isBracketedPasteMode() == true
+        write(if (bracketed) "\u001B[200~$clean\u001B[201~" else clean)
     }
 
     fun writeCodePoint(prependEscape: Boolean, codePoint: Int) {
@@ -1577,6 +1642,10 @@ object LocalTerminalManager {
         if (currentIndex == -1) return
         val nextIndex = (currentIndex + 1) % current.size
         selectSession(current[nextIndex].id, context)
+    }
+
+    fun renameSession(id: String, newName: String) {
+        _sessions.value.find { it.id == id }?.rename(newName)
     }
 
     fun closeSession(id: String) {

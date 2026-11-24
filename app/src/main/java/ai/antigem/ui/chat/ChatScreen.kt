@@ -412,6 +412,14 @@ fun ChatScreen(
         showSettingsDialog = true
         ai.antigem.data.jarvis.JarvisController.consumeSettingsRequest()
     }
+    // another screen asked to show a settings page (the terminal drawer's gear: Settings → Terminal)
+    val screenSettingsRequest by viewModel.requestedSettingsSection.collectAsState()
+    LaunchedEffect(screenSettingsRequest) {
+        val name = screenSettingsRequest ?: return@LaunchedEffect
+        requestedSettingsSection = runCatching { ai.antigem.ui.settings.SettingsSection.valueOf(name) }.getOrNull()
+        showSettingsDialog = true
+        viewModel.consumeRequestedSettingsSection()
+    }
 
     // Antigravity cloud agents (Remote Agents): cloud projects, through the hub
     LaunchedEffect(Unit) { ai.antigem.data.agent.agy.AgyCloud.init(context) }
@@ -3661,6 +3669,12 @@ fun ChatScreen(
 
 
     // Fully Working Local Terminal (Termux Shell with close button above)
+    // the terminal drawer's gear: close the terminal, show Settings → Terminal
+    val openTerminalSettingsFromTerminal: () -> Unit = {
+        showLocalTerminalDialog = false
+        requestedSettingsSection = ai.antigem.ui.settings.SettingsSection.TERMINAL
+        showSettingsDialog = true
+    }
     if (showLocalTerminalDialog) {
         if (isInFloatingWindow) {
             Surface(
@@ -3670,12 +3684,14 @@ fun ChatScreen(
                 color = MaterialTheme.colorScheme.background
             ) {
                 LocalTerminalContent(
-                    onClose = { showLocalTerminalDialog = false }
+                    onClose = { showLocalTerminalDialog = false },
+                    onOpenSettings = openTerminalSettingsFromTerminal
                 )
             }
         } else {
             LocalTerminalDialog(
-                onDismiss = { showLocalTerminalDialog = false }
+                onDismiss = { showLocalTerminalDialog = false },
+                onOpenSettings = openTerminalSettingsFromTerminal
             )
         }
     }

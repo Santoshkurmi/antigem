@@ -223,6 +223,29 @@ object LocalEnvironmentManager {
     fun getClaudeWrapperFile(context: Context): File = File(getBinDir(context), "claude")
 
     /**
+     * zsh (the terminal's shell) shows zero-width marks, like the Bangla hasanta U+09CD, as "<09cd>" unless its
+     * COMBINING_CHARS option is on; bash and the terminal itself draw them fine. zsh has no environment variable for
+     * its options, so this adds `setopt COMBINING_CHARS` to the global `$PREFIX/etc/zshenv`: read by every zsh before the
+     * user's own files (which can still turn it off), and owned by no package, so updates leave it alone. Called when a
+     * terminal opens; adds the marked block once, keeping anything else in the file.
+     */
+    fun ensureZshDefaults(context: Context) {
+        try {
+            val etc = File(getPrefixDir(context), "etc")
+            if (!File(getBinDir(context), "zsh").exists() || !etc.isDirectory) return
+            val zshenv = File(etc, "zshenv")
+            val marker = "# AntiGem: combining characters"
+            val existing = if (zshenv.exists()) zshenv.readText() else ""
+            if (existing.contains(marker)) return
+            val block = "$marker (marks like the Bangla hasanta drawn on their letter, not as <09cd>)\n" +
+                "setopt COMBINING_CHARS\n"
+            zshenv.writeText(if (existing.isBlank()) block else existing.trimEnd('\n') + "\n\n" + block)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not write the zsh defaults", e)
+        }
+    }
+
+    /**
      * Writes the Claude Code launcher. The official binary is built for glibc, so it runs through the bundled glibc
      * loader. Claude's own installer and updater only manage `~/.local/share/claude/versions/<version>` and the
      * `~/.local/bin/claude` link, never `$PREFIX/bin`, so updates cannot break this launcher: it always starts the

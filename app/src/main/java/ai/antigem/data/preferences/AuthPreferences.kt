@@ -74,6 +74,9 @@ class AuthPreferences(private val context: Context) {
         val TERMINAL_CURSOR_STYLE = stringPreferencesKey("terminal_cursor_style")
         val TERMINAL_BUFFER_SIZE = androidx.datastore.preferences.core.intPreferencesKey("terminal_buffer_size")
         val TERMINAL_THEME = stringPreferencesKey("terminal_theme")
+        val TERMINAL_SESSION_PILL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("terminal_session_pill_enabled")
+        val TERMINAL_DRAWER_SWIPE_AREA = stringPreferencesKey("terminal_drawer_swipe_area")
+        val TERMINAL_CHAR_BASED_INPUT = androidx.datastore.preferences.core.booleanPreferencesKey("terminal_char_based_input")
         val COMMAND_AUTO_EXECUTION_POLICY = stringPreferencesKey("command_auto_execution_policy")
         val COMMAND_SANDBOX_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("command_sandbox_enabled")
         val REQUIRE_APPROVAL_FOR_FILE_EDITS = androidx.datastore.preferences.core.booleanPreferencesKey("require_approval_for_file_edits")
@@ -92,6 +95,12 @@ class AuthPreferences(private val context: Context) {
         val FLOATING_SWITCHER_AUTO_COLLAPSE_SEC = androidx.datastore.preferences.core.intPreferencesKey("floating_switcher_auto_collapse_sec")
         val FLOATING_SWITCHER_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_x")
         val FLOATING_SWITCHER_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_y")
+        val PAGE_OVERVIEW_MODE = stringPreferencesKey("page_overview_mode")
+        val FLOATING_SWITCHER_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_scale")
+        val OVERVIEW_PILL_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("overview_pill_scale")
+        val OVERVIEW_PILL_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("overview_pill_pos_x")
+        val OVERVIEW_PILL_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("overview_pill_pos_y")
+        val PAGE_OVERVIEW_LAYOUT = stringPreferencesKey("page_overview_layout")
         val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
         val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
@@ -482,6 +491,46 @@ class AuthPreferences(private val context: Context) {
             syncPrefs.edit().putString("terminal_theme", th).apply()
         }
         th
+    }
+
+    /** The terminal's floating session pill (top right). Off (the default): sessions are switched from the drawer, like Termux. */
+    val terminalSessionPillEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[TERMINAL_SESSION_PILL_ENABLED] ?: false }
+
+    fun getTerminalSessionPillEnabledSync(): Boolean = syncPrefs.getBoolean("terminal_session_pill_enabled", false)
+
+    suspend fun saveTerminalSessionPillEnabled(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("terminal_session_pill_enabled", enabled).apply()
+        context.dataStore.edit { it[TERMINAL_SESSION_PILL_ENABLED] = enabled }
+    }
+
+    /**
+     * Where on the terminal's left edge the 200dp band kept from gesture navigation's Back swipe sits, so a swipe
+     * there always opens the sessions drawer: "TOP", "MIDDLE" or "BOTTOM".
+     */
+    val terminalDrawerSwipeArea: Flow<String> = context.dataStore.data
+        .map { it[TERMINAL_DRAWER_SWIPE_AREA] ?: "TOP" }
+
+    fun getTerminalDrawerSwipeAreaSync(): String = syncPrefs.getString("terminal_drawer_swipe_area", "TOP") ?: "TOP"
+
+    suspend fun saveTerminalDrawerSwipeArea(area: String) {
+        syncPrefs.edit().putString("terminal_drawer_swipe_area", area).apply()
+        context.dataStore.edit { it[TERMINAL_DRAWER_SWIPE_AREA] = area }
+    }
+
+    /**
+     * Terminal keyboard input mode. Off (the default): text mode, so the keyboard shows its toolbar and clipboard
+     * (suggestions and autocorrect off). On: key presses only (Android's TYPE_NULL), for keyboards that misbehave in
+     * text mode; no keyboard clipboard then.
+     */
+    val terminalCharBasedInput: Flow<Boolean> = context.dataStore.data
+        .map { it[TERMINAL_CHAR_BASED_INPUT] ?: false }
+
+    fun getTerminalCharBasedInputSync(): Boolean = syncPrefs.getBoolean("terminal_char_based_input", false)
+
+    suspend fun saveTerminalCharBasedInput(enabled: Boolean) {
+        syncPrefs.edit().putBoolean("terminal_char_based_input", enabled).apply()
+        context.dataStore.edit { it[TERMINAL_CHAR_BASED_INPUT] = enabled }
     }
 
     // a PC in use (Connect to PC) is the SSH server; its login is this phone's key, never a password
@@ -1108,6 +1157,74 @@ class AuthPreferences(private val context: Context) {
             it[FLOATING_SWITCHER_POS_X] = x
             it[FLOATING_SWITCHER_POS_Y] = y
         }
+    }
+
+    /**
+     * The page overview (a card per page) and how it opens: "SWITCHER" a tap on the switcher's pill (default; the pill
+     * has no icon panel then), "OWN_PILL" a second pill of its own (the switcher pill keeps its icon panel), "OFF".
+     */
+    val pageOverviewMode: Flow<String> = context.dataStore.data
+        .map { it[PAGE_OVERVIEW_MODE] ?: "SWITCHER" }
+
+    fun getPageOverviewModeSync(): String = syncPrefs.getString("page_overview_mode", "SWITCHER") ?: "SWITCHER"
+
+    suspend fun savePageOverviewMode(mode: String) {
+        syncPrefs.edit().putString("page_overview_mode", mode).apply()
+        context.dataStore.edit { it[PAGE_OVERVIEW_MODE] = mode }
+    }
+
+    /** Size of the switcher (pill and panel together); 1 = normal. */
+    val floatingSwitcherScale: Flow<Float> = context.dataStore.data
+        .map { it[FLOATING_SWITCHER_SCALE] ?: 1f }
+
+    fun getFloatingSwitcherScaleSync(): Float = syncPrefs.getFloat("floating_switcher_scale", 1f)
+
+    suspend fun saveFloatingSwitcherScale(scale: Float) {
+        syncPrefs.edit().putFloat("floating_switcher_scale", scale).apply()
+        context.dataStore.edit { it[FLOATING_SWITCHER_SCALE] = scale }
+    }
+
+    /** The page overview can be opened, so page pictures are worth taking. */
+    fun isPageOverviewInUseSync(): Boolean = getPageOverviewModeSync() != "OFF"
+
+    /** Size of the overview's own pill ("OWN_PILL" mode); 1 = normal. */
+    val overviewPillScale: Flow<Float> = context.dataStore.data
+        .map { it[OVERVIEW_PILL_SCALE] ?: 1f }
+
+    fun getOverviewPillScaleSync(): Float = syncPrefs.getFloat("overview_pill_scale", 1f)
+
+    suspend fun saveOverviewPillScale(scale: Float) {
+        syncPrefs.edit().putFloat("overview_pill_scale", scale).apply()
+        context.dataStore.edit { it[OVERVIEW_PILL_SCALE] = scale }
+    }
+
+    // Default: right edge, above the switcher's default spot (right-center)
+    val overviewPillPosX: Flow<Float> = context.dataStore.data
+        .map { it[OVERVIEW_PILL_POS_X] ?: 0.95f }
+
+    val overviewPillPosY: Flow<Float> = context.dataStore.data
+        .map { it[OVERVIEW_PILL_POS_Y] ?: 0.35f }
+
+    fun getOverviewPillPositionSync(): Pair<Float, Float> =
+        syncPrefs.getFloat("overview_pill_pos_x", 0.95f) to syncPrefs.getFloat("overview_pill_pos_y", 0.35f)
+
+    suspend fun saveOverviewPillPosition(x: Float, y: Float) {
+        syncPrefs.edit().putFloat("overview_pill_pos_x", x).putFloat("overview_pill_pos_y", y).apply()
+        context.dataStore.edit {
+            it[OVERVIEW_PILL_POS_X] = x
+            it[OVERVIEW_PILL_POS_Y] = y
+        }
+    }
+
+    /** How the page overview shows the pages: "LARGE" (2 big cards a row, scrolls; default), "FIT" (all at once) or "LIST". */
+    val pageOverviewLayout: Flow<String> = context.dataStore.data
+        .map { it[PAGE_OVERVIEW_LAYOUT] ?: "LARGE" }
+
+    fun getPageOverviewLayoutSync(): String = syncPrefs.getString("page_overview_layout", "LARGE") ?: "LARGE"
+
+    suspend fun savePageOverviewLayout(layout: String) {
+        syncPrefs.edit().putString("page_overview_layout", layout).apply()
+        context.dataStore.edit { it[PAGE_OVERVIEW_LAYOUT] = layout }
     }
 
     val isFloatingDiagnosticsEnabled: Flow<Boolean> = context.dataStore.data

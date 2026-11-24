@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -98,6 +99,10 @@ fun FloatingSwitcherWidget(
     savedPosXRatio: Float, // 0.0 .. 1.0 (default ~0.95f)
     savedPosYRatio: Float, // 0.0 .. 1.0 (default ~0.50f)
     handleIcon: String = "grid", // collapsed pill icon id, see FloatingSwitcherHandleIcons
+    handleIconOverride: ImageVector? = null, // a fixed pill icon instead of handleIcon (the overview pill)
+    scale: Float = 1f, // size of the pill and its panel together (Settings → Appearance), 1 = normal
+    tapOpensOverview: Boolean = false, // a tap calls onOpenOverview instead of opening the icon panel
+    onOpenOverview: () -> Unit = {},
     onNavigateToChat: () -> Unit,
     onNavigateToIde: () -> Unit,
     onNavigateToBrowser: () -> Unit,
@@ -113,7 +118,11 @@ fun FloatingSwitcherWidget(
     bottomAreaTopPx: () -> Float? = { null },
     modifier: Modifier = Modifier
 ) {
-    val density = LocalDensity.current
+    // Every dp of the widget (pill, panel, icons, gaps) follows the chosen size; positions stay in px
+    val baseDensity = LocalDensity.current
+    val density = remember(baseDensity, scale) {
+        Density(baseDensity.density * scale.coerceIn(0.5f, 2f), baseDensity.fontScale)
+    }
     val haptic = LocalHapticFeedback.current
 
     var isExpanded by remember { mutableStateOf(false) }
@@ -168,6 +177,8 @@ fun FloatingSwitcherWidget(
     }
     // The gesture handler lives in a long-running pointerInput(Unit); always call the latest callback.
     val currentOnNavigateBack by rememberUpdatedState(onNavigateBack)
+    val currentTapOpensOverview by rememberUpdatedState(tapOpensOverview)
+    val currentOnOpenOverview by rememberUpdatedState(onOpenOverview)
 
     // Directional arrow in the expanded panel: collapse points back to the anchor.
     val collapseArrowIcon: ImageVector = if (isVertical) {
@@ -388,14 +399,16 @@ fun FloatingSwitcherWidget(
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         lastInteractionTimestamp = System.currentTimeMillis()
 
-                        val isSecondTap = isExpanded && hitState.tapExpandPending &&
+                        // Overview mode never expands: its first tap opened (or closed) the overview instead
+                        val isSecondTap = (isExpanded || currentTapOpensOverview) && hitState.tapExpandPending &&
                             down.uptimeMillis - hitState.tapUpTimeMillis <= viewConfiguration.doubleTapTimeoutMillis &&
                             toRoot(down.position)?.let { (it - hitState.tapRootPos).getDistance() <= doubleTapRadiusPx } == true
                         hitState.tapExpandPending = false
 
                         if (isSecondTap) {
                             // Double-tap on the pill: the first tap already opened the panel (instantly), the second
-                            // closes it and jumps back to the previous screen. Swallow it so nothing else reacts.
+                            // closes it and jumps back to the previous screen (overview mode: the first tap opened the
+                            // overview, onNavigateBack closes it). Swallow it so nothing else reacts.
                             down.consume()
                             while (true) {
                                 val change = awaitPointerEvent(PointerEventPass.Initial).changes
@@ -435,95 +448,98 @@ fun FloatingSwitcherWidget(
                             if (up != null && !up.pressed) {
                                 hitState.tapUpTimeMillis = up.uptimeMillis
                                 hitState.tapRootPos = toRoot(up.position) ?: Offset.Zero
-                                expand()
+                                if (currentTapOpensOverview) currentOnOpenOverview() else expand()
                                 hitState.tapExpandPending = true
                             }
                         }
                     }
                 }
         ) {
-            // Solid fill with a single shadow: a see-through fill let the shadow underneath show through as a
-            // second, smaller circle behind the arrow
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
-                shadowElevation = 8.dp
-            ) {
-                if (!isExpanded) {
-                    // Collapsed Compact Pill with the chosen icon (never an arrow, so it can't be mistaken for the chat's
-                    // jump-to-top/bottom button). Touch is handled by the widget's gesture handler above
-                    // (tap / double-tap / drag).
-                    // 44dp = same footprint as the expanded panel's arrow cell, so the pill doesn't shift on toggle.
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(24.dp))
-                            .semantics {
-                                onClick(label = "Expand Switcher") {
-                                    expand()
-                                    true
+            // The pill's and panel's dp follow the chosen size (see density above)
+            CompositionLocalProvider(LocalDensity provides density) {
+                // Solid fill with a single shadow: a see-through fill let the shadow underneath show through as a
+                // second, smaller circle behind the arrow
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
+                    shadowElevation = 8.dp
+                ) {
+                    if (!isExpanded) {
+                        // Collapsed Compact Pill with the chosen icon (never an arrow, so it can't be mistaken for the chat's
+                        // jump-to-top/bottom button). Touch is handled by the widget's gesture handler above
+                        // (tap / double-tap / drag).
+                        // 44dp = same footprint as the expanded panel's arrow cell, so the pill doesn't shift on toggle.
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(24.dp))
+                                .semantics {
+                                    onClick(label = if (tapOpensOverview) "Open page overview" else "Expand Switcher") {
+                                        if (tapOpensOverview) onOpenOverview() else expand()
+                                        true
+                                    }
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = handleIconOverride ?: floatingSwitcherHandleIcon(handleIcon),
+                                contentDescription = if (tapOpensOverview) "Open page overview" else "Expand Switcher",
+                                tint = ClaudeTerracotta,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    } else CompositionLocalProvider(LocalViewConfiguration provides orientationHoldViewConfiguration) {
+                        if (isVertical) {
+                            // Collapse arrow sits at the anchored end (top when growing down, bottom when growing up).
+                            Column(
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                val divider: @Composable () -> Unit = {
+                                    HorizontalDivider(
+                                        modifier = Modifier
+                                            .width(22.dp)
+                                            .padding(vertical = 2.dp),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                    )
+                                }
+                                if (!anchorBottom) {
+                                    collapseButton()
+                                    divider()
+                                    switcherItems()
+                                } else {
+                                    switcherItems()
+                                    divider()
+                                    collapseButton()
                                 }
                             }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = floatingSwitcherHandleIcon(handleIcon),
-                            contentDescription = "Expand Switcher",
-                            tint = ClaudeTerracotta,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                } else CompositionLocalProvider(LocalViewConfiguration provides orientationHoldViewConfiguration) {
-                    if (isVertical) {
-                        // Collapse arrow sits at the anchored end (top when growing down, bottom when growing up).
-                        Column(
-                            modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            val divider: @Composable () -> Unit = {
-                                HorizontalDivider(
-                                    modifier = Modifier
-                                        .width(22.dp)
-                                        .padding(vertical = 2.dp),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                )
-                            }
-                            if (!anchorBottom) {
-                                collapseButton()
-                                divider()
-                                switcherItems()
-                            } else {
-                                switcherItems()
-                                divider()
-                                collapseButton()
-                            }
-                        }
-                    } else {
-                        // Collapse arrow sits at the anchored end (right when growing left, left when growing right).
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            val divider: @Composable () -> Unit = {
-                                VerticalDivider(
-                                    modifier = Modifier
-                                        .height(22.dp)
-                                        .padding(horizontal = 2.dp),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                )
-                            }
-                            if (anchorRight) {
-                                switcherItems()
-                                divider()
-                                collapseButton()
-                            } else {
-                                collapseButton()
-                                divider()
-                                switcherItems()
+                        } else {
+                            // Collapse arrow sits at the anchored end (right when growing left, left when growing right).
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                val divider: @Composable () -> Unit = {
+                                    VerticalDivider(
+                                        modifier = Modifier
+                                            .height(22.dp)
+                                            .padding(horizontal = 2.dp),
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                    )
+                                }
+                                if (anchorRight) {
+                                    switcherItems()
+                                    divider()
+                                    collapseButton()
+                                } else {
+                                    collapseButton()
+                                    divider()
+                                    switcherItems()
+                                }
                             }
                         }
                     }

@@ -873,6 +873,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         requestedViewMode.value = null
     }
 
+    /** A settings page another screen wants shown (a SettingsSection name, e.g. the terminal drawer's gear); ChatScreen opens it. */
+    val requestedSettingsSection = MutableStateFlow<String?>(null)
+
+    fun requestSettingsSection(section: String) {
+        requestedSettingsSection.value = section
+    }
+
+    fun consumeRequestedSettingsSection() {
+        requestedSettingsSection.value = null
+    }
+
     /** Antigravity's chat state (shared store); Claude Code keeps its own, see [messages]. */
     private val _messages = store.messages
     /** Messages of the chat on screen, from the agent that owns it. */

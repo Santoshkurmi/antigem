@@ -219,7 +219,13 @@ fun FloatingChatWindow(
                             val terminalSessions by ai.antigem.data.local.LocalTerminalManager.sessions.collectAsState()
                             if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
                                 LocalTerminalContent(
-                                    onClose = { currentViewMode = AppViewMode.CHAT }
+                                    onClose = { currentViewMode = AppViewMode.CHAT },
+                                    isVisible = currentViewMode == AppViewMode.TERMINAL,
+                                    // the drawer's gear: Settings lives on the chat screen
+                                    onOpenSettings = {
+                                        currentViewMode = AppViewMode.CHAT
+                                        viewModel.requestSettingsSection("TERMINAL")
+                                    }
                                 )
                             }
                         }

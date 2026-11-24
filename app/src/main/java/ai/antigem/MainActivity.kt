@@ -25,6 +25,7 @@ import ai.antigem.ui.browser.BrowserScreen
 import ai.antigem.ui.chat.ChatViewModel
 import ai.antigem.ui.chat.ChatViewModelHolder
 import ai.antigem.ui.ide.IdeScreen
+import ai.antigem.ui.components.pageSnapshotSource
 
 enum class AppViewMode {
     CHAT,
@@ -136,7 +137,17 @@ class MainActivity : ComponentActivity() {
                     else -> AppViewMode.CHAT
                 }
             }
-            var currentViewMode by remember { mutableStateOf(initialViewMode) }
+            // The page overview: a card per page, opened from the switcher's pill or the overview pill
+            var showPageOverview by remember { mutableStateOf(false) }
+            // Every page change goes through here. While the overview can be opened, the page being left is pictured for
+            // its card (not while the overview covers it: it pictured that page when it opened)
+            var currentViewMode by remember {
+                ai.antigem.ui.components.PageChangeState(initialViewMode) { left ->
+                    if (!showPageOverview && chatViewModel.authPreferences.isPageOverviewInUseSync()) {
+                        ai.antigem.ui.components.PageSnapshots.capture(this@MainActivity, left)
+                    }
+                }
+            }
             var previousViewMode by remember { mutableStateOf(AppViewMode.CHAT) }
 
             LaunchedEffect(requestedMode) {
@@ -187,6 +198,24 @@ class MainActivity : ComponentActivity() {
             val floatingSwitcherPosX by chatViewModel.floatingSwitcherPosX.collectAsState()
             val floatingSwitcherPosY by chatViewModel.floatingSwitcherPosY.collectAsState()
             val floatingSwitcherHandleIcon by chatViewModel.floatingSwitcherHandleIcon.collectAsState()
+            val switcherPrefs = chatViewModel.authPreferences
+            // The page overview opens from a tap on the switcher's pill ("SWITCHER"), from its own pill ("OWN_PILL"), or is off
+            val pageOverviewMode by switcherPrefs.pageOverviewMode
+                .collectAsState(initial = switcherPrefs.getPageOverviewModeSync())
+            val switcherTapOpensOverview = pageOverviewMode == "SWITCHER"
+            val overviewPillEnabled = pageOverviewMode == "OWN_PILL"
+            val floatingSwitcherScale by switcherPrefs.floatingSwitcherScale
+                .collectAsState(initial = switcherPrefs.getFloatingSwitcherScaleSync())
+            val overviewPillScale by switcherPrefs.overviewPillScale
+                .collectAsState(initial = switcherPrefs.getOverviewPillScaleSync())
+            val overviewPillPosX by switcherPrefs.overviewPillPosX
+                .collectAsState(initial = switcherPrefs.getOverviewPillPositionSync().first)
+            val overviewPillPosY by switcherPrefs.overviewPillPosY
+                .collectAsState(initial = switcherPrefs.getOverviewPillPositionSync().second)
+            val pageOverviewLayout by switcherPrefs.pageOverviewLayout
+                .collectAsState(initial = switcherPrefs.getPageOverviewLayoutSync())
+            // the page overview can be opened (from the switcher's tap or the overview pill): record the pages for it
+            val pageOverviewInUse = switcherTapOpensOverview || overviewPillEnabled
             // Where the chat's bottom input area starts (root px); read only inside the switcher, so updates don't
             // recompose this whole screen.
             val chatBottomAreaTop = remember { mutableStateOf<Float?>(null) }
@@ -215,6 +244,16 @@ class MainActivity : ComponentActivity() {
             // Jarvis (voice mode) needs to know which screen the user is on
             LaunchedEffect(currentViewMode) {
                 ai.antigem.data.jarvis.JarvisController.screen.value = currentViewMode.name.lowercase()
+            }
+
+            // Any page change (a pill's icon panel, a notification, a screen's own button) closes the page overview
+            LaunchedEffect(currentViewMode) { showPageOverview = false }
+            // Overview turned off in Settings: free its page pictures
+            LaunchedEffect(switcherTapOpensOverview, overviewPillEnabled) {
+                if (!switcherTapOpensOverview && !overviewPillEnabled) {
+                    ai.antigem.ui.components.PageSnapshots.shots.clear()
+                    showPageOverview = false
+                }
             }
 
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -333,6 +372,8 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else -20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.CHAT, pageOverviewInUse)
                                 ) {
                                     ChatScreen(
                                         viewModel = chatViewModel,
@@ -369,6 +410,8 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else 20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.IDE, pageOverviewInUse)
                                 ) {
                                     IdeScreen(
                                         viewModel = chatViewModel,
@@ -400,12 +443,21 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else 20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.TERMINAL, pageOverviewInUse)
                                 ) {
                                     if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
                                         ai.antigem.ui.components.LocalTerminalContent(
                                             onClose = {
                                                 currentViewMode =
                                                     if (previousViewMode == AppViewMode.TERMINAL) AppViewMode.CHAT else previousViewMode
+                                            },
+                                            isVisible = currentViewMode == AppViewMode.TERMINAL,
+                                            // the drawer's gear: Settings lives on the chat screen
+                                            onOpenSettings = {
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.CHAT
+                                                chatViewModel.requestSettingsSection("TERMINAL")
                                             }
                                         )
                                     }
@@ -420,6 +472,8 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else 20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.BROWSER, pageOverviewInUse)
                                 ) {
                                     BrowserScreen(
                                         isVisible = currentViewMode == AppViewMode.BROWSER,
@@ -439,6 +493,8 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else 20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.NOTES, pageOverviewInUse)
                                 ) {
                                     ai.antigem.ui.notes.NotesScreen(
                                         isVisible = currentViewMode == AppViewMode.NOTES,
@@ -460,6 +516,8 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else 20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.FILES, pageOverviewInUse)
                                 ) {
                                     if (hasEverOpenedFiles) {
                                         ai.antigem.ui.files.FileExplorer(
@@ -514,6 +572,8 @@ class MainActivity : ComponentActivity() {
                                             alpha = if (isVisible) 1f else 0f
                                             translationX = if (isVisible) 0f else 20000f
                                         }
+                                        // its drawing, for its picture in the page overview (without the floating pills over it)
+                                        .pageSnapshotSource(AppViewMode.RUN, pageOverviewInUse)
                                 ) {
                                     if (hasEverOpenedRun) {
                                         ai.antigem.ui.run.RunScreen(
@@ -565,6 +625,64 @@ class MainActivity : ComponentActivity() {
                                         switcherLastSeenMode = currentViewMode
                                     }
                                 }
+                                // Double-tap on a pill: back to the page shown before (closing the overview if a tap opened it)
+                                val switcherNavigateBack: () -> Unit = {
+                                    val target = switcherBackTarget
+                                    when {
+                                        target == null || target == currentViewMode -> Unit
+                                        target == AppViewMode.TERMINAL -> openTerminalFromSwitcher()
+                                        else -> {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = target
+                                        }
+                                    }
+                                    // after the page change, so the overview on screen isn't pictured as the page that was left
+                                    showPageOverview = false
+                                }
+                                // A pill tap (overview mode): open the overview, picturing the shown page first; again closes it
+                                val togglePageOverview: () -> Unit = {
+                                    if (showPageOverview) {
+                                        showPageOverview = false
+                                    } else {
+                                        ai.antigem.ui.components.PageSnapshots.capture(this@MainActivity, currentViewMode)
+                                        showPageOverview = true
+                                    }
+                                }
+                                val openPageFromOverview: (String) -> Unit = { id ->
+                                    val mode = when (id) {
+                                        "chat" -> AppViewMode.CHAT
+                                        "ide" -> AppViewMode.IDE
+                                        "browser" -> AppViewMode.BROWSER
+                                        "notes" -> AppViewMode.NOTES
+                                        "files" -> AppViewMode.FILES
+                                        "run" -> AppViewMode.RUN
+                                        else -> null
+                                    }
+                                    when {
+                                        id == "terminal" -> openTerminalFromSwitcher()
+                                        mode != null && mode != currentViewMode -> {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = mode
+                                        }
+                                    }
+                                    showPageOverview = false // after the page change (see switcherNavigateBack)
+                                }
+                                val pageOverviewScope = rememberCoroutineScope()
+                                ai.antigem.ui.components.PageOverview(
+                                    visible = showPageOverview,
+                                    currentViewMode = currentViewMode,
+                                    items = floatingSwitcherItems,
+                                    layout = pageOverviewLayout,
+                                    chatWorking = chatViewModel.isStreaming,
+                                    chatConversation = chatViewModel.currentConversation,
+                                    onOpenPage = openPageFromOverview,
+                                    onLayoutChange = { layout ->
+                                        pageOverviewScope.launch { switcherPrefs.savePageOverviewLayout(layout) }
+                                    },
+                                    // a tile held and dragged to a new place: the switcher's order (its panel and Settings follow)
+                                    onReorder = { order -> chatViewModel.setFloatingSwitcherItems(order) },
+                                    onDismiss = { showPageOverview = false }
+                                )
                                 ai.antigem.ui.components.FloatingSwitcherWidget(
                                     currentViewMode = currentViewMode,
                                     orientation = floatingSwitcherOrientation,
@@ -573,6 +691,9 @@ class MainActivity : ComponentActivity() {
                                     savedPosXRatio = floatingSwitcherPosX,
                                     savedPosYRatio = floatingSwitcherPosY,
                                     handleIcon = floatingSwitcherHandleIcon,
+                                    scale = floatingSwitcherScale,
+                                    tapOpensOverview = switcherTapOpensOverview,
+                                    onOpenOverview = togglePageOverview,
                                     // the chat stays composed (moved off-screen) under other screens: use it only when shown
                                     bottomAreaTopPx = {
                                         if (currentViewMode == AppViewMode.CHAT) chatBottomAreaTop.value else null
@@ -602,22 +723,40 @@ class MainActivity : ComponentActivity() {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.RUN
                                     },
-                                    onNavigateBack = {
-                                        val target = switcherBackTarget
-                                        when {
-                                            target == null || target == currentViewMode -> Unit
-                                            target == AppViewMode.TERMINAL -> openTerminalFromSwitcher()
-                                            else -> {
-                                                previousViewMode = currentViewMode
-                                                currentViewMode = target
-                                            }
-                                        }
-                                    },
+                                    onNavigateBack = switcherNavigateBack,
                                     onPositionSaved = { x, y ->
                                         chatViewModel.saveFloatingSwitcherPosition(x, y)
                                     },
                                     onOrientationChange = { chatViewModel.setFloatingSwitcherOrientation(it) }
                                 )
+                                // The overview pill: a second pill that only opens the page overview (Settings → Appearance)
+                                if (overviewPillEnabled) {
+                                    val overviewPillScope = rememberCoroutineScope()
+                                    ai.antigem.ui.components.FloatingSwitcherWidget(
+                                        currentViewMode = currentViewMode,
+                                        orientation = floatingSwitcherOrientation,
+                                        items = floatingSwitcherItems,
+                                        autoCollapseTimeoutSec = 0,
+                                        savedPosXRatio = overviewPillPosX,
+                                        savedPosYRatio = overviewPillPosY,
+                                        handleIconOverride = ai.antigem.ui.components.PageOverviewPillIcon,
+                                        scale = overviewPillScale,
+                                        tapOpensOverview = true,
+                                        onOpenOverview = togglePageOverview,
+                                        bottomAreaTopPx = {
+                                            if (currentViewMode == AppViewMode.CHAT) chatBottomAreaTop.value else null
+                                        },
+                                        // it never opens the icon panel
+                                        onNavigateToChat = {},
+                                        onNavigateToIde = {},
+                                        onNavigateToBrowser = {},
+                                        onNavigateToTerminal = {},
+                                        onNavigateBack = switcherNavigateBack,
+                                        onPositionSaved = { x, y ->
+                                            overviewPillScope.launch { switcherPrefs.saveOverviewPillPosition(x, y) }
+                                        }
+                                    )
+                                }
                                 if (showSwitcherToolsInstall) {
                                     ai.antigem.ui.settings.LocalToolsInstallDialog(
                                         authPreferences = chatViewModel.authPreferences,
