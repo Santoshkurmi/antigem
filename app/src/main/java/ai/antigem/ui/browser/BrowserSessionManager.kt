@@ -1099,7 +1099,12 @@ class BrowserSessionManager private constructor() {
 
                 override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: android.net.http.SslError?) {
                     val reqUrl = error?.url ?: tab.url
-                    val isLocal = reqUrl.contains("localhost") || reqUrl.contains("127.0.0.1") || reqUrl.contains("192.168.") || reqUrl.contains("10.0.")
+                    // Match the parsed host exactly, never a substring of the whole URL: otherwise
+                    // e.g. https://cdn.example/lib/10.0.2/x.js or ?r=localhost would skip TLS checks.
+                    val host = try { Uri.parse(reqUrl).host?.lowercase() } catch (_: Exception) { null } ?: ""
+                    val isIpv4 = host.matches(Regex("^\\d{1,3}(\\.\\d{1,3}){3}$"))
+                    val isLocal = host == "localhost" || host == "127.0.0.1" ||
+                        (isIpv4 && (host.startsWith("192.168.") || host.startsWith("10.0.")))
                     
                     // For local development on localhost/127.0.0.1, automatically bypass self-signed SSL errors so dev servers load seamlessly
                     if (isLocal) {
