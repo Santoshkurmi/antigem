@@ -20,27 +20,15 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 139,
-    "version_name": "2.0.5-beta.2",
+    "version_code": 140,
+    "version_name": "2.0.5-beta.3",
     "changelog": [
-      "Added home screen widgets: Chats (your newest chats), Quick actions, One chat, and Scripts (runs your ~/.shortcuts scripts, like Termux:Widget)",
-      "Put any chat on your home screen as its own icon: ⋮ on a chat in the sidebar → Add to home screen, or long-press the chat's title. Browser pages, pages of the app and scripts can get an icon too",
-      "Long-press AntiGem's app icon to jump straight into your recent chats",
-      "Added Settings → Home screen: add widgets and icons, widget colors (AntiGem theme or wallpaper), background opacity, and an option to hide chat names",
-      "Your AntiGem files now show up in Android's file picker and Files app, so other apps can open and save them. The Ubuntu chroot's home folder shows up too. Turn it on or off in Settings → Files in other apps",
-      "AntiGem now checks free storage before installing the Linux environment, Android dev tools, REA, the desktop or an app update, and tells you how much to free up instead of failing halfway",
-      "Running out of storage during an install now says so clearly, and the half-finished install is removed so it doesn't keep the phone full",
-      "Fixed AntiGem crashing when the phone's storage is full",
-      "Commands and scripts now show a clear message when the local environment isn't installed yet, instead of failing",
-      "Better Android 7 support: Java file features missing on Android 7 now come with the app",
-      "Fixed the app icon on Android 7: it showed as a big dark square, now it's a rounded icon the same size as other apps",
-      "The IDE's file tree now reads a folder only when you open it, so big projects open fast and use much less memory",
-      "The IDE's file tree now updates by itself while the sidebar is open: new, deleted and renamed files show up within a few seconds",
-      "Fixed the phone freezing when opening a very big file in the IDE. Files too big for it (text over 5 MB, pictures over 15 MB) are refused before anything is downloaded, with a Share button to open them in another app",
-      "The IDE now asks before opening a file that isn't text, before downloading it",
-      "The file open in the IDE now reloads only when it changed on disk, instead of being downloaded again every few seconds",
-      "Tapping another file while one is still opening in the IDE now cancels the first one, and the file being opened shows a spinner",
-      "The floating switcher's pill now shows a ripple when you press it"
+      "Added the Discord theme: Discord's dark look with deep greys and a blurple accent. It's now the default dark theme, followed by Obsidian and Midnight Aurora (a dark theme you already picked stays)",
+      "Each session in the terminal's sessions drawer now has Rename and Close buttons, no long press needed",
+      "With the Termux-style terminal icon, Recents now shows the terminal with the Termux icon and name",
+      "Loading spinners in the IDE's file tree and when opening the terminal now show only when loading is actually slow, instead of flashing every time",
+      "Fixed a strip of a different color next to the IDE's sidebar and behind the status bar",
+      "Settings: removed the On/Off badges next to switches (the switch already shows it), and long names no longer push the switch off the screen"
     ]
   }
 }

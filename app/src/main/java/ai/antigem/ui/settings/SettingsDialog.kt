@@ -1611,14 +1611,6 @@ private fun AppearanceSubScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
-            if (chatFontScale != 1.0f) {
-                TextButton(
-                    onClick = { onSetChatFontScale(1.0f) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text("Reset (1.0x)", fontSize = 12.sp, color = ClaudeTerracotta)
-                }
-            }
         }
 
         Card(
