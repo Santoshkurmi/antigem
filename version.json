@@ -20,17 +20,26 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 136,
-    "version_name": "2.0.4-beta.2",
+    "version_code": 138,
+    "version_name": "2.0.5-beta.1",
     "changelog": [
-      "Fixed OpenCode custom providers whose models didn't show up in the model list or in chat (newer OpenCode versions)",
-      "Added Images, Reasoning and Tools switches for each model of an OpenCode custom provider",
-      "\"Fetch from endpoint\" now detects which models read images, think or use tools (from the endpoint, Ollama or models.dev)",
-      "Redesigned the custom provider editor: full screen, fast with hundreds of models, with search, filters and select all",
-      "Added Effort and Thinking controls to OpenCode chats for models that support them",
-      "The chat now warns when you attach an image to an OpenCode model that can't read images",
-      "Fixed the app not starting on Android 7 and 8",
-      "Back on the main chat screen now moves AntiGem to the background instead of closing it"
+      "Added the page overview: every page (Chat, IDE, Terminal, Browser, Notes, Files) as a card showing how it looked when you left it and what it is doing now. Tap a card to open it, hold and drag to reorder",
+      "A tap on the floating switcher's pill now opens the page overview. In Settings → Appearance you can give the overview its own pill instead (the switcher keeps its icon panel) or turn it off",
+      "Page overview layouts: Large cards, Fit screen or List, switchable from its header or in Settings",
+      "Added size sliders for the floating switcher pill and the overview's pill",
+      "Choose the icon of the collapsed floating switcher in Settings → Appearance (it no longer shows an arrow that looked like the chat's jump button)",
+      "With the keyboard open, the floating switcher now stays above the chat's input bar instead of covering it",
+      "Added a sessions drawer to the terminal, like Termux: swipe right from the left edge to switch, rename or close sessions, show the keyboard, start a new session or open terminal settings",
+      "The terminal's floating session pill is now off by default (turn it on in Settings → Terminal). With gesture navigation, choose where on the left edge the drawer swipe works (top, middle or bottom)",
+      "The terminal keyboard now shows its toolbar and clipboard. For keyboards that misbehave there, turn on Character-Based Input in Settings → Terminal",
+      "Pasting into the terminal from the keyboard is now one quick paste instead of typing every character, and pasted lines aren't run one by one",
+      "Swipe the terminal's extra-keys bar sideways for a text box where any keyboard works fully (Bangla/Japanese drafts, suggestions, voice typing)",
+      "Renaming a tmux session also renames its tmux window, so the name stays after reconnecting",
+      "Fixed words lost when typing in the terminal with phonetic or Japanese keyboards",
+      "Fixed Bangla/Hindi marks shown as <09cd> in the terminal's zsh",
+      "Fixed the terminal keyboard sometimes not opening on tap (quick double taps, older Android)(added in sidebar of terminal for manual keyboard showing too)",
+      "Fixed fast typing getting scrambled in SSH/tmux terminals",
+      "Fixed Notes not scrolling to the cursor when you move it with the keyboard's arrow keys (Gboard, Ridmik), and note text no longer hides behind the keyboard"
     ]
   }
 }

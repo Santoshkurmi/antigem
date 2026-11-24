@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,13 +27,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -442,9 +448,10 @@ private fun NoteEditor(note: Note, onBack: () -> Unit, onDelete: () -> Unit) {
         Column(
             Modifier
                 .fillMaxSize()
+                // outside the scroll: the scrolled area ends at the top of the keyboard, so text scrolled into view isn't behind it
+                .imePadding()
                 .bouncyVerticalScroll(rememberScrollState())
                 .navigationBarsPadding()
-                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
@@ -574,14 +581,20 @@ private fun SyncedField(
     imeAction: ImeAction = ImeAction.Default,
     onImeAction: (() -> Unit)? = null
 ) {
-    var text by remember(key) { mutableStateOf(remoteValue) }
+    // A TextFieldValue, not a String, so PlainField knows where the caret is
+    var value by remember(key) { mutableStateOf(TextFieldValue(remoteValue)) }
     LaunchedEffect(key, remoteValue) {
         val latest = currentRemote()
-        if (latest != null && latest != text) text = latest
+        if (latest != null && latest != value.text) value = TextFieldValue(latest, value.selection) // caret kept, clamped to the new text
     }
     PlainField(
-        value = text,
-        onValueChange = { text = it; onValueChange(it) },
+        value = value,
+        onValueChange = { v ->
+            val textChanged = v.text != value.text
+            value = v
+            // only real edits reach the repository: a caret move alone would bump the note's "Edited" time
+            if (textChanged) onValueChange(v.text)
+        },
         placeholder = placeholder,
         textStyle = textStyle,
         textAlpha = textAlpha,
@@ -617,6 +630,55 @@ private fun PlainField(
         decorationBox = { inner ->
             Box {
                 if (value.isEmpty()) Text(placeholder, style = textStyle.copy(color = onSurface.copy(alpha = 0.35f), textDecoration = null))
+                inner()
+            }
+        }
+    )
+}
+
+/**
+ * [PlainField] for a [TextFieldValue]. A multi-line one also scrolls the page to the caret when only the caret moves: the text
+ * field does that by itself only when the text changes, so the keyboard's arrow keys (Gboard, Ridmik) left the caret off screen.
+ */
+@Composable
+private fun PlainField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    placeholder: String,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+    textAlpha: Float = 1f,
+    singleLine: Boolean = false,
+    imeAction: ImeAction = ImeAction.Default,
+    onImeAction: (() -> Unit)? = null
+) {
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val caretInView = remember { BringIntoViewRequester() }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var focused by remember { mutableStateOf(false) }
+    if (!singleLine) {
+        LaunchedEffect(value.selection, focused) {
+            val l = layout
+            // after typing, this layout is still the old text: the field scrolls to the caret itself once the new one is laid out
+            if (!focused || l == null || l.layoutInput.text.text != value.text) return@LaunchedEffect
+            val caret = l.getCursorRect(value.selection.end)
+            // a line above and below the caret as well, so it isn't left at the very edge of the screen
+            caretInView.bringIntoView(Rect(caret.left, caret.top - caret.height, caret.right, caret.bottom + caret.height))
+        }
+    }
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = textStyle.copy(color = onSurface.copy(alpha = textAlpha)),
+        cursorBrush = SolidColor(ClaudeTerracotta),
+        singleLine = singleLine,
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = imeAction),
+        keyboardActions = KeyboardActions(onNext = { onImeAction?.invoke() ?: defaultKeyboardAction(ImeAction.Next) }),
+        onTextLayout = { layout = it },
+        modifier = modifier.bringIntoViewRequester(caretInView).onFocusChanged { focused = it.isFocused },
+        decorationBox = { inner ->
+            Box {
+                if (value.text.isEmpty()) Text(placeholder, style = textStyle.copy(color = onSurface.copy(alpha = 0.35f), textDecoration = null))
                 inner()
             }
         }
