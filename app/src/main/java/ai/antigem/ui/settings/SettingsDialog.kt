@@ -1283,8 +1283,11 @@ private fun TermuxApiSubScreen(cardBg: Color, cardBorder: BorderStroke) {
     // both can change outside this page (an install in the terminal, the app installed from its APK): re-checked
     var packageInstalled by remember { mutableStateOf(env.isTermuxApiPackageInstalled(context)) }
     var appInstalled by remember { mutableStateOf(env.isTermuxApiAppInstalled(context)) }
+    // pkg only runs inside the local environment: without it the package can't be installed from here
+    var envInstalled by remember { mutableStateOf(env.isTermuxInstalled(context)) }
     LaunchedEffect(activeCommandExecution) {
         while (true) {
+            envInstalled = withContext(Dispatchers.IO) { env.isTermuxInstalled(context) }
             packageInstalled = withContext(Dispatchers.IO) { env.isTermuxApiPackageInstalled(context) }
             val nowInstalled = withContext(Dispatchers.IO) { env.isTermuxApiAppInstalled(context) }
             if (nowInstalled != appInstalled) {
@@ -1360,11 +1363,22 @@ private fun TermuxApiSubScreen(cardBg: Color, cardBorder: BorderStroke) {
                     detail = "The termux-* commands, in the terminal",
                     installed = packageInstalled
                 ) {
-                    OutlinedButton(
-                        onClick = { activeCommandExecution = "Install termux-api" to "pkg install -y termux-api" },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    ) { Text("Install", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                    if (envInstalled) {
+                        OutlinedButton(
+                            onClick = { activeCommandExecution = "Install termux-api" to "pkg install -y termux-api" },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) { Text("Install", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                    } else {
+                        Text(
+                            text = "Install the local environment first",
+                            modifier = Modifier.widthIn(max = 130.dp),
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp,
+                            textAlign = TextAlign.End,
+                            color = ai.antigem.theme.AppColors.warning
+                        )
+                    }
                 }
                 TermuxApiStatusRow(
                     title = "AntiGem's Termux:API app",

@@ -7,6 +7,7 @@ import android.system.OsConstants
 import android.util.Log
 import ai.antigem.BuildConfig
 import ai.antigem.data.local.LocalEnvironmentManager
+import ai.antigem.data.local.StorageSpace
 import ai.antigem.data.local.TermuxRelocation
 import ai.antigem.data.local.chroot.ChrootInstall
 import ai.antigem.data.local.chroot.ChrootSetup
@@ -538,6 +539,14 @@ object ReaManager {
             return
         }
         runTask(single?.step ?: "batch") {
+            // Enough storage for every part (their listed sizes, plus room for apt / npm while they install)?
+            val chroot = ChrootSetup.install()
+            val needed = components.sumOf { if (chroot != null && it == Component.CONTAINER) 0L else StorageSpace.parseSize(it.size) }
+            StorageSpace.shortage(chroot?.let { File(it.path) } ?: appContext.filesDir, needed + StorageSpace.MARGIN_BYTES,
+                if (components.size == 1) components[0].label else "these ${components.size} parts")?.let {
+                report(it, isError = true)
+                return@runTask
+            }
             if (!_state.value.filesReady) fetchSetupFiles()
             _state.update { it.copy(batch = components, batchIndex = 0) }
             for ((i, c) in components.withIndex()) {
@@ -904,7 +913,8 @@ object ReaManager {
             onOutputLine = { line -> if (line.isNotBlank()) appendLog(line.trimEnd()) }
         )
         if (result.exitCode != 0) {
-            val last = _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
+            val last = if (_state.value.log.takeLast(40).any(StorageSpace::isOutOfSpaceLine)) StorageSpace.outOfSpaceMessage()
+                else _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
             report(last ?: "The $step step failed (exit ${result.exitCode}). Check the log, then run it again.", isError = true)
             return false
         }
@@ -923,7 +933,8 @@ object ReaManager {
         val r = ChrootSetup.runScript(appContext, install, CHROOT_SHARE, "rea-setup.sh", step.split(' ').filter { it.isNotBlank() },
             timeoutSeconds * 1000) { line -> if (line.isNotBlank()) appendLog(line.trimEnd()) }
         if (!r.ok) {
-            val last = _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
+            val last = if (_state.value.log.takeLast(40).any(StorageSpace::isOutOfSpaceLine)) StorageSpace.outOfSpaceMessage()
+                else _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
             report(last ?: "The $step step failed (exit ${r.exitCode}). Check the log, then run it again.", isError = true)
             return false
         }

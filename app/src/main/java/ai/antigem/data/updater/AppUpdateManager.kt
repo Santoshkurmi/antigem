@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import ai.antigem.BuildConfig
+import ai.antigem.data.local.StorageSpace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -208,6 +209,7 @@ class AppUpdateManager(private val context: Context) {
         downloadUrl: String,
         onProgress: (Float, Long, Long) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
+        var targetFile: File? = null
         try {
             val request = Request.Builder()
                 .url(downloadUrl)
@@ -223,10 +225,18 @@ class AppUpdateManager(private val context: Context) {
             val totalBytes = body.contentLength()
 
             val targetDir = context.externalCacheDir ?: context.cacheDir
-            val targetFile = File(targetDir, "antiGem_update_${System.currentTimeMillis()}.apk")
+            // the APK, and Android's installer copies it once more while it installs
+            if (totalBytes > 0) {
+                StorageSpace.shortage(targetDir, totalBytes * 2 + StorageSpace.MARGIN_BYTES, "the update")?.let {
+                    response.close()
+                    return@withContext Result.failure(Exception(it))
+                }
+            }
+            val apkFile = File(targetDir, "antiGem_update_${System.currentTimeMillis()}.apk")
+            targetFile = apkFile
 
             body.byteStream().use { input ->
-                targetFile.outputStream().use { output ->
+                apkFile.outputStream().use { output ->
                     val buffer = ByteArray(32 * 1024)
                     var bytesRead: Int
                     var downloadedBytes = 0L
@@ -248,9 +258,13 @@ class AppUpdateManager(private val context: Context) {
                 }
             }
 
-            Result.success(targetFile)
+            Result.success(apkFile)
         } catch (e: Exception) {
             Log.e(TAG, "Download APK error: ${e.message}", e)
+            if (StorageSpace.isOutOfSpace(e)) {
+                targetFile?.delete()
+                return@withContext Result.failure(Exception(StorageSpace.outOfSpaceMessage("the update")))
+            }
             Result.failure(e)
         }
     }

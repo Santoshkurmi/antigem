@@ -11,6 +11,7 @@ import android.util.Log
 import ai.antigem.BuildConfig
 import ai.antigem.data.local.LocalCommandResult
 import ai.antigem.data.local.LocalEnvironmentManager
+import ai.antigem.data.local.StorageSpace
 import ai.antigem.data.local.chroot.ChrootInstall
 import ai.antigem.data.local.chroot.ChrootManager
 import ai.antigem.data.local.chroot.ChrootSetup
@@ -733,7 +734,8 @@ object X11DesktopManager {
         appendLog("$ $command")
         val result = shell(command, timeoutSeconds) { line -> if (line.isNotBlank()) appendLog(line) }
         if (result.exitCode != 0) {
-            report("Failed (exit ${result.exitCode}). Check the log, or run \"pkg upgrade\" in the terminal and try again.", isError = true)
+            report(if (ranOutOfSpace()) StorageSpace.outOfSpaceMessage()
+                else "Failed (exit ${result.exitCode}). Check the log, or run \"pkg upgrade\" in the terminal and try again.", isError = true)
         } else {
             appendLog("✓ Done")
         }
@@ -747,8 +749,12 @@ object X11DesktopManager {
         val wrapped = "( $command ) < /dev/null 2>&1"
         val r = if (asRoot) ChrootSetup.asRoot(appContext, install, wrapped, timeoutMs = timeoutSeconds * 1000, onLine = onLine)
         else ChrootSetup.asUser(appContext, install, wrapped, timeoutMs = timeoutSeconds * 1000, onLine = onLine)
-        if (!r.ok) report("Failed (exit ${r.exitCode}). Check the log above.", isError = true) else appendLog("✓ Done")
+        if (!r.ok) report(if (ranOutOfSpace()) StorageSpace.outOfSpaceMessage() else "Failed (exit ${r.exitCode}). Check the log above.", isError = true)
+        else appendLog("✓ Done")
     }
+
+    /** The step's output says the storage is full (apt checks free space itself before it downloads). */
+    private fun ranOutOfSpace() = _state.value.log.takeLast(40).any(StorageSpace::isOutOfSpaceLine)
 
     private suspend fun shell(command: String, timeoutSeconds: Long, onLine: ((String) -> Unit)? = null): LocalCommandResult =
         LocalEnvironmentManager.executeCommand(
