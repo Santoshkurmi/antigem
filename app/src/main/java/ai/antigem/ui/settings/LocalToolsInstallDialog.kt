@@ -346,7 +346,8 @@ fun LocalToolsInstallDialog(
                                                 text = "Auto Download (GitHub)",
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Box(
@@ -487,7 +488,8 @@ fun LocalToolsInstallDialog(
                                                 text = "Base Minimum Termux",
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Box(

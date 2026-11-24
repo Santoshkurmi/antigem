@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.BuildConfig
@@ -507,7 +508,8 @@ internal fun ServersSubScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(o.optString("name"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                                        Text(o.optString("name"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                         Spacer(Modifier.width(8.dp))
                                         Surface(shape = RoundedCornerShape(4.dp), color = accent.copy(alpha = 0.15f)) {
                                             Text(if (r && o.optBoolean("tunnel")) "SSH TUNNEL" else if (r) "SERVER" else "LOCAL", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = accent,

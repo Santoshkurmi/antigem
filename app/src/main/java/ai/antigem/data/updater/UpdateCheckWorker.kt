@@ -15,6 +15,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import ai.antigem.BuildConfig
 import ai.antigem.R
 import java.util.concurrent.TimeUnit
 
@@ -122,7 +123,8 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
         fun schedule(context: Context) {
             val interval = BackgroundUpdateCheck.get(context)
             val workManager = WorkManager.getInstance(context)
-            if (!interval.enabled) {
+            // debug builds never check for updates (see AppUpdateManager.checkForUpdates)
+            if (!interval.enabled || BuildConfig.DEBUG) {
                 workManager.cancelUniqueWork(WORK_NAME)
                 return
             }

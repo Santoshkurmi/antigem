@@ -91,7 +91,8 @@ internal fun ChrootRadioRow(
         Column(Modifier.weight(1f).padding(top = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (enabled) AppColors.onBackground else AppColors.textSecondary)
+                    color = if (enabled) AppColors.onBackground else AppColors.textSecondary,
+                    modifier = Modifier.weight(1f, fill = false))
                 if (tag != null) {
                     Spacer(Modifier.width(6.dp))
                     ChrootTag(tag, tagColor)

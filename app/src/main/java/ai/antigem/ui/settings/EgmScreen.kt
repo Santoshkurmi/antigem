@@ -177,7 +177,7 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
 
         if (state.version == null) return@Column
 
-        EgmCard("Slash commands", cardBg, cardBorder, pill = if (settings.enabled) ("On" to QuotaGreen) else ("Off" to Amber)) {
+        EgmCard("Slash commands", cardBg, cardBorder) {
             EgmSwitchRow("Use the EGM commands", "Type one at the start of a message in any chat; the rest of the message is the task.", settings.enabled) { on ->
                 EgmManager.update { it.copy(enabled = on) }
             }

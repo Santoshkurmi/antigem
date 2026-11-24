@@ -495,11 +495,7 @@ private fun WebsitesCard(state: ReaManager.State, cardBg: Color, cardBorder: Bor
     val bridge by ai.antigem.data.rea.ReaWebBridge.state.collectAsState()
     InfoCard(
         "Websites (optional)", cardBg, cardBorder,
-        pill = when {
-            bridge.running -> "Listening" to Amber
-            state.webEnabled -> "On" to QuotaGreen
-            else -> "Off" to MaterialTheme.colorScheme.primary
-        }
+        pill = if (bridge.running) "Listening" to Amber else null
     ) {
         Hint("Let agents analyze websites open in AntiGem's browser with REA: page structure, scripts and the APIs they call, libraries and frameworks, network and console errors, accessibility, storage and screenshots. REA only observes; agents open pages and click with the browser MCP.")
         SwitchRow(

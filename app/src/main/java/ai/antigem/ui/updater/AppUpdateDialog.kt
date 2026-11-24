@@ -126,7 +126,7 @@ fun AppUpdateDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Version & Package Badge Row
+                // Version row: installed -> new
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -157,20 +157,6 @@ fun AppUpdateDialog(
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    Surface(
-                        color = surfaceColor,
-                        shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, onSurfaceColor.copy(alpha = 0.1f))
-                    ) {
-                        Text(
-                            text = updateInfo.packageName,
-                            color = onSurfaceColor,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }

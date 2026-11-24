@@ -3009,7 +3009,8 @@ private fun McpSubScreen(
                 text = "Configured Servers (${mcpServers.size})",
                 fontSize = 13.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
             )
             if (mcpServers.isNotEmpty()) {
                 val totalTools = mcpServers.sumOf { it.tools.size }
@@ -3156,8 +3157,9 @@ private fun McpSubScreen(
                 server.status.contains("ERROR", ignoreCase = true) || !server.error.isNullOrBlank() -> Color.Red
                 else -> ai.antigem.theme.AppColors.warning
             }
+            // off: no status badge, the switch shows it
             val statusLabel = when {
-                !server.isEnabled -> "Disabled"
+                !server.isEnabled -> null
                 server.status.contains("RUNNING", ignoreCase = true) || server.status.contains("OK", ignoreCase = true) || server.tools.isNotEmpty() -> "Ready"
                 server.status.contains("ERROR", ignoreCase = true) || !server.error.isNullOrBlank() -> "Error"
                 else -> server.status.removePrefix("MCP_SERVER_STATUS_").lowercase().replaceFirstChar { it.uppercase() }
@@ -3223,7 +3225,7 @@ private fun McpSubScreen(
                                 }
 
                                 // Status badge
-                                Surface(
+                                if (statusLabel != null) Surface(
                                     shape = RoundedCornerShape(4.dp),
                                     color = statusColor.copy(alpha = 0.15f)
                                 ) {
@@ -4190,22 +4192,7 @@ private fun TerminalSubScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = if (remoteMode) "Terminal on the remote server" else "Use Terminal via SSH", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = if (useSshTerminal) QuotaGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                            ) {
-                                Text(
-                                    text = if (useSshTerminal || remoteMode) "SSH Mode" else "Local Mode",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (useSshTerminal) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
+                        Text(text = if (remoteMode) "Terminal on the remote server" else "Use Terminal via SSH", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             text = if (remoteMode) "Runs on your remote server over SSH" else if (useSshTerminal) "Direct SSH to Termux sshd without local rootfs" else "Built-in chroot rootfs environment",
                             fontSize = 11.5.sp,
@@ -5455,7 +5442,7 @@ data class ProjectBackupManifestItem(
     val backupSubpath: String
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ProjectsBackupRestoreDialog(
     onDismiss: () -> Unit,
@@ -5972,9 +5959,10 @@ private fun ProjectsBackupRestoreDialog(
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Column(modifier = Modifier.weight(1f)) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    FlowRow(
+                                                        itemVerticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        verticalArrangement = Arrangement.spacedBy(2.dp)
                                                     ) {
                                                         Text(
                                                             text = proj.name,
@@ -6953,9 +6941,9 @@ private fun DataProtectionSubScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (isShieldEnabled) "Enabled (Replaces Clear Data with Space Manager)" else "Disabled (Standard OS Clear Data)",
+                            text = "Replaces Clear Data with the Space Manager",
                             fontSize = 12.sp,
-                            color = if (isShieldEnabled) GeminiBlue else Color.Gray
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
                     Switch(
@@ -7608,8 +7596,7 @@ private fun CommandsSubScreen(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (activeSandbox) "Enabled: Isolates commands in sandbox without host network access."
-                            else "Disabled (Recommended for Hub): Commands execute directly in your Termux / Linux environment.",
+                            text = "Isolates commands in a sandbox without host network access. Keep it off for Hub: commands then run directly in your Termux / Linux environment.",
                             fontSize = 11.5.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp
@@ -7902,7 +7889,8 @@ private fun CommandsSubScreen(
                     text = "Project Overrides & Inheritance",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
                 )
                 if (projectsList.isNotEmpty()) {
                     Text(
@@ -8507,26 +8495,12 @@ private fun DiagnosticsSubScreen(
                             }
                         }
                         Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Network Inspector (Live Logs)",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = if (isNetworkInspectorEnabled) ai.antigem.theme.AppColors.info.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = if (isNetworkInspectorEnabled) "ACTIVE" else "OFF",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isNetworkInspectorEnabled) ai.antigem.theme.AppColors.info else Color.Gray,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "Network Inspector (Live Logs)",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                             Text(
                                 text = "Inspect IDE Bridge HTTP & AGY Daemon gRPC calls in real-time",
                                 fontSize = 11.5.sp,
@@ -8649,26 +8623,12 @@ private fun DiagnosticsSubScreen(
                             }
                         }
                         Column {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = "Floating Diagnostics HUD",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = if (isFloatingDiagnosticsEnabled) QuotaGreen.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = if (isFloatingDiagnosticsEnabled) "VISIBLE" else "DISABLED",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isFloatingDiagnosticsEnabled) QuotaGreen else Color.Gray,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "Floating Diagnostics HUD",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                             Text(
                                 text = "Live on-screen thread, queue & connection monitor",
                                 fontSize = 11.5.sp,
@@ -9170,7 +9130,8 @@ private fun AboutSubScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.FolderZip,

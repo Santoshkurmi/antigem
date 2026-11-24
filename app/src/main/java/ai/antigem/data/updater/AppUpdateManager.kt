@@ -45,7 +45,6 @@ data class AppUpdateInfo(
     val versionName: String,
     val currentVersionCode: Int,
     val currentVersionName: String,
-    val packageName: String,
     val downloadUrl: String,
     val changelog: List<String>,
     val isCritical: Boolean = false
@@ -73,6 +72,8 @@ class AppUpdateManager(private val context: Context) {
         versionJsonUrl: String = DEFAULT_VERSION_URL,
         forceCheck: Boolean = false
     ): Result<AppUpdateInfo?> = withContext(Dispatchers.IO) {
+        // a debug build is its own app (ai.antidev, debug key): a release APK can't install over it, so it never checks
+        if (BuildConfig.DEBUG) return@withContext Result.failure(Exception("Update checks are off in debug builds."))
         try {
             val request = Request.Builder()
                 .url(versionJsonUrl)
@@ -118,7 +119,6 @@ class AppUpdateManager(private val context: Context) {
                         versionName = remoteVersionName,
                         currentVersionCode = BuildConfig.VERSION_CODE,
                         currentVersionName = BuildConfig.VERSION_NAME,
-                        packageName = context.packageName,
                         downloadUrl = downloadUrl,
                         changelog = changelog,
                         isCritical = isCritical
