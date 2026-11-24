@@ -107,6 +107,8 @@ object ChrootManager {
     private fun saveInstalls(context: Context, list: List<ChrootInstall>) {
         _installs.value = list
         prefs(context).edit().putString(KEY_INSTALLS, ChrootInstall.listToJson(list)).apply()
+        // the file picker's "AntiGem Ubuntu" location follows the installs
+        ai.antigem.data.files.AntiGemDocumentsProvider.notifyRootsChanged(context)
     }
 
     // ------------------------------------------------------------------ the active runtime
@@ -133,6 +135,7 @@ object ChrootManager {
         if (_installs.value.none { it.path == install.path }) saveInstalls(context, _installs.value + install)
         _activePath.value = install.path
         prefs(context).edit().putString(KEY_ACTIVE, install.path).apply()
+        ai.antigem.data.files.AntiGemDocumentsProvider.notifyRootsChanged(context)
         val auth = AuthPreferences(context)
         auth.setEnvironmentType(ENV_CHROOT)
         auth.applyLocalRuntimeUrls(chroot = true)
@@ -154,6 +157,7 @@ object ChrootManager {
         if (_installs.value.any { it.path == path }) {
             _activePath.value = path
             prefs(context).edit().putString(KEY_ACTIVE, path).apply()
+            ai.antigem.data.files.AntiGemDocumentsProvider.notifyRootsChanged(context)
         }
     }
 
@@ -164,6 +168,7 @@ object ChrootManager {
         if (_activePath.value == path) {
             _activePath.value = _installs.value.firstOrNull()?.path
             prefs(context).edit().putString(KEY_ACTIVE, _activePath.value).apply()
+            ai.antigem.data.files.AntiGemDocumentsProvider.notifyRootsChanged(context)
         }
     }
 

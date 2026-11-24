@@ -450,6 +450,19 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- AntiGem's home (and the Ubuntu chroot's) in Android's file picker and Files app. Only the system picker
+             (MANAGE_DOCUMENTS) can browse it; Settings → Files in other apps disables this component. -->
+        <provider
+            android:name="ai.antigem.data.files.AntiGemDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- Mini Apps: the launcher grid, each app's root page (its own task / Recents card, one per app id via the
              data URI) and pushed pages (same task as their root) -->
         <activity
