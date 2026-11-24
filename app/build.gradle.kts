@@ -311,7 +311,7 @@ dependencies {
   implementation("org.tukaani:xz:1.9")
   // Core library desugaring runtime: backports the java.nio.file / java.time APIs used above
   // (commons-compress ZipFile needs StandardOpenOption, API 26+) down to minSdk 24 (issue #85)
-  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
   // Termux Terminal Emulator with Native PTY Support (Terminal View is compiled from source)
   implementation("com.github.termux.termux-app:terminal-emulator:v0.118.1")
