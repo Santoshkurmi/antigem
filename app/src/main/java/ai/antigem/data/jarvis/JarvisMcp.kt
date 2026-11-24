@@ -1732,7 +1732,7 @@ object JarvisMcp {
         if (f.startsWith("/") || f.startsWith("~")) return f to f.substringAfterLast('/')
         if (project != null && f.contains('/')) {
             val p = project.path.trimEnd('/') + "/" + f.removePrefix("./")
-            if (IdeApiClient.readFileDetailed(p) != null) return p to f.substringAfterLast('/')
+            if (ai.antigem.data.files.FileExplorerApi.stat(p).isSuccess) return p to f.substringAfterLast('/')
         }
         // just a name: search the project's files by name on the bridge (no full file tree download)
         val root = project?.path ?: return null
@@ -1753,9 +1753,11 @@ object JarvisMcp {
             if (IdeDaemonManager.activeProject.value?.path != p.path) { IdeDaemonManager.setActiveProject(p); vm.onProjectChanged(p.path) }
         }
         val (path, name) = resolveFile(file) ?: return error("Could not find \"$file\" in the active project. Open the right project first.")
-        val res = IdeApiClient.readFileDetailed(path) ?: return error("Could not read $path.")
-        if (res.category == "binary") return error("$name is a binary file and cannot be opened in the editor.")
-        IdeDaemonManager.openOrSelectTab(path, name, res.content)
+        when (val r = ai.antigem.data.files.IdeFileLauncher.open(path, name, -1)) {
+            is ai.antigem.data.files.IdeFileLauncher.Outcome.Opened -> Unit
+            is ai.antigem.data.files.IdeFileLauncher.Outcome.NeedsConfirm -> return error("$name is a binary file and cannot be opened in the editor.")
+            is ai.antigem.data.files.IdeFileLauncher.Outcome.Failed -> return error(r.message)
+        }
         if (args.optBoolean("show_ide", true)) vm.requestViewMode("IDE")
         return text("Opened $name.")
     }

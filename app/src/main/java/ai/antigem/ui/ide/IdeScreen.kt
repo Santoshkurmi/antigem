@@ -67,6 +67,10 @@ import kotlinx.coroutines.launch
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import ai.antigem.data.daemon.FileSaveResult
+import ai.antigem.data.daemon.FileReadOutcome
+import ai.antigem.data.files.FileExplorerApi
+import ai.antigem.data.files.FileKinds
+import ai.antigem.data.files.IdeFileLauncher
 
 import kotlinx.coroutines.delay
 
@@ -98,7 +102,9 @@ fun IdeScreen(
     val openTabs by IdeDaemonManager.openTabs.collectAsState()
     val activeTabPath by IdeDaemonManager.activeTabPath.collectAsState()
 
-    var fileTree by remember { mutableStateOf<List<FileNode>>(emptyList()) }
+    val fileTree = remember { IdeFileTreeState() }
+    var openingPath by remember { mutableStateOf<String?>(null) }
+    val openJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
     var isWordWrap by remember { mutableStateOf(false) }
     var showNewProjectDialog by remember { mutableStateOf(false) }
     var showFileManager by remember { mutableStateOf(false) }
@@ -226,15 +232,16 @@ fun IdeScreen(
         }
     }
 
-    fun refreshProjectsAndTree() {
+    /** [force]: read the shown folders again even when the bridge says they did not change (the Refresh button). */
+    fun refreshProjectsAndTree(force: Boolean = false) {
         coroutineScope.launch {
             val projs = IdeDaemonManager.loadProjects(conversations)
             val current = IdeDaemonManager.activeProject.value
             if (current != null) {
-                fileTree = IdeApiClient.getFileTree(current.path)
+                fileTree.refreshVisible(force)
             } else if (projs.isNotEmpty()) {
+                // the tree follows the active project (LaunchedEffect below)
                 IdeDaemonManager.setActiveProject(projs.first())
-                fileTree = IdeApiClient.getFileTree(projs.first().path)
             }
         }
     }
@@ -249,33 +256,16 @@ fun IdeScreen(
     // React immediately whenever daemon reconnects in the background
     LaunchedEffect(Unit) {
         IdeDaemonManager.serverReconnectedEvent.collect {
-            refreshProjectsAndTree()
+            refreshProjectsAndTree(force = true)
         }
     }
 
-    // Periodically poll active tab disk content & file tree in the background while user is in IDE
-    LaunchedEffect(isVisible, activeProject?.path, activeTabPath) {
+    // While the IDE is shown, the open file is checked every 3 s with a stat (size and change time, no download) and
+    // read again only when one of them moved. Switching tabs does not restart the loop.
+    LaunchedEffect(isVisible) {
         if (isVisible) {
             while (true) {
-                if (activeTabPath != null) {
-                    val currentTab = IdeDaemonManager.openTabs.value.find { it.path == activeTabPath }
-                    if (currentTab != null && !currentTab.isDiff) {
-                        val diskContent = IdeApiClient.readFile(currentTab.path)
-                        if (diskContent != null) {
-                            val res = IdeDaemonManager.updateTabFromDisk(currentTab.path, diskContent)
-                            if (res == TabDiskUpdateResult.AUTO_UPDATED) {
-                                autoUpdateNotification = "${currentTab.name} reloaded from disk"
-                            }
-                        }
-                    }
-                }
-                val projPath = activeProject?.path
-                if (!projPath.isNullOrBlank()) {
-                    val freshTree = IdeApiClient.getFileTree(projPath)
-                    if (freshTree.isNotEmpty() && freshTree != fileTree) {
-                        fileTree = freshTree
-                    }
-                }
+                checkActiveTabOnDisk()?.let { autoUpdateNotification = it }
                 delay(3000)
             }
         }
@@ -303,22 +293,52 @@ fun IdeScreen(
         }
     }
 
-    LaunchedEffect(activeProject) {
-        if (activeProject != null) {
-            coroutineScope.launch {
-                fileTree = IdeApiClient.getFileTree(activeProject?.path)
-            }
-        }
+    // the project folder is read as soon as a project is active, so the sidebar opens with it ready
+    LaunchedEffect(activeProject?.path) {
+        fileTree.setRoot(activeProject?.path)
     }
 
     val activeTab = openTabs.find { it.path == activeTabPath }
     val activeExt = remember(activeTab?.name) { activeTab?.name?.substringAfterLast('.', "")?.lowercase() ?: "" }
-    val isImageFile = activeExt in listOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico")
+    val isImageFile = activeExt in IdeFileLauncher.VIEWER_IMAGE_EXTS
     val isSvgFile = activeExt == "svg"
     var showSvgSource by remember(activeTabPath) { mutableStateOf(false) }
     var binaryWarningDialog by remember { mutableStateOf<BinaryWarningTab?>(null) }
+    var tooLargeDialog by remember { mutableStateOf<TooLargeFile?>(null) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+    // The tree's shown folders are checked every 3 s only while the sidebar is open (an unchanged folder costs the
+    // bridge one stat), and right away when it opens.
+    val sidebarOpen = drawerState.targetValue == DrawerValue.Open
+    LaunchedEffect(isVisible, sidebarOpen) {
+        if (isVisible && sidebarOpen) {
+            while (true) {
+                fileTree.refreshVisible()
+                delay(3000)
+            }
+        }
+    }
+
+    /** Opens a file through the same size and type checks as everywhere else; a new tap cancels the last open. */
+    fun openInIde(path: String, name: String, size: Long, force: Boolean = false) {
+        openJob[0]?.cancel()
+        openJob[0] = coroutineScope.launch {
+            openingPath = path
+            try {
+                when (val r = IdeFileLauncher.open(path, name, size, force)) {
+                    is IdeFileLauncher.Outcome.Opened -> drawerState.close()
+                    is IdeFileLauncher.Outcome.NeedsConfirm -> binaryWarningDialog = BinaryWarningTab(path, name, size, r.mimeType)
+                    is IdeFileLauncher.Outcome.Failed ->
+                        if (r.tooLarge) tooLargeDialog = TooLargeFile(path, name, r.message)
+                        else Toast.makeText(context, r.message, Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                // a newer tap owns the spinner now
+                if (openJob[0] === coroutineContext[kotlinx.coroutines.Job]) openingPath = null
+            }
+        }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -333,6 +353,7 @@ fun IdeScreen(
                     activeProject = activeProject,
                     fileTree = fileTree,
                     activeFilePath = activeTabPath,
+                    openingPath = openingPath,
                     onSelectProject = { proj ->
                         IdeDaemonManager.setActiveProject(proj)
                         viewModel?.onProjectChanged(proj.path)
@@ -351,30 +372,7 @@ fun IdeScreen(
                         showFileManager = true
                         coroutineScope.launch { drawerState.close() }
                     },
-                    onOpenFile = { node ->
-                        coroutineScope.launch {
-                            val res = IdeApiClient.readFileDetailed(node.path)
-                            if (res == null) {
-                                Toast.makeText(
-                                    context,
-                                    "Cannot open '${node.name}'. IDE Bridge is offline or file is unreachable.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            } else {
-                                if (res.category == "binary") {
-                                    binaryWarningDialog = BinaryWarningTab(
-                                        path = node.path,
-                                        name = node.name,
-                                        content = res.content,
-                                        mimeType = res.mimeType
-                                    )
-                                } else {
-                                    IdeDaemonManager.openOrSelectTab(node.path, node.name, res.content)
-                                    drawerState.close()
-                                }
-                            }
-                        }
-                    },
+                    onOpenFile = { node -> openInIde(node.path, node.name, node.size) },
                     onOpenFileDiff = { filePath, isStaged ->
                         coroutineScope.launch {
                             val projPath = activeProject?.path ?: return@launch
@@ -388,7 +386,7 @@ fun IdeScreen(
                         coroutineScope.launch {
                             val ok = IdeApiClient.createFileOrDir(fullPath, isDir)
                             if (ok) {
-                                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                                fileTree.reload(parentPathOf(fullPath))
                                 Toast.makeText(context, "Created ${if (isDir) "folder" else "file"} '$name'", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "Failed to create ${if (isDir) "folder" else "file"}", Toast.LENGTH_SHORT).show()
@@ -401,7 +399,8 @@ fun IdeScreen(
                             if (ok) {
                                 val newName = File(newPath).name
                                 IdeDaemonManager.renameTab(oldPath, newPath, newName)
-                                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                                fileTree.forget(oldPath)
+                                fileTree.reload(parentPathOf(oldPath), parentPathOf(newPath))
                                 Toast.makeText(context, "Renamed to '$newName'", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "Failed to rename", Toast.LENGTH_SHORT).show()
@@ -413,7 +412,8 @@ fun IdeScreen(
                             val ok = IdeApiClient.deleteFileOrDir(path)
                             if (ok) {
                                 IdeDaemonManager.closeTab(path)
-                                fileTree = IdeApiClient.getFileTree(activeProject?.path)
+                                fileTree.forget(path)
+                                fileTree.reload(parentPathOf(path))
                                 Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "Failed to delete", Toast.LENGTH_SHORT).show()
@@ -429,7 +429,7 @@ fun IdeScreen(
                         )
                         onNavigateToTerminal()
                     },
-                    onRefreshTree = { refreshProjectsAndTree() }
+                    onRefreshTree = { refreshProjectsAndTree(force = true) }
                 )
             }
         }
@@ -1328,13 +1328,7 @@ fun IdeScreen(
                                     } else {
                                         rawFilePath
                                     }
-                                    val content = IdeApiClient.readFile(fullFilePath) ?: ""
-                                    IdeDaemonManager.openOrSelectTab(
-                                        path = fullFilePath,
-                                        name = File(fullFilePath).name,
-                                        content = content,
-                                        isReadOnly = false
-                                    )
+                                    openInIde(fullFilePath, File(fullFilePath).name, -1)
                                 }
                             },
                             onOpenHistoricalFile = {
@@ -1710,9 +1704,8 @@ fun IdeScreen(
                     confirmButton = {
                         Button(
                             onClick = {
-                                IdeDaemonManager.openOrSelectTab(tabInfo.path, tabInfo.name, tabInfo.content)
                                 binaryWarningDialog = null
-                                coroutineScope.launch { drawerState.close() }
+                                openInIde(tabInfo.path, tabInfo.name, tabInfo.size, force = true)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ai.antigem.theme.AppColors.warning)
                         ) {
@@ -1723,6 +1716,34 @@ fun IdeScreen(
                         TextButton(onClick = { binaryWarningDialog = null }) {
                             Text("Cancel")
                         }
+                    }
+                )
+            }
+            // Refused for its size: say why, and offer to share it (streamed, never read into memory)
+            tooLargeDialog?.let { info ->
+                AlertDialog(
+                    onDismissRequest = { tooLargeDialog = null },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.WarningAmber,
+                            contentDescription = null,
+                            tint = ai.antigem.theme.AppColors.warning,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    },
+                    title = { Text("File too large", fontWeight = FontWeight.Bold) },
+                    text = { Text(info.message, style = MaterialTheme.typography.bodyMedium) },
+                    confirmButton = {
+                        TextButton(onClick = { tooLargeDialog = null }) { Text("OK") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            tooLargeDialog = null
+                            ai.antigem.ui.components.AppToastHelper.showToast("Preparing file share...", ai.antigem.ui.components.ChatToastType.INFO)
+                            coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                FileShareHelper.shareFile(context = context, filePath = info.path, fileName = info.name)
+                            }
+                        }) { Text("Share") }
                     }
                 )
             }
@@ -1951,7 +1972,44 @@ private fun AddRunProfileDialog(
 data class BinaryWarningTab(
     val path: String,
     val name: String,
-    val content: String,
+    val size: Long,
     val mimeType: String
 )
+
+/** A file the IDE refused for its size, with the reason shown to the user. */
+data class TooLargeFile(val path: String, val name: String, val message: String)
+
+/** The folder holding [path] (either slash), or null when there is none. */
+private fun parentPathOf(path: String): String? {
+    val p = path.trimEnd('/', '\\')
+    val i = maxOf(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+    return if (i > 0) p.substring(0, i) else null
+}
+
+/**
+ * Checks the active tab's file on the bridge: read again only when its size or change time moved since the last read,
+ * and never once it grew past what the editor opens. Returns a note for the user, or null.
+ */
+private suspend fun checkActiveTabOnDisk(): String? {
+    val path = IdeDaemonManager.activeTabPath.value ?: return null
+    val tab = IdeDaemonManager.openTabs.value.find { it.path == path } ?: return null
+    if (tab.isDiff || tab.isReadOnly || tab.isExternal || IdeFileLauncher.isViewerImage(tab.name)) return null
+    val stat = FileExplorerApi.stat(path).getOrNull()?.takeIf { !it.isDir } ?: return null
+    val last = IdeDaemonManager.diskStamp(path)
+    if (last == null) {
+        // a tab opened without a stat: this look is the baseline
+        IdeDaemonManager.setDiskStamp(path, stat.size, stat.modTime)
+        return null
+    }
+    if (last.first == stat.size && last.second == stat.modTime) return null
+    if (stat.size > IdeFileLauncher.MAX_TEXT_BYTES) {
+        IdeDaemonManager.setDiskStamp(path, stat.size, stat.modTime)
+        return "${tab.name} changed on disk and is now too large to reload (${FileKinds.formatSize(stat.size)})"
+    }
+    val read = IdeApiClient.readFileLimited(path, IdeFileLauncher.MAX_TEXT_BYTES) as? FileReadOutcome.Ok ?: return null
+    IdeDaemonManager.setDiskStamp(path, stat.size, stat.modTime)
+    return if (IdeDaemonManager.updateTabFromDisk(path, read.result.content) == TabDiskUpdateResult.AUTO_UPDATED) {
+        "${tab.name} reloaded from disk"
+    } else null
+}
 

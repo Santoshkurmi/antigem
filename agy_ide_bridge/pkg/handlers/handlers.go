@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -1267,14 +1268,21 @@ const fileTreeMaxNodes = 20000
 
 // FileTreeHandler recursively lists files and folders (up to 25 levels and fileTreeMaxNodes entries).
 // Symlinked folders are listed but not walked into.
+//
+// ?depth=1 lists only the folder's own entries (see fileTreeLevel): the IDE sidebar reads a folder when it is opened.
 func (h *Handler) FileTreeHandler(w http.ResponseWriter, r *http.Request) {
 	dir := r.URL.Query().Get("dir")
 	if dir == "" {
 		dir = h.Cfg.ProjectsBaseDir
 	}
 
+	if r.URL.Query().Get("depth") == "1" {
+		fileTreeLevel(w, r, dir)
+		return
+	}
+
 	budget := fileTreeMaxNodes
-	tree, err := buildRecursiveFileTree(dir, 0, 25, &budget)
+	tree, err := buildRecursiveFileTree(r.Context(), dir, 0, 25, &budget, true)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -1285,8 +1293,52 @@ func (h *Handler) FileTreeHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tree)
 }
 
+// fileTreeLevel answers /api/tree?depth=1: one folder's entries, every one of them but .git (folders have no children
+// in the reply), at most fileTreeMaxNodes (X-Tree-Truncated: 1 when there were more). X-Tree-Depth: 1 tells the app the
+// bridge knows this mode; an older one sends the whole tree.
+// The ETag is the folder's change time, which adding, removing or renaming an entry updates. Asked again with
+// If-None-Match, an unchanged folder answers 304 without being read, so the sidebar can check its open folders often.
+func fileTreeLevel(w http.ResponseWriter, r *http.Request, dir string) {
+	st, err := os.Stat(dir)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if !st.IsDir() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not a folder"})
+		return
+	}
+	etag := fmt.Sprintf(`"%x"`, st.ModTime().UnixNano())
+	w.Header().Set("X-Tree-Depth", "1")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+	// file systems with a coarse clock (FAT on SD cards) can give two changes close together the same time: a folder
+	// changed in the last seconds is always read again
+	if r.Header.Get("If-None-Match") == etag && time.Since(st.ModTime()) > 3*time.Second {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	budget := fileTreeMaxNodes + 1 // one more than shown, to know the folder has more
+	nodes, err := buildRecursiveFileTree(r.Context(), dir, 0, 0, &budget, false)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if len(nodes) > fileTreeMaxNodes {
+		nodes = nodes[:fileTreeMaxNodes]
+		w.Header().Set("X-Tree-Truncated", "1")
+	}
+	if nodes == nil {
+		nodes = []models.FileNode{}
+	}
+	writeJSON(w, http.StatusOK, nodes)
+}
+
 // buildRecursiveFileTree lists dir; budget is how many more entries the whole tree may hold (shared by all levels).
-func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int, budget *int) ([]models.FileNode, error) {
+// skipHeavy leaves out build and dependency folders (the whole-tree walk); .git is always left out. It stops when ctx
+// ends (the app went away), so an abandoned request does not keep walking.
+func buildRecursiveFileTree(ctx context.Context, dir string, currentDepth int, maxDepth int, budget *int, skipHeavy bool) ([]models.FileNode, error) {
 	if currentDepth > maxDepth || *budget <= 0 {
 		return nil, nil
 	}
@@ -1301,9 +1353,12 @@ func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int, budget *
 		if *budget <= 0 {
 			break
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		name := entry.Name()
 		// Ignore only internal VCS storage and heavy build/dependency caches
-		if name == ".git" || name == "node_modules" || name == "build" || name == "target" || name == "dist" || name == ".gradle" || name == ".idea" {
+		if name == ".git" || (skipHeavy && (name == "node_modules" || name == "build" || name == "target" || name == "dist" || name == ".gradle" || name == ".idea")) {
 			continue
 		}
 
@@ -1329,7 +1384,7 @@ func buildRecursiveFileTree(dir string, currentDepth int, maxDepth int, budget *
 		// Symlinked folders are not walked: on Termux ~/storage/* all point into the same phone storage, and links
 		// can loop back up the tree.
 		if isDir && entry.Type()&os.ModeSymlink == 0 {
-			children, _ := buildRecursiveFileTree(fullPath, currentDepth+1, maxDepth, budget)
+			children, _ := buildRecursiveFileTree(ctx, fullPath, currentDepth+1, maxDepth, budget, skipHeavy)
 			node.Children = children
 		}
 
@@ -1359,26 +1414,96 @@ func expandHome(p string) string {
 	return p
 }
 
+// fileReadUnsizedCap: files that report no size (/proc, /sys) are read up to this; their size is only known by reading.
+const fileReadUnsizedCap = 16 << 20
+
+// FileReadHandler sends a file's bytes with what they are: X-File-Category ("text", "image" or "binary", judged from the
+// first bytes), X-File-Mime and X-File-Size. The file is streamed, never held in memory whole: a few reads of a big file
+// at once (a 300 MB program opened in the IDE) used to fill the phone's memory and freeze it.
+// ?max=N refuses a file bigger than N bytes with 413 and the same details as JSON, so a caller that shows the content
+// never downloads more than it can show. Range requests work (players seek).
 func (h *Handler) FileReadHandler(w http.ResponseWriter, r *http.Request) {
 	path := expandHome(r.URL.Query().Get("path"))
 	if path == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path parameter required"})
 		return
 	}
+	maxBytes := int64(-1)
+	if v := r.URL.Query().Get("max"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			maxBytes = n
+		}
+	}
 
-	content, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if info.IsDir() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "is a folder"})
+		return
+	}
 
-	category, mimeType := detectFileCategoryAndMime(content)
-	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Access-Control-Expose-Headers", "X-File-Category, X-File-Mime, X-File-Size, Content-Type")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	tooLarge := func(size int64, category, mimeType string) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]interface{}{
+			"error":    fmt.Sprintf("the file is %d bytes, more than the %d asked for", size, maxBytes),
+			"size":     size,
+			"category": category,
+			"mime":     mimeType,
+		})
+	}
+
+	if info.Size() == 0 {
+		limit := int64(fileReadUnsizedCap)
+		if maxBytes >= 0 && maxBytes < limit {
+			limit = maxBytes
+		}
+		data, err := io.ReadAll(io.LimitReader(f, limit+1))
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		category, mimeType := detectFileCategoryAndMime(data)
+		w.Header().Set("X-File-Category", category)
+		w.Header().Set("X-File-Mime", mimeType)
+		if int64(len(data)) > limit {
+			if maxBytes >= 0 && int64(len(data)) > maxBytes {
+				tooLarge(int64(len(data)), category, mimeType)
+				return
+			}
+			data = data[:limit]
+		}
+		w.Header().Set("X-File-Size", strconv.Itoa(len(data)))
+		w.Header().Set("Content-Type", mimeType)
+		w.Write(data)
+		return
+	}
+
+	head := make([]byte, 4097) // one past the sample size, so the check knows the file goes on
+	n, _ := io.ReadFull(f, head)
+	category, mimeType := detectFileCategoryAndMime(head[:n])
 	w.Header().Set("X-File-Category", category)
 	w.Header().Set("X-File-Mime", mimeType)
-	w.Header().Set("Access-Control-Expose-Headers", "X-File-Category, X-File-Mime, Content-Type")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Write(content)
+	w.Header().Set("X-File-Size", strconv.FormatInt(info.Size(), 10))
+	if maxBytes >= 0 && info.Size() > maxBytes {
+		tooLarge(info.Size(), category, mimeType)
+		return
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", mimeType)
+	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
 // trimPartialRune drops a multi-byte character cut in half at the end of a sample taken from a longer file,

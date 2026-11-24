@@ -2,11 +2,18 @@ package ai.antigem.data.daemon
 
 import android.util.Log
 import ai.antigem.data.preferences.AuthPreferences
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
@@ -77,6 +84,27 @@ data class FileReadResult(
     val mimeType: String = "text/plain"
 )
 
+/** A file read with a size limit: its text, or why there is none. */
+sealed class FileReadOutcome {
+    /** [size]: bytes read. */
+    data class Ok(val result: FileReadResult, val size: Long) : FileReadOutcome()
+
+    /** Bigger than the limit ([size] is -1 when the bridge did not say). Nothing past the limit was downloaded. */
+    data class TooLarge(val size: Long, val category: String) : FileReadOutcome()
+    data class Failed(val message: String) : FileReadOutcome()
+}
+
+/** One folder of the IDE sidebar's tree (see [IdeApiClient.listTreeLevel]). */
+sealed class TreeLevelResult {
+    /**
+     * [etag] goes back with the next check of the folder. [truncated]: the folder has more entries than the bridge sends.
+     * [legacy]: an older bridge sent the whole tree under the folder, so entries carry their children.
+     */
+    data class Listing(val entries: List<FileNode>, val etag: String?, val truncated: Boolean, val legacy: Boolean) : TreeLevelResult()
+    object NotModified : TreeLevelResult()
+    data class Failed(val message: String) : TreeLevelResult()
+}
+
 data class SearchMatch(
     val path: String,
     val lineNumber: Int,
@@ -113,6 +141,35 @@ object IdeApiClient {
     private val client: OkHttpClient get() = okHttpClient
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+    /** [readFileDetailed] refuses files above this: text this big would already strain the app's memory. */
+    const val READ_SAFETY_CAP_BYTES = 32L * 1024 * 1024
+
+    /**
+     * Runs the call so that cancelling the coroutine also aborts the request. A plain execute() keeps downloading after
+     * the screen that asked has moved on, so repeated taps used to stack up whole-file downloads.
+     */
+    private suspend fun <T> Call.executeCancellable(block: (Response) -> T): T = coroutineScope {
+        val call = this@executeCancellable
+        val finished = java.util.concurrent.atomic.AtomicBoolean(false)
+        val canceller = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                awaitCancellation()
+            } finally {
+                if (!finished.get()) call.cancel()
+            }
+        }
+        try {
+            withContext(Dispatchers.IO) { call.execute().use(block) }
+        } finally {
+            finished.set(true)
+            canceller.cancel()
+        }
+    }
+
+    private fun errorText(response: Response): String =
+        runCatching { JSONObject(response.body?.string().orEmpty()).optString("error") }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: "The IDE bridge answered ${response.code}"
 
     suspend fun checkHealth(): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -334,25 +391,75 @@ object IdeApiClient {
         return list
     }
 
-    suspend fun readFileDetailed(path: String): FileReadResult? = withContext(Dispatchers.IO) {
-        try {
-            val url = "$baseUrl/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}"
-            val request = Request.Builder().url(url).get().build()
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val bodyStr = response.body?.string() ?: ""
-                    val category = response.header("X-File-Category") ?: run {
-                        if (bodyStr.contains('\u0000')) "binary" else "text"
-                    }
-                    val mime = response.header("X-File-Mime") ?: response.header("Content-Type") ?: "text/plain"
-                    FileReadResult(content = bodyStr, category = category, mimeType = mime)
-                } else null
+    /**
+     * One folder's entries for the IDE sidebar (folders come without children). With the [etag] of the last listing an
+     * unchanged folder answers [TreeLevelResult.NotModified] without the bridge reading it.
+     */
+    suspend fun listTreeLevel(dir: String, etag: String?): TreeLevelResult {
+        val url = "$baseUrl/api/tree?depth=1&dir=${java.net.URLEncoder.encode(dir, "UTF-8")}"
+        val request = Request.Builder().url(url).get().apply { if (!etag.isNullOrBlank()) header("If-None-Match", etag) }.build()
+        return try {
+            client.newCall(request).executeCancellable { response ->
+                when {
+                    response.code == 304 -> TreeLevelResult.NotModified
+                    !response.isSuccessful -> TreeLevelResult.Failed(errorText(response))
+                    else -> TreeLevelResult.Listing(
+                        entries = parseFileNodes(JSONArray(response.body?.string().orEmpty())),
+                        etag = response.header("ETag"),
+                        truncated = response.header("X-Tree-Truncated") == "1",
+                        legacy = response.header("X-Tree-Depth") != "1"
+                    )
+                }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading file: $path", e)
-            null
+            Log.w(TAG, "Listing $dir failed: ${e.message}")
+            TreeLevelResult.Failed("The IDE bridge is not reachable")
         }
     }
+
+    /**
+     * Reads a file as text, refusing anything over [maxBytes]: the bridge answers 413 before sending it (an older bridge
+     * sends it anyway and the read stops one byte past the limit), so nothing bigger is ever held in memory.
+     */
+    suspend fun readFileLimited(path: String, maxBytes: Long): FileReadOutcome {
+        val url = "$baseUrl/api/file/read?path=${java.net.URLEncoder.encode(path, "UTF-8")}&max=$maxBytes"
+        return try {
+            client.newCall(Request.Builder().url(url).get().build()).executeCancellable { response ->
+                val category = response.header("X-File-Category")
+                val declared = response.header("X-File-Size")?.toLongOrNull()
+                val body = response.body
+                when {
+                    response.code == 413 -> FileReadOutcome.TooLarge(declared ?: -1, category.orEmpty())
+                    !response.isSuccessful || body == null -> FileReadOutcome.Failed(errorText(response))
+                    (declared ?: body.contentLength()) > maxBytes ->
+                        FileReadOutcome.TooLarge(declared ?: body.contentLength(), category.orEmpty())
+                    else -> {
+                        val source = body.source()
+                        if (source.request(maxBytes + 1)) {
+                            FileReadOutcome.TooLarge(-1, category.orEmpty())
+                        } else {
+                            val bytes = source.readByteArray()
+                            val text = String(bytes, body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8)
+                            val cat = category ?: if (text.contains('\u0000')) "binary" else "text"
+                            val mime = response.header("X-File-Mime") ?: response.header("Content-Type") ?: "text/plain"
+                            FileReadOutcome.Ok(FileReadResult(content = text, category = cat, mimeType = mime), bytes.size.toLong())
+                        }
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading file: $path", e)
+            FileReadOutcome.Failed(e.message ?: "Read failed")
+        }
+    }
+
+    /** The file's text, or null when it cannot be read or is over [READ_SAFETY_CAP_BYTES]. */
+    suspend fun readFileDetailed(path: String): FileReadResult? =
+        (readFileLimited(path, READ_SAFETY_CAP_BYTES) as? FileReadOutcome.Ok)?.result
 
     suspend fun readFile(path: String): String? = readFileDetailed(path)?.content
 

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Pre-Android 8 (API 24/25) fallback: those versions cannot read mipmap-anydpi-v26 adaptive icons,
-     so without this the launcher icon is missing and any notification using it crashes the app.
-     Android 8+ ignores this file and uses mipmap-anydpi-v26. -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/ic_launcher_background" />
-    <item android:drawable="@drawable/ic_launcher_foreground" />
-</layer-list>

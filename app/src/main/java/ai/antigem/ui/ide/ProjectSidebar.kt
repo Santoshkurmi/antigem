@@ -52,8 +52,10 @@ enum class SidebarTab {
 fun ProjectSidebar(
     projects: List<ProjectItem>,
     activeProject: ProjectItem?,
-    fileTree: List<FileNode>,
+    fileTree: IdeFileTreeState,
     activeFilePath: String?,
+    /** The file being opened (its row shows a spinner). */
+    openingPath: String? = null,
     onSelectProject: (ProjectItem) -> Unit,
     onOpenFileManager: () -> Unit = {},
     onRemoveProject: (ProjectItem) -> Unit = {},
@@ -75,7 +77,7 @@ fun ProjectSidebar(
     var showRenameDialog by remember { mutableStateOf<FileNode?>(null) }
     var showDeleteDialog by remember { mutableStateOf<FileNode?>(null) }
     var showDetailsDialog by remember { mutableStateOf<FileNode?>(null) }
-    var expandedPaths by remember { mutableStateOf(setOf<String>()) }
+    val treeScope = rememberCoroutineScope()
     val daemonStatus by ai.antigem.data.daemon.IdeDaemonManager.status.collectAsState()
 
     Column(
@@ -385,8 +387,9 @@ fun ProjectSidebar(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 
-            // --- 4. Recursive File Tree ---
-            if (fileTree.isEmpty()) {
+            // --- 4. File Tree: one flat lazy list (only the rows on screen are drawn), folders read when opened ---
+            val rootEntries = fileTree.rootEntries
+            if (rootEntries.isNullOrEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -394,6 +397,7 @@ fun ProjectSidebar(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    val rootError = fileTree.rootError
                     if (daemonStatus != ai.antigem.data.daemon.DaemonStatus.RUNNING) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -435,6 +439,18 @@ fun ProjectSidebar(
                                 Text("Retry Now", fontSize = 13.sp)
                             }
                         }
+                    } else if (activeProject != null && rootError != null) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = rootError,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            TextButton(onClick = onRefreshTree) { Text("Retry") }
+                        }
+                    } else if (activeProject != null && rootEntries == null) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                     } else {
                         Text(
                             text = if (activeProject == null) "Open or create a project to view files" else "Project is empty",
@@ -444,37 +460,41 @@ fun ProjectSidebar(
                     }
                 }
             } else {
+                val rows = fileTree.rows
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .weight(1f)
                 ) {
-                    items(fileTree) { node ->
-                        FileTreeNodeItem(
-                            node = node,
-                            depth = 0,
-                            activeFilePath = activeFilePath,
-                            expandedPaths = expandedPaths,
-                            onToggleExpand = { path ->
-                                expandedPaths = if (expandedPaths.contains(path)) expandedPaths - path else expandedPaths + path
-                            },
-                            onOpenFile = onOpenFile,
-                            onCreateChildFile = { parentPath, isDir ->
-                                isNewFolderMode = isDir
-                                showCreateFileDialog = parentPath
-                                expandedPaths = expandedPaths + parentPath
-                            },
-                            onRenameRequested = { targetNode ->
-                                showRenameDialog = targetNode
-                            },
-                            onDetailsRequested = { targetNode ->
-                                showDetailsDialog = targetNode
-                            },
-                            onDeleteRequested = { targetNode ->
-                                showDeleteDialog = targetNode
-                            },
-                            onOpenTerminal = onOpenTerminal
-                        )
+                    items(rows, key = { it.key }, contentType = { it::class }) { row ->
+                        when (row) {
+                            is TreeRow.Item -> FileTreeNodeItem(
+                                node = row.node,
+                                depth = row.depth,
+                                isExpanded = row.expanded,
+                                isOpening = openingPath == row.node.path,
+                                activeFilePath = activeFilePath,
+                                onToggleExpand = { path -> treeScope.launch { fileTree.toggle(path) } },
+                                onOpenFile = onOpenFile,
+                                onCreateChildFile = { parentPath, isDir ->
+                                    isNewFolderMode = isDir
+                                    showCreateFileDialog = parentPath
+                                    treeScope.launch { fileTree.expand(parentPath) }
+                                },
+                                onRenameRequested = { targetNode ->
+                                    showRenameDialog = targetNode
+                                },
+                                onDetailsRequested = { targetNode ->
+                                    showDetailsDialog = targetNode
+                                },
+                                onDeleteRequested = { targetNode ->
+                                    showDeleteDialog = targetNode
+                                },
+                                onOpenTerminal = onOpenTerminal
+                            )
+                            is TreeRow.Loading -> FileTreeNoteRow(depth = row.depth, text = "Loading…", loading = true)
+                            is TreeRow.Note -> FileTreeNoteRow(depth = row.depth, text = row.text, isError = row.isError)
+                        }
                     }
                 }
             }
@@ -510,7 +530,7 @@ fun ProjectSidebar(
                         val parent = showCreateFileDialog ?: ""
                         if (newItemName.isNotBlank() && parent.isNotBlank()) {
                             val fullPath = "$parent/${newItemName.trim()}"
-                            expandedPaths = expandedPaths + parent
+                            treeScope.launch { fileTree.expand(parent) }
                             onCreateFile(fullPath, newItemName.trim(), isNewFolderMode)
                             newItemName = ""
                             showCreateFileDialog = null
@@ -635,18 +655,45 @@ fun ProjectSidebar(
             path = node.path,
             isDir = node.isDir,
             size = node.size,
-            childCount = if (node.isDir) node.children.size else null,
+            childCount = if (node.isDir) fileTree.childCount(node.path) else null,
             onDismiss = { showDetailsDialog = null }
         )
     }
 }
 
+/** A note under a folder in the tree: still loading, empty, cut short, or could not be read. */
+@Composable
+private fun FileTreeNoteRow(depth: Int, text: String, loading: Boolean = false, isError: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .padding(start = (depth * 14 + 24).dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** One file or folder row. Rows are drawn flat by the sidebar's lazy list: a folder's children are rows of their own. */
 @Composable
 fun FileTreeNodeItem(
     node: FileNode,
     depth: Int,
+    isExpanded: Boolean,
+    isOpening: Boolean,
     activeFilePath: String?,
-    expandedPaths: Set<String>,
     onToggleExpand: (String) -> Unit,
     onOpenFile: (FileNode) -> Unit,
     onCreateChildFile: (parentPath: String, isDir: Boolean) -> Unit,
@@ -657,7 +704,6 @@ fun FileTreeNodeItem(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val isExpanded = expandedPaths.contains(node.path)
     var menuExpanded by remember { mutableStateOf(false) }
     val isActive = activeFilePath == node.path
 
@@ -698,12 +744,16 @@ fun FileTreeNodeItem(
                 )
             } else {
                 Spacer(modifier = Modifier.width(20.dp))
-                Icon(
-                    imageVector = getFileIcon(node.name),
-                    contentDescription = null,
-                    tint = getFileIconColor(node.name),
-                    modifier = Modifier.size(16.dp)
-                )
+                if (isOpening) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.5.dp)
+                } else {
+                    Icon(
+                        imageVector = getFileIcon(node.name),
+                        contentDescription = null,
+                        tint = getFileIconColor(node.name),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(6.dp))
@@ -862,24 +912,6 @@ fun FileTreeNodeItem(
                 }
             }
         }
-
-        if (node.isDir && isExpanded && node.children.isNotEmpty()) {
-            node.children.forEach { child ->
-                FileTreeNodeItem(
-                    node = child,
-                    depth = depth + 1,
-                    activeFilePath = activeFilePath,
-                    expandedPaths = expandedPaths,
-                    onToggleExpand = onToggleExpand,
-                    onOpenFile = onOpenFile,
-                    onCreateChildFile = onCreateChildFile,
-                    onRenameRequested = onRenameRequested,
-                    onDetailsRequested = onDetailsRequested,
-                    onDeleteRequested = onDeleteRequested,
-                    onOpenTerminal = onOpenTerminal
-                )
-            }
-        }
     }
 }
 
@@ -938,8 +970,9 @@ object FileShareHelper {
             if (localFile.exists()) {
                 localFile.copyTo(shareFile, overwrite = true)
             } else {
-                val content = IdeApiClient.readFile(filePath) ?: ""
-                shareFile.writeText(content)
+                // a file only the bridge sees: streamed to the cache byte for byte (never read whole into memory)
+                val r = ai.antigem.data.files.FileExplorerApi.download(filePath, shareFile)
+                if (!r.ok) throw java.io.IOException(r.error ?: "Download failed")
             }
 
             val shareUri = try {

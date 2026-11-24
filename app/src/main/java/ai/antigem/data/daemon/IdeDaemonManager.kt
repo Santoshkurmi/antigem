@@ -148,6 +148,15 @@ object IdeDaemonManager {
         _activeTabPath.value = path
     }
 
+    /** Size and change time of each open file when it was last read: the IDE re-reads a file only when they change. */
+    private val diskStamps = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Long>>()
+
+    fun setDiskStamp(path: String, size: Long, modTime: Long) {
+        diskStamps[path] = size to modTime
+    }
+
+    fun diskStamp(path: String): Pair<Long, Long>? = diskStamps[path]
+
     fun setOpenTabs(tabs: List<OpenTab>) {
         _openTabs.value = tabs
     }
@@ -228,6 +237,7 @@ object IdeDaemonManager {
     }
 
     fun closeTab(path: String) {
+        diskStamps.remove(path)
         val updated = _openTabs.value.filterNot { it.path == path }
         _openTabs.value = updated
         if (_activeTabPath.value == path) {
@@ -236,6 +246,7 @@ object IdeDaemonManager {
     }
 
     fun renameTab(oldPath: String, newPath: String, newName: String) {
+        diskStamps.remove(oldPath)?.let { diskStamps[newPath] = it }
         _openTabs.value = _openTabs.value.map { tab ->
             if (tab.path == oldPath) {
                 tab.copy(path = newPath, name = newName)

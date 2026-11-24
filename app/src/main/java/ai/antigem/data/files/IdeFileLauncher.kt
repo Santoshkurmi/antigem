@@ -1,5 +1,6 @@
 package ai.antigem.data.files
 
+import ai.antigem.data.daemon.FileReadOutcome
 import ai.antigem.data.daemon.IdeApiClient
 import ai.antigem.data.daemon.ProjectItem
 import ai.antigem.data.daemon.IdeDaemonManager
@@ -10,39 +11,83 @@ import java.io.File
 /** Opens bridge files and folders in the IDE, with the size and file-type checks the editor needs. */
 object IdeFileLauncher {
 
-    /** Text above this is too heavy for the editor. */
-    private const val MAX_TEXT_BYTES = 20L * 1024 * 1024
+    /** Text above this is too heavy for the editor (it keeps the whole file in memory, more than once). */
+    const val MAX_TEXT_BYTES = 5L * 1024 * 1024
 
-    /** Non-text files above this would only show megabytes of garbage. */
+    /** Non-text files opened as text anyway: above this they would only show megabytes of garbage. */
     private const val MAX_BINARY_BYTES = 2L * 1024 * 1024
+
+    /** Pictures shown by the image viewer (it loads them itself, scaled to the screen). */
+    const val MAX_IMAGE_BYTES = 15L * 1024 * 1024
+
+    /** The picture types the IDE shows in its image viewer instead of the editor. */
+    val VIEWER_IMAGE_EXTS = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico")
+
+    fun isViewerImage(name: String): Boolean = FileKinds.extOf(name) in VIEWER_IMAGE_EXTS
 
     sealed class Outcome {
         object Opened : Outcome()
 
         /** Not a text file: ask the user before opening anyway (call [open] again with force = true). */
         data class NeedsConfirm(val mimeType: String) : Outcome()
-        data class Failed(val message: String) : Outcome()
+
+        /** [tooLarge]: refused for its size, the file itself is fine (it can be shared or opened with another app). */
+        data class Failed(val message: String, val tooLarge: Boolean = false) : Outcome()
     }
 
-    private fun sizeProblem(name: String, size: Long, textual: Boolean, kind: FileKind): Outcome.Failed? = when {
-        size > MAX_TEXT_BYTES -> Outcome.Failed("$name is too large for the editor (${FileKinds.formatSize(size)})")
-        !textual && kind != FileKind.IMAGE && size > MAX_BINARY_BYTES ->
-            Outcome.Failed("$name is not a text file and too large to open in the editor (${FileKinds.formatSize(size)}). Open it with another app instead.")
+    private fun tooLarge(name: String, size: Long, limit: Long, what: String) = Outcome.Failed(
+        "$name is too large to open in the IDE (${FileKinds.formatSize(size)}). The IDE opens $what up to ${FileKinds.formatSize(limit)}.",
+        tooLarge = true
+    )
+
+    private fun sizeProblem(name: String, size: Long, textual: Boolean): Outcome.Failed? = when {
+        isViewerImage(name) -> if (size > MAX_IMAGE_BYTES) tooLarge(name, size, MAX_IMAGE_BYTES, "pictures") else null
+        size > MAX_TEXT_BYTES -> tooLarge(name, size, MAX_TEXT_BYTES, "text files")
+        !textual && size > MAX_BINARY_BYTES -> Outcome.Failed(
+            "$name is not a text file and too large to open in the editor (${FileKinds.formatSize(size)}). Open it with another app instead.",
+            tooLarge = true
+        )
         else -> null
     }
 
     /** False when the editor would refuse the file for its size. */
-    fun fitsEditor(name: String, size: Long, textual: Boolean): Boolean = sizeProblem(name, size, textual, FileKinds.of(name)) == null
+    fun fitsEditor(name: String, size: Long, textual: Boolean): Boolean = sizeProblem(name, size, textual) == null
 
-    /** [textual]: what the file's content says, when already known; otherwise the extension decides the size limit. */
+    /**
+     * [size]: what the caller knows (-1 when nothing); the bridge's own stat wins. [textual]: what the file's content
+     * says, when already known; otherwise the bridge's look at the first bytes, then the extension, decide.
+     * Nothing bigger than the limits is ever downloaded, and a non-text file is not downloaded before the user agrees.
+     */
     suspend fun open(path: String, name: String, size: Long, force: Boolean = false, textual: Boolean? = null): Outcome {
         val kind = FileKinds.of(name)
-        sizeProblem(name, size, textual ?: kind.isTextual, kind)?.let { return it }
-        val res = IdeApiClient.readFileDetailed(path)
-            ?: return Outcome.Failed("Cannot open $name. The IDE bridge is offline or the file is unreadable.")
-        if (res.category == "binary" && !force && kind != FileKind.IMAGE) return Outcome.NeedsConfirm(res.mimeType)
-        IdeDaemonManager.openOrSelectTab(path, name, res.content)
-        return Outcome.Opened
+        val stat = FileExplorerApi.stat(path).getOrNull()?.takeIf { !it.isDir }
+        val isText = when (stat?.category) {
+            "text" -> true
+            "image", "binary" -> false
+            else -> textual ?: kind.isTextual
+        }
+        sizeProblem(name, stat?.size ?: size, isText)?.let { return it }
+        if (isViewerImage(name)) {
+            // the image viewer loads the picture by itself: nothing to download here
+            IdeDaemonManager.openOrSelectTab(path, name, "")
+            stat?.let { IdeDaemonManager.setDiskStamp(path, it.size, it.modTime) }
+            return Outcome.Opened
+        }
+        // the bridge already looked at the first bytes: ask before downloading anything that is not text
+        if (stat != null && !isText && !force && stat.category.isNotBlank()) return Outcome.NeedsConfirm(stat.sniffedMime.ifBlank { stat.mime })
+        val limit = if (isText) MAX_TEXT_BYTES else MAX_BINARY_BYTES
+        return when (val r = IdeApiClient.readFileLimited(path, limit)) {
+            is FileReadOutcome.TooLarge ->
+                if (r.size > 0) sizeProblem(name, r.size, isText) ?: tooLarge(name, r.size, limit, "files like this")
+                else Outcome.Failed("$name is too large to open in the IDE (over ${FileKinds.formatSize(limit)}).", tooLarge = true)
+            is FileReadOutcome.Failed -> Outcome.Failed("Cannot open $name. The IDE bridge is offline or the file is unreadable.")
+            is FileReadOutcome.Ok -> {
+                if (r.result.category != "text" && !force) return Outcome.NeedsConfirm(r.result.mimeType)
+                IdeDaemonManager.openOrSelectTab(path, name, r.result.content)
+                stat?.let { IdeDaemonManager.setDiskStamp(path, it.size, it.modTime) }
+                Outcome.Opened
+            }
+        }
     }
 
     /**
@@ -50,10 +95,9 @@ object IdeFileLauncher {
      * bridge runs on a server). [textual] comes from the file's content; [force] skips the not-text question.
      */
     suspend fun openLocal(path: String, name: String, size: Long, textual: Boolean, mimeType: String = "", force: Boolean = false): Outcome {
-        val kind = FileKinds.of(name)
-        sizeProblem(name, size, textual, kind)?.let { return it }
+        sizeProblem(name, size, textual)?.let { return it }
         // the IDE's image viewer loads the picture from the path itself
-        val content = if (kind == FileKind.IMAGE && !textual) "" else {
+        val content = if (isViewerImage(name) && !textual) "" else {
             if (!textual && !force) return Outcome.NeedsConfirm(mimeType)
             withContext(Dispatchers.IO) { runCatching { File(path).readText() }.getOrNull() }
                 ?: return Outcome.Failed("Cannot read $name")
