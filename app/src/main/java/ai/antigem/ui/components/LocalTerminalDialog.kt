@@ -34,12 +34,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1224,6 +1226,8 @@ private fun ExtraKey(
         isPressed -> Color.White
         isLocked -> Color.White
         isActive -> ClaudeTerracotta
+        // Termux: white keys on its black bar; a light terminal theme keeps the theme's text color
+        ai.antigem.theme.AppColors.terminalBg.luminance() < 0.5f -> Color.White
         else -> ai.antigem.theme.AppColors.editorText
     }
 
@@ -1251,9 +1255,11 @@ private fun ExtraKey(
             ) {
                 Text(
                     text = label,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = if (isActive || isLocked || isPressed) FontWeight.Bold else FontWeight.SemiBold,
+                    // Termux's key text (Material button text): Roboto Medium 14sp, the same weight when active
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.0892857143.em,
                     color = textColor
                 )
                 if (isLocked) {

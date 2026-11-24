@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -30,14 +31,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DriveFileRenameOutline
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -258,8 +257,8 @@ fun Modifier.terminalDrawerEdgeSwipe(state: TerminalDrawerState, area: String, t
     }
 
 /**
- * Termux's left drawer: the gear (terminal settings) at the top, the sessions (tap = switch, long-press = Rename /
- * Close session), and KEYBOARD and NEW SESSION at the bottom. Draw it above the terminal, filling it.
+ * Termux's left drawer: the gear (terminal settings) at the top, the sessions (tap = switch; each row has Rename and
+ * Close session icons), and KEYBOARD and NEW SESSION at the bottom. Draw it above the terminal, filling it.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -377,7 +376,6 @@ fun TerminalSessionsDrawer(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerSessionRow(
     session: LocalPtySession,
@@ -388,57 +386,41 @@ private fun DrawerSessionRow(
 ) {
     val title by session.title.collectAsState()
     val exited by session.isExited.collectAsState()
-    var menuOpen by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .background(if (isActive) ClaudeTerracotta.copy(alpha = 0.18f) else Color.Transparent)
-                .combinedClickable(
-                    onClickLabel = "Switch to this session",
-                    onLongClickLabel = "Rename or close",
-                    onClick = onClick,
-                    onLongClick = { menuOpen = true }
-                )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // like Termux: an ended session is struck through, in red
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                color = if (exited) AppColors.danger else if (isActive) ClaudeTerracotta else Color.White,
-                textDecoration = if (exited) TextDecoration.LineThrough else null,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .background(if (isActive) ClaudeTerracotta.copy(alpha = 0.18f) else Color.Transparent)
+            .clickable(onClickLabel = "Switch to this session", onClick = onClick)
+            .padding(start = 14.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // like Termux: an ended session is struck through, in red
+        Text(
+            text = title,
+            fontSize = 14.sp,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+            color = if (exited) AppColors.danger else if (isActive) ClaudeTerracotta else Color.White,
+            textDecoration = if (exited) TextDecoration.LineThrough else null,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onRename, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = "Rename session",
+                tint = AppColors.editorText.copy(alpha = 0.75f),
+                modifier = Modifier.size(18.dp)
             )
         }
-        DropdownMenu(
-            expanded = menuOpen,
-            onDismissRequest = { menuOpen = false },
-            modifier = Modifier.background(AppColors.editorPanel)
-        ) {
-            DropdownMenuItem(
-                text = { Text("Rename", color = Color.White, fontSize = 13.sp) },
-                leadingIcon = {
-                    Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(18.dp))
-                },
-                onClick = {
-                    menuOpen = false
-                    onRename()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Close session", color = AppColors.danger, fontSize = 13.sp) },
-                leadingIcon = {
-                    Icon(Icons.Outlined.Close, contentDescription = null, tint = AppColors.danger, modifier = Modifier.size(18.dp))
-                },
-                onClick = {
-                    menuOpen = false
-                    onClose()
-                }
+        // asks first (the terminal's "Close Tab?" dialog)
+        IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Outlined.Delete,
+                contentDescription = "Close session",
+                tint = AppColors.danger.copy(alpha = 0.85f),
+                modifier = Modifier.size(18.dp)
             )
         }
     }

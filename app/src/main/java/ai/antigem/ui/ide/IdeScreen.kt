@@ -351,7 +351,8 @@ fun IdeScreen(
         gesturesEnabled = isVisible && (drawerState.isOpen || runnerSession == null),
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = ai.antigem.theme.AppColors.editorPanel,
+                // the sidebar's own color, so the sheet's strip right of it and behind the status bar match it
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.width(300.dp)
             ) {
                 ProjectSidebar(
