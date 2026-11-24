@@ -81,8 +81,8 @@ Notes and to-do lists are on the notes screen and in the floating bubble. Agents
 """.trim()),
             Entry("appearance", listOf("theme", "dark", "light", "font", "size", "appearance", "look", "bubble", "switcher", "floating"), """
 Settings → Themes: the mode (Light, Dark or Auto), and a gallery to pick one light theme and one dark theme (light:
-Porcelain (default), Lavender, Sky (these three recommended), Sakura, Mint, Linen, Paper, Solarized Light; dark: Midnight Aurora (default),
-Obsidian, Graphite (these three recommended), Midnight, High Contrast, Amber Night (AntiGem's original dark look), Mocha, Neon City,
+Porcelain (default), Lavender, Sky (these three recommended), Sakura, Mint, Linen, Paper, Solarized Light; dark: Discord (default),
+Obsidian, Midnight Aurora (these three recommended), Graphite, Midnight, High Contrast, Amber Night (AntiGem's original dark look), Mocha, Neon City,
 Aurora, Nord, Dracula, Velvet, Deep Ocean, Ember, Forest, Sunset, Solarized Dark, plus custom ones; the chat, the IDE editor, the terminal and the code blocks all follow it). Settings → Appearance: chat font size, Group Agent Steps (on by default: runs of thinking and tool calls fold into one
 progress pill once a run has "Fold after" steps, 2+ by default, 1+ = every run; off: every step is a tile), message stats (token/cache/time under replies) on or off, the chat header icons, the floating switcher (always on: its layout, items and their order) and the separate terminal app icon.
 "Vibrate when a chat finishes" is in Settings → Agents. Grouping the chat list by project is the folder icon at the top of the

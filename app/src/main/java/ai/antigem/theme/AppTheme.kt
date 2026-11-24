@@ -308,7 +308,7 @@ object ThemeTokens {
 /** The themes that come with the app. */
 object BuiltInThemes {
     const val LIGHT_DEFAULT = "antigem_light"
-    const val DARK_DEFAULT = "midnight_aurora"
+    const val DARK_DEFAULT = "discord"
     /** The original AntiGem dark look (no longer the default; the id stays so a saved choice still finds it). */
     private const val ANTIGEM_DARK = "antigem_dark"
 
@@ -358,9 +358,9 @@ object BuiltInThemes {
         }
     )
 
-    /** The default dark theme: every color set by hand (first made as a custom theme in the app, then exported). */
+    /** Every color set by hand (first made as a custom theme in the app, then exported). The default dark theme before Discord. */
     private fun midnightAurora() = AppTheme(
-        id = DARK_DEFAULT, name = "Midnight Aurora", dark = true, builtIn = true,
+        id = "midnight_aurora", name = "Midnight Aurora", dark = true, builtIn = true,
         about = "Deep ink-blue midnight with luminous violet, aurora teal and rose accents",
         colors = linkedMapOf(
             "primary" to 0xFFA78BFA, "on_primary" to 0xFF14102B, "primary_container" to 0xFF373256, "on_primary_container" to 0xFFC4B5FE,
@@ -470,12 +470,12 @@ object BuiltInThemes {
                 0xFF268BD2, 0xFF2AA198, 0xFF6C71C4, 0xFF859900, 0xFFB58900, 0xFFDC322F, 0xFF268BD2,
                 0xFF002B36, listOf(0xFF859900, 0xFFB58900, 0xFF2AA198, 0xFFD33682, 0xFF657B83, 0xFF268BD2, 0xFFCB4B16, 0xFF93A1A1)),
             // dark: the same
-            midnightAurora(),
             discord(),
             seeded("obsidian", "Obsidian", "Refined deep black with layered surfaces and a soft periwinkle glow", true,
                 0xFF0D0E12, 0xFF0D0E12, 0xFF16181D, 0xFF1F2229, 0xFFECEDF0, 0xFF9297A3,
                 0xFF8B9CFF, 0xFF6E7FF3, 0xFFC4A1FF, 0xFF4ADE80, 0xFFF5B454, 0xFFF87171, 0xFF60A5FA,
                 0xFF111318, listOf(0xFFC4A1FF, 0xFF7DD3FC, 0xFF9FE2B0, 0xFFF9B98A, 0xFF5E6573, 0xFF8BB4FF, 0xFFF5D08A, 0xFFB8BDC8)),
+            midnightAurora(),
             seeded("graphite", "Graphite", "Warm charcoal with a glowing amber accent: AntiGem's look, refined", true,
                 0xFF121212, 0xFF121212, 0xFF1B1B1C, 0xFF262628, 0xFFEDEBE8, 0xFFA29E98,
                 0xFFF0A04B, 0xFFD9822B, 0xFFB794F4, 0xFF5BD18A, 0xFFF4C152, 0xFFEF6B6B, 0xFF6CB4F2,
