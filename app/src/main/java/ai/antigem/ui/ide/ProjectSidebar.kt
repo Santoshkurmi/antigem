@@ -39,6 +39,7 @@ import ai.antigem.ui.components.AppToastHelper
 import ai.antigem.ui.components.ChatToastType
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -450,7 +451,7 @@ fun ProjectSidebar(
                             TextButton(onClick = onRefreshTree) { Text("Retry") }
                         }
                     } else if (activeProject != null && rootEntries == null) {
-                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        AfterDelay { CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp) }
                     } else {
                         Text(
                             text = if (activeProject == null) "Open or create a project to view files" else "Project is empty",
@@ -492,7 +493,7 @@ fun ProjectSidebar(
                                 },
                                 onOpenTerminal = onOpenTerminal
                             )
-                            is TreeRow.Loading -> FileTreeNoteRow(depth = row.depth, text = "Loading…", loading = true)
+                            is TreeRow.Loading -> AfterDelay { FileTreeNoteRow(depth = row.depth, text = "Loading…", loading = true) }
                             is TreeRow.Note -> FileTreeNoteRow(depth = row.depth, text = row.text, isError = row.isError)
                         }
                     }
@@ -659,6 +660,20 @@ fun ProjectSidebar(
             onDismiss = { showDetailsDialog = null }
         )
     }
+}
+
+/** How long the sidebar waits before showing a spinner: most files and folders open faster, and a flash of one feels slow. */
+const val SPINNER_DELAY_MS = 300L
+
+/** Shows [content] only once [SPINNER_DELAY_MS] has passed (nothing, not even its space, before that). */
+@Composable
+private fun AfterDelay(content: @Composable () -> Unit) {
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(SPINNER_DELAY_MS)
+        show = true
+    }
+    if (show) content()
 }
 
 /** A note under a folder in the tree: still loading, empty, cut short, or could not be read. */

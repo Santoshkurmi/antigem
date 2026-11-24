@@ -323,8 +323,13 @@ fun IdeScreen(
     /** Opens a file through the same size and type checks as everywhere else; a new tap cancels the last open. */
     fun openInIde(path: String, name: String, size: Long, force: Boolean = false) {
         openJob[0]?.cancel()
+        openingPath = null
         openJob[0] = coroutineScope.launch {
-            openingPath = path
+            // most files open in a few ms: the row's spinner only shows for a slow one
+            val spinner = launch {
+                delay(SPINNER_DELAY_MS)
+                openingPath = path
+            }
             try {
                 when (val r = IdeFileLauncher.open(path, name, size, force)) {
                     is IdeFileLauncher.Outcome.Opened -> drawerState.close()
@@ -334,6 +339,7 @@ fun IdeScreen(
                         else Toast.makeText(context, r.message, Toast.LENGTH_LONG).show()
                 }
             } finally {
+                spinner.cancel()
                 // a newer tap owns the spinner now
                 if (openJob[0] === coroutineContext[kotlinx.coroutines.Job]) openingPath = null
             }
