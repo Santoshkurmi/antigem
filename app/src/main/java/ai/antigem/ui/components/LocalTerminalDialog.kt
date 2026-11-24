@@ -727,9 +727,22 @@ fun LocalTerminalContent(
                                 activeSession.terminalSession.emulator?.setCursorStyle()
                                 currentTerminalView = this
                                 if (showKeyboardOnOpen) post {
-                                    requestFocus()
-                                    val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                                    imm.showSoftInput(this, 0)
+                                    if (hasWindowFocus()) {
+                                        requestFocus()
+                                        val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                        imm.showSoftInput(this, 0)
+                                    } else {
+                                        // A new window (the terminal's own app icon opens it in a dialog) gets the focus
+                                        // a moment after it shows, and the keyboard is refused until then: wait for it
+                                        val tv = this
+                                        viewTreeObserver.addOnWindowFocusChangeListener(object : android.view.ViewTreeObserver.OnWindowFocusChangeListener {
+                                            override fun onWindowFocusChanged(hasFocus: Boolean) {
+                                                if (!hasFocus) return
+                                                tv.viewTreeObserver.removeOnWindowFocusChangeListener(this)
+                                                tv.post { showTerminalKeyboard(tv) }
+                                            }
+                                        })
+                                    }
                                 }
                             }
                         },
