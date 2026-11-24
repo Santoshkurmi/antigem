@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.AppShortcut
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.PushPin
@@ -1866,6 +1867,24 @@ private fun ChatHistoryItemRow(
                             menuExpanded = false
                             onTogglePin()
                             AppToastHelper.showToast(if (isPinned) "Chat unpinned" else "Chat pinned", ChatToastType.SUCCESS)
+                        }
+                    )
+                }
+                if (!conv.readOnly && conv.parentConversationId == null) {
+                    // an icon on the home screen that opens this chat (Settings → Home screen has widgets too)
+                    DropdownMenuItem(
+                        text = { Text("Add to home screen", fontSize = 13.5.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.AppShortcut,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            ai.antigem.data.homescreen.HomeShortcuts.pinChat(context, conv.id, conv.agent, conv.title)
                         }
                     )
                 }

@@ -404,9 +404,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-    fun selectConversation(id: String) {
+    /** [agent]: the chat's agent when the caller knows it (a home-screen link: the chat list may not be loaded yet). */
+    fun selectConversation(id: String, agent: AgentKind = agentOf(id)) {
         flushMemoryWait()
-        when (agentOf(id)) {
+        when (agent) {
             AgentKind.CLAUDE -> {
                 agyBackend.detach()
                 openCodeBackend.detach()
@@ -433,6 +434,52 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    private var outsideOpenJob: Job? = null
+
+    /**
+     * A home-screen shortcut or widget asked for this chat. It opens once its agent's chats have loaded: right after a
+     * cold start they are still on their way, and opening earlier would race Antigravity's start-up chat. The link's
+     * agent is used, so a Claude chat never goes to Antigravity just because its list was not there yet.
+     */
+    fun openChatFromOutside(id: String, agent: AgentKind) {
+        if (agent !in enabledAgents.value) {
+            ai.antigem.ui.components.AppToastHelper.showToast(
+                "${ai.antigem.data.homescreen.HomeIcons.agentLabel(agent)} is turned off: turn it on in Settings → Agents",
+                ai.antigem.ui.components.ChatToastType.INFO
+            )
+            return
+        }
+        outsideOpenJob?.cancel()
+        outsideOpenJob = viewModelScope.launch {
+            if (currentConversation.value?.id == id) return@launch
+            val list = when (agent) {
+                AgentKind.AGY -> _conversations
+                AgentKind.CLAUDE -> claudeBackend.conversations
+                AgentKind.OPENCODE -> openCodeBackend.conversations
+                AgentKind.CODEX -> codexBackend.conversations
+            }
+            withTimeoutOrNull(if (agent == AgentKind.AGY) 20_000L else 8_000L) { list.first { it.isNotEmpty() } }
+            if (currentConversation.value?.id != id) selectConversation(id, agent)
+        }
+    }
+
+    /** A home-screen "New chat": with [agent] (null or turned off: the new-chat default), after the start-up chat. */
+    fun startNewChatFromOutside(agent: AgentKind?) {
+        outsideOpenJob?.cancel()
+        outsideOpenJob = viewModelScope.launch {
+            // right after a cold start Antigravity opens its start-up chat first; a new chat made before could be replaced
+            withTimeoutOrNull(4_000L) { currentConversation.first { it != null } }
+            val usable = agent?.takeIf { it in enabledAgents.value }
+            if (agent != null && usable == null) {
+                ai.antigem.ui.components.AppToastHelper.showToast(
+                    "${ai.antigem.data.homescreen.HomeIcons.agentLabel(agent)} is turned off: starting a chat with your default agent",
+                    ai.antigem.ui.components.ChatToastType.INFO
+                )
+            }
+            if (usable == null) startNewChat() else startNewChat(usable)
+        }
+    }
+
     /**
      * Voice call tile / shortcut: opens the AGY chat that last had a voice call (a new AGY chat when none did) and waits
      * until it is the chat on screen. Returns its id (null if it did not open in time).
@@ -498,6 +545,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         ai.antigem.data.jarvis.JarvisController.onChatDeleted(id)
         // Agent memory: its history file goes too (memories it saved stay)
         ai.antigem.data.memory.MemorySync.onChatDeleted(id)
+        // its home-screen shortcut is greyed out, and it leaves the app icon's menu
+        ai.antigem.data.homescreen.HomeShortcuts.onChatDeleted(getApplication(), id)
     }
     fun forkConversation(id: String) {
         flushMemoryWait()

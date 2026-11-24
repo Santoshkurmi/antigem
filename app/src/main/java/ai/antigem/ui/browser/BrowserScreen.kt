@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.AddToHomeScreen
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.*
@@ -1057,6 +1058,24 @@ private fun BrowserMenuSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
+                    if (hasActivePage) {
+                        // an icon on the home screen that opens this page in AntiGem's browser
+                        val homeContext = androidx.compose.ui.platform.LocalContext.current
+                        BrowserMenuRow(
+                            icon = Icons.AutoMirrored.Rounded.AddToHomeScreen,
+                            title = "Add to home screen",
+                            subtitle = "An icon that opens this page here",
+                            onClick = {
+                                val pageTitle = activeTab?.title?.takeIf { it.isNotBlank() } ?: browserDisplayHost(url)
+                                closeThen { ai.antigem.data.homescreen.HomeShortcuts.pinWeb(homeContext, pageTitle, url) }
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 60.dp),
+                            thickness = 0.5.dp,
+                            color = dividerColor
+                        )
+                    }
                     BrowserMenuRow(
                         icon = Icons.Rounded.CleaningServices,
                         title = "Clear tab cache",

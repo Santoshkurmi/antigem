@@ -256,6 +256,9 @@ dependencies {
   implementation(libs.androidx.activity.compose)
   implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
   implementation("androidx.work:work-runtime-ktx:2.10.0")
+  // Home-screen widgets (chats, quick actions, one chat, scripts): Compose-style code drawn as RemoteViews
+  implementation("androidx.glance:glance-appwidget:1.2.0")
+  implementation("androidx.glance:glance-material3:1.2.0")
 
   // Arch Components
   implementation(libs.androidx.lifecycle.runtime.compose)

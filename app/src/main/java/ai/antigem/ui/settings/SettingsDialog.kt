@@ -88,6 +88,7 @@ enum class SettingsSection(val title: String, val subtitle: String) {
     MAIN("Settings & Preferences", "Configure your AntiGem experience"),
     THEMES("Themes", "Light and dark mode, and the theme gallery"),
     APPEARANCE("Appearance", "Chat text size, agent steps, message stats, header icons, the app switcher and Gemmy"),
+    HOME_SCREEN("Home screen", "Widgets, shortcuts to chats and pages, scripts, and the app icon's menu"),
     STEM_RENDERING("STEM & diagrams", "Chemistry, graphs, geometry, simulations, circuits and offline Mermaid in chats"),
     SERVERS("Where agents run", "This phone (AntiGem or Ubuntu chroot) or your server, and how the app reaches it"),
     CONNECT_PC("Connect to PC", "Use the agents on your PC (AntiGem in VS Code) from this phone"),
@@ -749,6 +750,11 @@ fun SettingsDialog(
                     ) {
                         ai.antigem.ui.voice.AgyVoiceCallSettingsCard()
                     }
+                    SettingsSection.HOME_SCREEN -> Column(
+                        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)
+                    ) {
+                        ai.antigem.ui.homescreen.HomeScreenSettingsCard()
+                    }
                     SettingsSection.CLAUDE -> if (claude != null) {
                         ai.antigem.ui.claude.ClaudeSettingsGroup(claude, cardBg) { page ->
                             claudePage = page
@@ -954,6 +960,7 @@ private fun MainSettingsMenu(
             listOf(
                 row(SettingsSection.THEMES, Icons.Outlined.Palette, c.accentPink, ai.antigem.theme.ThemeManager.current.name),
                 row(SettingsSection.APPEARANCE, Icons.Outlined.Tune, c.accentAlt),
+                row(SettingsSection.HOME_SCREEN, Icons.Outlined.Widgets, c.accentTeal),
                 stemRow,
                 // where agents run (Termux, Ubuntu chroot or a server), and whether the app reaches it
                 row(SettingsSection.SERVERS, Icons.Outlined.Dns, c.info,

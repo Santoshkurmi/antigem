@@ -41,6 +41,8 @@
 
     <uses-permission android:name="${applicationId}.permission.RUN_COMMAND" />
     <uses-permission android:name="${applicationId}.permission.API" />
+    <!-- Home-screen shortcuts on Android 7 launchers (Android 8+ asks the launcher directly) -->
+    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
@@ -344,6 +346,80 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden" />
+
+        <!-- Home screen: every shortcut, app-icon menu entry and widget tap opens this invisible screen with an
+             antigem:// link; it hands it on and closes. Exported for Android 7 launchers; scripts need the app's key. -->
+        <activity
+            android:name="ai.antigem.data.homescreen.HomeLaunchActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden" />
+
+        <!-- A widget's setup screen (when it is placed, and from its settings on Android 12+) -->
+        <activity
+            android:name="ai.antigem.ui.homescreen.WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="${applicationId}.widgetconfig"
+            android:theme="@style/Theme.Gemini"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Home-screen widgets: Chats, Quick actions, One chat, Scripts -->
+        <receiver
+            android:name="ai.antigem.ui.homescreen.ChatsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_chats_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_chats_info" />
+        </receiver>
+        <receiver
+            android:name="ai.antigem.ui.homescreen.ActionsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_actions_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_actions_info" />
+        </receiver>
+        <receiver
+            android:name="ai.antigem.ui.homescreen.ChatWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_chat_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_chat_info" />
+        </receiver>
+        <receiver
+            android:name="ai.antigem.ui.homescreen.ScriptsWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_scripts_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_scripts_info" />
+        </receiver>
+        <!-- A One chat widget placed from the app: the launcher tells which widget it became -->
+        <receiver
+            android:name="ai.antigem.ui.homescreen.HomeWidgetPinReceiver"
+            android:exported="false" />
 
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
         <service

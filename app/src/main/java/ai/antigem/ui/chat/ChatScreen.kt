@@ -19,6 +19,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -1736,12 +1738,20 @@ fun ChatScreen(
                             modifier = Modifier.fillMaxWidth().padding(end = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // long-press the title: this chat on the home screen (an icon, or a widget)
+                            var titleMenuOpen by remember { mutableStateOf(false) }
+                            Box(Modifier.weight(1f)) {
                             // the real title fades in when the chat gets one (instead of jumping from "New Chat")
                             Crossfade(
                                 targetState = displayedChatTitle,
                                 animationSpec = tween(250),
                                 label = "chat_title",
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.pointerInput(currentConv?.id, isChatStarted) {
+                                    detectTapGestures(onLongPress = {
+                                        val conv = currentConv
+                                        if (conv != null && isChatStarted && !conv.readOnly && !isInFloatingWindow) titleMenuOpen = true
+                                    })
+                                }
                             ) { chatTitle ->
                                 Text(
                                     text = chatTitle,
@@ -1751,6 +1761,37 @@ fun ChatScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            }
+                            DropdownMenu(expanded = titleMenuOpen, onDismissRequest = { titleMenuOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Add to home screen") },
+                                    leadingIcon = { Icon(Icons.Outlined.AppShortcut, null, modifier = Modifier.size(18.dp)) },
+                                    onClick = {
+                                        titleMenuOpen = false
+                                        currentConv?.let { ai.antigem.data.homescreen.HomeShortcuts.pinChat(context, it.id, it.agent, displayedChatTitle) }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Add as a widget") },
+                                    leadingIcon = { Icon(Icons.Outlined.Widgets, null, modifier = Modifier.size(18.dp)) },
+                                    onClick = {
+                                        titleMenuOpen = false
+                                        val conv = currentConv
+                                        if (conv != null) {
+                                            if (ai.antigem.ui.homescreen.HomeWidgets.canPin(context)) {
+                                                ai.antigem.ui.homescreen.HomeWidgets.pin(
+                                                    context, ai.antigem.ui.homescreen.WidgetKind.CHAT, Triple(conv.id, conv.agent, displayedChatTitle)
+                                                )
+                                            } else {
+                                                ai.antigem.ui.components.AppToastHelper.showToast(
+                                                    "Long-press your home screen → Widgets → AntiGem → One chat",
+                                                    ai.antigem.ui.components.ChatToastType.INFO
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Box {

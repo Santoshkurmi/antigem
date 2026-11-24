@@ -92,6 +92,11 @@ class MainActivity : ComponentActivity() {
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
         handleVoiceCallIntent(intent)
+        // Home-screen shortcuts and widgets: the chat / page / script they asked for (not again when recreated); the
+        // chat list they show is kept up to date from here on
+        if (savedInstanceState == null) ai.antigem.data.homescreen.HomeRouter.handle(this, chatViewModel, intent)
+        ai.antigem.data.homescreen.HomeSnapshot.start(application, chatViewModel)
+        ai.antigem.ui.homescreen.HomeWidgets.publishPreviews(this)
         // Voice call tile / shortcut: the floating call window stays away while this screen is up; the long-press menu
         // of the app icon gets "Voice call"
         lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -875,6 +880,7 @@ class MainActivity : ComponentActivity() {
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
         handleVoiceCallIntent(intent)
+        ai.antigem.data.homescreen.HomeRouter.handle(this, chatViewModel, intent)
     }
 
     /**
