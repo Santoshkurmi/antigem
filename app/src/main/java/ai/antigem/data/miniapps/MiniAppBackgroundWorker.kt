@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.UUID
+import ai.antigem.i18n.L
 
 /**
  * Runs one background task of a mini app: its background script in an invisible WebView page with the full SDK
@@ -101,7 +102,7 @@ class MiniAppBackgroundWorker(context: Context, params: WorkerParameters) : Coro
         if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel("mini_apps_background") == null)
             nm.createNotificationChannel(NotificationChannel("mini_apps_background", "Mini app background tasks", NotificationManager.IMPORTANCE_MIN))
         val n = NotificationCompat.Builder(applicationContext, "mini_apps_background")
-            .setSmallIcon(R.mipmap.ic_launcher).setContentTitle("Mini app task").setContentText(inputData.getString("task").orEmpty())
+            .setSmallIcon(R.mipmap.ic_launcher).setContentTitle(L.miniapps.miniAppBackgroundWorker.miniAppTask).setContentText(inputData.getString("task").orEmpty())
             .setPriority(NotificationCompat.PRIORITY_MIN).setOngoing(true).build()
         return ForegroundInfo(0x6d1a, n)
     }

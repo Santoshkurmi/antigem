@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okio.ByteString.Companion.toByteString
+import ai.antigem.i18n.L
 
 /**
  * Antigravity cloud agents (what Antigravity calls Remote Agents): chats that run in a Google-managed VM with the
@@ -161,7 +162,7 @@ object AgyCloud {
 
     private suspend fun read(id: String): CloudProject? {
         val p = AgyLanguageService.ReadProject().executeSafely(ReadProjectRequest(id = id)).getOrNull()?.project ?: return null
-        return CloudProject(p.id.ifBlank { id }, p.name.ifBlank { "Cloud project" }, repos(p), p)
+        return CloudProject(p.id.ifBlank { id }, p.name.ifBlank { L.agent.agyCloud.cloudProject }, repos(p), p)
     }
 
     private fun repos(p: Project): List<RemoteResource> =
@@ -307,17 +308,17 @@ object AgyCloud {
         val m = raw.orEmpty()
         return when {
             isWarmingUp(m) && m.contains("not enabled", true) ->
-                "Cloud agents start about a minute after the Antigravity server starts. Try again in a moment."
-            m.contains("REMOTE_AGENT_AT_CAPACITY") -> "Cloud agents are busy right now. Try again in a few minutes."
-            m.contains("REMOTE_AGENT_ENVIRONMENT_TIME_EXHAUSTED") -> "Today's cloud VM time is used up. It resets tomorrow."
-            m.contains("REMOTE_AGENT_ENVIRONMENT_LIMIT") -> "Too many cloud environments are running. Let one finish, then try again."
-            m.contains("REMOTE_AGENT_ACTIVE_CONVERSATION_LIMIT") -> "Today's limit of cloud chats is reached. It resets tomorrow."
-            m.contains("REMOTE_AGENT_CONVERSATION_LIMIT") -> "The limit of cloud chats is reached. Delete old cloud chats to start new ones."
-            m.contains("PERMISSION_DENIED", true) && m.contains("terminal", true) -> "The cloud VM has no terminal for apps. Ask the agent to run the command."
+                L.agent.agyCloud.cloudAgentsStartAboutAMinute
+            m.contains("REMOTE_AGENT_AT_CAPACITY") -> L.agent.agyCloud.cloudAgentsAreBusyRightNow
+            m.contains("REMOTE_AGENT_ENVIRONMENT_TIME_EXHAUSTED") -> L.agent.agyCloud.todaysCloudVmTimeIsUsed
+            m.contains("REMOTE_AGENT_ENVIRONMENT_LIMIT") -> L.agent.agyCloud.tooManyCloudEnvironmentsAreRunning
+            m.contains("REMOTE_AGENT_ACTIVE_CONVERSATION_LIMIT") -> L.agent.agyCloud.todaysLimitOfCloudChatsIs
+            m.contains("REMOTE_AGENT_CONVERSATION_LIMIT") -> L.agent.agyCloud.theLimitOfCloudChatsIs
+            m.contains("PERMISSION_DENIED", true) && m.contains("terminal", true) -> L.agent.agyCloud.theCloudVmHasNoTerminal
             m.contains("PERMISSION_DENIED", true) || m.contains("not eligible", true) ->
-                "Cloud agents need Google AI Pro or Ultra on a personal Google account (and agy 1.5 or newer)."
-            m.contains("unimplemented", true) -> "This agy does not support cloud agents yet. Update agy in Settings → Antigravity → Account & CLI."
-            m.isBlank() -> "Something went wrong with the cloud agent."
+                L.agent.agyCloud.cloudAgentsNeedGoogleAiPro
+            m.contains("unimplemented", true) -> L.agent.agyCloud.thisAgyDoesNotSupportCloud
+            m.isBlank() -> L.agent.agyCloud.somethingWentWrongWithTheCloud
             else -> m.substringAfterLast("): ").ifBlank { m }.take(300)
         }
     }

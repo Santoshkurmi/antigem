@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * Keeps an Antigravity voice call going while the screen is off or another app is in front (Android only lets a
@@ -87,7 +88,7 @@ class AgyVoiceCallService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(NotificationChannel(CHANNEL, "Antigravity voice calls", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shown while you are on a voice call with Antigravity"
+                description = L.voice.agyVoiceCallService.shownWhileYouAreOnA
                 setShowBadge(false)
             })
         }
@@ -99,18 +100,18 @@ class AgyVoiceCallService : Service() {
             PendingIntent.getService(this, code, Intent(this, AgyVoiceCallService::class.java).setAction(a), flags)
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), flags)
         val text = when (st.phase) {
-            AgyVoiceCall.Phase.CONNECTING -> "Connecting…"
-            AgyVoiceCall.Phase.RECONNECTING -> "Reconnecting…"
-            AgyVoiceCall.Phase.ENDING -> "Ending…"
+            AgyVoiceCall.Phase.CONNECTING -> L.voice.agyVoiceCallService.connecting
+            AgyVoiceCall.Phase.RECONNECTING -> L.voice.agyVoiceCallService.reconnecting
+            AgyVoiceCall.Phase.ENDING -> L.voice.agyVoiceCallService.ending
             else -> when {
-                st.muted -> "Muted"
-                st.agentSpeaking -> "${st.voice} is speaking"
-                else -> "Listening"
+                st.muted -> L.voice.agyVoiceCallService.muted
+                st.agentSpeaking -> L.voice.agyVoiceCallService.voiceIsSpeaking(st.voice)
+                else -> L.voice.agyVoiceCallService.listening
             }
         }
         val b = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_jarvis_mic)
-            .setContentTitle(st.title.ifBlank { "Antigravity" } + " · voice call")
+            .setContentTitle(L.voice.agyVoiceCallService.titleVoiceCall(st.title.ifBlank { "Antigravity" }))
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -120,8 +121,8 @@ class AgyVoiceCallService : Service() {
             b.setUsesChronometer(true)
             b.setWhen(System.currentTimeMillis() - (SystemClock.elapsedRealtime() - st.connectedAt))
         } else b.setShowWhen(false)
-        b.addAction(0, if (st.muted) "Unmute" else "Mute", action(ACTION_MUTE, 1))
-        b.addAction(0, "End", action(ACTION_END, 2))
+        b.addAction(0, if (st.muted) L.common.unmute else L.common.mute, action(ACTION_MUTE, 1))
+        b.addAction(0, L.voice.agyVoiceCallService.end, action(ACTION_END, 2))
         return b.build()
     }
 

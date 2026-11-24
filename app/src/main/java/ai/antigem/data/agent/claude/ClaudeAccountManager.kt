@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** Claude Code account: CLI/auth status, plan usage, OAuth sign-in and sign-out (all through the bridge). */
 class ClaudeAccountManager(
@@ -86,7 +87,7 @@ class ClaudeAccountManager(
                 .onSuccess {
                     _status.value = it
                     _failure.value = null
-                    _statusError.value = it.auth_error?.let { e -> "Could not read the sign-in state: $e" }
+                    _statusError.value = it.auth_error?.let { e -> L.agent.claudeAccountManager.couldNotReadTheSignIn(e) }
                     if (it.auth?.loggedIn == true) refreshUsage(false) else _usage.value = null
                 }
                 .onFailure {
@@ -94,8 +95,8 @@ class ClaudeAccountManager(
                     _failure.value = failure
                     _statusError.value = when (failure) {
                         ClaudeStatus.BRIDGE_OUTDATED -> it.message
-                        ClaudeStatus.BRIDGE_OFFLINE -> "Could not reach the bridge" + (it.message?.let { m -> " ($m)." } ?: ".")
-                        else -> it.message ?: "Status check failed"
+                        ClaudeStatus.BRIDGE_OFFLINE -> it.message?.let { m -> L.agent.claudeAccountManager.couldNotReachTheBridgeError(m) } ?: L.agent.claudeAccountManager.couldNotReachTheBridge
+                        else -> it.message ?: L.agent.claudeAccountManager.statusCheckFailed
                     }
                 }
             _checking.value = false
@@ -107,7 +108,7 @@ class ClaudeAccountManager(
         statusJob?.cancel()
         _checking.value = false
         _failure.value = ClaudeStatus.BRIDGE_OFFLINE
-        _statusError.value = "The bridge is not running."
+        _statusError.value = L.agent.claudeAccountManager.theBridgeIsNotRunning
     }
 
     private fun classify(error: Throwable): ClaudeStatus = when {
@@ -157,9 +158,9 @@ class ClaudeAccountManager(
                             _usageError.value = null
                             _usageUpdatedAt.value = System.currentTimeMillis()
                             if (force) onFreshUsage?.invoke()
-                        } else _usageError.value = resp.error ?: "Claude Code did not return usage"
+                        } else _usageError.value = resp.error ?: L.agent.claudeAccountManager.claudeCodeDidNotReturnUsage
                     }
-                    .onFailure { if (it !is kotlinx.coroutines.CancellationException) _usageError.value = it.message ?: "Cannot reach the bridge" }
+                    .onFailure { if (it !is kotlinx.coroutines.CancellationException) _usageError.value = it.message ?: L.agent.claudeAccountManager.cannotReachTheBridge }
             } finally {
                 // a newer refresh that replaced this one owns the spinner
                 if (gen == usageGen) {

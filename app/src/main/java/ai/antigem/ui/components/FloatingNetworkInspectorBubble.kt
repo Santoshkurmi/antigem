@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import ai.antigem.data.remote.inspector.NetworkInspectorManager
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 @Composable
 fun FloatingNetworkInspectorBubble(
@@ -94,7 +95,7 @@ fun FloatingNetworkInspectorBubble(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Language,
-                            contentDescription = "Network Inspector",
+                            contentDescription = L.components.floatingNetworkInspectorBubble.networkInspector,
                             tint = ai.antigem.theme.AppColors.info,
                             modifier = Modifier.size(14.dp)
                         )

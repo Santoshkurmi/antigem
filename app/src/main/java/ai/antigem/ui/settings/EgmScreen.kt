@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.data.egm.EgmManager
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.i18n.L
 
 /** The EGM row of Settings → Agents, with what is installed. */
 @Composable
@@ -56,11 +57,11 @@ fun EgmEntryRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
             ) { Icon(Icons.Outlined.Psychology, null, tint = MaterialTheme.colorScheme.tertiary) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("EGM · Elephant-Goldfish", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.settings.egm.egmElephantGoldfish, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     when {
-                        state.version == null -> "Not installed  ·  Review a design before any code"
-                        !settings.enabled -> "${state.label}  ·  Commands off"
+                        state.version == null -> L.settings.egm.notInstalledReviewADesignBefore
+                        !settings.enabled -> L.settings.egm.labelCommandsOff(state.label)
                         else -> "${state.label}  ·  " + EgmManager.Command.entries.filter { EgmManager.available(it, state) }.joinToString { "/${it.token}" }
                     },
                     fontSize = 12.5.sp,
@@ -98,9 +99,9 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        EgmCard("What EGM does", cardBg, cardBorder) {
-            Hint("Google's Elephant-Goldfish Model (open source, Apache 2.0). The agent (the Elephant) works out a design with you and writes it down. Then fresh reviewers (the Goldfish), who never saw your conversation, read only the document and try to break it. The design is fixed until it passes and you approve it; only then is code written.")
-            Hint("It uses more tokens than a plain chat: every reviewer reads the document, its persona and project files. On a phone, Quick or Standard reviewers are usually enough.")
+        EgmCard(L.settings.egm.whatEgmDoes, cardBg, cardBorder) {
+            Hint(L.settings.egm.googlesElephantGoldfishModelOpenSource)
+            Hint(L.settings.egm.itUsesMoreTokensThanA)
             TextButton(onClick = { egmOpenUrl(context, EgmManager.HOMEPAGE) }, contentPadding = PaddingValues(0.dp)) {
                 Text("github.com/google/elephant-goldfish-model", fontSize = 12.5.sp)
             }
@@ -110,21 +111,21 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
             Surface(shape = RoundedCornerShape(12.dp), color = (if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen).copy(alpha = 0.1f)) {
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f))
-                    IconButton(onClick = EgmManager::clearMessage) { Icon(Icons.Default.Close, "Dismiss", Modifier.size(18.dp)) }
+                    IconButton(onClick = EgmManager::clearMessage) { Icon(Icons.Default.Close, L.common.dismiss, Modifier.size(18.dp)) }
                 }
             }
         }
 
         StepCard(
-            1, "Install",
+            1, L.common.install,
             when {
-                state.hasUpdate -> "Update"
+                state.hasUpdate -> L.common.update
                 else -> state.label
             },
             cardBg, cardBorder,
             badgeColor = if (state.hasUpdate) Amber else QuotaGreen
         ) {
-            Hint("Downloads EGM from GitHub (the skills, the reviewer personas and the review standards) into a folder every agent on this phone can read. Pick where it comes from:")
+            Hint(L.settings.egm.downloadsEgmFromGithubTheSkills)
             EgmManager.Source.entries.forEach { src ->
                 Row(
                     verticalAlignment = Alignment.Top,
@@ -148,27 +149,27 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 when {
                     state.version == null -> Button(enabled = !busy, onClick = EgmManager::install) {
-                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Install EGM")
+                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.egm.installEgm)
                     }
                     switching -> Button(enabled = !busy, onClick = EgmManager::install) {
                         Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                        Text(if (settings.source == EgmManager.Source.MAIN) "Install the development version" else "Install the newest release")
+                        Text(if (settings.source == EgmManager.Source.MAIN) L.settings.egm.installTheDevelopmentVersion else L.settings.egm.installTheNewestRelease)
                     }
                     state.hasUpdate -> Button(enabled = !busy, onClick = EgmManager::install) {
                         Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                        Text(if (state.installedSource == EgmManager.Source.MAIN) "Update to main ${state.latestCommit}" else "Update to v${state.latest}")
+                        Text(if (state.installedSource == EgmManager.Source.MAIN) L.settings.egm.updateToMainLatestcommit(state.latestCommit) else L.settings.egm.updateToVLatest(state.latest))
                     }
-                    else -> OutlinedButton(enabled = !busy, onClick = EgmManager::install) { Text("Reinstall") }
+                    else -> OutlinedButton(enabled = !busy, onClick = EgmManager::install) { Text(L.common.reinstall) }
                 }
                 if (state.version != null && !state.hasUpdate && !switching) {
-                    TextButton(enabled = !busy, onClick = { EgmManager.checkForUpdate() }) { Text("Check for update") }
+                    TextButton(enabled = !busy, onClick = { EgmManager.checkForUpdate() }) { Text(L.common.checkForUpdate) }
                 }
             }
             if (busy) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text(state.progress ?: "Working…", fontSize = 12.5.sp)
+                    Text(state.progress ?: L.common.working, fontSize = 12.5.sp)
                 }
             }
             if (state.log.isNotEmpty()) LogBox(state.log)
@@ -177,8 +178,8 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
 
         if (state.version == null) return@Column
 
-        EgmCard("Slash commands", cardBg, cardBorder) {
-            EgmSwitchRow("Use the EGM commands", "Type one at the start of a message in any chat; the rest of the message is the task.", settings.enabled) { on ->
+        EgmCard(L.settings.egm.slashCommands, cardBg, cardBorder) {
+            EgmSwitchRow(L.settings.egm.useTheEgmCommands, L.settings.egm.typeOneAtTheStartOf, settings.enabled) { on ->
                 EgmManager.update { it.copy(enabled = on) }
             }
             EgmManager.Command.entries.forEach { c ->
@@ -192,13 +193,13 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
                     if (!available) Text(liteMissingNote(state.label), fontSize = 11.5.sp, color = Amber)
                 }
             }
-            Hint("In a normal chat the agent runs the reviewers with its own subagent tool. In a Jarvis chat (Jarvis tab), Jarvis manages the run: it starts every reviewer as a separate chat, shows the phases as its mission steps and asks you to approve the design.")
+            Hint(L.settings.egm.inANormalChatTheAgent)
         }
 
         EgmGuideCard(cardBg, cardBorder, settings.artifactDir, liteNote = if (state.hasLite) null else liteMissingNote(state.label))
 
-        EgmCard("Goldfish reviewers", cardBg, cardBorder, pill = "${settings.reviewers.size} of ${EgmManager.Persona.entries.size}" to MaterialTheme.colorScheme.primary) {
-            Hint("Which of EGM's reviewer personas look at a design (/egm and /egm-review). Each is a separate reviewer run that costs tokens. /egm-lite always uses one reviewer.")
+        EgmCard(L.settings.egm.goldfishReviewers, cardBg, cardBorder, pill = "${settings.reviewers.size} of ${EgmManager.Persona.entries.size}" to MaterialTheme.colorScheme.primary) {
+            Hint(L.settings.egm.whichOfEgmsReviewerPersonasLook)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EgmManager.Preset.entries.forEach { p ->
                     FilterChip(
@@ -228,27 +229,27 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
             }
         }
 
-        EgmCard("Review", cardBg, cardBorder) {
+        EgmCard(L.settings.egm.review, cardBg, cardBorder) {
             EgmSwitchRow(
-                "Stop after each review stage",
-                "On: you see every stage's report before the next stage runs. Off: all stages run, then one combined report.",
+                L.settings.egm.stopAfterEachReviewStage,
+                L.settings.egm.onYouSeeEveryStagesReport,
                 settings.checkpoints
             ) { on -> EgmManager.update { it.copy(checkpoints = on) } }
             EgmStepper(
-                "Re-reviews after fixes",
-                "How often a review stage may run again once the document is fixed. 0 = never.",
+                L.settings.egm.reReviewsAfterFixes,
+                L.settings.egm.howOftenAReviewStageMay,
                 settings.rounds, 0, EgmManager.MAX_ROUNDS
             ) { v -> EgmManager.update { it.copy(rounds = v) } }
             EgmStepper(
-                "Reviewers at the same time",
-                "Each running reviewer is a full agent: more at once is faster but needs more memory.",
+                L.settings.egm.reviewersAtTheSameTime,
+                L.settings.egm.eachRunningReviewerIsAFull,
                 settings.parallel, 1, EgmManager.MAX_PARALLEL
             ) { v -> EgmManager.update { it.copy(parallel = v) } }
             EgmArtifactDirField(settings.artifactDir)
         }
 
-        EgmCard("Jarvis", cardBg, cardBorder) {
-            Hint("Who is the Elephant (writes and fixes the design) when you type an EGM command in a Jarvis chat. The reviewers are always separate chats that Jarvis starts.")
+        EgmCard(L.common.jarvis, cardBg, cardBorder) {
+            Hint(L.settings.egm.whoIsTheElephantWritesAnd)
             EgmManager.Elephant.entries.forEach { e ->
                 Row(
                     verticalAlignment = Alignment.Top,
@@ -264,22 +265,22 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
             }
         }
 
-        EgmCard("Instructions", cardBg, cardBorder) {
-            Hint("What each command tells the agent after the facts from this page (where EGM is, the reviewers, the limits). Edit it to change how the agent or Jarvis runs EGM.")
-            EgmTemplateRow("Normal chats", settings.chatTemplate != EgmManager.DEFAULT_CHAT_TEMPLATE) { editTemplate = false }
-            EgmTemplateRow("Jarvis chats", settings.jarvisTemplate != EgmManager.DEFAULT_JARVIS_TEMPLATE) { editTemplate = true }
-            Hint("Rules for the planner and the reviewers of Jarvis runs, written by the app from this page:")
+        EgmCard(L.settings.egm.instructions, cardBg, cardBorder) {
+            Hint(L.settings.egm.whatEachCommandTellsTheAgent)
+            EgmTemplateRow(L.settings.egm.normalChats, settings.chatTemplate != EgmManager.DEFAULT_CHAT_TEMPLATE) { editTemplate = false }
+            EgmTemplateRow(L.settings.egm.jarvisChats, settings.jarvisTemplate != EgmManager.DEFAULT_JARVIS_TEMPLATE) { editTemplate = true }
+            Hint(L.settings.egm.rulesForThePlannerAndThe)
             Mono(EgmManager.adapterDir.absolutePath)
         }
 
-        EgmCard("Remove", cardBg, cardBorder) {
-            Hint("Deletes EGM and its rules files from the phone. Design documents and reports in your projects stay.")
+        EgmCard(L.common.remove, cardBg, cardBorder) {
+            Hint(L.settings.egm.deletesEgmAndItsRulesFiles)
             OutlinedButton(
                 enabled = !busy,
                 onClick = { confirmRemove = true },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
             ) {
-                Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Remove EGM")
+                Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.egm.removeEgm)
             }
         }
     }
@@ -287,14 +288,14 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
     if (confirmRemove) {
         AlertDialog(
             onDismissRequest = { confirmRemove = false },
-            title = { Text("Remove EGM?", fontWeight = FontWeight.Bold) },
-            text = { Text("The /egm commands stop working. Your design documents and reports stay in your projects.", fontSize = 13.5.sp) },
+            title = { Text(L.settings.egm.removeEgm2, fontWeight = FontWeight.Bold) },
+            text = { Text(L.settings.egm.theEgmCommandsStopWorkingYour, fontSize = 13.5.sp) },
             confirmButton = {
                 TextButton(onClick = { confirmRemove = false; EgmManager.uninstall() }) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                    Text(L.common.remove, color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(L.common.cancel) } }
         )
     }
 
@@ -331,61 +332,47 @@ private fun EgmGuideCard(cardBg: Color, cardBorder: BorderStroke, artifactDir: S
             Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.AutoMirrored.Outlined.MenuBook, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
-                Text("How to use EGM", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (open) "Hide the guide" else "Show the guide")
+                Text(L.settings.egm.howToUseEgm, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (open) L.settings.egm.hideTheGuide else L.settings.egm.showTheGuide)
             }
             if (!open) {
-                Hint("Which command to use when, with examples, and what happens in a normal chat and in a Jarvis chat.")
+                Hint(L.settings.egm.whichCommandToUseWhenWith)
                 return@Column
             }
 
-            EgmGuideHeading("Which command?")
+            EgmGuideHeading(L.settings.egm.whichCommand)
             EgmGuideCommand(
                 "/egm <task>",
-                "For a new feature or a big change, where a wrong design costs a lot: several files, data formats, APIs. Uses the most tokens.",
-                "1. The agent asks you questions until the idea is clear (brainstorm).\n" +
-                    "2. It writes the design document, section by section, and asks for your OK on each.\n" +
-                    "3. The reviewers attack the document; the agent fixes it or explains why a finding is wrong.\n" +
-                    "4. You approve the design.\n" +
-                    "5. Only then does it write the code.",
+                L.settings.egm.forANewFeatureOrA,
+                L.settings.egm.n1TheAgentAsksYouQuestions,
                 "/egm add offline sync for notes, with conflict handling"
             )
             EgmGuideCommand(
                 "/egm-lite <task>",
-                "For small changes: a bug fix, a refactor, a small feature, a change to a spec. Much cheaper than /egm.",
-                "1. The agent first points out risks and gaps in the task, then waits.\n" +
-                    "2. Type checklist: it writes a short plan (egm_lite_checklist.md).\n" +
-                    "3. Type goldfish: one fresh reviewer checks the plan (you can skip this).\n" +
-                    "4. Type exec: it makes the change.\n" +
-                    "5. Type review: one fresh reviewer checks the changes.",
+                L.settings.egm.forSmallChangesABugFix,
+                L.settings.egm.n1TheAgentFirstPointsOut,
                 "/egm-lite fix the crash when the chat list is empty",
                 note = liteNote
             )
             EgmGuideCommand(
                 "/egm-review <doc path>",
-                "When a plan or design document already exists (yours, or written in another chat) and you want it checked before anyone builds it.",
-                "The reviewers check the document and the agent writes their findings into a report. Then you choose: the agent fixes the findings, you fix them yourself, or you stop there.",
+                L.settings.egm.whenAPlanOrDesignDocument,
+                L.settings.egm.theReviewersCheckTheDocumentAnd,
                 "/egm-review docs/sync-design.md"
             )
 
-            EgmGuideHeading("Normal chat or Jarvis chat?")
-            Hint("Normal chat (Claude Code, Codex, …): the agent does everything in that chat and runs the reviewers as its own hidden sub-agents. The simplest and lightest way. If the agent has no sub-agent tool, it stops and tells you to use a Jarvis chat.")
-            Hint("Jarvis chat (Jarvis tab → a Jarvis chat, then type the command): Jarvis manages the run. It starts a planner chat (or plans itself, see Jarvis below) and one chat per reviewer, which you can open from the chat list. The phases show as Jarvis' mission steps, and Jarvis asks you to approve the design. Use it to watch the reviewers, or when the agent has no sub-agent tool. Every reviewer chat is a full agent, so it needs more memory.")
+            EgmGuideHeading(L.settings.egm.normalChatOrJarvisChat)
+            Hint(L.settings.egm.normalChatClaudeCodeCodexThe)
+            Hint(L.settings.egm.jarvisChatJarvisTabAJarvis)
 
-            EgmGuideHeading("During a run")
+            EgmGuideHeading(L.settings.egm.duringARun)
             Hint(
-                "• Answer the agent's questions: it asks one at a time.\n" +
-                    "• Everything is saved as files in your project, in $artifactDir/<topic>/: the design document and every review report. Open them in Files.\n" +
-                    "• Nothing is coded before you approve. To approve, just say so; or ask for changes, or for one more review round.\n" +
-                    "• You can stop at any time. The files stay, and later you can check the document again with /egm-review."
+                L.settings.egm.answerTheAgentsQuestionsItAsks(artifactDir)
             )
 
-            EgmGuideHeading("Tips")
+            EgmGuideHeading(L.settings.egm.tips)
             Hint(
-                "• Start with Quick or Standard reviewers; Full runs eight reviewers in every round.\n" +
-                    "• If the phone gets slow, set Reviewers at the same time to 1.\n" +
-                    "• Write the task as you would explain it to a colleague: what, why, and any limits (\"no new libraries\").\n" +
-                    "• For a change of a few lines, a plain chat is cheaper than EGM."
+                L.settings.egm.startWithQuickOrStandardReviewers
             )
         }
     }
@@ -403,7 +390,7 @@ private fun EgmGuideCommand(command: String, whenToUse: String, steps: String, e
         note?.let { Text(it, fontSize = 11.5.sp, color = Amber) }
         Hint(whenToUse)
         Hint(steps)
-        Text("Example", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+        Text(L.settings.egm.example, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         Mono(example)
     }
 }
@@ -429,9 +416,9 @@ private fun EgmStepper(title: String, text: String, value: Int, min: Int, max: I
             Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
             Text(text, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         }
-        IconButton(enabled = value > min, onClick = { onChange(value - 1) }) { Icon(Icons.Outlined.Remove, "Less", Modifier.size(18.dp)) }
+        IconButton(enabled = value > min, onClick = { onChange(value - 1) }) { Icon(Icons.Outlined.Remove, L.settings.egm.less, Modifier.size(18.dp)) }
         Text("$value", fontSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.widthIn(min = 20.dp))
-        IconButton(enabled = value < max, onClick = { onChange(value + 1) }) { Icon(Icons.Outlined.Add, "More", Modifier.size(18.dp)) }
+        IconButton(enabled = value < max, onClick = { onChange(value + 1) }) { Icon(Icons.Outlined.Add, L.common.more, Modifier.size(18.dp)) }
     }
 }
 
@@ -443,17 +430,17 @@ private fun EgmArtifactDirField(saved: String) {
             OutlinedTextField(
                 value = dir,
                 onValueChange = { dir = it },
-                label = { Text("Folder for designs and reports") },
+                label = { Text(L.settings.egm.folderForDesignsAndReports) },
                 singleLine = true,
                 textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
             TextButton(enabled = dir.trim().trimEnd('/') != saved && dir.isNotBlank(), onClick = { EgmManager.update { it.copy(artifactDir = dir) } }) {
-                Text("Save")
+                Text(L.common.save)
             }
         }
-        Hint("In the project folder; each topic gets its own folder inside. You may want to add it to .gitignore.")
+        Hint(L.settings.egm.inTheProjectFolderEachTopic)
     }
 }
 
@@ -469,7 +456,7 @@ private fun EgmTemplateRow(title: String, changed: Boolean, onClick: () -> Unit)
             Icon(Icons.Outlined.Edit, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(10.dp))
             Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            Pill(if (changed) "Changed" else "Default", if (changed) Amber else QuotaGreen)
+            Pill(if (changed) L.settings.egm.changed else L.common.default, if (changed) Amber else QuotaGreen)
         }
     }
 }
@@ -479,12 +466,12 @@ private fun EgmTemplateDialog(jarvis: Boolean, current: String, onDismiss: () ->
     var text by remember(jarvis) { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (jarvis) "Instructions for Jarvis chats" else "Instructions for normal chats", fontWeight = FontWeight.Bold) },
+        title = { Text(if (jarvis) L.settings.egm.instructionsForJarvisChats else L.settings.egm.instructionsForNormalChats, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Hint(
-                    if (jarvis) "Sent after the run's facts (EGM's folder, the planner and reviewer goals, the limits). It tells Jarvis how to manage the planner and the reviewer chats."
-                    else "Sent after the run's facts (EGM's folder, the reviewers, the limits). It tells the agent how to run the reviewers in its own chat."
+                    if (jarvis) L.settings.egm.sentAfterTheRunsFactsEgms
+                    else L.settings.egm.sentAfterTheRunsFactsEgms2
                 )
                 OutlinedTextField(
                     value = text,
@@ -495,22 +482,22 @@ private fun EgmTemplateDialog(jarvis: Boolean, current: String, onDismiss: () ->
                 TextButton(
                     onClick = { text = if (jarvis) EgmManager.DEFAULT_JARVIS_TEMPLATE else EgmManager.DEFAULT_CHAT_TEMPLATE },
                     contentPadding = PaddingValues(0.dp)
-                ) { Text("Reset to default") }
+                ) { Text(L.settings.egm.resetToDefault) }
             }
         },
         confirmButton = {
             Button(onClick = {
                 EgmManager.update { if (jarvis) it.copy(jarvisTemplate = text) else it.copy(chatTemplate = text) }
                 onDismiss()
-            }) { Text("Save") }
+            }) { Text(L.common.save) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
 /** Why /egm-lite is off: the installed EGM ([label], e.g. v0.1.1) has no egm-lite skill (releases up to 0.1.1). */
 private fun liteMissingNote(label: String?): String =
-    "Not available: EGM${label?.let { " $it" }.orEmpty()} has no egm-lite. Install the development version (step 1) to get it now; a later EGM release will include it too."
+    L.settings.egm.notAvailableEgmValueHasNo(label?.let { " $it" }.orEmpty())
 
 private fun egmOpenUrl(context: android.content.Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

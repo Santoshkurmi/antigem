@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.agents.AgentSheetHeader
 import ai.antigem.ui.components.ClaudeAccent
+import ai.antigem.i18n.L
 
 /** Color of a permission mode (chip, picker icon). */
 @Composable
@@ -135,7 +136,7 @@ fun ClaudePermissionModeSheet(
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    ClaudePickerSheet("Permission mode", "how Claude asks before acting", onDismiss) {
+    ClaudePickerSheet(L.claude.modeSheets.permissionMode, L.claude.modeSheets.howClaudeAsksBeforeActing, onDismiss) {
         modes.forEach { (value, label) ->
             PickerOption(
                 title = label,
@@ -160,13 +161,13 @@ fun ClaudePermissionModeSheet(
 }
 
 private fun effortDescription(level: String?): String = when (level) {
-    null -> "The model's own default"
-    "minimal" -> "Barely any reasoning, fastest replies"
-    "low" -> "Quick answers with light reasoning"
-    "medium" -> "Balanced speed and depth"
-    "high" -> "Thorough work on hard tasks"
-    "xhigh" -> "Extra depth for complex changes"
-    "max" -> "Most thorough; uses plan limits fastest"
+    null -> L.claude.modeSheets.theModelsOwnDefault
+    "minimal" -> L.claude.modeSheets.barelyAnyReasoningFastestReplies
+    "low" -> L.claude.modeSheets.quickAnswersWithLightReasoning
+    "medium" -> L.claude.modeSheets.balancedSpeedAndDepth
+    "high" -> L.claude.modeSheets.thoroughWorkOnHardTasks
+    "xhigh" -> L.claude.modeSheets.extraDepthForComplexChanges
+    "max" -> L.claude.modeSheets.mostThoroughUsesPlanLimitsFastest
     else -> ""
 }
 
@@ -196,9 +197,9 @@ fun ClaudeEffortSheet(
     // other agents (OpenCode) show the same sheet in their own colour and words
     agent: AgentKind = AgentKind.CLAUDE,
     color: Color = ClaudeAccent,
-    detail: String = "how much work Claude puts into each reply"
+    detail: String = L.claude.modeSheets.howMuchWorkClaudePutsInto
 ) {
-    ClaudePickerSheet("Effort", detail, onDismiss, agent = agent) {
+    ClaudePickerSheet(L.claude.modeSheets.effort, detail, onDismiss, agent = agent) {
         (listOf<String?>(null) + levels).forEachIndexed { index, level ->
             PickerOption(
                 title = effortLabel(level),

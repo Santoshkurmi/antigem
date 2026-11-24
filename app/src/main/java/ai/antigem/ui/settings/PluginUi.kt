@@ -34,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import ai.antigem.i18n.L
 
 /** A plugin's icon from a local file path or URL, or a generic plugin icon when there is none or it fails to load. */
 @Composable
@@ -59,12 +60,12 @@ fun PluginIcon(source: String, size: Dp = 40.dp) {
 
 /** "Installed: v1.0 → This ZIP: v1.1 (newer)", red when the incoming version is older. */
 @Composable
-fun VersionChange(installed: String, incoming: String, incomingLabel: String = "This ZIP") {
+fun VersionChange(installed: String, incoming: String, incomingLabel: String = L.settings.pluginUi.thisZip) {
     val hint = when (PluginVersions.compare(incoming, installed)) {
         null -> ""
-        0 -> " (same version)"
+        0 -> L.settings.pluginUi.sameVersion
         in 1..Int.MAX_VALUE -> " (newer)"
-        else -> " (older than installed)"
+        else -> L.settings.pluginUi.olderThanInstalled
     }
     Text("Installed: ${PluginVersions.label(installed)}  →  $incomingLabel: ${PluginVersions.label(incoming)}$hint", style = MaterialTheme.typography.bodySmall,
         color = if (hint.startsWith(" (older")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -121,7 +122,7 @@ private suspend fun saveToDownloads(context: Context, fileName: String, mime: St
             }
         }
     }
-    Toast.makeText(context, if (saved.isSuccess) "$fileName saved to Downloads/AntiGem" else "Could not save $fileName: ${saved.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+    Toast.makeText(context, if (saved.isSuccess) L.settings.pluginUi.filenameSavedToDownloadsAntigem(fileName) else L.settings.pluginUi.couldNotSaveFilenameValue(fileName, saved.exceptionOrNull()?.message), Toast.LENGTH_LONG).show()
 }
 
 /** Full-screen view of a Markdown document with a download button. */
@@ -134,8 +135,8 @@ fun MarkdownViewerDialog(title: String, markdown: String, fileName: String, onDi
             Column(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                    IconButton(onClick = { scope.launch { saveToDownloads(context, fileName, markdown) } }) { Icon(Icons.Outlined.Download, "Download") }
-                    TextButton(onClick = onDismiss) { Text("Close") }
+                    IconButton(onClick = { scope.launch { saveToDownloads(context, fileName, markdown) } }) { Icon(Icons.Outlined.Download, L.common.download) }
+                    TextButton(onClick = onDismiss) { Text(L.common.close) }
                 }
                 HorizontalDivider()
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) { MarkdownContent(content = markdown) }

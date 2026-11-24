@@ -47,6 +47,7 @@ import ai.antigem.data.jarvis.JarvisManagers
 import ai.antigem.data.jarvis.JarvisPreferences
 import ai.antigem.data.jarvis.JarvisTasks
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * The Jarvis panel (long-press the orb): the quick switches the user pinned (the tune icon opens all quick settings),
@@ -109,30 +110,30 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Jarvis", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.common.jarvis, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     val sub = when (phase) {
-                        Phase.LISTENING -> "Listening"
-                        Phase.THINKING -> steps.lastOrNull()?.text ?: "Working"
-                        Phase.SPEAKING -> "Speaking"
+                        Phase.LISTENING -> L.common.listening
+                        Phase.THINKING -> steps.lastOrNull()?.text ?: L.jarvis.panel.working
+                        Phase.SPEAKING -> L.jarvis.panel.speaking
                         else -> when (agent) {
-                            "AGY" -> "Ready · runs on Antigravity"
-                            "CLAUDE" -> "Ready · runs on Claude Code"
-                            "OPENCODE" -> "Ready · runs on OpenCode"
-                            "CODEX" -> "Ready · runs on Codex"
-                            else -> "No agent picked: Settings → Jarvis → Agent"
+                            "AGY" -> L.jarvis.panel.readyRunsOnAntigravity
+                            "CLAUDE" -> L.jarvis.panel.readyRunsOnClaudeCode
+                            "OPENCODE" -> L.jarvis.panel.readyRunsOnOpencode
+                            "CODEX" -> L.jarvis.panel.readyRunsOnCodex
+                            else -> L.jarvis.panel.noAgentPickedSettingsJarvisAgent
                         }
                     }
                     Text(sub, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                RoundIcon(Icons.Filled.Tune, "Quick settings", Cyan) { JarvisController.quickSettingsOpen.value = true }
-                RoundIcon(Icons.Filled.Close, "Close", Color.White.copy(alpha = 0.7f)) { close() }
+                RoundIcon(Icons.Filled.Tune, L.common.quickSettings, Cyan) { JarvisController.quickSettingsOpen.value = true }
+                RoundIcon(Icons.Filled.Close, L.common.close, Color.White.copy(alpha = 0.7f)) { close() }
             }
             Spacer(Modifier.height(12.dp))
 
             // ---- the switches the user pinned (edit them in quick settings)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 pins.forEach { QuickSwitchChip(it) }
-                JarvisQuickChip("More", "Settings…", false) { JarvisController.quickSettingsOpen.value = true }
+                JarvisQuickChip(L.common.more, L.jarvis.panel.settings, false) { JarvisController.quickSettingsOpen.value = true }
             }
             notice?.let {
                 Spacer(Modifier.height(10.dp))
@@ -145,9 +146,9 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                 if (shownTasks.isNotEmpty()) {
                     item(key = "tasks_head") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            SectionTitle("Tasks", Modifier.weight(1f))
+                            SectionTitle(L.jarvis.panel.tasks, Modifier.weight(1f))
                             if (shownTasks.any { !it.active }) {
-                                Text("Clear finished", color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable { JarvisTasks.clearFinished() }.padding(horizontal = 8.dp, vertical = 4.dp))
+                                Text(L.jarvis.panel.clearFinished, color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable { JarvisTasks.clearFinished() }.padding(horizontal = 8.dp, vertical = 4.dp))
                             }
                         }
                     }
@@ -163,24 +164,23 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                 item(key = "conv_head") {
                     Column(Modifier.padding(top = if (shownTasks.isNotEmpty()) 10.dp else 0.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            SectionTitle("Conversation", Modifier.weight(1f))
+                            SectionTitle(L.jarvis.panel.conversation, Modifier.weight(1f))
                             if (voiceChat.isNotBlank()) {
-                                Text("Open chat", color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
+                                Text(L.jarvis.panel.openChat, color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
                                     close()
                                     JarvisController.vm.selectConversation(voiceChat)
                                     JarvisController.vm.requestViewMode("CHAT")
                                 }.padding(horizontal = 8.dp, vertical = 4.dp))
                             }
                             if (log.isNotEmpty()) {
-                                Text("Clear", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
+                                Text(L.common.clear, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
                                     JarvisController.clearHistory()
                                 }.padding(horizontal = 8.dp, vertical = 4.dp))
                             }
                         }
                         if (log.isEmpty()) {
                             Text(
-                                "Tap the orb and talk, or type below. Try “what's running?”, “start a task to fix the failing tests”, " +
-                                    "“switch to dark mode”, “how do I add an MCP server?”.",
+                                L.jarvis.panel.tapTheOrbAndTalkOr,
                                 color = Color.White.copy(alpha = 0.5f), fontSize = 12.5.sp, lineHeight = 18.sp
                             )
                         }
@@ -197,7 +197,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = input, onValueChange = { input = it },
-                    placeholder = { Text("Type to Jarvis…", color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp) },
+                    placeholder = { Text(L.jarvis.panel.typeToJarvis, color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp) },
                     modifier = Modifier.weight(1f),
                     maxLines = 4,
                     shape = RoundedCornerShape(22.dp),
@@ -211,22 +211,22 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                 )
                 Spacer(Modifier.width(8.dp))
                 if (input.isNotBlank()) {
-                    RoundIcon(Icons.Filled.Send, "Send", Cyan, filled = true) { JarvisController.submitText(input); input = "" }
+                    RoundIcon(Icons.Filled.Send, L.common.send, Cyan, filled = true) { JarvisController.submitText(input); input = "" }
                 } else {
-                    RoundIcon(Icons.Filled.Mic, "Talk", Cyan, filled = true) { close(); onTalk() }
+                    RoundIcon(Icons.Filled.Mic, L.jarvis.panel.talk, Cyan, filled = true) { close(); onTalk() }
                 }
             }
             Spacer(Modifier.height(8.dp))
 
             // ---- shortcuts
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                FooterButton("New Jarvis chat") {
+                FooterButton(L.jarvis.panel.newJarvisChat) {
                     close()
                     JarvisController.startTextChat()?.let { JarvisController.showProblem(it) }
                 }
-                FooterButton("Jarvis settings") { JarvisController.requestSettings("JARVIS") }
-                FooterButton("New session") { JarvisController.newSession(carry = true) }
-                FooterButton("Stop all", Danger) { JarvisController.stopEverything() }
+                FooterButton(L.jarvis.panel.jarvisSettings) { JarvisController.requestSettings("JARVIS") }
+                FooterButton(L.jarvis.panel.newSession) { JarvisController.newSession(carry = true) }
+                FooterButton(L.jarvis.panel.stopAll, Danger) { JarvisController.stopEverything() }
             }
         }
     }
@@ -255,15 +255,15 @@ private fun TaskRow(t: JarvisTasks.Task, onOpen: () -> Unit, onStop: () -> Unit,
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(t.title, color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val age = ((System.currentTimeMillis() - t.createdAt) / 60_000).let { if (it < 1) "just now" else if (it < 60) "${it}m" else "${it / 60}h ${it % 60}m" }
+            val age = ((System.currentTimeMillis() - t.createdAt) / 60_000).let { if (it < 1) L.common.justNow else if (it < 60) "${it}m" else L.jarvis.panel.valueHValue2M(it / 60, it % 60) }
             Text(
-                listOf(t.team.takeIf { it.isNotBlank() }, when (t.agent.name) { "AGY" -> "Antigravity"; "OPENCODE" -> "OpenCode"; "CODEX" -> "Codex"; else -> "Claude" }, t.state.label, age, t.note.takeIf { it.isNotBlank() && it != "Working" }).filterNotNull().joinToString(" · "),
+                listOf(t.team.takeIf { it.isNotBlank() }, when (t.agent.name) { "AGY" -> L.common.antigravity; "OPENCODE" -> "OpenCode"; "CODEX" -> L.common.codex; else -> L.common.claude }, t.state.label, age, t.note.takeIf { it.isNotBlank() && it != "Working" }).filterNotNull().joinToString(" · "),
                 color = c.copy(alpha = 0.85f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
-        RoundIcon(Icons.Filled.OpenInNew, "Open", Color.White.copy(alpha = 0.7f), small = true) { onOpen() }
-        if (t.active) RoundIcon(Icons.Filled.Stop, "Stop", Danger, small = true) { onStop() }
-        else RoundIcon(Icons.Filled.Close, "Dismiss", Color.White.copy(alpha = 0.5f), small = true) { onDismiss() }
+        RoundIcon(Icons.Filled.OpenInNew, L.common.open, Color.White.copy(alpha = 0.7f), small = true) { onOpen() }
+        if (t.active) RoundIcon(Icons.Filled.Stop, L.common.stop, Danger, small = true) { onStop() }
+        else RoundIcon(Icons.Filled.Close, L.common.dismiss, Color.White.copy(alpha = 0.5f), small = true) { onDismiss() }
     }
 }
 

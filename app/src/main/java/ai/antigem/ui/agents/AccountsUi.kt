@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -39,6 +40,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +63,32 @@ import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.label
 import ai.antigem.ui.drawer.parseProfileAvatarModel
+import ai.antigem.i18n.L
+
+/**
+ * "Sign out of [agentName]?" with Sign out / Cancel, shown before every agent sign-out (a sign-out button can appear right
+ * where Check or Sign in was a moment ago, so a quick extra tap must not sign the user out). [account]: the email, if known.
+ */
+@Composable
+fun ConfirmSignOutDialog(agentName: String, account: String?, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(L.agents.accountsUi.signOutOfAgent(agentName)) },
+        text = {
+            Column {
+                account?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(L.agents.accountsUi.youWillHaveToSignIn(agentName))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDismiss(); onConfirm() }) { Text(L.common.signOut, color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
+    )
+}
 
 /** Account avatar: the profile picture or initial when signed in, a sign-in glyph otherwise; status badge corner. */
 @Composable
@@ -146,13 +176,13 @@ fun AccountsButton(
             }
             Spacer(Modifier.width(7.dp))
             val text = when {
-                needsSignIn -> "Sign in"
-                single?.agent == AgentKind.AGY && single.isReady -> agyAuth.displayName.ifBlank { "Account" }
-                single?.agent == AgentKind.CLAUDE && single.isReady -> claudeStatus?.auth?.email?.substringBefore('@') ?: "Account"
+                needsSignIn -> L.common.signIn
+                single?.agent == AgentKind.AGY && single.isReady -> agyAuth.displayName.ifBlank { L.common.account }
+                single?.agent == AgentKind.CLAUDE && single.isReady -> claudeStatus?.auth?.email?.substringBefore('@') ?: L.common.account
                 single?.agent == AgentKind.OPENCODE && single.isReady -> "OpenCode"
-                single?.agent == AgentKind.CODEX && single.isReady -> codexEmail?.substringBefore('@') ?: "Codex"
+                single?.agent == AgentKind.CODEX && single.isReady -> codexEmail?.substringBefore('@') ?: L.common.codex
                 single != null -> single.label
-                else -> "Accounts"
+                else -> L.agents.accountsUi.accounts
             }
             Text(
                 text,
@@ -192,6 +222,8 @@ fun AccountsDialog(
     onCodexSignOut: () -> Unit = {},
     onCodexSettings: () -> Unit = {}
 ) {
+    // the agent whose Sign out was tapped: asks first
+    var confirmSignOut by remember { mutableStateOf<AgentKind?>(null) }
     // `agy --version`, asked from the bridge (this phone's or the server's) each time the dialog opens
     val agyCli by ai.antigem.data.remote.BridgeInfo.agyCli.collectAsState()
     LaunchedEffect(Unit) { ai.antigem.data.remote.BridgeInfo.refreshAgyCli() }
@@ -207,9 +239,9 @@ fun AccountsDialog(
         ) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Accounts", fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(L.agents.accountsUi.accounts, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
-                        Icon(Icons.Outlined.Close, "Close", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Icon(Icons.Outlined.Close, L.common.close, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -227,14 +259,13 @@ fun AccountsDialog(
                     ) {
                         when {
                             entry.isReady -> {
-                                SectionButton("Sign out", Icons.AutoMirrored.Outlined.Logout, danger = true) {
-                                    onAgySignOut()
-                                    onDismiss()
+                                SectionButton(L.common.signOut, Icons.AutoMirrored.Outlined.Logout, danger = true) {
+                                    confirmSignOut = AgentKind.AGY
                                 }
                             }
                             entry.pending && entry.action != null -> {
                                 entry.action.let { SectionButton(it.label, primary = AgentKind.AGY.accent()) { it.onClick() } }
-                                SectionButton("Cancel") { onAgyCancelSignIn() }
+                                SectionButton(L.common.cancel) { onAgyCancelSignIn() }
                             }
                             else -> entry.action?.let {
                                 SectionButton(it.label, primary = AgentKind.AGY.accent()) {
@@ -243,7 +274,7 @@ fun AccountsDialog(
                                 }
                             }
                         }
-                        SectionButton("Settings", Icons.Outlined.Settings) {
+                        SectionButton(L.common.settings, Icons.Outlined.Settings) {
                             onAgySettings()
                             onDismiss()
                         }
@@ -265,7 +296,7 @@ fun AccountsDialog(
                         ) else listOfNotNull(claudeStatus?.version?.substringBefore(" ")?.let { "CLI $it" })
                     ) {
                         if (entry.isReady) {
-                            SectionButton("Sign out", Icons.AutoMirrored.Outlined.Logout, danger = true) { onClaudeSignOut() }
+                            SectionButton(L.common.signOut, Icons.AutoMirrored.Outlined.Logout, danger = true) { confirmSignOut = AgentKind.CLAUDE }
                         } else {
                             entry.action?.let {
                                 SectionButton(it.label, primary = AgentKind.CLAUDE.accent()) {
@@ -274,7 +305,7 @@ fun AccountsDialog(
                                 }
                             }
                         }
-                        SectionButton("Settings", Icons.Outlined.Settings) {
+                        SectionButton(L.common.settings, Icons.Outlined.Settings) {
                             onClaudeSettings()
                             onDismiss()
                         }
@@ -288,10 +319,30 @@ fun AccountsDialog(
 
                 codex?.let { entry ->
                     if (agy != null || claude != null || openCode != null) Spacer(Modifier.height(12.dp))
-                    CodexAccountSection(entry, codexEmail, codexFacts, onCodexSignOut, onCodexSettings, onDismiss)
+                    CodexAccountSection(entry, codexEmail, codexFacts, { confirmSignOut = AgentKind.CODEX }, onCodexSettings, onDismiss)
                 }
             }
         }
+    }
+    confirmSignOut?.let { agent ->
+        ConfirmSignOutDialog(
+            agentName = agent.label(),
+            account = when (agent) {
+                AgentKind.AGY -> agyAuth.email
+                AgentKind.CLAUDE -> claudeStatus?.auth?.email
+                AgentKind.CODEX -> codexEmail
+                else -> null
+            },
+            onConfirm = {
+                when (agent) {
+                    AgentKind.AGY -> { onAgySignOut(); onDismiss() }
+                    AgentKind.CLAUDE -> onClaudeSignOut()
+                    AgentKind.CODEX -> onCodexSignOut()
+                    else -> {}
+                }
+            },
+            onDismiss = { confirmSignOut = null }
+        )
     }
 }
 
@@ -312,7 +363,7 @@ private fun CodexAccountSection(
         facts = facts
     ) {
         if (entry.isReady) {
-            SectionButton("Sign out", Icons.AutoMirrored.Outlined.Logout, danger = true) { onSignOut() }
+            SectionButton(L.common.signOut, Icons.AutoMirrored.Outlined.Logout, danger = true) { onSignOut() }
         } else {
             entry.action?.let {
                 SectionButton(it.label, primary = AgentKind.CODEX.accent()) {
@@ -321,7 +372,7 @@ private fun CodexAccountSection(
                 }
             }
         }
-        SectionButton("Settings", Icons.Outlined.Settings) {
+        SectionButton(L.common.settings, Icons.Outlined.Settings) {
             onSettings()
             onDismiss()
         }
@@ -343,7 +394,7 @@ private fun OpenCodeAccountSection(entry: AgentStatusEntry, facts: List<String>,
                 onDismiss()
             }
         }
-        SectionButton("Settings", Icons.Outlined.Settings) {
+        SectionButton(L.common.settings, Icons.Outlined.Settings) {
             onSettings()
             onDismiss()
         }

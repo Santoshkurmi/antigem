@@ -58,18 +58,23 @@ import ai.antigem.data.agent.codex.CodexLimitWindow
 import ai.antigem.data.agent.codex.CodexPreferences
 import ai.antigem.data.agent.codex.CodexState
 import ai.antigem.domain.model.AgentKind
+import ai.antigem.ui.components.label
 import ai.antigem.ui.claude.ClaudeCard
 import ai.antigem.ui.components.CodexAccent
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** The pages of Settings → Codex (each opens from the Codex row list). */
-enum class CodexSettingsPage(val title: String, val subtitle: String) {
-    ACCOUNT("Account & CLI", "Sign in with ChatGPT, install, update and restart Codex"),
-    USAGE("Usage limits", "How much of your plan's limits is used, and when they reset"),
-    PERMISSIONS("Permissions", "What Codex asks before acting in new chats"),
-    MCP("MCP servers", "Tools Codex can call: presets and your own servers"),
-    PLUGINS("Plugins", "Install plugins from Codex' catalog or any GitHub marketplace"),
-    SKILLS("Skills", "Add skills from GitHub, update or remove them")
+enum class CodexSettingsPage(private val titleText: () -> String, private val subtitleText: () -> String) {
+    ACCOUNT({ L.common.accountCli }, { L.codex.settings.signInWithChatgptInstallUpdate }),
+    USAGE({ L.codex.settings.usageLimits }, { L.codex.settings.howMuchOfYourPlansLimits }),
+    PERMISSIONS({ L.common.permissions }, { L.codex.settings.whatCodexAsksBeforeActingIn }),
+    MCP({ L.common.mcpServers }, { L.codex.settings.toolsCodexCanCallPresetsAnd }),
+    PLUGINS({ L.common.plugins }, { L.codex.settings.installPluginsFromCodexCatalogOr }),
+    SKILLS({ L.common.skills }, { L.codex.settings.addSkillsFromGithubUpdateOr })
+;
+    val title: String get() = titleText()
+    val subtitle: String get() = subtitleText()
 }
 
 /** Settings → Codex: one row per page, each with its current state. */
@@ -92,7 +97,7 @@ fun CodexSettingsGroup(backend: CodexChatBackend, cardBg: Color, onOpen: (CodexS
         groups = listOf(
             listOf(
                 row(CodexSettingsPage.ACCOUNT, Icons.Outlined.AccountCircle,
-                    if (account != null) account?.plan?.replaceFirstChar { it.uppercase() }?.let { "$it plan" } ?: "Signed in" else state.label,
+                    if (account != null) account?.plan?.replaceFirstChar { it.uppercase() }?.let { "$it plan" } ?: L.common.signedIn else state.label,
                     if (ready) CodexAccent else MaterialTheme.colorScheme.error),
                 row(CodexSettingsPage.USAGE, Icons.Outlined.DataUsage, limits?.primary?.let { "${it.usedPercent.toInt()}% used" })
             ),
@@ -164,9 +169,9 @@ fun CodexSettingsScreen(
     ) {
         // ---- CLI (install, update, restart)
         if (page == CodexSettingsPage.ACCOUNT) ClaudeCard {
-            Text("Codex CLI", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(L.codex.settings.codexCli, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text(
-                listOfNotNull(status?.version?.let { "Codex $it" }, if (status?.running == true) "running" else if (status?.installed == true) "starts when needed" else null)
+                listOfNotNull(status?.version?.let { L.codex.settings.codexValue(it) }, if (status?.running == true) "running" else if (status?.installed == true) L.codex.settings.startsWhenNeeded else null)
                     .joinToString(" · ").ifBlank { state.label },
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -177,8 +182,8 @@ fun CodexSettingsScreen(
             if (state == CodexState.NOT_INSTALLED) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (status?.termux_package == true) "Codex is not installed on this phone. Install it here (the Termux package: pkg install codex)."
-                    else "Codex is not installed on the server. Install it here: the app downloads OpenAI's official Linux build into ~/.local/bin.",
+                    if (status?.termux_package == true) L.codex.settings.codexIsNotInstalledOnThis
+                    else L.codex.settings.codexIsNotInstalledOnThe,
                     fontSize = 12.5.sp, lineHeight = 17.sp
                 )
             }
@@ -190,10 +195,10 @@ fun CodexSettingsScreen(
                         enabled = !jobRunning,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CodexAccent, contentColor = Color.White)
-                    ) { Text(if (jobRunning) "Installing…" else "Install Codex") }
+                    ) { Text(if (jobRunning) L.common.installing else L.codex.settings.installCodex) }
                 } else {
                     OutlinedButton(onClick = { backend.startCliJob("update") }, enabled = !jobRunning, shape = RoundedCornerShape(12.dp)) {
-                        Text(if (jobRunning) "Checking…" else "Check for updates")
+                        Text(if (jobRunning) L.common.checking else L.common.checkForUpdates)
                     }
                     Spacer(Modifier.width(8.dp))
                     OutlinedButton(
@@ -202,14 +207,14 @@ fun CodexSettingsScreen(
                             backend.restartServer { err ->
                                 restarting = false
                                 ai.antigem.ui.components.AppToastHelper.showToast(
-                                    err?.let { "Restart failed: $it" } ?: "Codex restarted",
+                                    err?.let { L.codex.settings.restartFailedValue(it) } ?: L.codex.settings.codexRestarted,
                                     if (err == null) ai.antigem.ui.components.ChatToastType.SUCCESS else ai.antigem.ui.components.ChatToastType.ERROR
                                 )
                             }
                         },
                         enabled = !restarting && !jobRunning,
                         shape = RoundedCornerShape(12.dp)
-                    ) { Text(if (restarting) "Restarting…" else "Restart") }
+                    ) { Text(if (restarting) L.common.restarting else L.common.restart) }
                 }
                 if (jobRunning || restarting) {
                     Spacer(Modifier.width(10.dp))
@@ -219,7 +224,7 @@ fun CodexSettingsScreen(
             job?.let { j ->
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    (if (j.kind == "update") "Update" else "Install") + ": " + when {
+                    (if (j.kind == "update") L.common.update else L.common.install) + ": " + when {
                         j.running -> "running…"
                         j.exit_code == 0 -> "done"
                         else -> "failed"
@@ -235,7 +240,7 @@ fun CodexSettingsScreen(
                 )
             }
             Text(
-                "Restarting ends replies that are running. Codex keeps its chats and sign-in in ~/.codex on the server.",
+                L.codex.settings.restartingEndsRepliesThatAreRunning,
                 fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 8.dp)
             )
             status?.error?.takeIf { state != CodexState.READY }?.let {
@@ -250,10 +255,10 @@ fun CodexSettingsScreen(
                 ai.antigem.ui.agents.AgentMark(AgentKind.CODEX, size = 40.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Codex", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(L.common.codex, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(
                         when {
-                            account != null -> listOfNotNull(account?.email, account?.plan?.replaceFirstChar { it.uppercase() }?.let { "$it plan" }).joinToString(" · ").ifBlank { "Signed in" }
+                            account != null -> listOfNotNull(account?.email, account?.plan?.replaceFirstChar { it.uppercase() }?.let { "$it plan" }).joinToString(" · ").ifBlank { L.common.signedIn }
                             else -> state.label
                         },
                         fontSize = 12.sp,
@@ -261,29 +266,29 @@ fun CodexSettingsScreen(
                     )
                 }
                 if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+                else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
             }
             val l = login
             when {
                 l != null -> {
                     Spacer(Modifier.height(10.dp))
                     if (l.code != null) {
-                        Text("Open the link, sign in with your ChatGPT account and enter this code:", fontSize = 12.5.sp, lineHeight = 17.sp)
+                        Text(L.codex.settings.openTheLinkSignInWith, fontSize = 12.5.sp, lineHeight = 17.sp)
                         SelectionContainer {
                             Text(l.code, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = CodexAccent,
                                 modifier = Modifier.padding(vertical = 8.dp))
                         }
                     } else {
-                        Text("Finish signing in in your browser. Codex picks it up by itself.", fontSize = 12.5.sp, lineHeight = 17.sp)
+                        Text(L.codex.settings.finishSigningInInYourBrowser, fontSize = 12.5.sp, lineHeight = 17.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
                             onClick = { open(l.url) },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = CodexAccent, contentColor = Color.White)
-                        ) { Text("Open sign-in page") }
+                        ) { Text(L.codex.settings.openSignInPage) }
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { backend.cancelLogin() }) { Text("Cancel") }
+                        TextButton(onClick = { backend.cancelLogin() }) { Text(L.common.cancel) }
                     }
                     Text(l.url, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
@@ -291,7 +296,7 @@ fun CodexSettingsScreen(
                 state == CodexState.SIGNED_OUT -> {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Sign in with the ChatGPT account whose plan Codex should use (Free, Plus, Pro, Business…).",
+                        L.codex.settings.signInWithTheChatgptAccount,
                         fontSize = 12.5.sp, lineHeight = 17.sp
                     )
                     Spacer(Modifier.height(10.dp))
@@ -300,20 +305,27 @@ fun CodexSettingsScreen(
                             onClick = { backend.startLogin(deviceCode = remote) },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = CodexAccent, contentColor = Color.White)
-                        ) { Text("Sign in with ChatGPT") }
+                        ) { Text(L.codex.settings.signInWithChatgpt) }
                         Spacer(Modifier.width(8.dp))
-                        if (!remote) TextButton(onClick = { backend.startLogin(deviceCode = true) }) { Text("Use a code") }
+                        if (!remote) TextButton(onClick = { backend.startLogin(deviceCode = true) }) { Text(L.codex.settings.useACode) }
                     }
                     Text(
-                        if (remote) "The server is remote: you get a code to enter on the sign-in page."
-                        else "\"Use a code\" works when the browser cannot come back to the app. It may first need to be allowed in ChatGPT → Settings → Security.",
+                        if (remote) L.codex.settings.theServerIsRemoteYouGet
+                        else L.codex.settings.useACodeWorksWhenThe,
                         fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                         modifier = Modifier.padding(top = 6.dp)
                     )
                 }
                 account != null -> {
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { backend.logout() }, shape = RoundedCornerShape(12.dp)) { Text("Sign out") }
+                    var confirmSignOut by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { confirmSignOut = true }, shape = RoundedCornerShape(12.dp)) { Text(L.common.signOut) }
+                    if (confirmSignOut) {
+                        ai.antigem.ui.agents.ConfirmSignOutDialog(
+                            AgentKind.CODEX.label(), account?.email,
+                            onConfirm = { backend.logout() }, onDismiss = { confirmSignOut = false }
+                        )
+                    }
                 }
             }
         }
@@ -324,22 +336,22 @@ fun CodexSettingsScreen(
             ClaudeCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Usage limits", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(L.codex.settings.usageLimits, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         (limits?.plan ?: account?.plan)?.let {
-                            Text("${it.replaceFirstChar { c -> c.uppercase() }} plan · every Codex model counts toward the same limits",
+                            Text(L.codex.settings.valuePlanEveryCodexModelCounts(it.replaceFirstChar { c -> c.uppercase() }),
                                 fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         }
                     }
-                    IconButton(onClick = { scope.launch { backend.refreshRateLimits() } }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+                    IconButton(onClick = { scope.launch { backend.refreshRateLimits() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
                 }
                 Spacer(Modifier.height(8.dp))
                 val lim = limits
                 when {
                     lim == null -> Text(
-                        if (state == CodexState.READY) "No usage information yet." else "Sign in to Codex to see your limits.",
+                        if (state == CodexState.READY) L.codex.settings.noUsageInformationYet else L.codex.settings.signInToCodexToSee,
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
-                    lim.primary == null && lim.secondary == null -> Text("No limits reported for this account.", fontSize = 12.sp)
+                    lim.primary == null && lim.secondary == null -> Text(L.codex.settings.noLimitsReportedForThisAccount, fontSize = 12.sp)
                     else -> {
                         lim.primary?.let { LimitRow(it) }
                         lim.secondary?.let { Spacer(Modifier.height(10.dp)); LimitRow(it) }
@@ -350,8 +362,8 @@ fun CodexSettingsScreen(
 
         // ---- approvals for new chats
         if (page == CodexSettingsPage.PERMISSIONS) ClaudeCard {
-            Text("Approvals", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text("What Codex asks before acting. Each chat can change it from the chip above the message box.",
+            Text(L.common.approvals, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(L.codex.settings.whatCodexAsksBeforeActingEach,
                 fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             Spacer(Modifier.height(8.dp))
             CodexPreferences.MODES.forEach { m ->
@@ -379,12 +391,12 @@ private fun LimitRow(w: CodexLimitWindow) {
             m >= 60 -> "${m / 60}-hour limit"
             else -> "$m-minute limit"
         }
-    } ?: "Limit"
+    } ?: L.codex.settings.limit
     val resets = w.resetsAt?.let { s ->
         val left = s * 1000 - System.currentTimeMillis()
-        if (left <= 0) "resets now" else {
+        if (left <= 0) L.codex.settings.resetsNow else {
             val h = left / 3_600_000
-            if (h >= 48) "resets in ${h / 24} days" else if (h >= 1) "resets in $h h" else "resets in ${left / 60_000} min"
+            if (h >= 48) L.codex.settings.resetsInValueDays(h / 24) else if (h >= 1) L.codex.settings.resetsInHH(h) else L.codex.settings.resetsInValueMin(left / 60_000)
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {

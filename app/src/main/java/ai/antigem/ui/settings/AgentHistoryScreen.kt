@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import ai.antigem.i18n.L
 
 /** Longer than this, a saved chat is shown read-only (a text field that big is too slow to edit). */
 private const val HISTORY_EDIT_LIMIT = 300_000
@@ -61,7 +62,7 @@ fun AgentHistoryScreen() {
         val r = MemoryBridgeClient.historyList()
         ensureActive()
         r.onSuccess { chats = it; loadError = null }
-            .onFailure { loadError = it.message ?: "Could not reach the bridge." }
+            .onFailure { loadError = it.message ?: L.settings.agentHistory.couldNotReachTheBridge }
         loading = false
     }
 
@@ -84,9 +85,7 @@ fun AgentHistoryScreen() {
 
     Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(
-            "Chats saved for the agents to look up: your messages and the replies, no tool output. Open one to read or " +
-                "edit it, or remove it. A removed chat is not saved again (new chats are). An edited one keeps your text, " +
-                "and the chat's new messages are added at the end.",
+            L.settings.agentHistory.chatsSavedForTheAgentsTo,
             fontSize = 12.5.sp, lineHeight = 17.sp, color = muted
         )
 
@@ -94,7 +93,7 @@ fun AgentHistoryScreen() {
             Spacer(Modifier.height(12.dp))
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    "Chat history is off: new messages are not saved. Turn it on in Agent memory & history.",
+                    L.settings.agentHistory.chatHistoryIsOffNewMessages,
                     fontSize = 12.5.sp, lineHeight = 17.sp,
                     modifier = Modifier.padding(14.dp)
                 )
@@ -104,17 +103,17 @@ fun AgentHistoryScreen() {
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
             value = filter, onValueChange = { filter = it }, singleLine = true,
-            placeholder = { Text("Filter by title, project or agent") },
+            placeholder = { Text(L.settings.agentHistory.filterByTitleProjectOrAgent) },
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            trailingIcon = if (filter.isNotEmpty()) ({ IconButton(onClick = { filter = "" }) { Icon(Icons.Outlined.Close, "Clear") } }) else null,
+            trailingIcon = if (filter.isNotEmpty()) ({ IconButton(onClick = { filter = "" }) { Icon(Icons.Outlined.Close, L.common.clear) } }) else null,
             modifier = Modifier.fillMaxWidth()
         )
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             val count = when {
                 chats.isEmpty() -> ""
-                q.isEmpty() -> "${chats.size} saved chat${if (chats.size == 1) "" else "s"}"
-                else -> "${shown.size} of ${chats.size} saved chat${if (chats.size == 1) "" else "s"}"
+                q.isEmpty() -> L.settings.agentHistory.chatscountSavedChatValue(chats.size, if (chats.size == 1) "" else "s")
+                else -> L.settings.agentHistory.showncountOfChatscountSavedChatValue(shown.size, chats.size, if (chats.size == 1) "" else "s")
             }
             Text(count, fontSize = 12.sp, color = muted, modifier = Modifier.weight(1f))
             if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -122,20 +121,20 @@ fun AgentHistoryScreen() {
 
         loadError?.let { err ->
             HistoryErrorText(err)
-            TextButton(onClick = { reload++ }, contentPadding = PaddingValues(horizontal = 0.dp)) { Text("Try again") }
+            TextButton(onClick = { reload++ }, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(L.common.tryAgain) }
         }
         if (chats.isEmpty() && !loading && loadError == null) {
-            Text("No saved chats yet.", fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp))
+            Text(L.settings.agentHistory.noSavedChatsYet, fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp))
         }
         if (chats.isNotEmpty() && shown.isEmpty()) {
-            Text("No saved chat matches \"$q\".", fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp))
+            Text(L.settings.agentHistory.noSavedChatMatchesQ(q), fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp))
         }
 
         groups.forEach { group ->
             val first = group.first()
             val project = first.project.trim()
             HistoryGroupHeader(
-                title = if (project.isBlank()) "No project folder" else first.projectName.ifBlank { project },
+                title = if (project.isBlank()) L.settings.agentHistory.noProjectFolder else first.projectName.ifBlank { project },
                 subtitle = project.ifBlank { null }
             )
             group.forEach { c ->
@@ -150,7 +149,7 @@ fun AgentHistoryScreen() {
                 onClick = { clearError = null; confirmClear = true },
                 enabled = !clearing,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-            ) { Text(if (clearing) "Removing…" else "Remove all saved chats") }
+            ) { Text(if (clearing) L.common.removing else L.settings.agentHistory.removeAllSavedChats) }
         }
         clearError?.let { HistoryErrorText(it) }
         Spacer(Modifier.height(24.dp))
@@ -164,8 +163,8 @@ fun AgentHistoryScreen() {
         val n = chats.size
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text(if (n == 1) "Remove 1 saved chat?" else "Remove all $n saved chats?") },
-            text = { Text("They are not saved again; new chats are. The chats themselves stay.") },
+            title = { Text(if (n == 1) L.settings.agentHistory.remove1SavedChat else L.settings.agentHistory.removeAllNSavedChats(n)) },
+            text = { Text(L.settings.agentHistory.theyAreNotSavedAgainNew) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
@@ -174,12 +173,12 @@ fun AgentHistoryScreen() {
                     scope.launch {
                         MemoryBridgeClient.historyClear()
                             .onSuccess { AgentMemory.changed() }
-                            .onFailure { clearError = it.message ?: "Could not remove the saved chats." }
+                            .onFailure { clearError = it.message ?: L.settings.agentHistory.couldNotRemoveTheSavedChats }
                         clearing = false
                     }
-                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.common.remove, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -216,7 +215,7 @@ private fun HistoryRow(c: MemoryBridgeClient.HistoryChat, onClick: () -> Unit) {
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text(
-                c.title.ifBlank { "Untitled chat" }, fontSize = 14.5.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
+                c.title.ifBlank { L.settings.agentHistory.untitledChat }, fontSize = 14.5.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(4.dp))
@@ -243,7 +242,7 @@ private fun HistoryRow(c: MemoryBridgeClient.HistoryChat, onClick: () -> Unit) {
 private fun HistoryEditedChip() {
     val c = MaterialTheme.colorScheme.tertiary
     Text(
-        "Edited", fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = c, maxLines = 1,
+        L.settings.agentHistory.edited, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = c, maxLines = 1,
         modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(c.copy(alpha = 0.13f)).padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
@@ -274,7 +273,7 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
             original = t
             text = t
             loadError = null
-        }.onFailure { loadError = it.message ?: "Could not load the chat." }
+        }.onFailure { loadError = it.message ?: L.settings.agentHistory.couldNotLoadTheChat }
         loading = false
     }
 
@@ -287,7 +286,7 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
         title = {
             Text(
-                info.title.ifBlank { "Untitled chat" }, fontWeight = FontWeight.SemiBold,
+                info.title.ifBlank { L.settings.agentHistory.untitledChat }, fontWeight = FontWeight.SemiBold,
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
         },
@@ -295,7 +294,7 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 val meta = listOfNotNull(
                     historyAgentLabel(info.agent).takeIf { it.isNotBlank() },
-                    info.project.trim().ifBlank { "No project folder" },
+                    info.project.trim().ifBlank { L.settings.agentHistory.noProjectFolder },
                     historyDay(info.started)?.let { "started $it" },
                     historyDay(info.updated)?.let { "updated $it" }
                 ).joinToString("  ·  ")
@@ -307,7 +306,7 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
                     }
                     failed != null -> HistoryErrorText(failed)
                     tooLarge -> {
-                        Text("Too large to edit here.", fontSize = 12.sp, lineHeight = 16.sp, color = muted)
+                        Text(L.settings.agentHistory.tooLargeToEditHere, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
                         Spacer(Modifier.height(6.dp))
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -343,19 +342,19 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
                             AgentMemory.changed()
                             onClose()
                         }.onFailure {
-                            error = it.message ?: "Could not save the chat."
+                            error = it.message ?: L.settings.agentHistory.couldNotSaveTheChat
                             saving = false
                         }
                     }
                 }
-            ) { Text(if (saving) "Saving…" else "Save") }
+            ) { Text(if (saving) L.common.saving else L.common.save) }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = { confirmRemove = true }, enabled = !busy) {
-                    Text(if (removing) "Removing…" else "Remove", color = MaterialTheme.colorScheme.error)
+                    Text(if (removing) L.common.removing else L.common.remove, color = MaterialTheme.colorScheme.error)
                 }
-                TextButton(onClick = onClose, enabled = !busy) { Text("Close") }
+                TextButton(onClick = onClose, enabled = !busy) { Text(L.common.close) }
             }
         }
     )
@@ -363,8 +362,8 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
     if (confirmRemove) {
         AlertDialog(
             onDismissRequest = { confirmRemove = false },
-            title = { Text("Remove this saved chat?") },
-            text = { Text("The agents can no longer look it up, and this chat is not saved again. The chat itself stays.") },
+            title = { Text(L.settings.agentHistory.removeThisSavedChat) },
+            text = { Text(L.settings.agentHistory.theAgentsCanNoLongerLook) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmRemove = false
@@ -375,13 +374,13 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
                             AgentMemory.changed()
                             onClose()
                         }.onFailure {
-                            error = it.message ?: "Could not remove the chat."
+                            error = it.message ?: L.settings.agentHistory.couldNotRemoveTheChat
                             removing = false
                         }
                     }
-                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.common.remove, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(L.common.cancel) } }
         )
     }
 }

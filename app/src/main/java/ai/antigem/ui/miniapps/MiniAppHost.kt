@@ -10,6 +10,7 @@ import ai.antigem.data.miniapps.MiniAppError
 import ai.antigem.data.miniapps.MiniAppPermissions
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.theme.ThemeManager
+import ai.antigem.i18n.L
 
 /** What a page (MiniAppPage) needs from whatever shows it: an activity on screen, or nothing (a background task). */
 interface MiniAppHost {
@@ -62,20 +63,20 @@ class BackgroundTaskHost(override val context: Context, private val onCrash: () 
     override fun onRendererGone(p: MiniAppPage) = onCrash()
     override fun onManifestChanged(newApp: MiniApp) {}
     override fun toast(text: String, long: Boolean) {}
-    override suspend fun showDialog(d: NativeDialog): Any? = noUi("A dialog")
+    override suspend fun showDialog(d: NativeDialog): Any? = noUi(L.miniapps.miniAppHost.aDialog)
     override suspend fun requestPermission(app: MiniApp, name: String) = MiniAppPermissions.state(context, app, name)
     override suspend fun androidPermissions(perms: Array<String>) = false
-    override suspend fun pickFiles(accept: String, multiple: Boolean): List<Uri> = noUi("Picking files")
-    override suspend fun capture(video: Boolean): Uri? = noUi("The camera")
-    override suspend fun pickDate(value: String, title: String): String? = noUi("A date picker")
-    override suspend fun pickTime(value: String): String? = noUi("A time picker")
-    override suspend fun pickFolder(title: String): java.io.File? = noUi("Picking a folder")
+    override suspend fun pickFiles(accept: String, multiple: Boolean): List<Uri> = noUi(L.miniapps.miniAppHost.pickingFiles)
+    override suspend fun capture(video: Boolean): Uri? = noUi(L.miniapps.miniAppHost.theCamera)
+    override suspend fun pickDate(value: String, title: String): String? = noUi(L.miniapps.miniAppHost.aDatePicker)
+    override suspend fun pickTime(value: String): String? = noUi(L.miniapps.miniAppHost.aTimePicker)
+    override suspend fun pickFolder(title: String): java.io.File? = noUi(L.miniapps.miniAppHost.pickingAFolder)
     override fun setStatusBar(color: String) {}
-    override fun push(path: String) = noUi("Opening a page")
+    override fun push(path: String) = noUi(L.miniapps.miniAppHost.openingAPage)
     override fun closePage() {}
     override fun closeApp() {}
     override fun showConsole() {}
     override fun showFullscreen(view: View, callback: WebChromeClient.CustomViewCallback) = callback.onCustomViewHidden()
     override fun hideFullscreen() {}
-    override fun startActivity(intent: Intent) = noUi("Opening another app")
+    override fun startActivity(intent: Intent) = noUi(L.miniapps.miniAppHost.openingAnotherApp)
 }

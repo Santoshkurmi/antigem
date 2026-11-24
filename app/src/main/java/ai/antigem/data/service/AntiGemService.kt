@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -64,8 +65,23 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
         const val ACTION_WAKE_UNLOCK = "ai.antigem.service_wake_unlock"
         const val ACTION_STOP_SERVICE = "ai.antigem.service_stop"
 
-        fun start(context: Context) {
+        /**
+         * [fromForeground]: called while an AntiGem screen is up. Then a plain startService() is used: onCreate still
+         * makes it a foreground service, but without startForegroundService()'s deadline (5 s on Android 8.x), which a
+         * slow phone misses while the first screen is still being built (the service's onCreate waits behind it on
+         * the main thread) and Android ends the app.
+         */
+        fun start(context: Context, fromForeground: Boolean = false) {
             val intent = Intent(context, ai.antigem.app.TermuxService::class.java)
+            if (fromForeground) {
+                try {
+                    context.startService(intent)
+                    return
+                } catch (e: IllegalStateException) {
+                    // Android counts the app as in the background after all
+                    Log.w(TAG, "startService refused, using startForegroundService: ${e.message}")
+                }
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -172,8 +188,8 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "AntiGem Terminal & Execution Service"
-            val descriptionText = "Terminal sessions and background execution"
+            val name = L.service.antiGemService.antigemTerminalExecutionService
+            val descriptionText = L.service.antiGemService.terminalSessionsAndBackgroundExecution
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
@@ -194,7 +210,7 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
 
         val sessionText = "$currentSessionCount " + (if (currentSessionCount == 1) "session" else "sessions") +
             (if (currentRunCount > 0) " · $currentRunCount running" else "")
-        val notificationText = if (wakeLockHeld) "$sessionText (wake lock held)" else sessionText
+        val notificationText = if (wakeLockHeld) L.service.antiGemService.sessiontextWakeLockHeld(sessionText) else sessionText
 
         val launchIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -230,7 +246,7 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
             this, 2, toggleWakeLockIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val wakeActionTitle = if (wakeLockHeld) "Release wakelock" else "Acquire wakelock"
+        val wakeActionTitle = if (wakeLockHeld) L.service.antiGemService.releaseWakelock else L.service.antiGemService.acquireWakelock
         val wakeActionIcon = if (wakeLockHeld) android.R.drawable.ic_lock_idle_lock else android.R.drawable.ic_lock_lock
 
         val priority = if (wakeLockHeld) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW
@@ -243,9 +259,9 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
             .setOngoing(true)
             .setShowWhen(false)
             .setPriority(priority)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Exit", exitPendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, L.service.antiGemService.exit, exitPendingIntent)
             .addAction(wakeActionIcon, wakeActionTitle, wakePendingIntent)
-            .addAction(android.R.drawable.ic_menu_view, "Float", floatPendingIntent)
+            .addAction(android.R.drawable.ic_menu_view, L.service.antiGemService.float, floatPendingIntent)
             .build()
     }
 
@@ -281,7 +297,7 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
         requestDisableBatteryOptimizations(this)
         updateNotification()
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(this@AntiGemService, "Wake lock activated for 1 hour", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@AntiGemService, L.service.antiGemService.wakeLockActivatedFor1Hour, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -312,7 +328,7 @@ open class AntiGemService : Service(), LifecycleOwner, ViewModelStoreOwner, Save
         updateNotification()
         Log.d(TAG, "WakeLocks released successfully")
         Handler(Looper.getMainLooper()).post {
-            Toast.makeText(this@AntiGemService, "Wake lock released", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@AntiGemService, L.service.antiGemService.wakeLockReleased, Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -81,6 +81,7 @@ import ai.antigem.data.ide.RunConfigManager
 import ai.antigem.data.ide.RunConfiguration
 import ai.antigem.data.local.LocalTerminalManager
 import ai.antigem.ui.browser.BrowserSessionManager
+import ai.antigem.i18n.L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -396,7 +397,7 @@ fun IdeScreen(
                                 fileTree.reload(parentPathOf(fullPath))
                                 Toast.makeText(context, "Created ${if (isDir) "folder" else "file"} '$name'", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "Failed to create ${if (isDir) "folder" else "file"}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.failedToCreateValue(if (isDir) "folder" else "file"), Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -408,9 +409,9 @@ fun IdeScreen(
                                 IdeDaemonManager.renameTab(oldPath, newPath, newName)
                                 fileTree.forget(oldPath)
                                 fileTree.reload(parentPathOf(oldPath), parentPathOf(newPath))
-                                Toast.makeText(context, "Renamed to '$newName'", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.renamedToNewname(newName), Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "Failed to rename", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.failedToRename, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -421,9 +422,9 @@ fun IdeScreen(
                                 IdeDaemonManager.closeTab(path)
                                 fileTree.forget(path)
                                 fileTree.reload(parentPathOf(path))
-                                Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.deleted, Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "Failed to delete", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.failedToDelete, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -452,13 +453,13 @@ fun IdeScreen(
                         }) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
-                                contentDescription = "Toggle Sidebar"
+                                contentDescription = L.ide.screen.toggleSidebar
                             )
                         }
                     },
                     title = {
                         Text(
-                            text = activeProject?.name ?: "antiGem IDE",
+                            text = activeProject?.name ?: L.ide.screen.antigemIde,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -480,7 +481,7 @@ fun IdeScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.MoreVert,
-                                        contentDescription = "More editor options",
+                                        contentDescription = L.ide.screen.moreEditorOptions,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -491,7 +492,7 @@ fun IdeScreen(
                                 ) {
                                     // Word Wrap with Checkbox
                                     DropdownMenuItem(
-                                        text = { Text("Word Wrap", fontSize = 13.sp) },
+                                        text = { Text(L.ide.screen.wordWrap, fontSize = 13.sp) },
                                         leadingIcon = {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.WrapText,
@@ -513,7 +514,7 @@ fun IdeScreen(
 
                                     // Find / Search in File
                                     DropdownMenuItem(
-                                        text = { Text("Find in File", fontSize = 13.sp) },
+                                        text = { Text(L.ide.screen.findInFile, fontSize = 13.sp) },
                                         leadingIcon = {
                                             Icon(
                                                 imageVector = Icons.Default.Search,
@@ -532,7 +533,7 @@ fun IdeScreen(
                                         DropdownMenuItem(
                                             text = {
                                                 Text(
-                                                    text = if (showSvgSource) "Preview SVG Graphic" else "Edit SVG XML Source",
+                                                    text = if (showSvgSource) L.ide.screen.previewSvgGraphic else L.ide.screen.editSvgXmlSource,
                                                     fontSize = 13.sp
                                                 )
                                             },
@@ -562,7 +563,7 @@ fun IdeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Undo,
-                                    contentDescription = "Undo",
+                                    contentDescription = L.common.undo,
                                     tint = if (canUndo && isTextEditable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -575,7 +576,7 @@ fun IdeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Redo,
-                                    contentDescription = "Redo",
+                                    contentDescription = L.ide.screen.redo,
                                     tint = if (canRedo && isTextEditable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -603,7 +604,7 @@ fun IdeScreen(
                                             when (result) {
                                                 is FileSaveResult.Success -> {
                                                     IdeDaemonManager.markTabSaved(activeTab.path, result.hash)
-                                                    Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, L.ide.screen.saved, Toast.LENGTH_SHORT).show()
                                                 }
                                                 is FileSaveResult.Conflict -> {
                                                     conflictDialogTab = activeTab.copy(
@@ -612,7 +613,7 @@ fun IdeScreen(
                                                     )
                                                 }
                                                 is FileSaveResult.Error -> {
-                                                    Toast.makeText(context, "Save Error: ${result.message}", Toast.LENGTH_LONG).show()
+                                                    Toast.makeText(context, L.ide.screen.saveErrorMessage(result.message), Toast.LENGTH_LONG).show()
                                                 }
                                             }
                                         }
@@ -623,7 +624,7 @@ fun IdeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Save,
-                                    contentDescription = if (isExternal) "Save As..." else "Save File",
+                                    contentDescription = if (isExternal) L.ide.screen.saveAs else L.ide.screen.saveFile,
                                     tint = if (activeTab.isModified || isExternal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -658,11 +659,11 @@ fun IdeScreen(
                                                     }
                                                 } else {
                                                     val ext = File(activePath).extension
-                                                    Toast.makeText(context, "No default runner for '.$ext'. Configure a run profile.", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, L.ide.screen.noDefaultRunnerForExtConfigure(ext), Toast.LENGTH_SHORT).show()
                                                     showAddProfileDialog = true
                                                 }
                                             } else {
-                                                Toast.makeText(context, "Open a file or select a project run profile", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, L.ide.screen.openAFileOrSelectA, Toast.LENGTH_SHORT).show()
                                             }
                                         }
                                     },
@@ -674,7 +675,7 @@ fun IdeScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = if (isCustomMode) "Run Profile: $selectedProfileName" else "Run Active File",
+                                            contentDescription = if (isCustomMode) L.ide.screen.runProfileSelectedprofilename(selectedProfileName) else L.ide.screen.runActiveFile,
                                             tint = if (isCustomMode) GeminiBlue else ai.antigem.theme.AppColors.success,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -701,7 +702,7 @@ fun IdeScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = "Run Configurations",
+                                        contentDescription = L.ide.screen.runConfigurations,
                                         tint = if (isCustomMode) GeminiBlue else ai.antigem.theme.AppColors.success,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -722,12 +723,12 @@ fun IdeScreen(
                                     text = {
                                         Column {
                                             Text(
-                                                text = "Auto: Run Active File",
+                                                text = L.ide.screen.autoRunActiveFile,
                                                 fontWeight = if (isAutoMode) FontWeight.Bold else FontWeight.Normal,
                                                 fontSize = 13.sp
                                             )
                                             Text(
-                                                text = if (activeFile != null) activeFile.name else "(No file open)",
+                                                text = if (activeFile != null) activeFile.name else L.ide.screen.noFileOpen,
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -745,7 +746,7 @@ fun IdeScreen(
                                         if (isAutoMode) {
                                             Icon(
                                                 Icons.Default.Check,
-                                                contentDescription = "Selected",
+                                                contentDescription = L.common.selected,
                                                 tint = ai.antigem.theme.AppColors.success,
                                                 modifier = Modifier.size(16.dp)
                                             )
@@ -760,11 +761,11 @@ fun IdeScreen(
                                                 if (runner != null) executeRun(runner)
                                             } else {
                                                 val ext = File(activePath).extension
-                                                Toast.makeText(context, "No default runner for '.$ext'. Configure a run profile.", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, L.ide.screen.noDefaultRunnerForExtConfigure(ext), Toast.LENGTH_SHORT).show()
                                                 showAddProfileDialog = true
                                             }
                                         } else {
-                                            Toast.makeText(context, "Open a file to run", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, L.ide.screen.openAFileToRun, Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 )
@@ -821,7 +822,7 @@ fun IdeScreen(
                                                 if (isSelected) {
                                                     Icon(
                                                         Icons.Default.Check,
-                                                        contentDescription = "Selected",
+                                                        contentDescription = L.common.selected,
                                                         tint = GeminiBlue,
                                                         modifier = Modifier.size(16.dp)
                                                     )
@@ -838,7 +839,7 @@ fun IdeScreen(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                "No custom profiles configured",
+                                                L.ide.screen.noCustomProfilesConfigured,
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                             )
@@ -886,7 +887,7 @@ fun IdeScreen(
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                                 DropdownMenuItem(
-                                    text = { Text("Open Run screen", fontSize = 13.sp) },
+                                    text = { Text(L.ide.screen.openRunScreen, fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                                     },
@@ -897,7 +898,7 @@ fun IdeScreen(
                                 )
 
                                 DropdownMenuItem(
-                                    text = { Text("Add Run Configuration...", fontSize = 13.sp) },
+                                    text = { Text(L.ide.screen.addRunConfiguration, fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                     },
@@ -905,7 +906,7 @@ fun IdeScreen(
                                         showRunMenu = false
                                         val projectPath = activeProject?.path ?: ""
                                         if (projectPath.isBlank()) {
-                                            Toast.makeText(context, "Open a project folder first", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, L.ide.screen.openAProjectFolderFirst, Toast.LENGTH_SHORT).show()
                                         } else {
                                             showAddProfileDialog = true
                                         }
@@ -913,7 +914,7 @@ fun IdeScreen(
                                 )
 
                                 DropdownMenuItem(
-                                    text = { Text("Edit run.json in Editor", fontSize = 13.sp) },
+                                    text = { Text(L.ide.screen.editRunJsonInEditor, fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
                                     },
@@ -921,7 +922,7 @@ fun IdeScreen(
                                         showRunMenu = false
                                         val projectPath = activeProject?.path ?: ""
                                         if (projectPath.isBlank()) {
-                                            Toast.makeText(context, "Open a project folder first", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, L.ide.screen.openAProjectFolderFirst, Toast.LENGTH_SHORT).show()
                                         } else {
                                             val file = RunConfigManager.getOrCreateLaunchJson(projectPath, activeTabPath)
                                             val content = try { file.readText() } catch (_: Exception) { "{}" }
@@ -939,7 +940,7 @@ fun IdeScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "AI Chat",
+                                contentDescription = L.ide.screen.aiChat,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -1013,7 +1014,7 @@ fun IdeScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Close Tab",
+                                    contentDescription = L.common.closeTab,
                                     tint = Color.Gray,
                                     modifier = Modifier
                                         .size(14.dp)
@@ -1108,7 +1109,7 @@ fun IdeScreen(
                                         decorationBox = { innerTextField ->
                                             if (findQuery.isEmpty()) {
                                                 Text(
-                                                    text = "Find in file...",
+                                                    text = L.ide.screen.findInFile2,
                                                     color = ai.antigem.theme.AppColors.editorMuted,
                                                     fontSize = 13.sp,
                                                     fontFamily = FontFamily.Monospace
@@ -1129,7 +1130,7 @@ fun IdeScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Close,
-                                                contentDescription = "Clear",
+                                                contentDescription = L.common.clear,
                                                 tint = Color.LightGray,
                                                 modifier = Modifier.size(14.dp)
                                             )
@@ -1162,7 +1163,7 @@ fun IdeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = "Previous Match",
+                                    contentDescription = L.ide.screen.previousMatch,
                                     tint = if (searchMatchCount > 0) Color.White else Color.DarkGray,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -1176,7 +1177,7 @@ fun IdeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Next Match",
+                                    contentDescription = L.ide.screen.nextMatch,
                                     tint = if (searchMatchCount > 0) Color.White else Color.DarkGray,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -1192,7 +1193,7 @@ fun IdeScreen(
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Text(
-                                    text = "Aa",
+                                    text = L.ide.screen.aa,
                                     color = if (isCaseSensitive) ai.antigem.theme.AppColors.info else Color.Gray,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
@@ -1213,7 +1214,7 @@ fun IdeScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Close Find",
+                                    contentDescription = L.ide.screen.closeFind,
                                     tint = Color.Gray,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -1271,7 +1272,7 @@ fun IdeScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Historical Revision • Read-Only",
+                                text = L.ide.screen.historicalRevisionReadOnly,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 11.5.sp,
                                 color = ai.antigem.theme.AppColors.editorText,
@@ -1301,7 +1302,7 @@ fun IdeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "File modified on disk externally",
+                                text = L.ide.screen.fileModifiedOnDiskExternally,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = ai.antigem.theme.AppColors.warning,
                                 modifier = Modifier.weight(1f)
@@ -1310,7 +1311,7 @@ fun IdeScreen(
                                 onClick = { conflictDialogTab = activeTab },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                             ) {
-                                Text("Resolve", color = ai.antigem.theme.AppColors.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(L.ide.screen.resolve, color = ai.antigem.theme.AppColors.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1479,7 +1480,7 @@ fun IdeScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Select a file from the sidebar to start editing",
+                                text = L.ide.screen.selectAFileFromTheSidebar,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.Gray
                             )
@@ -1494,8 +1495,8 @@ fun IdeScreen(
                 AlertDialog(
                     onDismissRequest = { tabToClose = null },
                     icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = ClaudeTerracotta) },
-                    title = { Text("Unsaved Changes", fontWeight = FontWeight.Bold) },
-                    text = { Text("Do you want to save the changes made to '${closingTarget.name}' before closing?") },
+                    title = { Text(L.ide.screen.unsavedChanges, fontWeight = FontWeight.Bold) },
+                    text = { Text(L.ide.screen.doYouWantToSaveThe(closingTarget.name)) },
                     confirmButton = {
                         Button(
                             onClick = {
@@ -1510,17 +1511,17 @@ fun IdeScreen(
                                     )
                                     if (res is FileSaveResult.Success) {
                                         IdeDaemonManager.closeTab(target.path)
-                                        Toast.makeText(context, "Saved and closed", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, L.ide.screen.savedAndClosed, Toast.LENGTH_SHORT).show()
                                     } else if (res is FileSaveResult.Conflict) {
                                         conflictDialogTab = target.copy(diskConflict = true, diskContentOnConflict = res.diskContent)
                                     } else {
-                                        Toast.makeText(context, "Failed to save file", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, L.ide.screen.failedToSaveFile, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                         ) {
-                            Text("Save & Close")
+                            Text(L.ide.screen.saveClose)
                         }
                     },
                     dismissButton = {
@@ -1531,7 +1532,7 @@ fun IdeScreen(
                                 IdeDaemonManager.closeTab(target.path)
                             }
                         ) {
-                            Text("Don't Save", color = ai.antigem.theme.AppColors.danger)
+                            Text(L.ide.screen.dontSave, color = ai.antigem.theme.AppColors.danger)
                         }
                     }
                 )
@@ -1543,13 +1544,13 @@ fun IdeScreen(
                 AlertDialog(
                     onDismissRequest = { conflictDialogTab = null },
                     icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = ai.antigem.theme.AppColors.warning) },
-                    title = { Text("File Conflict Detected", fontWeight = FontWeight.Bold) },
+                    title = { Text(L.ide.screen.fileConflictDetected, fontWeight = FontWeight.Bold) },
                     text = {
                         Column {
-                            Text("The file '${conflictingTarget.name}' has been modified on disk or by AI.")
+                            Text(L.ide.screen.theFileNameHasBeenModified(conflictingTarget.name))
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "Choose whether to overwrite the disk version with your editor changes or reload the version from disk.",
+                                L.ide.screen.chooseWhetherToOverwriteTheDisk,
                                 fontSize = 12.sp,
                                 color = Color.Gray
                             )
@@ -1568,15 +1569,15 @@ fun IdeScreen(
                                     )
                                     if (res is FileSaveResult.Success) {
                                         IdeDaemonManager.markTabSaved(target.path, res.hash)
-                                        Toast.makeText(context, "Saved (Overwritten)", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, L.ide.screen.savedOverwritten, Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(context, "Failed to overwrite disk", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, L.ide.screen.failedToOverwriteDisk, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                         ) {
-                            Text("Overwrite Disk (Keep Mine)")
+                            Text(L.ide.screen.overwriteDiskKeepMine)
                         }
                     },
                     dismissButton = {
@@ -1585,10 +1586,10 @@ fun IdeScreen(
                                 val target = conflictDialogTab ?: return@TextButton
                                 conflictDialogTab = null
                                 IdeDaemonManager.resolveTabConflict(target.path, keepMine = false)
-                                Toast.makeText(context, "Reverted to disk version", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.revertedToDiskVersion, Toast.LENGTH_SHORT).show()
                             }
                         ) {
-                            Text("Revert to Disk", color = ai.antigem.theme.AppColors.danger)
+                            Text(L.ide.screen.revertToDisk, color = ai.antigem.theme.AppColors.danger)
                         }
                     }
                 )
@@ -1606,8 +1607,8 @@ fun IdeScreen(
                 ai.antigem.ui.files.FileExplorerDialog(
                     stateKey = "ide_projects",
                     initialPath = initialBrowsePath,
-                    title = "Open a project or file",
-                    confirmLabel = "Open as project",
+                    title = L.ide.screen.openAProjectOrFile,
+                    confirmLabel = L.ide.screen.openAsProject,
                     onConfirmFolder = { folder ->
                         showFileManager = false
                         val proj = ProjectItem(java.io.File(folder).name.ifBlank { folder }, folder)
@@ -1640,7 +1641,7 @@ fun IdeScreen(
                 ai.antigem.ui.files.FileExplorerDialog(
                     stateKey = "ide_save_as",
                     initialPath = initialSavePath,
-                    title = "Save \"${tabToSave.name}\" as",
+                    title = L.ide.screen.saveNameAs(tabToSave.name),
                     saveFileName = tabToSave.name,
                     onSave = { folderPath, fileName ->
                         val cleanFolder = folderPath.trim().trimEnd('/')
@@ -1669,9 +1670,9 @@ fun IdeScreen(
                                 IdeDaemonManager.markTabSaved(fullPath, res.hash)
                                 saveAsDialogTab = null
                                 refreshProjectsAndTree()
-                                Toast.makeText(context, "Saved to $fullPath", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.ide.screen.savedToFullpath(fullPath), Toast.LENGTH_SHORT).show()
                             } else if (res is FileSaveResult.Error) {
-                                Toast.makeText(context, "Save Error: ${res.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, L.ide.screen.saveErrorMessage(res.message), Toast.LENGTH_LONG).show()
                             }
                         }
                     },
@@ -1692,7 +1693,7 @@ fun IdeScreen(
                         )
                     },
                     title = {
-                        Text("Non-Text File Warning", fontWeight = FontWeight.Bold)
+                        Text(L.ide.screen.nonTextFileWarning, fontWeight = FontWeight.Bold)
                     },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1702,7 +1703,7 @@ fun IdeScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Opening it in the text editor may display garbled characters, cause lag, or corrupt the file if saved.",
+                                text = L.ide.screen.openingItInTheTextEditor,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1716,12 +1717,12 @@ fun IdeScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ai.antigem.theme.AppColors.warning)
                         ) {
-                            Text("Open Anyway", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text(L.ide.screen.openAnyway, color = Color.Black, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { binaryWarningDialog = null }) {
-                            Text("Cancel")
+                            Text(L.common.cancel)
                         }
                     }
                 )
@@ -1738,19 +1739,19 @@ fun IdeScreen(
                             modifier = Modifier.size(32.dp)
                         )
                     },
-                    title = { Text("File too large", fontWeight = FontWeight.Bold) },
+                    title = { Text(L.ide.screen.fileTooLarge, fontWeight = FontWeight.Bold) },
                     text = { Text(info.message, style = MaterialTheme.typography.bodyMedium) },
                     confirmButton = {
-                        TextButton(onClick = { tooLargeDialog = null }) { Text("OK") }
+                        TextButton(onClick = { tooLargeDialog = null }) { Text(L.common.ok) }
                     },
                     dismissButton = {
                         TextButton(onClick = {
                             tooLargeDialog = null
-                            ai.antigem.ui.components.AppToastHelper.showToast("Preparing file share...", ai.antigem.ui.components.ChatToastType.INFO)
+                            ai.antigem.ui.components.AppToastHelper.showToast(L.ide.screen.preparingFileShare, ai.antigem.ui.components.ChatToastType.INFO)
                             coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                 FileShareHelper.shareFile(context = context, filePath = info.path, fileName = info.name)
                             }
-                        }) { Text("Share") }
+                        }) { Text(L.common.share) }
                     }
                 )
             }
@@ -1766,7 +1767,7 @@ fun IdeScreen(
                         RunConfigManager.addConfiguration(projPath, newProfile)
                         refreshRunConfigurations()
                         selectedProfileName = newProfile.name
-                        Toast.makeText(context, "Added run configuration: ${newProfile.name}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, L.ide.screen.addedRunConfigurationName(newProfile.name), Toast.LENGTH_SHORT).show()
                     }
                 )
             }
@@ -1846,22 +1847,22 @@ private fun AddRunProfileDialog(
 ) {
     val defaultRunner = activeFilePath?.let { RunConfigManager.getDefaultRunnerForFile(it, projectPath) }
 
-    var profileName by remember { mutableStateOf(defaultRunner?.name ?: "Custom Run") }
+    var profileName by remember { mutableStateOf(defaultRunner?.name ?: L.ide.screen.customRun) }
     var commandInput by remember { mutableStateOf(defaultRunner?.command ?: "python3 \"\${file}\"") }
     var cwdInput by remember { mutableStateOf(defaultRunner?.cwd ?: "\${workspaceFolder}") }
     var isDefault by remember { mutableStateOf(false) }
 
     val presets = listOf(
-        "Python" to "python3 \"\${file}\"",
+        L.ide.screen.python to "python3 \"\${file}\"",
         "Node.js" to "node \"\${file}\"",
-        "C Program" to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && gcc -Wall -O2 \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
+        L.ide.screen.cProgram to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && gcc -Wall -O2 \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
         "C++" to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && g++ -Wall -O2 \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
         "TypeScript" to "npx tsx \"\${file}\"",
         "PHP" to "php \"\${file}\"",
-        "Bash Shell" to "bash \"\${file}\"",
-        "Rust" to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && rustc \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
-        "Go" to "go run \"\${file}\"",
-        "Dev Server" to "npm run dev"
+        L.ide.screen.bashShell to "bash \"\${file}\"",
+        L.ide.screen.rust to "mkdir -p \"\${TMPDIR:-\$PREFIX/tmp}\" && rustc \"\${file}\" -o \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\" && \"\${TMPDIR:-\$PREFIX/tmp}/\${fileBasenameNoExtension}\"",
+        L.ide.screen.go to "go run \"\${file}\"",
+        L.ide.screen.devServer to "npm run dev"
     )
 
     AlertDialog(
@@ -1870,7 +1871,7 @@ private fun AddRunProfileDialog(
             Icon(Icons.Default.Tune, contentDescription = null, tint = ai.antigem.theme.AppColors.success, modifier = Modifier.size(28.dp))
         },
         title = {
-            Text("Add Run Configuration", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text(L.ide.screen.addRunConfiguration2, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         },
         text = {
             Column(
@@ -1880,13 +1881,13 @@ private fun AddRunProfileDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Saved into .antigem/run.json in your workspace root.",
+                    text = L.ide.screen.savedIntoAntigemRunJsonIn,
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 // Presets row
-                Text("Quick Presets:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.ide.screen.quickPresets, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1906,7 +1907,7 @@ private fun AddRunProfileDialog(
                 OutlinedTextField(
                     value = profileName,
                     onValueChange = { profileName = it },
-                    label = { Text("Profile Name") },
+                    label = { Text(L.ide.screen.profileName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1914,7 +1915,7 @@ private fun AddRunProfileDialog(
                 OutlinedTextField(
                     value = commandInput,
                     onValueChange = { commandInput = it },
-                    label = { Text("Command to Execute") },
+                    label = { Text(L.ide.screen.commandToExecute) },
                     placeholder = { Text("python3 \"\${file}\"") },
                     minLines = 2,
                     maxLines = 4,
@@ -1924,7 +1925,7 @@ private fun AddRunProfileDialog(
                 OutlinedTextField(
                     value = cwdInput,
                     onValueChange = { cwdInput = it },
-                    label = { Text("Working Directory (CWD)") },
+                    label = { Text(L.ide.screen.workingDirectoryCwd) },
                     placeholder = { Text("\${workspaceFolder}") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -1936,7 +1937,7 @@ private fun AddRunProfileDialog(
                 ) {
                     Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Set as default run profile", fontSize = 12.5.sp)
+                    Text(L.ide.screen.setAsDefaultRunProfile, fontSize = 12.5.sp)
                 }
 
                 Surface(
@@ -1945,7 +1946,7 @@ private fun AddRunProfileDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        Text("Supported Variables:", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                        Text(L.ide.screen.supportedVariables, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                         Text("\${file} • \${fileBasename} • \${fileBasenameNoExtension} • \${fileDirname} • \${workspaceFolder}", fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
                     }
                 }
@@ -1955,7 +1956,7 @@ private fun AddRunProfileDialog(
             Button(
                 onClick = {
                     val config = RunConfiguration(
-                        name = profileName.trim().ifEmpty { "Run Profile" },
+                        name = profileName.trim().ifEmpty { L.ide.screen.runProfile },
                         type = "terminal",
                         command = commandInput.trim(),
                         cwd = cwdInput.trim().ifEmpty { "\${workspaceFolder}" },
@@ -1965,12 +1966,12 @@ private fun AddRunProfileDialog(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = ai.antigem.theme.AppColors.success)
             ) {
-                Text("Save Profile", fontWeight = FontWeight.Bold)
+                Text(L.ide.screen.saveProfile, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(L.common.cancel)
             }
         }
     )
@@ -2016,7 +2017,7 @@ private suspend fun checkActiveTabOnDisk(): String? {
     val read = IdeApiClient.readFileLimited(path, IdeFileLauncher.MAX_TEXT_BYTES) as? FileReadOutcome.Ok ?: return null
     IdeDaemonManager.setDiskStamp(path, stat.size, stat.modTime)
     return if (IdeDaemonManager.updateTabFromDisk(path, read.result.content) == TabDiskUpdateResult.AUTO_UPDATED) {
-        "${tab.name} reloaded from disk"
+        L.ide.screen.nameReloadedFromDisk(tab.name)
     } else null
 }
 

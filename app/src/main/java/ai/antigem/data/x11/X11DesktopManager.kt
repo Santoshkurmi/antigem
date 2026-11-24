@@ -33,6 +33,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 /**
  * Settings → X11 Desktop: sets up Termux:X11 (the app that shows the desktop, its companion
@@ -286,8 +287,8 @@ object X11DesktopManager {
         _state.update {
             it.copy(
                 logTask = Task.START,
-                log = if (tail.isEmpty()) emptyList() else listOf("End of $LOG_FILE:") + tail,
-                message = if (failed) "The desktop stopped because of an error. ${reasonHint(tail)}" else "The desktop has stopped.",
+                log = if (tail.isEmpty()) emptyList() else listOf(L.x11.desktopManager.endOfLogFile(LOG_FILE)) + tail,
+                message = if (failed) L.x11.desktopManager.theDesktopStoppedBecauseOfAn(reasonHint(tail)) else L.x11.desktopManager.theDesktopHasStopped,
                 isError = failed
             )
         }
@@ -312,12 +313,11 @@ object X11DesktopManager {
     /** What to do about the errors we know, from the end of the X server's log. */
     private fun reasonHint(tail: List<String>): String = when {
         tail.any { "CANNOT LINK EXECUTABLE" in it } ->
-            "A program could not load a library, which usually means some packages are out of date. " +
-                "Run \"pkg upgrade\" in the terminal, then start again."
+            L.x11.desktopManager.aProgramCouldNotLoadA
         tail.any { "XKB_CONFIG_ROOT is not set" in it } ->
-            "This Termux:X11 build can't find the keyboard files. Update the Termux:X11 app (step 1), then start again."
-        tail.isEmpty() -> "Its log ($LOG_FILE) is empty."
-        else -> "The reason is at the end of the log in step 4."
+            L.x11.desktopManager.thisTermuxX11BuildCantFind
+        tail.isEmpty() -> L.x11.desktopManager.itsLogFileIsEmpty(LOG_FILE)
+        else -> L.x11.desktopManager.theReasonIsAtTheEnd
     }
 
     private fun readAppInfo(ctx: Context): AppInfo? {
@@ -350,17 +350,17 @@ object X11DesktopManager {
     /** Downloads AntiGem's Termux:X11 build and opens the system installer. */
     fun installApp() = runTask(Task.APP) {
         val url = FORK_APK_URL
-        appendLog("Downloading AntiGem's Termux:X11 build…")
+        appendLog(L.x11.desktopManager.downloadingAntigemsTermuxX11Build)
         appendLog(url)
         val dir = File(appContext.externalCacheDir ?: appContext.cacheDir, "x11").apply { mkdirs() }
         val apk = File(dir, "termux-x11.apk")
-        download(url, apk) { pct -> _state.update { it.copy(progress = "Downloading Termux:X11… $pct") } }
-        appendLog("✓ Downloaded ${apk.length() / 1024} KB")
+        download(url, apk) { pct -> _state.update { it.copy(progress = L.x11.desktopManager.downloadingTermuxX11Pct(pct)) } }
+        appendLog(L.x11.desktopManager.downloadedValueKb(apk.length() / 1024))
         val opened = withContext(Dispatchers.Main) { AppUpdateManager(appContext).installApk(apk) }
         if (opened) {
-            appendLog("Opened the installer. Confirm the install there.")
+            appendLog(L.x11.desktopManager.openedTheInstallerConfirmTheInstall)
         } else {
-            report("Allow AntiGem to install apps (the settings page that just opened), then tap Install again.", isError = true)
+            report(L.x11.desktopManager.allowAntigemToInstallAppsThe, isError = true)
         }
     }
 
@@ -370,23 +370,23 @@ object X11DesktopManager {
             context.startActivity(
                 Intent(Intent.ACTION_DELETE, Uri.parse("package:$X11_PACKAGE")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        }.onFailure { report("Could not open the uninstall dialog: ${it.message}", isError = true) }
+        }.onFailure { report(L.x11.desktopManager.couldNotOpenTheUninstallDialog(it.message), isError = true) }
     }
 
     // ---------------- step 2: the companion package (termux-x11 command) ----------------
 
     fun installCompanion() = runTask(Task.COMPANION) {
         if (chroot != null) {
-            appendLog("Not needed in the Ubuntu chroot: AntiGem starts the X server itself.")
+            appendLog(L.x11.desktopManager.notNeededInTheUbuntuChroot)
             return@runTask
         }
         val enableRepo = "apt-get update && apt-get install -y $KEEP_CONFIGS x11-repo && apt-get update"
         val deb = File(LocalEnvironmentManager.getTmpDir(appContext), "$COMPANION_ANTIGEM.deb")
-        appendLog("Finding the latest $COMPANION_ANTIGEM package…")
+        appendLog(L.x11.desktopManager.findingTheLatestCompanionAntigemPackage(COMPANION_ANTIGEM))
         val url = latestForkDebUrl()
         appendLog(url)
-        download(url, deb) { pct -> _state.update { it.copy(progress = "Downloading $COMPANION_ANTIGEM… $pct") } }
-        appendLog("✓ Downloaded ${deb.length() / 1024} KB")
+        download(url, deb) { pct -> _state.update { it.copy(progress = L.x11.desktopManager.downloadingNamePct(COMPANION_ANTIGEM, pct)) } }
+        appendLog(L.x11.desktopManager.downloadedValueKb(deb.length() / 1024))
         // A path (not a name) makes apt install the file and pull its dependency (xkeyboard-config) from x11-repo;
         // it also removes termux-x11-nightly, which it conflicts with
         val command = "$enableRepo && apt-get install -y $KEEP_CONFIGS '${deb.absolutePath}'; s=\$?; rm -f '${deb.absolutePath}'; exit \$s"
@@ -404,7 +404,7 @@ object X11DesktopManager {
     fun installDesktop() = runTask(Task.DESKTOP) {
         val desktop = _state.value.desktop
         chroot?.let { install ->
-            chrootTask(install, "Installing ${desktop.label} in the Ubuntu chroot… (a large download, this can take a while)",
+            chrootTask(install, L.x11.desktopManager.installingLabelInTheUbuntuChroot(desktop.label),
                 "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y --no-install-recommends $KEEP_CONFIGS ${ubuntuPackages(desktop)}",
                 asRoot = true, timeoutSeconds = 3600)
             // the keyboard files may be new or updated: copied again at the next start
@@ -412,7 +412,7 @@ object X11DesktopManager {
             return@runTask
         }
         shellTask(
-            "Updating installed packages, then installing ${desktop.label}… (a large download, this can take a while)",
+            L.x11.desktopManager.updatingInstalledPackagesThenInstalling(desktop.label),
             "apt-get update && apt-get install -y $KEEP_CONFIGS x11-repo && apt-get update && " +
                 "$UPGRADE && apt-get install -y $KEEP_CONFIGS dbus ${desktop.packages}",
             3600
@@ -434,11 +434,11 @@ object X11DesktopManager {
                 "echo \"deb [signed-by=/etc/apt/keyrings/xtradeb.asc] $ppa \$VERSION_CODENAME main\" > /etc/apt/sources.list.d/xtradeb-apps.list; " +
                 "printf 'Package: chromium* firefox*\\nPin: release o=LP-PPA-xtradeb-apps\\nPin-Priority: 1001\\n' > /etc/apt/preferences.d/antigem-xtradeb; " +
                 "apt-get update && apt-get install -y $KEEP_CONFIGS ${browser.packageName}"
-            chrootTask(install, "Installing ${browser.label} in the Ubuntu chroot (from the xtradeb/apps PPA)…", command, asRoot = true, timeoutSeconds = 3600)
+            chrootTask(install, L.x11.desktopManager.installingLabelInTheUbuntuChroot2(browser.label), command, asRoot = true, timeoutSeconds = 3600)
             return@runTask
         }
         shellTask(
-            "Updating installed packages, then installing ${browser.label}…",
+            L.x11.desktopManager.updatingInstalledPackagesThenInstalling2(browser.label),
             "apt-get update && apt-get install -y $KEEP_CONFIGS tur-repo && apt-get update && " +
                 "$UPGRADE && apt-get install -y $KEEP_CONFIGS ${browser.packageName}",
             3600
@@ -466,7 +466,7 @@ object X11DesktopManager {
             socket.delete()
             val desktop = _state.value.desktop
             val log = File(tmp, LOG_FILE)
-            _state.update { it.copy(progress = "Starting the X server…") }
+            _state.update { it.copy(progress = L.x11.desktopManager.startingTheXServer) }
             // nohup + redirects: the command returns at once and the X server outlives it
             val command = "nohup termux-x11 $DISPLAY -xstartup \"${desktop.startCommand}\" " +
                 "> '${log.absolutePath}' 2>&1 < /dev/null &"
@@ -488,10 +488,10 @@ object X11DesktopManager {
                 failStart(desktop, seen)
                 return@runTask
             }
-            appendLog("✓ X server listening on display $DISPLAY")
+            appendLog(L.x11.desktopManager.xServerListeningOnDisplayDisplay(DISPLAY))
 
             // 2. the desktop session starts; if it exits, the X server stops with it
-            _state.update { it.copy(progress = "Starting ${desktop.label}…") }
+            _state.update { it.copy(progress = L.x11.desktopManager.startingLabel(desktop.label)) }
             val settleUntil = System.currentTimeMillis() + SETTLE_MS
             while (System.currentTimeMillis() < settleUntil) {
                 delay(250)
@@ -500,7 +500,7 @@ object X11DesktopManager {
                     return@runTask
                 }
             }
-            appendLog("✓ ${desktop.label} running on display $DISPLAY")
+            appendLog(L.x11.desktopManager.labelRunningOnDisplayDisplay(desktop.label, DISPLAY))
         }
         refreshNow()
         withContext(Dispatchers.Main) { open(context) }
@@ -515,9 +515,9 @@ object X11DesktopManager {
         if (xServerPids().isEmpty()) {
             stopRequested = false
             if (!ensureXkb(install)) return false
-            _state.update { it.copy(progress = "Starting the X server…") }
+            _state.update { it.copy(progress = L.x11.desktopManager.startingTheXServer) }
             val apk = runCatching { appContext.packageManager.getApplicationInfo(X11_PACKAGE, 0).sourceDir }.getOrNull()
-                ?: run { report("Termux:X11 is not installed.", isError = true); return false }
+                ?: run { report(L.x11.desktopManager.termuxX11IsNotInstalled, isError = true); return false }
             x11Sockets.mkdirs()
             runCatching { Os.chmod(x11Tmp.absolutePath, "700".toInt(8)) }
             runCatching { Os.chmod(x11Sockets.absolutePath, "1777".toInt(8)) }
@@ -552,40 +552,40 @@ object X11DesktopManager {
                 failStart(desktop, seen = xServerPids().isNotEmpty())
                 return false
             }
-            appendLog("✓ X server listening on display $DISPLAY")
+            appendLog(L.x11.desktopManager.xServerListeningOnDisplayDisplay(DISPLAY))
         }
 
         // the socket folder into the chroot's /tmp/.X11-unix (again after a restart of the chroot)
-        _state.update { it.copy(progress = "Sharing the display with the Ubuntu chroot…") }
+        _state.update { it.copy(progress = L.x11.desktopManager.sharingTheDisplayWithTheUbuntu) }
         val bind = ChrootManager.runCtl(appContext, listOf("x11-bind", "--root", install.path, "--path", x11Sockets.absolutePath))
         if (!bind.ok) {
-            report("Could not share the display with the Ubuntu chroot: ${bind.message()}", isError = true)
+            report(L.x11.desktopManager.couldNotShareTheDisplayWith(bind.message()), isError = true)
             return false
         }
 
         // the desktop session, in the chroot as its user (it ends when the X server stops)
         val session = desktop.sessionBinary
         if (!chrootSessionRunning(install, session)) {
-            _state.update { it.copy(progress = "Starting ${desktop.label}…") }
+            _state.update { it.copy(progress = L.x11.desktopManager.startingLabel(desktop.label)) }
             val command = "export DISPLAY=$DISPLAY; d=/tmp/runtime-\$(id -u); mkdir -p \$d && chmod 700 \$d; export XDG_RUNTIME_DIR=\$d; " +
                 "mkdir -p ~/.cache; cd ~; setsid nohup ${desktop.startCommand} > ~/.cache/antigem-x11-session.log 2>&1 < /dev/null & echo started"
             val r = ChrootSetup.asUser(appContext, install, command, timeoutMs = 30_000L)
             if (!r.ok) {
-                report("Could not start ${desktop.label} in the Ubuntu chroot: ${r.message()}", isError = true)
+                report(L.x11.desktopManager.couldNotStartLabelInThe(desktop.label, r.message()), isError = true)
                 return false
             }
             delay(SETTLE_MS)
             if (!chrootSessionRunning(install, session)) {
                 val tail = ChrootSetup.asUser(appContext, install, "tail -n 20 ~/.cache/antigem-x11-session.log 2>/dev/null").out
                 if (tail.isNotEmpty()) {
-                    appendLog("End of ~/.cache/antigem-x11-session.log:")
+                    appendLog(L.x11.desktopManager.endOfCacheAntigemX11Session)
                     tail.forEach(::appendLog)
                 }
-                report("${desktop.label} stopped right after starting. The reason is at the end of the log above.", isError = true)
+                report(L.x11.desktopManager.labelStoppedRightAfterStartingThe(desktop.label), isError = true)
                 return false
             }
         }
-        appendLog("✓ ${desktop.label} running on display $DISPLAY")
+        appendLog(L.x11.desktopManager.labelRunningOnDisplayDisplay(desktop.label, DISPLAY))
         refreshNow(force = true)
         return true
     }
@@ -600,7 +600,7 @@ object X11DesktopManager {
     /** The chroot's keyboard files (xkb-data) in the app's storage, where the X server reads them: copied once. */
     private suspend fun ensureXkb(install: ChrootInstall): Boolean {
         if (File(xkbDir, "rules").isDirectory && File(xkbDir, "keycodes").isDirectory) return true
-        _state.update { it.copy(progress = "Copying the keyboard files from the Ubuntu chroot…") }
+        _state.update { it.copy(progress = L.x11.desktopManager.copyingTheKeyboardFilesFromThe) }
         val staging = File(x11Dir, "xkb.new")
         staging.deleteRecursively()
         staging.mkdirs()
@@ -623,13 +623,13 @@ object X11DesktopManager {
         val copied = File(staging, "xkb")
         if (!r.ok || !File(copied, "rules").isDirectory) {
             staging.deleteRecursively()
-            report("The Ubuntu chroot has no keyboard files (/usr/share/X11/xkb). Install the desktop (step 3) again.", isError = true)
+            report(L.x11.desktopManager.theUbuntuChrootHasNoKeyboard, isError = true)
             return false
         }
         xkbDir.deleteRecursively()
-        if (!copied.renameTo(xkbDir)) { report("Could not keep the keyboard files.", isError = true); return false }
+        if (!copied.renameTo(xkbDir)) { report(L.x11.desktopManager.couldNotKeepTheKeyboardFiles, isError = true); return false }
         staging.deleteRecursively()
-        appendLog("✓ Keyboard files copied from the Ubuntu chroot")
+        appendLog(L.x11.desktopManager.keyboardFilesCopiedFromTheUbuntu)
         return true
     }
 
@@ -637,15 +637,15 @@ object X11DesktopManager {
     private suspend fun failStart(desktop: Desktop, seen: Boolean) {
         val tail = xLogTail()
         if (tail.isNotEmpty()) {
-            appendLog("End of $LOG_FILE:")
+            appendLog(L.x11.desktopManager.endOfLogFile(LOG_FILE))
             tail.forEach(::appendLog)
         }
         // termux-x11 prints "<pid> exited, status=<n>" when the desktop session ends
         val sessionEnded = tail.any { Regex("^\\d+ (exited, status=|killed by signal)").containsMatchIn(it) }
         val what = when {
-            !seen -> "The X server did not start."
-            sessionEnded -> "${desktop.label} stopped right after starting, and the X server with it."
-            else -> "The X server stopped right after starting."
+            !seen -> L.x11.desktopManager.theXServerDidNotStart
+            sessionEnded -> L.x11.desktopManager.labelStoppedRightAfterStartingAnd(desktop.label)
+            else -> L.x11.desktopManager.theXServerStoppedRightAfter
         }
         refreshNow()
         report("$what ${reasonHint(tail)}", isError = true)
@@ -654,11 +654,11 @@ object X11DesktopManager {
     fun open(context: Context) {
         val intent = context.packageManager.getLaunchIntentForPackage(X11_PACKAGE)
         if (intent == null) {
-            report("Termux:X11 is not installed.", isError = true)
+            report(L.x11.desktopManager.termuxX11IsNotInstalled, isError = true)
             return
         }
         runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            .onFailure { report("Could not open Termux:X11: ${it.message}", isError = true) }
+            .onFailure { report(L.x11.desktopManager.couldNotOpenTermuxX11Message(it.message), isError = true) }
     }
 
     /** Closes the Termux:X11 window and stops the X server; the desktop's programs exit with it. */
@@ -684,7 +684,7 @@ object X11DesktopManager {
                 }
             }
             refreshNow(force = true)
-            report("Desktop stopped.")
+            report(L.x11.desktopManager.desktopStopped)
         } finally {
             stopRequested = false
         }
@@ -703,8 +703,8 @@ object X11DesktopManager {
             "echo max_phantom_processes=\$(/system/bin/device_config get activity_manager max_phantom_processes); " +
             "echo settings_enable_monitor_phantom_procs=\$(/system/bin/settings get global settings_enable_monitor_phantom_procs)"
         val install = chroot
-        if (install != null) chrootTask(install, "Changing the limit over adb…", "adb -s '$serial' shell '$inner'", asRoot = false, timeoutSeconds = 60)
-        else shellTask("Changing the limit over adb…", "adb -s '$serial' shell '$inner'", 60)
+        if (install != null) chrootTask(install, L.x11.desktopManager.changingTheLimitOverAdb, "adb -s '$serial' shell '$inner'", asRoot = false, timeoutSeconds = 60)
+        else shellTask(L.x11.desktopManager.changingTheLimitOverAdb, "adb -s '$serial' shell '$inner'", 60)
     }
 
     // ---------------- helpers ----------------
@@ -720,7 +720,7 @@ object X11DesktopManager {
             } catch (e: Exception) {
                 Log.e(TAG, "$task failed", e)
                 appendLog("✗ ${e.message ?: e.javaClass.simpleName}")
-                report(e.message ?: "Failed", isError = true)
+                report(e.message ?: L.x11.desktopManager.failed, isError = true)
             } finally {
                 withContext(kotlinx.coroutines.NonCancellable) { runCatching { refreshNow(force = true) } }
                 _state.update { it.copy(task = null, progress = null) }
@@ -735,7 +735,7 @@ object X11DesktopManager {
         val result = shell(command, timeoutSeconds) { line -> if (line.isNotBlank()) appendLog(line) }
         if (result.exitCode != 0) {
             report(if (ranOutOfSpace()) StorageSpace.outOfSpaceMessage()
-                else "Failed (exit ${result.exitCode}). Check the log, or run \"pkg upgrade\" in the terminal and try again.", isError = true)
+                else L.x11.desktopManager.failedExitExitcodeCheckTheLog(result.exitCode), isError = true)
         } else {
             appendLog("✓ Done")
         }
@@ -749,7 +749,7 @@ object X11DesktopManager {
         val wrapped = "( $command ) < /dev/null 2>&1"
         val r = if (asRoot) ChrootSetup.asRoot(appContext, install, wrapped, timeoutMs = timeoutSeconds * 1000, onLine = onLine)
         else ChrootSetup.asUser(appContext, install, wrapped, timeoutMs = timeoutSeconds * 1000, onLine = onLine)
-        if (!r.ok) report(if (ranOutOfSpace()) StorageSpace.outOfSpaceMessage() else "Failed (exit ${r.exitCode}). Check the log above.", isError = true)
+        if (!r.ok) report(if (ranOutOfSpace()) StorageSpace.outOfSpaceMessage() else L.x11.desktopManager.failedExitExitcodeCheckTheLog2(r.exitCode), isError = true)
         else appendLog("✓ Done")
     }
 
@@ -774,22 +774,22 @@ object X11DesktopManager {
             .header("Accept", "application/vnd.github+json")
             .build()
         http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IllegalStateException("Could not read the latest release (HTTP ${response.code}).")
+            if (!response.isSuccessful) throw IllegalStateException(L.x11.desktopManager.couldNotReadTheLatestRelease(response.code))
             val assets = JSONObject(response.body?.string().orEmpty()).optJSONArray("assets")
-                ?: throw IllegalStateException("The latest release has no files.")
+                ?: throw IllegalStateException(L.x11.desktopManager.theLatestReleaseHasNoFiles)
             (0 until assets.length()).map { assets.getJSONObject(it) }
                 .firstOrNull { it.optString("name").let { n -> n.startsWith(COMPANION_ANTIGEM) && n.endsWith("-all.deb") } }
                 ?.optString("browser_download_url")
                 ?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("The latest release has no $COMPANION_ANTIGEM .deb file.")
+                ?: throw IllegalStateException(L.x11.desktopManager.theLatestReleaseHasNoName(COMPANION_ANTIGEM))
         }
     }
 
     private suspend fun download(url: String, target: File, onProgress: (String) -> Unit) = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).header("User-Agent", userAgent()).build()
         http.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IllegalStateException("Download failed (HTTP ${response.code}).")
-            val body = response.body ?: throw IllegalStateException("Download failed (empty response).")
+            if (!response.isSuccessful) throw IllegalStateException(L.x11.desktopManager.downloadFailedHttpCode(response.code))
+            val body = response.body ?: throw IllegalStateException(L.x11.desktopManager.downloadFailedEmptyResponse)
             val total = body.contentLength()
             target.parentFile?.mkdirs()
             val partial = File(target.parentFile, target.name + ".part")

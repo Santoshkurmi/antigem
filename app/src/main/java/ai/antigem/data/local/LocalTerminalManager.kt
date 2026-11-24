@@ -18,6 +18,7 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Properties
+import ai.antigem.i18n.L
 
 /** PATH for SSH sessions; also finds the tools of AntiGem or Termux when the host is an Android phone. */
 const val UNIVERSAL_SSH_PATH =
@@ -512,7 +513,7 @@ class LocalPtySession(
             val closedWinId = windowId.trim().substringBefore(" ")
             Log.d(TAG, "[$id] Tmux window closed event: $closedWinId (assignedWin=$assignedWindowId, assignedPane=$assignedPaneId)")
             if (!assignedWindowId.isNullOrBlank() && (closedWinId == assignedWindowId || closedWinId.removePrefix("@") == assignedWindowId?.removePrefix("@"))) {
-                notifySessionClosed("Process exited")
+                notifySessionClosed(L.local.terminalManager.processExited)
             } else {
                 scheduleDebouncedInfoUpdate(50)
             }
@@ -526,14 +527,14 @@ class LocalPtySession(
             val myPane = assignedPaneId?.trim()
             Log.d(TAG, "[$id] Tmux pane exited event: $cleanPane (assigned: $myPane)")
             if (!myPane.isNullOrBlank() && (cleanPane == myPane || cleanPane.removePrefix("%") == myPane.removePrefix("%"))) {
-                notifySessionClosed("Process exited")
+                notifySessionClosed(L.local.terminalManager.processExited)
             } else {
                 scheduleDebouncedInfoUpdate(50)
             }
         },
         onExit = { reason ->
             Log.d(TAG, "[$id] Tmux exited: $reason")
-            notifySessionClosed(reason ?: "Process exited")
+            notifySessionClosed(reason ?: L.local.terminalManager.processExited)
         },
         onCommandResponse = { cmdNum, data, isError ->
             val preview =
@@ -544,7 +545,7 @@ class LocalPtySession(
                 val target = assignedPaneId ?: assignedWindowId
                 if (target != null && (str.contains("can't find") || str.contains("no such")) && str.contains(target)) {
                     Log.d(TAG, "[$id] Target $target no longer exists on remote ($str), notifying session closed")
-                    notifySessionClosed("Process exited")
+                    notifySessionClosed(L.local.terminalManager.processExited)
                 }
             } else if (data.isNotEmpty()) {
                 val str = String(data, Charsets.UTF_8)
@@ -623,7 +624,7 @@ class LocalPtySession(
             assignedPaneId = pId
         } else if (!assignedPaneId.isNullOrBlank() && !pId.isNullOrBlank() && pId != assignedPaneId) {
             Log.d(TAG, "[$id] Current pane $assignedPaneId is dead (fallback to $pId), notifying session closed")
-            notifySessionClosed("Process exited")
+            notifySessionClosed(L.local.terminalManager.processExited)
             return
         }
 
@@ -849,8 +850,8 @@ class LocalPtySession(
             Log.d(TAG, "[$id] Starting SSH connection to $sshUser@$sshHost:$sshPort (winIdx=$winIdx)...")
             if (sshHost.isBlank() || sshUser.isBlank()) {
                 notifySessionClosed(
-                    if (AuthPreferences.currentRemoteMode) "SSH is not set up. Open Settings > Servers and enter the SSH host, user and password or key."
-                    else "SSH is not set up. Open Settings > Terminal and enter the SSH host and user."
+                    if (AuthPreferences.currentRemoteMode) L.local.terminalManager.sshIsNotSetUpOpen
+                    else L.local.terminalManager.sshIsNotSetUpOpen2
                 )
                 return@withContext
             }
@@ -928,12 +929,11 @@ class LocalPtySession(
         } catch (e: Exception) {
             Log.e(TAG, "[$id] SSH session error", e)
             notifySessionClosed(
-                "SSH not connected to $sshUser@$sshHost:$sshPort. " +
-                    ai.antigem.data.remote.RemoteServerManager.friendly(e)
+                L.local.terminalManager.sshNotConnectedToSshuserSshhost(sshUser, sshHost, sshPort, ai.antigem.data.remote.RemoteServerManager.friendly(e))
             )
         } finally {
             Log.d(TAG, "[$id] SSH loop terminated")
-            notifySessionClosed(if (tmuxParser.isControlModeActive) null else "The SSH connection to $sshHost:$sshPort closed before the terminal started.")
+            notifySessionClosed(if (tmuxParser.isControlModeActive) null else L.local.terminalManager.theSshConnectionToSshhostSshport(sshHost, sshPort))
         }
     }
 
@@ -1002,7 +1002,7 @@ class LocalPtySession(
             val clip = android.content.ClipData.newPlainText("Terminal Text", text)
             clipboard?.setPrimaryClip(clip)
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                android.widget.Toast.makeText(context, "Copied text", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, L.local.terminalManager.copiedText, android.widget.Toast.LENGTH_SHORT).show()
             }
             Log.d(TAG, "Copied ${text.length} chars to clipboard")
         } catch (e: Exception) {
@@ -1019,7 +1019,7 @@ class LocalPtySession(
                 if (!text.isNullOrEmpty()) {
                     paste(text)
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        android.widget.Toast.makeText(context, "Pasted text", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, L.local.terminalManager.pastedText, android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }

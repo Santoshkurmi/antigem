@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.theme.AppTheme
 import ai.antigem.theme.BuiltInThemes
 import ai.antigem.theme.ThemeManager
+import ai.antigem.i18n.L
 
 /**
  * Settings → Themes: pick the light theme and the dark theme from previews of every built-in and custom theme.
@@ -49,13 +50,12 @@ fun ThemeGallery(cardBg: Color, themeMode: String, onSetThemeMode: (String) -> U
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        GalleryHeader("Light theme", "Used in Light mode, and by Auto when the system is light.")
+        GalleryHeader(L.settings.themeGallery.lightTheme, L.settings.themeGallery.usedInLightModeAndBy)
         ThemeGrid(all.filter { !it.dark }, lightId, cardBg, ::pick) { toDelete = it }
-        GalleryHeader("Dark theme", "Used in Dark mode, and by Auto when the system is dark.")
+        GalleryHeader(L.settings.themeGallery.darkTheme, L.settings.themeGallery.usedInDarkModeAndBy)
         ThemeGrid(all.filter { it.dark }, darkId, cardBg, ::pick) { toDelete = it }
         Text(
-            "Make your own: add the Theme preset in MCP Servers (or Claude Code → MCP) and ask any chat, e.g. " +
-                "“create a neon cyberpunk dark theme and apply it”. Jarvis can switch themes by voice too.",
+            L.settings.themeGallery.makeYourOwnAddTheTheme,
             fontSize = 11.5.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
     }
@@ -64,9 +64,9 @@ fun ThemeGallery(cardBg: Color, themeMode: String, onSetThemeMode: (String) -> U
         AlertDialog(
             onDismissRequest = { toDelete = null },
             title = { Text("Delete “${t.name}”?") },
-            text = { Text("This custom theme is removed. If it is in use, the default theme takes its place.") },
-            confirmButton = { TextButton(onClick = { ThemeManager.deleteCustom(t.id); toDelete = null }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Cancel") } }
+            text = { Text(L.settings.themeGallery.thisCustomThemeIsRemovedIf) },
+            confirmButton = { TextButton(onClick = { ThemeManager.deleteCustom(t.id); toDelete = null }) { Text(L.common.delete) } },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -149,7 +149,7 @@ internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: 
                         .border(1.5.dp, col("background"), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Star, "Default theme", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(11.dp))
+                    Icon(Icons.Filled.Star, L.settings.themeGallery.defaultTheme, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(11.dp))
                 }
             }
             // a custom theme: a small brush in the same corner (a custom theme is never the default, so the two never
@@ -161,7 +161,7 @@ internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: 
                         .border(1.5.dp, col("background"), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Brush, "Custom theme", tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(11.dp))
+                    Icon(Icons.Filled.Brush, L.settings.themeGallery.customTheme, tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(11.dp))
                 }
             }
         }
@@ -171,11 +171,11 @@ internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: 
                     color = MaterialTheme.colorScheme.onSurface)
             }
             if (onDelete != null) {
-                Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                Icon(Icons.Outlined.Delete, L.common.delete, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                     modifier = Modifier.size(18.dp).clip(CircleShape).clickable { onDelete() })
                 Spacer(Modifier.width(4.dp))
             }
-            if (selected) Icon(Icons.Filled.CheckCircle, "In use", tint = accent, modifier = Modifier.size(18.dp))
+            if (selected) Icon(Icons.Filled.CheckCircle, L.common.inUse, tint = accent, modifier = Modifier.size(18.dp))
         }
     }
 }

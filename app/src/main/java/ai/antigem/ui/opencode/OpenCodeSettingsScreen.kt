@@ -95,6 +95,7 @@ import ai.antigem.ui.components.OpenCodeAccent
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import ai.antigem.i18n.L
 
 /** A built-inn OpenCode provider (integration) and the saved connections the user made for it. */
 private data class Integration(val id: String, val name: String, val keyLogin: Boolean, val envNames: List<String>, val connections: List<Pair<String, String>>)
@@ -103,12 +104,15 @@ private fun toast(msg: String, ok: Boolean = true) =
     AppToastHelper.showToast(msg, if (ok) ChatToastType.SUCCESS else ChatToastType.ERROR)
 
 /** The pages of Settings → OpenCode (each opens from the OpenCode row list). */
-enum class OpenCodeSettingsPage(val title: String, val subtitle: String) {
-    SERVER("OpenCode CLI", "Install, update and restart OpenCode"),
-    DEFAULTS("Permissions", "What OpenCode asks before acting, and the agent of new chats"),
-    PROVIDERS("Custom providers", "Sign in or add an API key, or add any OpenAI- or Anthropic-compatible API manually"),
-    MCP("MCP servers", "Tools OpenCode can call: presets and your own servers"),
-    SKILLS("Skills", "Add skills from GitHub, update or remove them")
+enum class OpenCodeSettingsPage(private val titleText: () -> String, private val subtitleText: () -> String) {
+    SERVER({ L.opencode.settings.opencodeCli }, { L.opencode.settings.installUpdateAndRestartOpencode }),
+    DEFAULTS({ L.common.permissions }, { L.opencode.settings.whatOpencodeAsksBeforeActingAnd }),
+    PROVIDERS({ L.opencode.settings.customProviders }, { L.opencode.settings.signInOrAddAnApi }),
+    MCP({ L.common.mcpServers }, { L.opencode.settings.toolsOpencodeCanCallPresetsAnd }),
+    SKILLS({ L.common.skills }, { L.opencode.settings.addSkillsFromGithubUpdateOr })
+;
+    val title: String get() = titleText()
+    val subtitle: String get() = subtitleText()
 }
 
 /** Settings → OpenCode: one row per page, each with its current state. */
@@ -138,7 +142,7 @@ fun OpenCodeSettingsGroup(backend: OpenCodeChatBackend, cardBg: Color, onOpen: (
             listOf(
                 row(OpenCodeSettingsPage.DEFAULTS, Icons.Outlined.Tune, openCodeModeLabel(mode)),
                 row(OpenCodeSettingsPage.PROVIDERS, Icons.Outlined.Cloud,
-                    (connected.size + (endpoints ?: 0)).takeIf { it > 0 }?.let { "$it connected" } ?: if (models.isNotEmpty()) "Free models" else null),
+                    (connected.size + (endpoints ?: 0)).takeIf { it > 0 }?.let { "$it connected" } ?: if (models.isNotEmpty()) L.opencode.settings.freeModels else null),
                 row(OpenCodeSettingsPage.MCP, Icons.Outlined.Hub, mcp?.takeIf { it > 0 }?.let { "$it servers" }),
                 row(OpenCodeSettingsPage.SKILLS, Icons.Outlined.Psychology)
             )
@@ -223,13 +227,13 @@ fun OpenCodeSettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Text("OpenCode", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(
-                        listOfNotNull(state.label, status?.version, if (status?.running == true) "server running" else null).joinToString(" · "),
+                        listOfNotNull(state.label, status?.version, if (status?.running == true) L.opencode.settings.serverRunning else null).joinToString(" · "),
                         fontSize = 12.sp,
                         color = if (state == OpenCodeState.READY) OpenCodeAccent else MaterialTheme.colorScheme.error
                     )
                 }
                 if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+                else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
             }
             status?.binary?.let {
                 Spacer(Modifier.height(6.dp))
@@ -238,8 +242,7 @@ fun OpenCodeSettingsScreen(
             if (state == OpenCodeState.NOT_INSTALLED) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "OpenCode is not installed on the server (on this phone when you use the local server). " +
-                        "Install it here: the app downloads the official build (~250 MB) into ~/.opencode/bin.",
+                    L.opencode.settings.opencodeIsNotInstalledOnThe,
                     fontSize = 12.5.sp, lineHeight = 17.sp
                 )
             }
@@ -252,10 +255,10 @@ fun OpenCodeSettingsScreen(
                             enabled = !jobRunning,
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = OpenCodeAccent, contentColor = Color.White)
-                        ) { Text(if (jobRunning) "Installing…" else "Install OpenCode") }
+                        ) { Text(if (jobRunning) L.common.installing else L.opencode.settings.installOpencode) }
                     } else {
                         OutlinedButton(onClick = { backend.startCliJob("update") }, enabled = !jobRunning, shape = RoundedCornerShape(12.dp)) {
-                            Text(if (jobRunning) "Checking…" else "Check for updates")
+                            Text(if (jobRunning) L.common.checking else L.common.checkForUpdates)
                         }
                     }
                     if (jobRunning) {
@@ -266,7 +269,7 @@ fun OpenCodeSettingsScreen(
                 job?.let { j ->
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        (if (j.kind == "update") "Update" else "Install") + ": " + when {
+                        (if (j.kind == "update") L.common.update else L.common.install) + ": " + when {
                             j.running -> "running…"
                             j.exit_code == 0 -> "done"
                             else -> "failed"
@@ -300,7 +303,7 @@ fun OpenCodeSettingsScreen(
                         restarting = true
                         backend.restartServer { err ->
                             restarting = false
-                            if (err == null) toast("OpenCode restarted") else toast("Restart failed: $err", ok = false)
+                            if (err == null) toast(L.opencode.settings.opencodeRestarted) else toast(L.opencode.settings.restartFailedErr(err), ok = false)
                             scope.launch { reload() }
                         }
                     },
@@ -309,10 +312,10 @@ fun OpenCodeSettingsScreen(
                 ) {
                     if (restarting) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp) else Icon(Icons.Outlined.Refresh, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(if (status?.running == true) "Restart OpenCode" else "Start OpenCode")
+                    Text(if (status?.running == true) L.opencode.settings.restartOpencode else L.opencode.settings.startOpencode)
                 }
                 Text(
-                    "Running replies stop when OpenCode restarts.",
+                    L.opencode.settings.runningRepliesStopWhenOpencodeRestarts,
                     fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -320,7 +323,7 @@ fun OpenCodeSettingsScreen(
 
         // ---- defaults
         if (page == OpenCodeSettingsPage.DEFAULTS) {
-        SectionTitle("Approvals")
+        SectionTitle(L.common.approvals)
         ClaudeCard {
             listOf(OpenCodePreferences.MODE_ASK, OpenCodePreferences.MODE_AUTO, OpenCodePreferences.MODE_DEFAULT).forEach { m ->
                 Row(
@@ -335,11 +338,11 @@ fun OpenCodeSettingsScreen(
                 }
             }
             Text(
-                "Applies to new chats and to the chat on screen.",
+                L.opencode.settings.appliesToNewChatsAndTo,
                 fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp)
             )
         }
-        SectionTitle("Agent for new chats")
+        SectionTitle(L.opencode.settings.agentForNewChats)
         ClaudeCard {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 agents.ifEmpty {
@@ -349,7 +352,7 @@ fun OpenCodeSettingsScreen(
                 }
             }
             Text(
-                "Build makes changes; Plan only reads and plans. Switch any time from the chip above the message box.",
+                L.opencode.settings.buildMakesChangesPlanOnlyReads,
                 fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 6.dp)
             )
         }
@@ -362,10 +365,9 @@ fun OpenCodeSettingsScreen(
         // ---- custom endpoints
         // ---- manual: any OpenAI- / Anthropic-compatible API by its address (on the same page as the providers)
         if (page == OpenCodeSettingsPage.PROVIDERS) ClaudeCard {
-            Text("Manual", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(L.common.manual, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text(
-                "Any OpenAI-compatible API (Ollama, LM Studio, vLLM, LiteLLM, a company gateway…) or an Anthropic-compatible one, " +
-                    "added by its address. It must be reachable from the server.",
+                L.opencode.settings.anyOpenaiCompatibleApiOllamaLm,
                 fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
             customs.forEach { p ->
@@ -376,27 +378,27 @@ fun OpenCodeSettingsScreen(
                     Column(Modifier.weight(1f)) {
                         Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
                         Text(
-                            "${if (p.kind == "anthropic") "Anthropic" else "OpenAI"}-compatible · ${p.models.size} model${if (p.models.size == 1) "" else "s"}" +
-                                p.models.count { it.images }.let { if (it > 0) " · $it with images" else "" } +
-                                (p.api_key_hint?.let { " · key $it" } ?: if (p.has_api_key) " · key set" else ""),
+                            L.opencode.settings.kindCompatibleCountModels(p.models.size, if (p.kind == "anthropic") "Anthropic" else "OpenAI") +  // i18n: keep (brand)
+                                p.models.count { it.images }.let { if (it > 0) L.opencode.settings.valueWithImages(it) else "" } +
+                                (p.api_key_hint?.let { L.opencode.settings.keyHint(it) } ?: if (p.has_api_key) L.opencode.settings.keySet else ""),
                             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                         )
                         Text(p.base_url, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    IconButton(onClick = { editing = p }) { Icon(Icons.Outlined.Edit, "Edit") }
+                    IconButton(onClick = { editing = p }) { Icon(Icons.Outlined.Edit, L.common.edit) }
                     IconButton(onClick = {
                         scope.launch {
                             backend.client.deleteCustomProvider(p.id)
-                                .onSuccess { toast("${p.name} removed"); backend.refreshModels() }
-                                .onFailure { toast("Could not remove: ${it.message}", ok = false) }
+                                .onSuccess { toast(L.opencode.settings.nameRemoved(p.name)); backend.refreshModels() }
+                                .onFailure { toast(L.opencode.settings.couldNotRemoveMessage(it.message), ok = false) }
                             reload()
                         }
-                    }) { Icon(Icons.Outlined.Delete, "Remove", tint = MaterialTheme.colorScheme.error) }
+                    }) { Icon(Icons.Outlined.Delete, L.common.remove, tint = MaterialTheme.colorScheme.error) }
                 }
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { editing = OpenCodeCustomProvider() }, shape = RoundedCornerShape(12.dp)) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Add manually")
+                Icon(Icons.Outlined.Add, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.opencode.settings.addManually)
             }
         }
         if (page == OpenCodeSettingsPage.MCP) OpenCodeMcpPage(backend, onOpenRea, onOpenReaGroups)
@@ -426,7 +428,9 @@ private fun SectionTitle(text: String) {
 }
 
 /** Which of a provider's models the list shows. */
-private enum class ModelFilter(val label: String) { ALL("All"), ADDED("Added"), IMAGES("Images"), REASONING("Reasoning") }
+private enum class ModelFilter(private val labelText: () -> String) { ALL({ L.opencode.settings.all }), ADDED({ L.common.added }), IMAGES({ L.opencode.settings.images }), REASONING({ L.common.reasoning }) ;
+    val label: String get() = labelText()
+}
 
 /**
  * Adding or editing a custom provider. Nearly full screen: an endpoint can list hundreds of models (OpenRouter has over
@@ -480,7 +484,7 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                 .onSuccess { list ->
                     fetched = list.distinctBy { it.id }
                     when {
-                        list.isEmpty() -> error = "The endpoint listed no models."
+                        list.isEmpty() -> error = L.opencode.settings.theEndpointListedNoModels
                         // nothing chosen yet (a new provider): every model the endpoint lists is on; untick the unwanted ones
                         models.isEmpty() -> fetched.forEach { models[it.id] = it }
                         // models already added keep the user's choices: what was found only turns things on and fills in limits
@@ -526,38 +530,38 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
             Column(Modifier.fillMaxSize()) {
                 // title and Save stay put while the list scrolls
                 Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close") }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, L.common.close) }
                     Text(
-                        if (isNew) "Add a custom provider" else "Edit ${initial.name}",
+                        if (isNew) L.opencode.settings.addACustomProvider else L.opencode.settings.editName(initial.name),
                         fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
                     )
                     Button(
                         onClick = { save() },
                         enabled = !saving && name.isNotBlank() && baseUrl.isNotBlank() && models.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(containerColor = OpenCodeAccent)
-                    ) { Text(if (saving) "Saving…" else "Save") }
+                    ) { Text(if (saving) L.common.saving else L.common.save) }
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)) }
 
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
                     item(key = "fields") {
                         Column {
-                            OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(name, { name = it }, label = { Text(L.common.name) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(selected = kind == "openai", onClick = { kind = "openai" }, label = { Text("OpenAI-compatible") })
-                                FilterChip(selected = kind == "anthropic", onClick = { kind = "anthropic" }, label = { Text("Anthropic") })
+                                FilterChip(selected = kind == "anthropic", onClick = { kind = "anthropic" }, label = { Text(L.opencode.settings.anthropic) })
                             }
                             Spacer(Modifier.height(4.dp))
                             OutlinedTextField(
-                                baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                baseUrl, { baseUrl = it }, label = { Text(L.opencode.settings.baseUrl) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                                 placeholder = { Text(if (kind == "anthropic") "https://api.example.com/v1" else "http://localhost:11434/v1") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                             )
                             Spacer(Modifier.height(8.dp))
                             OutlinedTextField(
                                 apiKey, { apiKey = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                                label = { Text(if (!isNew && initial.has_api_key) "API key (blank keeps ${initial.api_key_hint ?: "the saved one"})" else "API key (optional for local servers)") },
+                                label = { Text(if (!isNew && initial.has_api_key) L.opencode.settings.apiKeyBlankKeepsValue(initial.api_key_hint ?: L.opencode.settings.theSavedOne) else L.opencode.settings.apiKeyOptionalForLocalServers) },
                                 visualTransformation = PasswordVisualTransformation(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                             )
@@ -566,29 +570,28 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                     item(key = "models-header") {
                         Column(Modifier.padding(top = 14.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Models", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                                Text(L.common.models, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                                 if (fetching) CircularProgressIndicator(Modifier.size(16.dp).padding(end = 2.dp), strokeWidth = 2.dp, color = OpenCodeAccent)
                                 TextButton(onClick = { fetch() }, enabled = baseUrl.isNotBlank() && !fetching) {
                                     Icon(Icons.Outlined.Refresh, null, Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text(if (fetching) "Fetching…" else "Fetch from endpoint")
+                                    Text(if (fetching) L.opencode.settings.fetching else L.opencode.settings.fetchFromEndpoint)
                                 }
                             }
                             Text(
-                                "Tick the models to add. For each added one, set what it can do: Images lets you attach pictures, Reasoning shows " +
-                                    "its thinking, Tools lets it edit files and run commands. Fetching fills these in where the endpoint or models.dev knows the model.",
+                                L.opencode.settings.tickTheModelsToAddFor,
                                 fontSize = 11.sp, lineHeight = 14.sp, color = dim
                             )
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
                                 OutlinedTextField(
                                     newModel, { newModel = it }, singleLine = true, modifier = Modifier.weight(1f),
-                                    placeholder = { Text("Add a model id by hand, e.g. llama3.1", fontSize = 13.sp) }
+                                    placeholder = { Text(L.opencode.settings.addAModelIdByHand, fontSize = 13.sp) }
                                 )
                                 IconButton(onClick = {
                                     val id = newModel.trim()
                                     if (id.isNotBlank() && !models.containsKey(id)) models[id] = OpenCodeCustomModel(id)
                                     newModel = ""
-                                }) { Icon(Icons.Outlined.Add, "Add model") }
+                                }) { Icon(Icons.Outlined.Add, L.opencode.settings.addModel) }
                             }
                         }
                     }
@@ -598,7 +601,7 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                                 OutlinedTextField(
                                     value = query, onValueChange = { query = it }, singleLine = true, shape = RoundedCornerShape(12.dp),
                                     leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
-                                    placeholder = { Text("Search ${rows.size} models", fontSize = 13.sp) },
+                                    placeholder = { Text(L.opencode.settings.searchRowscountModels(rows.size), fontSize = 13.sp) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -616,14 +619,14 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                             val allShownAdded = shown.isNotEmpty() && shown.all { models.containsKey(it.id) }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "${models.size} added" + if (shown.size != rows.size) " · ${shown.size} shown" else "",
+                                    L.opencode.settings.countAdded(models.size) + if (shown.size != rows.size) L.opencode.settings.countShown(shown.size) else "",
                                     fontSize = 11.5.sp, color = dim, modifier = Modifier.weight(1f)
                                 )
                                 TextButton(onClick = {
                                     if (allShownAdded) shown.forEach { models.remove(it.id) }
                                     else shown.forEach { if (!models.containsKey(it.id)) models[it.id] = it }
                                 }, enabled = shown.isNotEmpty()) {
-                                    Text(if (allShownAdded) "Select none" else "Select all", fontSize = 12.sp)
+                                    Text(if (allShownAdded) L.opencode.settings.selectNone else L.common.selectAll, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -637,7 +640,7 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
                         )
                     }
                     if (rows.isNotEmpty() && shown.isEmpty()) item(key = "none") {
-                        Text("No models match.", fontSize = 12.5.sp, color = dim, modifier = Modifier.padding(vertical = 12.dp))
+                        Text(L.opencode.settings.noModelsMatch, fontSize = 12.5.sp, color = dim, modifier = Modifier.padding(vertical = 12.dp))
                     }
                 }
             }
@@ -662,7 +665,7 @@ private fun ProviderModelRow(model: OpenCodeCustomModel, added: OpenCodeCustomMo
                     cur.context_length?.takeIf { it > 0 }?.let { "${it / 1000}K" },
                     if (added == null) "images".takeIf { cur.images } else null,
                     if (added == null) "reasoning".takeIf { cur.reasoning } else null,
-                    if (added == null) "no tools".takeIf { cur.no_tools } else null
+                    if (added == null) L.opencode.settings.noTools.takeIf { cur.no_tools } else null
                 )
                 if (facts.isNotEmpty()) Text(facts.joinToString(" · "), fontSize = 10.5.sp, color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -676,12 +679,12 @@ private fun ProviderModelRow(model: OpenCodeCustomModel, added: OpenCodeCustomMo
 @Composable
 private fun ModelCapabilityChips(model: OpenCodeCustomModel, onChange: (OpenCodeCustomModel) -> Unit, modifier: Modifier = Modifier) {
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        CapabilityChip("Images", Icons.Outlined.Image, model.images) { onChange(model.copy(images = it)) }
-        CapabilityChip("Reasoning", Icons.Outlined.Psychology, model.reasoning) { onChange(model.copy(reasoning = it)) }
-        CapabilityChip("Tools", Icons.Outlined.Build, !model.no_tools) { onChange(model.copy(no_tools = !it)) }
+        CapabilityChip(L.opencode.settings.images, Icons.Outlined.Image, model.images) { onChange(model.copy(images = it)) }
+        CapabilityChip(L.common.reasoning, Icons.Outlined.Psychology, model.reasoning) { onChange(model.copy(reasoning = it)) }
+        CapabilityChip(L.opencode.settings.tools, Icons.Outlined.Build, !model.no_tools) { onChange(model.copy(no_tools = !it)) }
         model.detected?.takeIf { it.isNotBlank() }?.let {
             Text(
-                "auto: $it", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                L.opencode.settings.autoValue(it), fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                 modifier = Modifier.align(Alignment.CenterVertically)
             )
         }

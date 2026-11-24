@@ -7,6 +7,7 @@ import ai.antigem.data.daemon.IdeDaemonManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import ai.antigem.i18n.L
 
 /** Opens bridge files and folders in the IDE, with the size and file-type checks the editor needs. */
 object IdeFileLauncher {
@@ -36,15 +37,15 @@ object IdeFileLauncher {
     }
 
     private fun tooLarge(name: String, size: Long, limit: Long, what: String) = Outcome.Failed(
-        "$name is too large to open in the IDE (${FileKinds.formatSize(size)}). The IDE opens $what up to ${FileKinds.formatSize(limit)}.",
+        L.files.ideFileLauncher.nameIsTooLargeToOpen2(name, FileKinds.formatSize(size), what, FileKinds.formatSize(limit)),
         tooLarge = true
     )
 
     private fun sizeProblem(name: String, size: Long, textual: Boolean): Outcome.Failed? = when {
-        isViewerImage(name) -> if (size > MAX_IMAGE_BYTES) tooLarge(name, size, MAX_IMAGE_BYTES, "pictures") else null
-        size > MAX_TEXT_BYTES -> tooLarge(name, size, MAX_TEXT_BYTES, "text files")
+        isViewerImage(name) -> if (size > MAX_IMAGE_BYTES) tooLarge(name, size, MAX_IMAGE_BYTES, L.files.ideFileLauncher.pictures) else null
+        size > MAX_TEXT_BYTES -> tooLarge(name, size, MAX_TEXT_BYTES, L.files.ideFileLauncher.textFiles)
         !textual && size > MAX_BINARY_BYTES -> Outcome.Failed(
-            "$name is not a text file and too large to open in the editor (${FileKinds.formatSize(size)}). Open it with another app instead.",
+            L.files.ideFileLauncher.nameIsNotATextFile(name, FileKinds.formatSize(size)),
             tooLarge = true
         )
         else -> null
@@ -78,9 +79,9 @@ object IdeFileLauncher {
         val limit = if (isText) MAX_TEXT_BYTES else MAX_BINARY_BYTES
         return when (val r = IdeApiClient.readFileLimited(path, limit)) {
             is FileReadOutcome.TooLarge ->
-                if (r.size > 0) sizeProblem(name, r.size, isText) ?: tooLarge(name, r.size, limit, "files like this")
-                else Outcome.Failed("$name is too large to open in the IDE (over ${FileKinds.formatSize(limit)}).", tooLarge = true)
-            is FileReadOutcome.Failed -> Outcome.Failed("Cannot open $name. The IDE bridge is offline or the file is unreadable.")
+                if (r.size > 0) sizeProblem(name, r.size, isText) ?: tooLarge(name, r.size, limit, L.files.ideFileLauncher.filesLikeThis)
+                else Outcome.Failed(L.files.ideFileLauncher.nameIsTooLargeToOpen(name, FileKinds.formatSize(limit)), tooLarge = true)
+            is FileReadOutcome.Failed -> Outcome.Failed(L.files.ideFileLauncher.cannotOpenNameTheIdeBridge(name))
             is FileReadOutcome.Ok -> {
                 if (r.result.category != "text" && !force) return Outcome.NeedsConfirm(r.result.mimeType)
                 IdeDaemonManager.openOrSelectTab(path, name, r.result.content)
@@ -100,7 +101,7 @@ object IdeFileLauncher {
         val content = if (isViewerImage(name) && !textual) "" else {
             if (!textual && !force) return Outcome.NeedsConfirm(mimeType)
             withContext(Dispatchers.IO) { runCatching { File(path).readText() }.getOrNull() }
-                ?: return Outcome.Failed("Cannot read $name")
+                ?: return Outcome.Failed(L.files.ideFileLauncher.cannotReadName(name))
         }
         IdeDaemonManager.openOrSelectTab(path, name, content)
         return Outcome.Opened

@@ -33,6 +33,7 @@ import org.json.JSONObject
 import java.util.UUID
 import ai.antigem.data.agent.ChatSessionStore
 import kotlinx.coroutines.CoroutineScope
+import ai.antigem.i18n.L
 
 /** Antigravity global security settings, permission grants and project presets. Moved out of ChatViewModel unchanged. */
 class AgySecuritySettingsManager(
@@ -71,7 +72,7 @@ class AgySecuritySettingsManager(
                 _globalSecuritySettings.value = globalRes.getOrNull()
                 _globalSettingsError.value = null
             } else {
-                val err = globalRes.exceptionOrNull()?.message ?: "Failed to connect to AGY Hub"
+                val err = globalRes.exceptionOrNull()?.message ?: L.agent.agySecuritySettingsManager.failedToConnectToAgyHub
                 _globalSettingsError.value = err
                 _globalSecuritySettings.value = null
             }
@@ -119,7 +120,7 @@ class AgySecuritySettingsManager(
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
-                _conversationError.value = "Failed to save permission grant: ${res.exceptionOrNull()?.message}"
+                _conversationError.value = L.agent.agySecuritySettingsManager.failedToSavePermissionGrantValue(res.exceptionOrNull()?.message)
                 loadSecurityAndProjectSettings()
             }
         }
@@ -147,7 +148,7 @@ class AgySecuritySettingsManager(
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
-                _conversationError.value = "Failed to remove permission grant: ${res.exceptionOrNull()?.message}"
+                _conversationError.value = L.agent.agySecuritySettingsManager.failedToRemovePermissionGrantValue(res.exceptionOrNull()?.message)
                 loadSecurityAndProjectSettings()
             }
         }
@@ -181,7 +182,7 @@ class AgySecuritySettingsManager(
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
-                _conversationError.value = "Failed to update permission grant: ${res.exceptionOrNull()?.message}"
+                _conversationError.value = L.agent.agySecuritySettingsManager.failedToUpdatePermissionGrantValue(res.exceptionOrNull()?.message)
                 loadSecurityAndProjectSettings()
             }
         }

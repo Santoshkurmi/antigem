@@ -6,6 +6,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
+import ai.antigem.i18n.L
 
 /**
  * Works out what a tapped file path is before opening it: a folder, a missing file, text (opens in the editor) or
@@ -46,7 +47,7 @@ object FileProbe {
                     Result.Found(s.path.ifBlank { path }, name, s.size, textual, mime, local = false)
                 }
             },
-            onFailure = { Result.Unavailable(it.message?.takeIf { m -> m.isNotBlank() } ?: "Cannot open $name") }
+            onFailure = { Result.Unavailable(it.message?.takeIf { m -> m.isNotBlank() } ?: L.files.fileProbe.cannotOpenName(name)) }
         )
     }
 

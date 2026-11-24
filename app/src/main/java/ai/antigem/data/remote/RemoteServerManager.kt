@@ -27,6 +27,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
+import ai.antigem.i18n.L
 
 /**
  * Remote mode: the IDE bridge and the agents run on a server (VPS) and the app manages them over SSH.
@@ -47,7 +48,7 @@ object RemoteServerManager {
 
     data class SshState(val connected: Boolean, val message: String)
 
-    private val _ssh = MutableStateFlow(SshState(false, "Not connected"))
+    private val _ssh = MutableStateFlow(SshState(false, L.remote.serverManager.notConnected))
     val sshState: StateFlow<SshState> = _ssh.asStateFlow()
 
     /** What the manager is doing right now ("Uploading bridge 45%"). Empty when idle. */
@@ -143,13 +144,13 @@ object RemoteServerManager {
     private suspend fun connectControl(): Session = connectLock.withLock { withContext(Dispatchers.IO) {
         val ctx = appContext ?: throw IllegalStateException("App not ready")
         control?.takeIf { it.isConnected }?.let { return@withContext it }
-        val t = target(ctx) ?: throw IllegalStateException("Enter the SSH host, user and a password or key in Settings > Server")
-        _ssh.value = SshState(false, "Connecting to ${t.user}@${t.host}:${t.port}…")
+        val t = target(ctx) ?: throw IllegalStateException(L.remote.serverManager.enterTheSshHostUserAnd)
+        _ssh.value = SshState(false, L.remote.serverManager.connectingToUserHostPort(t.user, t.host, t.port))
         val s = SshSessionFactory.open(t.host, t.port, t.user, t.pass, connectTimeoutMs = 12_000, keepAliveMs = 20_000)
         control = s
         // a paired PC: its bridge token may have changed since (read over this login)
         if (AuthPreferences.pcOverride != null) ai.antigem.data.pc.PcConnect.afterConnect(s)
-        _ssh.value = SshState(true, "Connected to ${AuthPreferences.pcOverride?.pcName ?: "${t.user}@${t.host}"}")
+        _ssh.value = SshState(true, L.remote.serverManager.connectedToValue(AuthPreferences.pcOverride?.pcName ?: "${t.user}@${t.host}"))
         AdbTunnel.onNewSession()
         syncTunnels(s)
         s
@@ -166,22 +167,22 @@ object RemoteServerManager {
         try { control?.disconnect() } catch (_: Exception) {}
         control = null
         _tunnels.value = emptyList()
-        _ssh.value = SshState(false, "Not connected")
+        _ssh.value = SshState(false, L.remote.serverManager.notConnected)
     }
 
     internal fun friendly(e: Throwable): String {
         val m = e.message.orEmpty()
         return when {
             m.contains("Auth fail", true) || m.contains("Auth cancel", true) ->
-                "SSH login failed. Check the user and password, or the private key."
+                L.remote.serverManager.sshLoginFailedCheckTheUser
             m.contains("HostKey has been changed", true) || m.contains("reject HostKey", true) ->
-                "The server's SSH host key changed. If you reinstalled the server, use \"Forget saved host key\" in Settings > Server."
+                L.remote.serverManager.theServersSshHostKeyChanged
             m.contains("timeout", true) || m.contains("timed out", true) ->
-                "SSH connection timed out. Check the host, the SSH port and the firewall."
-            m.contains("refused", true) -> "SSH connection refused. Is sshd running on that port?"
-            m.contains("UnknownHost", true) || m.contains("unresolved", true) -> "Cannot find that host name."
+                L.remote.serverManager.sshConnectionTimedOutCheckThe
+            m.contains("refused", true) -> L.remote.serverManager.sshConnectionRefusedIsSshdRunning
+            m.contains("UnknownHost", true) || m.contains("unresolved", true) -> L.remote.serverManager.cannotFindThatHostName
             m.contains("invalid privatekey", true) || m.contains("passphrase", true) ->
-                "The SSH private key could not be read (wrong format or passphrase)."
+                L.remote.serverManager.theSshPrivateKeyCouldNot
             else -> m.ifBlank { e.javaClass.simpleName }
         }
     }
@@ -362,8 +363,8 @@ object RemoteServerManager {
     }
 
     private fun unreachableHint(): String =
-        if (AuthPreferences.currentRemoteTunnel) "Check the SSH tunnel in Settings > Servers (the bridge port in the address must be the port it listens on at the server)."
-        else "Check the reverse proxy, the firewall and the URL."
+        if (AuthPreferences.currentRemoteTunnel) L.remote.serverManager.checkTheSshTunnelInSettings
+        else L.remote.serverManager.checkTheReverseProxyTheFirewall
 
     private suspend fun bridgeReachable(): Boolean =
         AgyBridgeService.instance.checkServerHealth(AuthPreferences.currentBridgeHttpUrl)
@@ -393,7 +394,7 @@ object RemoteServerManager {
 
     private fun serverHome(s: Session): String {
         val (_, home) = exec(s, "printf %s \"\$HOME\"")
-        if (home.isBlank()) throw IllegalStateException("Could not read the server's home directory.")
+        if (home.isBlank()) throw IllegalStateException(L.remote.serverManager.couldNotReadTheServersHome)
         return home.trim().trimEnd('/')
     }
 
@@ -409,7 +410,7 @@ object RemoteServerManager {
      */
     private fun ensureBridgeBinary(context: Context, s: Session, home: String): String {
         val path = expandHome(effectiveBridgeBin(AuthPreferences(context)), home)
-        _detail.value = "Checking the bridge on the server…"
+        _detail.value = L.remote.serverManager.checkingTheBridgeOnTheServer
         val (_, state) = exec(
             s,
             "p=${q(path)}; if [ ! -e \"\$p\" ]; then echo missing; elif [ -d \"\$p\" ]; then echo dir; " +
@@ -417,18 +418,17 @@ object RemoteServerManager {
         )
         when (state.trim().lines().lastOrNull()) {
             "ok" -> return path
-            "dir" -> throw IllegalStateException("The bridge path on the server is a folder, not a file: $path")
-            "noexec" -> throw IllegalStateException("The bridge on the server is not executable. Run on the server: chmod +x $path")
+            "dir" -> throw IllegalStateException(L.remote.serverManager.theBridgePathOnTheServer(path))
+            "noexec" -> throw IllegalStateException(L.remote.serverManager.theBridgeOnTheServerIs(path))
             else -> {
-                val arch = exec(s, "uname -m").second.trim().ifBlank { "unknown CPU" }
+                val arch = exec(s, "uname -m").second.trim().ifBlank { L.remote.serverManager.unknownCpu }
                 val build = when (arch) {
                     "x86_64", "amd64" -> "agy_ide_bridge_linux_amd64"
                     "aarch64", "arm64" -> "agy_ide_bridge_linux_arm64"
-                    else -> "a Linux build for $arch"
+                    else -> L.remote.serverManager.aLinuxBuildForArch(arch)
                 }
                 throw IllegalStateException(
-                    "The bridge is not on the server. Copy $build there yourself as $path and make it executable " +
-                        "(chmod +x). The app does not upload it. Server CPU: $arch."
+                    L.remote.serverManager.theBridgeIsNotOnThe(build, path, arch)
                 )
             }
         }
@@ -551,7 +551,7 @@ object RemoteServerManager {
             }
             LocalServerManager.publishRemoteStatus(LocalServerStatus.Starting)
             try {
-                _detail.value = "Connecting over SSH…"
+                _detail.value = L.remote.serverManager.connectingOverSsh
                 val s = session()
                 val p = plan(context)
                 val prefs = AuthPreferences(context)
@@ -586,14 +586,14 @@ object RemoteServerManager {
                 val codexPath = agentPathOrNull(s, expandHome(effectiveCodexBin(prefs), home))
 
                 // Never launch over an old copy: graceful on a restart, only leftovers on a plain start
-                _detail.value = if (force) "Stopping the old bridge…" else "Starting the bridge…"
+                _detail.value = if (force) L.remote.serverManager.stoppingTheOldBridge else L.remote.serverManager.startingTheBridge
                 stopServerProcesses(s, context, graceful = force)
 
-                _detail.value = "Starting the bridge…"
+                _detail.value = L.remote.serverManager.startingTheBridge
                 val (code, out) = exec(s, launchScript(context, bin, agyPath, claudePath, openCodePath, codexPath), 30_000)
-                if (code != 0) throw IllegalStateException("Could not start the bridge: $out")
+                if (code != 0) throw IllegalStateException(L.remote.serverManager.couldNotStartTheBridgeOut(out))
 
-                _detail.value = "Waiting for the bridge…"
+                _detail.value = L.remote.serverManager.waitingForTheBridge
                 var up = false
                 var died = false
                 for (i in 0 until 80) {
@@ -609,12 +609,11 @@ object RemoteServerManager {
                     val onLoopback = runCatching { serverLoopbackHealthy(s, p.bridgePort) }.getOrDefault(false)
                     val msg = when {
                         onLoopback ->
-                            "The bridge is running on the server (port ${p.bridgePort}) but the app cannot reach " +
-                                "${AuthPreferences.currentBridgeHttpUrl}. ${unreachableHint()}"
+                            L.remote.serverManager.theBridgeIsRunningOnThe(p.bridgePort, AuthPreferences.currentBridgeHttpUrl, unreachableHint())
                         else -> {
                             val tail = logTail(s, bin).trim()
-                            (if (died) "The bridge stopped right after it was started on the server." else "The bridge did not come up on the server in time.") +
-                                if (tail.isNotBlank()) "\nLast log lines:\n$tail" else " See the server log."
+                            (if (died) L.remote.serverManager.theBridgeStoppedRightAfterIt else L.remote.serverManager.theBridgeDidNotComeUp) +
+                                if (tail.isNotBlank()) L.remote.serverManager.lastLogLinesTail(tail) else L.remote.serverManager.seeTheServerLog
                         }
                     }
                     LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(msg))
@@ -639,10 +638,10 @@ object RemoteServerManager {
         val pc = AuthPreferences.pcOverride ?: return
         LocalServerManager.publishRemoteStatus(LocalServerStatus.Starting)
         try {
-            _detail.value = "Connecting to ${pc.pcName}…"
+            _detail.value = L.remote.serverManager.connectingToPcname(pc.pcName)
             val s = session()
             syncTunnels(s)
-            _detail.value = "Checking AntiGem on ${pc.pcName}…"
+            _detail.value = L.remote.serverManager.checkingAntigemOnPcname(pc.pcName)
             var up = false
             for (i in 0 until 12) {
                 if (bridgeReachable()) { up = true; break }
@@ -662,7 +661,7 @@ object RemoteServerManager {
         } catch (e: Exception) {
             _detail.value = ""
             Log.e(TAG, "connect to PC failed", e)
-            LocalServerManager.publishRemoteStatus(LocalServerStatus.Error("Cannot connect to ${pc.pcName}: ${friendly(e)}"))
+            LocalServerManager.publishRemoteStatus(LocalServerStatus.Error(L.remote.serverManager.cannotConnectToPcnameFriendly(pc.pcName, friendly(e))))
         }
     }
 
@@ -806,7 +805,7 @@ object RemoteServerManager {
     suspend fun ensureExtensionHost(context: Context) = extLock.withLock { withContext(Dispatchers.IO) {
         extensionHostReady = false
         if (AuthPreferences.pcOverride != null) {
-            throw IllegalStateException("Browser plugins don't run on a connected PC. Switch back to this phone (side bar → PC icon) to use them.")
+            throw IllegalStateException(L.remote.serverManager.browserPluginsDontRunOnA)
         }
         appContext = context.applicationContext
         val hostPort = ai.antigem.ui.browser.BrowserExtensionManager.instance.hostPort()
@@ -825,17 +824,17 @@ object RemoteServerManager {
             )
         val version = exec(s, "${q(node)} --version", 10_000).second.trim()
         val major = version.removePrefix("v").substringBefore('.').toIntOrNull() ?: 0
-        if (major < 18) throw IllegalStateException("Node.js $version on the server is too old for browser plugins (18 or newer is needed).")
+        if (major < 18) throw IllegalStateException(L.remote.serverManager.nodeJsVersionOnTheServer(version))
 
         val home = exec(s, "printf %s \"\$HOME\"").second.trim()
-        if (home.isBlank()) throw IllegalStateException("Could not read the server's home directory.")
+        if (home.isBlank()) throw IllegalStateException(L.remote.serverManager.couldNotReadTheServersHome)
         val base = "$home/.antigem"
         val runtimeDir = "$base/browser-runtime"
         val rootDir = "$base/browser-extensions"
         exec(s, "mkdir -p ${q(runtimeDir)} ${q(rootDir)}")
 
         // runtime files: upload what differs
-        _detail.value = "Installing the browser-plugin host…"
+        _detail.value = L.remote.serverManager.installingTheBrowserPluginHost
         val remoteHashes = exec(s, "cd ${q(runtimeDir)} 2>/dev/null && sha256sum *.mjs 2>/dev/null").second.lines()
             .mapNotNull { l -> l.trim().split(Regex("\\s+")).takeIf { it.size >= 2 }?.let { it[1].removePrefix("*") to it[0] } }.toMap()
         var changed = false
@@ -868,7 +867,7 @@ object RemoteServerManager {
             append(" --device-id ").append(q(deviceId))
             append(" --bridge-url http://127.0.0.1:").append(mcpPort)
         }
-        _detail.value = "Starting the browser-plugin host…"
+        _detail.value = L.remote.serverManager.startingTheBrowserPluginHost
         val launch = """
             tmux kill-session -t $EXT_TMUX 2>/dev/null
             pids=${'$'}(pgrep -f '[e]xtension-host.mjs --serve --port $hostPort'); [ -n "${'$'}pids" ] && kill ${'$'}pids 2>/dev/null
@@ -882,7 +881,7 @@ object RemoteServerManager {
             true
         """.trimIndent()
         val (code, out) = exec(s, launch, 20_000)
-        if (code != 0) throw IllegalStateException("Could not start the browser-plugin host: $out")
+        if (code != 0) throw IllegalStateException(L.remote.serverManager.couldNotStartTheBrowserPlugin(out))
 
         var up = false
         for (i in 0 until 60) {
@@ -892,7 +891,7 @@ object RemoteServerManager {
         _detail.value = ""
         if (!up) {
             val tail = exec(s, "tail -n 12 ${q(log)} 2>/dev/null", 8_000).second
-            throw IllegalStateException("The browser-plugin host did not start on the server." + if (tail.isNotBlank()) "\n$tail" else "")
+            throw IllegalStateException(L.remote.serverManager.theBrowserPluginHostDidNot + if (tail.isNotBlank()) "\n$tail" else "")
         }
         syncTunnels(s)
         extensionHostReady = true
@@ -916,7 +915,7 @@ object RemoteServerManager {
             val (_, out) = exec(s, "tail -n 300 \"$dir/bridge.log\" 2>/dev/null | sed 's/\\x1b\\[[0-9;]*[A-Za-z]//g'", 10_000)
             _log.value = out
         } catch (e: Exception) {
-            _log.value = "Could not read the server log: ${e.message}"
+            _log.value = L.remote.serverManager.couldNotReadTheServerLog(e.message)
         }
     }
 

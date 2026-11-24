@@ -75,6 +75,7 @@ import ai.antigem.domain.model.AgentKind
 import ai.antigem.theme.GeminiTheme
 import ai.antigem.theme.isSystemInDarkThemeRobust
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * A widget's setup screen, opened when it is placed (and from its settings on Android 12+): which chats the Chats
@@ -156,10 +157,10 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun Header(kind: WidgetKind) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(kind.title + " widget", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(L.homescreen.widgetConfigActivity.titleWidget(kind.title), fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 Text(kind.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = { finish() }) { Icon(Icons.Default.Close, "Cancel") }
+            IconButton(onClick = { finish() }) { Icon(Icons.Default.Close, L.common.cancel) }
         }
     }
 
@@ -173,11 +174,11 @@ class WidgetConfigActivity : ComponentActivity() {
         var filter by remember { mutableStateOf("all") }
         LaunchedEffect(Unit) { currentState()?.get(WidgetKeys.FILTER)?.let { filter = it } }
         val options = listOf(
-            "all" to ("All chats" to "Pinned chats first, then the newest"),
-            "pinned" to ("Pinned chats" to "Only the chats you pinned in the sidebar")
-        ) + enabledAgents().map { a -> a.name to (HomeIcons.agentLabel(a) to "Only ${HomeIcons.agentLabel(a)} chats; + starts one") }
+            "all" to (L.homescreen.widgetConfigActivity.allChats to L.homescreen.widgetConfigActivity.pinnedChatsFirstThenTheNewest),
+            "pinned" to (L.homescreen.widgetConfigActivity.pinnedChats to L.homescreen.widgetConfigActivity.onlyTheChatsYouPinnedIn)
+        ) + enabledAgents().map { a -> a.name to (HomeIcons.agentLabel(a) to L.homescreen.widgetConfigActivity.onlyAgentlabelChatsStartsOne(HomeIcons.agentLabel(a))) }
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Show", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+            Text(L.common.show, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
                 Column {
                     options.forEach { (value, text) ->
@@ -200,7 +201,7 @@ class WidgetConfigActivity : ComponentActivity() {
             }
             Spacer(Modifier.weight(1f))
             Button(onClick = { save(WidgetKind.CHATS) { it[WidgetKeys.FILTER] = filter } }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                Text("Done", fontSize = 16.sp)
+                Text(L.common.done, fontSize = 16.sp)
             }
         }
     }
@@ -237,26 +238,26 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
                 item {
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Show names under the buttons", modifier = Modifier.weight(1f))
+                        Text(L.homescreen.widgetConfigActivity.showNamesUnderTheButtons, modifier = Modifier.weight(1f))
                         Switch(checked = labels, onCheckedChange = { labels = it })
                     }
                 }
-                item { SectionLabel("On the widget (as many as fit, in this order)") }
+                item { SectionLabel(L.homescreen.widgetConfigActivity.onTheWidgetAsManyAs) }
                 items(chosen.toList(), key = { "on_" + it.id }) { a ->
                     val i = chosen.indexOf(a)
                     ActionRow(a) {
-                        IconButton(onClick = { if (i > 0) { chosen.removeAt(i); chosen.add(i - 1, a) } }, enabled = i > 0) { Icon(Icons.Default.KeyboardArrowUp, "Move up") }
-                        IconButton(onClick = { if (i < chosen.size - 1) { chosen.removeAt(i); chosen.add(i + 1, a) } }, enabled = i < chosen.size - 1) { Icon(Icons.Default.KeyboardArrowDown, "Move down") }
+                        IconButton(onClick = { if (i > 0) { chosen.removeAt(i); chosen.add(i - 1, a) } }, enabled = i > 0) { Icon(Icons.Default.KeyboardArrowUp, L.homescreen.widgetConfigActivity.moveUp) }
+                        IconButton(onClick = { if (i < chosen.size - 1) { chosen.removeAt(i); chosen.add(i + 1, a) } }, enabled = i < chosen.size - 1) { Icon(Icons.Default.KeyboardArrowDown, L.homescreen.widgetConfigActivity.moveDown) }
                         IconButton(onClick = { if (chosen.size > 1) chosen.remove(a) }, enabled = chosen.size > 1) {
-                            Icon(Icons.Outlined.RemoveCircleOutline, "Remove", tint = MaterialTheme.colorScheme.error)
+                            Icon(Icons.Outlined.RemoveCircleOutline, L.common.remove, tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
                 val rest = available.filter { it !in chosen }
-                if (rest.isNotEmpty()) item { SectionLabel("Add") }
+                if (rest.isNotEmpty()) item { SectionLabel(L.common.add) }
                 items(rest, key = { "off_" + it.id }) { a ->
                     ActionRow(a, onClick = { chosen.add(a) }) {
-                        IconButton(onClick = { chosen.add(a) }) { Icon(Icons.Outlined.AddCircleOutline, "Add", tint = MaterialTheme.colorScheme.primary) }
+                        IconButton(onClick = { chosen.add(a) }) { Icon(Icons.Outlined.AddCircleOutline, L.common.add, tint = MaterialTheme.colorScheme.primary) }
                     }
                 }
             }
@@ -271,7 +272,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 },
                 enabled = loaded && chosen.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(16.dp).height(52.dp)
-            ) { Text("Done", fontSize = 16.sp) }
+            ) { Text(L.common.done, fontSize = 16.sp) }
         }
     }
 
@@ -309,16 +310,16 @@ class WidgetConfigActivity : ComponentActivity() {
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                placeholder = { Text("Search chats") },
+                placeholder = { Text(L.homescreen.widgetConfigActivity.searchChats) },
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             )
             if (snap?.loaded != true || snap?.chats.isNullOrEmpty()) {
                 Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No chats yet", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text("Open AntiGem once so your chats show up here.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    Text(L.homescreen.widgetConfigActivity.noChatsYet, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(L.homescreen.widgetConfigActivity.openAntigemOnceSoYourChats, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { startActivity(HomeLinks.intent(this@WidgetConfigActivity, HomeLinks.Target.OpenPage(HomeLinks.Page.CHAT))) }) { Text("Open AntiGem") }
+                    Button(onClick = { startActivity(HomeLinks.intent(this@WidgetConfigActivity, HomeLinks.Target.OpenPage(HomeLinks.Page.CHAT))) }) { Text(L.homescreen.widgetConfigActivity.openAntigem) }
                 }
                 return@Column
             }
@@ -364,6 +365,6 @@ internal fun ChatPickRow(c: HomeChat, onClick: () -> Unit) {
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
-        if (c.running) Text("Working…", fontSize = 11.sp, color = Color(HomeIcons.agentColor(c.agentKind)), fontWeight = FontWeight.SemiBold)
+        if (c.running) Text(L.common.working, fontSize = 11.sp, color = Color(HomeIcons.agentColor(c.agentKind)), fontWeight = FontWeight.SemiBold)
     }
 }

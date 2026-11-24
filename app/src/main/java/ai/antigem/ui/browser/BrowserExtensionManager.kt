@@ -23,6 +23,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 data class BrowserExtension(
     val id: String,
@@ -238,7 +239,7 @@ class BrowserExtensionManager private constructor() {
                 val tail = synchronized(hostTail) { hostTail.takeLast(8).joinToString("\n") }
                 val logPath = File(LocalEnvironmentManager.getHomeDir(context), "extension-host.log").absolutePath
                 throw IllegalStateException("Extension host exited" + (hostProcess?.let { p -> runCatching { " (code ${p.exitValue()})" }.getOrDefault("") } ?: "") +
-                    (if (tail.isNotBlank()) ":\n$tail" else "; no output") + "\nFull log: $logPath")
+                    (if (tail.isNotBlank()) ":\n$tail" else L.browser.extensionManager.noOutput) + "\nFull log: $logPath")
             }
             delay(100)
         }

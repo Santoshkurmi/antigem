@@ -63,6 +63,7 @@ import ai.antigem.ui.claude.ClaudeCard
 import ai.antigem.ui.components.AppToastHelper
 import ai.antigem.ui.components.ChatToastType
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 private fun toast(msg: String, ok: Boolean = true) =
     AppToastHelper.showToast(msg, if (ok) ChatToastType.SUCCESS else ChatToastType.ERROR)
@@ -81,9 +82,9 @@ private fun PanelHint(text: String, modifier: Modifier = Modifier) {
 private fun pluginHint(agent: AgentKind, kinds: List<String>): String? {
     if (kinds.isEmpty()) return null
     return when (agent) {
-        AgentKind.CLAUDE -> if ("claude-marketplace" in kinds) "This repository is a Claude Code plugin marketplace: add it in Plugins → Marketplaces." else null
-        AgentKind.CODEX -> if ("codex-plugin" in kinds || "claude-marketplace" in kinds) "This repository is a plugin marketplace: add it in Plugins → Marketplaces." else null
-        AgentKind.AGY -> if ("agy-plugin" in kinds || "claude-plugin" in kinds || "claude-marketplace" in kinds) "This repository is a plugin: install it from the Plugins tab (From GitHub)." else null
+        AgentKind.CLAUDE -> if ("claude-marketplace" in kinds) L.settings.agentSkills.thisRepositoryIsAClaudeCode else null
+        AgentKind.CODEX -> if ("codex-plugin" in kinds || "claude-marketplace" in kinds) L.settings.agentSkills.thisRepositoryIsAPluginMarketplace else null
+        AgentKind.AGY -> if ("agy-plugin" in kinds || "claude-plugin" in kinds || "claude-marketplace" in kinds) L.settings.agentSkills.thisRepositoryIsAPluginInstall else null
         AgentKind.OPENCODE -> null
     }
 }
@@ -116,7 +117,7 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
         loading = true
         AgentSkillsClient.list(agent)
             .onSuccess { skills = it.skills; dir = it.dir; loadError = null }
-            .onFailure { loadError = it.message ?: "Could not list the skills" }
+            .onFailure { loadError = it.message ?: L.settings.agentSkills.couldNotListTheSkills }
         loading = false
     }
     LaunchedEffect(agent) { reload() }
@@ -134,10 +135,10 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                     picked.clear()
                     res.skills.forEach { picked[it.path] = true }
                     // no skills, and no plugin this agent's Plugins page can take: an AI agent can set it up
-                    if (res.skills.isEmpty() && pluginHint(agent, res.pluginKinds) == null) aiSetup = text to "it has no skills (no folder with a SKILL.md)"
+                    if (res.skills.isEmpty() && pluginHint(agent, res.pluginKinds) == null) aiSetup = text to L.settings.agentSkills.itHasNoSkillsNoFolder
                 }
                 .onFailure {
-                    val why = it.message ?: "Could not read the repository"
+                    val why = it.message ?: L.settings.agentSkills.couldNotReadTheRepository
                     findError = why
                     // a typo in the link is fixed by hand; anything else (private repository, GitHub limits…) an agent may manage
                     if (!why.startsWith("Use owner/repo") && !why.startsWith("Invalid")) aiSetup = text to why
@@ -148,13 +149,13 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
 
     // ---- add from GitHub
     ClaudeCard {
-        PanelTitle("Add skills from GitHub")
-        PanelHint("A GitHub repository (owner/repo), or a link to a folder in one. Every folder with a SKILL.md in it is a skill; you pick which ones to add.")
+        PanelTitle(L.settings.agentSkills.addSkillsFromGithub)
+        PanelHint(L.settings.agentSkills.aGithubRepositoryOwnerRepoOr)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 source, { source = it; findError = null }, singleLine = true,
-                placeholder = { Text("owner/repo or github.com link") },
+                placeholder = { Text(L.settings.agentSkills.ownerRepoOrGithubComLink) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { find() }),
                 modifier = Modifier.weight(1f), enabled = !installing
@@ -164,10 +165,10 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                 onClick = { find() }, enabled = source.isNotBlank() && !inspecting && !installing,
                 colors = ButtonDefaults.buttonColors(containerColor = accent)
             ) {
-                if (inspecting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) else Text("Find")
+                if (inspecting) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) else Text(L.settings.agentSkills.find)
             }
         }
-        if (inspecting) PanelHint("Looking for skills in the repository…", Modifier.padding(top = 6.dp))
+        if (inspecting) PanelHint(L.settings.agentSkills.lookingForSkillsInTheRepository, Modifier.padding(top = 6.dp))
         findError?.let {
             Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
             SetupWithAiLink(accent) { aiSetup = source.trim() to it }
@@ -176,18 +177,18 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
         found?.let { res ->
             Spacer(Modifier.height(10.dp))
             if (res.skills.isEmpty()) {
-                Text("No skills found in ${res.repo}" + (if (res.subpath.isNotBlank()) "/${res.subpath}" else "") + " (no folder with a SKILL.md).",
+                Text(L.settings.agentSkills.noSkillsFoundInRepoValue(res.repo, (if (res.subpath.isNotBlank()) "/${res.subpath}" else "")),
                     fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                 pluginHint(agent, res.pluginKinds)?.let { PanelHint(it, Modifier.padding(top = 4.dp)) }
-                SetupWithAiLink(accent) { aiSetup = source.trim() to "it has no skills (no folder with a SKILL.md)" }
+                SetupWithAiLink(accent) { aiSetup = source.trim() to L.settings.agentSkills.itHasNoSkillsNoFolder }
             } else {
                 val count = picked.values.count { it }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${res.skills.size} skill${if (res.skills.size == 1) "" else "s"} in ${res.repo}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Text(L.settings.agentSkills.skillscountSkillValueInRepo(res.skills.size, if (res.skills.size == 1) "" else "s", res.repo), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     if (res.skills.size > 1) TextButton(onClick = {
                         val all = count < res.skills.size
                         res.skills.forEach { picked[it.path] = all }
-                    }, enabled = !installing) { Text(if (count < res.skills.size) "Select all" else "Select none", fontSize = 12.sp) }
+                    }, enabled = !installing) { Text(if (count < res.skills.size) L.common.selectAll else L.settings.agentSkills.selectNone, fontSize = 12.sp) }
                 }
                 res.skills.forEach { s ->
                     HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
@@ -200,11 +201,11 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                             Text(s.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             if (s.description.isNotBlank()) Text(s.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
-                            Text(s.path.ifBlank { "(the whole repository)" } + if (s.id != s.path.substringAfterLast('/')) "  →  ${s.id}" else "",
+                            Text(s.path.ifBlank { L.settings.agentSkills.theWholeRepository } + if (s.id != s.path.substringAfterLast('/')) "  →  ${s.id}" else "",
                                 fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f))
                             when {
-                                s.sameSource -> Text("Already added: adding it again updates it", fontSize = 11.sp, color = accent)
-                                s.exists -> Text("A different skill named ${s.id} is installed and will be replaced", fontSize = 11.sp, color = QuotaAmber)
+                                s.sameSource -> Text(L.settings.agentSkills.alreadyAddedAddingItAgainUpdates, fontSize = 11.sp, color = accent)
+                                s.exists -> Text(L.settings.agentSkills.aDifferentSkillNamedIdIs(s.id), fontSize = 11.sp, color = QuotaAmber)
                             }
                         }
                     }
@@ -220,7 +221,7 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                                     .onSuccess { r ->
                                         val updated = r.replaced.size
                                         toast(buildString {
-                                            append("Added ${r.installed.size} skill${if (r.installed.size == 1) "" else "s"}")
+                                            append(L.settings.agentSkills.addedInstalledcountSkillValue(r.installed.size, if (r.installed.size == 1) "" else "s"))
                                             if (updated > 0) append(" ($updated replaced)")
                                             append(". Start a new chat to use them.")
                                         })
@@ -230,8 +231,8 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                                         onChanged()
                                     }
                                     .onFailure { e ->
-                                    toast(e.message ?: "Could not add the skills", ok = false)
-                                    aiSetup = source.trim() to (e.message ?: "adding the skills failed")
+                                    toast(e.message ?: L.settings.agentSkills.couldNotAddTheSkills, ok = false)
+                                    aiSetup = source.trim() to (e.message ?: L.settings.agentSkills.addingTheSkillsFailed)
                                 }
                                 installing = false
                             }
@@ -241,11 +242,11 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                         if (installing) {
                             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
                             Spacer(Modifier.width(8.dp))
-                            Text("Adding…")
-                        } else Text(if (count == 1) "Add 1 skill" else "Add $count skills")
+                            Text(L.settings.agentSkills.adding)
+                        } else Text(if (count == 1) L.settings.agentSkills.add1Skill else L.settings.agentSkills.addCountSkills(count))
                     }
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { found = null }, enabled = !installing) { Text("Cancel") }
+                    TextButton(onClick = { found = null }, enabled = !installing) { Text(L.common.cancel) }
                 }
             }
         }
@@ -255,20 +256,20 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
     ClaudeCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                PanelTitle("Your skills" + (skills?.let { " (${it.size})" } ?: ""))
+                PanelTitle(L.settings.agentSkills.yourSkillsValue((skills?.let { " (${it.size})" } ?: "")))
                 if (dir.isNotBlank()) Text(dir, fontSize = 10.5.sp, fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             IconButton(onClick = { scope.launch { reload() } }, enabled = !loading) {
                 if (loading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = accent)
-                else Icon(Icons.Outlined.Refresh, "Refresh")
+                else Icon(Icons.Outlined.Refresh, L.common.refresh)
             }
         }
         loadError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp)) }
         val list = skills
         when {
-            list == null && loadError == null -> PanelHint("Loading…", Modifier.padding(top = 6.dp))
-            list != null && list.isEmpty() -> PanelHint("No skills here yet. Add some from GitHub above.", Modifier.padding(top = 6.dp))
+            list == null && loadError == null -> PanelHint(L.common.loading, Modifier.padding(top = 6.dp))
+            list != null && list.isEmpty() -> PanelHint(L.settings.agentSkills.noSkillsHereYetAddSome, Modifier.padding(top = 6.dp))
         }
         list.orEmpty().forEach { s ->
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
@@ -280,7 +281,7 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                         if (s.kind == "plugin") {
                             Spacer(Modifier.width(6.dp))
                             Surface(shape = RoundedCornerShape(6.dp), color = accent.copy(alpha = 0.15f)) {
-                                Text("Plugin", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = accent, modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
+                                Text(L.settings.agentSkills.plugin, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = accent, modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
                             }
                         }
                     }
@@ -288,30 +289,30 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
                     Text(
                         s.source?.let { src -> "github.com/${src.repo}" + (if (src.path.isNotBlank()) " · ${src.path}" else "") + (if (src.ref.isNotBlank()) " @${src.ref}" else "") }
-                            ?: "Added by hand",
+                            ?: L.settings.agentSkills.addedByHand,
                         fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f), maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
                 if (op != null) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = accent)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (op == "update") "Updating…" else "Removing…", fontSize = 11.5.sp, color = accent)
+                    Text(if (op == "update") L.common.updating else L.common.removing, fontSize = 11.5.sp, color = accent)
                 } else {
                     if (s.source != null) IconButton(onClick = {
                         busy[s.id] = "update"
                         scope.launch {
                             AgentSkillsClient.update(agent, s.id)
-                                .onSuccess { toast("${s.name} updated. Start a new chat to use it."); reload(); onChanged() }
-                                .onFailure { toast(it.message ?: "Could not update ${s.name}", ok = false) }
+                                .onSuccess { toast(L.settings.agentSkills.nameUpdatedStartANewChat(s.name)); reload(); onChanged() }
+                                .onFailure { toast(it.message ?: L.settings.agentSkills.couldNotUpdateName(s.name), ok = false) }
                             busy.remove(s.id)
                         }
-                    }) { Icon(Icons.Outlined.Refresh, "Update from GitHub", tint = accent) }
-                    IconButton(onClick = { confirmRemove = s }) { Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.85f)) }
+                    }) { Icon(Icons.Outlined.Refresh, L.settings.agentSkills.updateFromGithub, tint = accent) }
+                    IconButton(onClick = { confirmRemove = s }) { Icon(Icons.Outlined.Delete, L.common.remove, tint = QuotaRed.copy(alpha = 0.85f)) }
                 }
             }
         }
         Spacer(Modifier.height(8.dp))
-        PanelHint("The agent reads its skills when a chat starts: start a new chat after adding, updating or removing one.")
+        PanelHint(L.settings.agentSkills.theAgentReadsItsSkillsWhen)
     }
 
     aiSetup?.let { (src, why) -> SetupWithAiDialog(src, agent, why) { aiSetup = null } }
@@ -319,8 +320,8 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
     confirmRemove?.let { s ->
         AlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text("Remove ${s.name}?") },
-            text = { Text("This deletes the folder ${s.path}" + if (s.source == null) ". It was not added from GitHub, so it can't be downloaded again." else ".") },
+            title = { Text(L.settings.agentSkills.removeName(s.name)) },
+            text = { Text(if (s.source == null) L.settings.agentSkills.thisDeletesTheFolderPathIt(s.path) else L.settings.agentSkills.thisDeletesTheFolderPath(s.path)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmRemove = null
@@ -328,12 +329,12 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                     scope.launch {
                         AgentSkillsClient.remove(agent, s.id)
                             .onSuccess { toast("${s.name} removed"); reload(); onChanged() }
-                            .onFailure { toast(it.message ?: "Could not remove ${s.name}", ok = false) }
+                            .onFailure { toast(it.message ?: L.settings.agentSkills.couldNotRemoveName(s.name), ok = false) }
                         busy.remove(s.id)
                     }
-                }) { Text("Remove", color = QuotaRed) }
+                }) { Text(L.common.remove, color = QuotaRed) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -349,7 +350,7 @@ fun AgentSkillsDialog(agent: AgentKind, accent: Color, title: String, onDismiss:
             Column(Modifier.padding(top = 12.dp)) {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("Done") }
+                    TextButton(onClick = onDismiss) { Text(L.common.done) }
                 }
                 Column(
                     Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -383,14 +384,14 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
             AgentSkillsClient.installAgyPlugin(source.trim())
                 .onSuccess {
                     failed = false
-                    output = it.ifBlank { "Installed." }
-                    toast("Plugin installed. Start a new chat to use it.")
+                    output = it.ifBlank { L.settings.agentSkills.installed }
+                    toast(L.settings.agentSkills.pluginInstalledStartANewChat)
                     onInstalled()
                 }
                 .onFailure {
                     failed = true
-                    output = it.message ?: "agy could not install it"
-                    val why = if (output!!.contains("could not detect plugin structure")) "agy found no plugin in it" else output!!.lines().first()
+                    output = it.message ?: L.settings.agentSkills.agyCouldNotInstallIt
+                    val why = if (output!!.contains("could not detect plugin structure")) L.settings.agentSkills.agyFoundNoPluginInIt else output!!.lines().first()
                     if (!why.startsWith("Use owner/repo") && !why.startsWith("Invalid")) aiSetup = source.trim() to why
                 }
             installing = false
@@ -398,14 +399,14 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
     }
     AlertDialog(
         onDismissRequest = { if (!installing) onDismiss() },
-        title = { Text("Install a plugin from GitHub") },
+        title = { Text(L.settings.agentSkills.installAPluginFromGithub) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 PanelHint("An Antigravity or Claude Code plugin (or a Claude Code marketplace, which installs all its plugins): owner/repo or a github.com link. agy's own installer adds it, the same as `agy plugin install`.")
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     source, { source = it }, singleLine = true, enabled = !installing,
-                    placeholder = { Text("owner/repo or github.com link") },
+                    placeholder = { Text(L.settings.agentSkills.ownerRepoOrGithubComLink) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { install() }),
                     modifier = Modifier.fillMaxWidth()
@@ -413,7 +414,7 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
                 if (installing) Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = accent)
                     Spacer(Modifier.width(8.dp))
-                    PanelHint("Downloading and installing…")
+                    PanelHint(L.settings.agentSkills.downloadingAndInstalling)
                 }
                 if (failed) SetupWithAiLink(accent) { aiSetup = source.trim() to output?.lines()?.firstOrNull() }
                 output?.let {
@@ -427,10 +428,10 @@ fun AgyGitHubPluginDialog(accent: Color, onInstalled: () -> Unit, onDismiss: () 
             }
         },
         confirmButton = {
-            if (output != null && !failed) TextButton(onClick = onDismiss) { Text("Done") }
-            else Button(onClick = { install() }, enabled = source.isNotBlank() && !installing, colors = ButtonDefaults.buttonColors(containerColor = accent)) { Text("Install") }
+            if (output != null && !failed) TextButton(onClick = onDismiss) { Text(L.common.done) }
+            else Button(onClick = { install() }, enabled = source.isNotBlank() && !installing, colors = ButtonDefaults.buttonColors(containerColor = accent)) { Text(L.common.install) }
         },
-        dismissButton = { if (output == null || failed) TextButton(onClick = onDismiss, enabled = !installing) { Text("Cancel") } }
+        dismissButton = { if (output == null || failed) TextButton(onClick = onDismiss, enabled = !installing) { Text(L.common.cancel) } }
     )
     aiSetup?.let { (src, why) -> SetupWithAiDialog(src, AgentKind.AGY, why) { aiSetup = null } }
 }

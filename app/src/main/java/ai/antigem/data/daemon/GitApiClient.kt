@@ -12,6 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 data class GitFileStatus(
     val path: String,
@@ -164,7 +165,7 @@ object GitApiClient {
             }
         } catch (e: Exception) {
             Log.e(TAG, "initRepo failed: ${e.message}")
-            GitActionResult(success = false, error = e.message ?: "Init failed")
+            GitActionResult(success = false, error = e.message ?: L.daemon.gitApiClient.initFailed)
         }
     }
 
@@ -227,7 +228,7 @@ object GitApiClient {
             }
         } catch (e: Exception) {
             Log.e(TAG, "setConfig failed: ${e.message}")
-            GitActionResult(success = false, error = e.message ?: "Failed to set config")
+            GitActionResult(success = false, error = e.message ?: L.daemon.gitApiClient.failedToSetConfig)
         }
     }
 
@@ -402,7 +403,7 @@ object GitApiClient {
             }
         } catch (e: Exception) {
             Log.e(TAG, "commit failed: ${e.message}")
-            GitActionResult(success = false, error = e.message ?: "Commit network error")
+            GitActionResult(success = false, error = e.message ?: L.daemon.gitApiClient.commitNetworkError)
         }
     }
 
@@ -432,7 +433,7 @@ object GitApiClient {
             }
         } catch (e: Exception) {
             Log.e(TAG, "push failed: ${e.message}")
-            GitActionResult(success = false, error = e.message ?: "Push network error")
+            GitActionResult(success = false, error = e.message ?: L.daemon.gitApiClient.pushNetworkError)
         }
     }
 
@@ -462,7 +463,7 @@ object GitApiClient {
             }
         } catch (e: Exception) {
             Log.e(TAG, "pull failed: ${e.message}")
-            GitActionResult(success = false, error = e.message ?: "Pull network error")
+            GitActionResult(success = false, error = e.message ?: L.daemon.gitApiClient.pullNetworkError)
         }
     }
 

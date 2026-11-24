@@ -33,16 +33,18 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.security.SecureRandom
+import ai.antigem.i18n.L
 
 /** Whether OpenCode can be used, as the chat screen and the settings show it. */
-enum class OpenCodeState(val label: String) {
-    CHECKING("Checking…"),
-    READY("Ready"),
-    NOT_INSTALLED("Not installed"),
-    DISABLED("Turned off on the server"),
-    OUTDATED("Server update needed"),
-    OFFLINE("Server offline"),
-    ERROR("Error");
+enum class OpenCodeState(private val labelText: () -> String) {
+    CHECKING({ L.agent.openCodeChatBackend.checking }),
+    READY({ L.agent.openCodeChatBackend.ready }),
+    NOT_INSTALLED({ L.agent.openCodeChatBackend.notInstalled }),
+    DISABLED({ L.agent.openCodeChatBackend.turnedOffOnTheServer }),
+    OUTDATED({ L.agent.openCodeChatBackend.serverUpdateNeeded }),
+    OFFLINE({ L.agent.openCodeChatBackend.serverOffline }),
+    ERROR({ L.agent.openCodeChatBackend.error });
+    val label: String get() = labelText()
 
     /** Sending a message cannot work in this state. */
     val isBlocking get() = this == NOT_INSTALLED || this == DISABLED || this == OUTDATED || this == OFFLINE
@@ -208,7 +210,7 @@ class OpenCodeChatBackend(
                     ai.antigem.data.remote.SlashCommandItem(
                         id, "/$id",
                         (sk.str("description").orEmpty()).lines().firstOrNull { it.isNotBlank() }.orEmpty(),
-                        type = "skill", argumentHint = "what to do"
+                        type = "skill", argumentHint = L.agent.openCodeChatBackend.whatToDo
                     )
                 }
                 commandNames = cmdItems.map { it.name }.toSet()
@@ -402,8 +404,8 @@ class OpenCodeChatBackend(
                                     displayName = m.str("name") ?: m.str("id").orEmpty(),
                                     description = buildString {
                                         append(names[provider] ?: provider)
-                                        m.o("limit").long("context")?.takeIf { it > 0 }?.let { append(" · ${it / 1000}K context") }
-                                        if (free) append(" · free")
+                                        m.o("limit").long("context")?.takeIf { it > 0 }?.let { append(L.agent.openCodeChatBackend.valueKContext(it / 1000)) }
+                                        if (free) append(L.agent.openCodeChatBackend.free)
                                     },
                                     isDefault = id == defaultId,
                                     key = id,
@@ -464,8 +466,8 @@ class OpenCodeChatBackend(
         val list = all.filter { isModelVisible(it.id) }
         _availableModels.value = list
         _modelsError.value = when {
-            all.isEmpty() -> "No models: connect a provider in Settings → OpenCode."
-            list.isEmpty() -> "All models are turned off: turn some on in Settings → OpenCode → Providers."
+            all.isEmpty() -> L.agent.openCodeChatBackend.noModelsConnectAProviderIn
+            list.isEmpty() -> L.agent.openCodeChatBackend.allModelsAreTurnedOffTurn
             else -> null
         }
         val cur = _selectedModelId.value
@@ -578,7 +580,7 @@ class OpenCodeChatBackend(
 
     override fun selectConversation(id: String) {
         val conv = _conversations.value.find { it.id == id }
-            ?: Conversation(id = id, title = "OpenCode Chat", sessionId = id, agent = AgentKind.OPENCODE)
+            ?: Conversation(id = id, title = L.agent.openCodeChatBackend.opencodeChat, sessionId = id, agent = AgentKind.OPENCODE)
         store.currentConversation.value = conv
         if (conv.modelId.isNotBlank()) _selectedModelId.value = conv.modelId
         _variant.value = null
@@ -604,7 +606,7 @@ class OpenCodeChatBackend(
         var pages = 0
         while (true) {
             val body = res.getOrElse { e ->
-                if (attachedId == id) _conversationError.value = "Could not load this chat: ${e.message}"
+                if (attachedId == id) _conversationError.value = L.agent.openCodeChatBackend.couldNotLoadThisChatMessage(e.message)
                 return
             }.obj()
             val page = body.a("data").orEmpty().mapNotNull { it.obj() }
@@ -678,7 +680,7 @@ class OpenCodeChatBackend(
         store.attachments.value = emptyList()
         val text = content.trim()
         val title = if (conv.title == "New Chat" || conv.title.isBlank()) {
-            val first = ai.antigem.data.remote.PromptExpansion.collapse(text.ifBlank { "Attachment" }).lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            val first = ai.antigem.data.remote.PromptExpansion.collapse(text.ifBlank { L.agent.openCodeChatBackend.attachment }).lines().firstOrNull { it.isNotBlank() } ?: L.agent.openCodeChatBackend.chat
             first.take(40) + if (first.length > 40) "..." else ""
         } else conv.title
         val updated = conv.copy(title = title, updatedAt = System.currentTimeMillis(), modelId = _selectedModelId.value)
@@ -713,7 +715,7 @@ class OpenCodeChatBackend(
                 }
                 val r = client.post("/session", body)
                 if (r.isFailure) {
-                    fail(msgId, "Could not start the OpenCode chat", r.exceptionOrNull())
+                    fail(msgId, L.agent.openCodeChatBackend.couldNotStartTheOpencodeChat, r.exceptionOrNull())
                     return@launch
                 }
                 synchronized(created) { created.add(conv.id) }
@@ -739,7 +741,7 @@ class OpenCodeChatBackend(
                     put("text", (listOf(args) + notes).filter { it.isNotBlank() }.joinToString("\n\n"))
                     if (files.isNotEmpty()) put("files", JsonArray(files))
                 })
-                if (r.isFailure) fail(msgId, "OpenCode did not run /$slashName", r.exceptionOrNull())
+                if (r.isFailure) fail(msgId, L.agent.openCodeChatBackend.opencodeDidNotRunSlashname(slashName), r.exceptionOrNull())
                 else {
                     transcript.dropLocal(msgId)
                     emitNow()
@@ -752,7 +754,7 @@ class OpenCodeChatBackend(
                 if (files.isNotEmpty()) put("files", JsonArray(files))
                 if (slashName != null && slashName in skillIds) put("skills", buildJsonArray { add(buildJsonObject { put("id", slashName) }) })
             })
-            if (r.isFailure) fail(msgId, "OpenCode did not take the message", r.exceptionOrNull())
+            if (r.isFailure) fail(msgId, L.agent.openCodeChatBackend.opencodeDidNotTakeTheMessage, r.exceptionOrNull())
         }
     }
 
@@ -780,7 +782,7 @@ class OpenCodeChatBackend(
     private fun fail(msgId: String, title: String, e: Throwable?) {
         Log.w(TAG, "$title: ${e?.message}")
         transcript.removeLocalPrompt(msgId)
-        transcript.addError(title, e?.message ?: "Unknown error")
+        transcript.addError(title, e?.message ?: L.agent.openCodeChatBackend.unknownError)
         attachedId?.let { running.remove(it) }
         publishConversations()
         emitNow()
@@ -1071,10 +1073,10 @@ class OpenCodeChatBackend(
                 }
                 when {
                     quiet >= STALL_MS -> {
-                        val model = _selectedModelId.value.substringAfter('/').ifBlank { "the model" }
+                        val model = _selectedModelId.value.substringAfter('/').ifBlank { L.agent.openCodeChatBackend.theModel }
                         transcript.addError(
-                            "No answer from the model",
-                            "$model did not answer for ${STALL_MS / 1000} s. It may be overloaded or not available on the provider right now: try again, or pick another model."
+                            L.agent.openCodeChatBackend.noAnswerFromTheModel,
+                            L.agent.openCodeChatBackend.modelDidNotAnswerForSeconds(model, STALL_MS / 1000)
                         )
                         transcript.setNotice(null)
                         emitNow()
@@ -1082,7 +1084,7 @@ class OpenCodeChatBackend(
                         break
                     }
                     quiet >= STALL_NOTICE_MS -> {
-                        transcript.setNotice("Waiting for the model to answer… ${quiet / 1000} s")
+                        transcript.setNotice(L.agent.openCodeChatBackend.waitingForTheModelToAnswer(quiet / 1000))
                         noticeShown = true
                         emitNow()
                     }
@@ -1225,7 +1227,7 @@ class OpenCodeChatBackend(
         _pendingPermissions.value = transcript.pendingPermissions.values.toList()
         _isStreaming.value = transcript.isTurnActive
         _notice.value = when {
-            transcript.compacting -> "Compacting the conversation…"
+            transcript.compacting -> L.agent.openCodeChatBackend.compactingTheConversation
             else -> transcript.retryNotice
         }
     }

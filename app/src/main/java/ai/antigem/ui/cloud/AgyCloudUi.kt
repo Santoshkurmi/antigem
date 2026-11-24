@@ -79,6 +79,7 @@ import ai.antigem.data.agent.agy.AgyCloud
 import ai.antigem.theme.GeminiBlue
 import exa.language_server_pb.RemoteResource
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 private val subtleAlpha = 0.6f
 
@@ -152,20 +153,18 @@ fun AgyCloudSettingsCard(modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Cloud agents", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text(L.cloud.agyCloudUi.cloudAgents, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Switch(checked = enabled, onCheckedChange = { AgyCloud.setEnabled(it) })
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Antigravity chats can run on a Google cloud machine with your GitHub repos (Antigravity's Remote " +
-                        "Agents) and keep working while the phone is off. Needs Google AI Pro or Ultra on a personal account.",
+                    L.cloud.agyCloudUi.antigravityChatsCanRunOnA,
                     fontSize = 12.5.sp, color = subtle()
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (enabled) "On: cloud projects show in the project picker of Antigravity chats, and cloud chats in the " +
-                        "chat list. They are ready about a minute after the Antigravity server starts."
-                    else "Off: the app does not ask the Antigravity server for cloud projects or cloud chats.",
+                    if (enabled) L.cloud.agyCloudUi.onCloudProjectsShowInThe
+                    else L.cloud.agyCloudUi.offTheAppDoesNotAsk,
                     fontSize = 12.5.sp, color = subtle()
                 )
             }
@@ -179,10 +178,10 @@ fun AgyCloudSettingsCard(modifier: Modifier = Modifier) {
                 Column {
                     CloudSettingsRow(
                         icon = Icons.Outlined.Cloud,
-                        title = "Cloud projects & repos",
+                        title = L.cloud.agyCloudUi.cloudProjectsRepos,
                         value = when {
-                            loading && projects.isEmpty() -> "Loading…"
-                            cloudError != null && projects.isEmpty() -> "Not ready"
+                            loading && projects.isEmpty() -> L.common.loading
+                            cloudError != null && projects.isEmpty() -> L.cloud.agyCloudUi.notReady
                             projects.size == 1 -> "1 project"
                             else -> "${projects.size} projects"
                         },
@@ -191,13 +190,13 @@ fun AgyCloudSettingsCard(modifier: Modifier = Modifier) {
                     HorizontalDivider(Modifier.padding(start = 48.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
                     CloudSettingsRow(
                         icon = Icons.Outlined.Link,
-                        title = "Connections (GitHub, Drive…)",
+                        title = L.cloud.agyCloudUi.connectionsGithubDrive,
                         value = when {
                             !githubChecked -> "…"
                             github == null -> ""
-                            github!!.connected -> "GitHub connected"
-                            github!!.expired -> "GitHub expired"
-                            else -> "GitHub not connected"
+                            github!!.connected -> L.cloud.agyCloudUi.githubConnected
+                            github!!.expired -> L.cloud.agyCloudUi.githubExpired
+                            else -> L.cloud.agyCloudUi.githubNotConnected
                         },
                         onClick = { dialogTab = 1 }
                     )
@@ -229,7 +228,7 @@ private fun CloudSettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVect
 }
 
 private fun repoSummary(p: AgyCloud.CloudProject): String = when (p.repos.size) {
-    0 -> "No repos"
+    0 -> L.cloud.agyCloudUi.noRepos
     1 -> p.repos[0].display_name.ifBlank { p.repos[0].resource_id }
     else -> "${p.repos[0].display_name.ifBlank { p.repos[0].resource_id }} +${p.repos.size - 1}"
 }
@@ -253,10 +252,10 @@ fun LazyListScope.cloudProjectsSection(
             Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
-                Text("Cloud", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
-                Text("Runs in Google's cloud with your GitHub repos, also while the phone is off", fontSize = 11.sp, color = subtle(), lineHeight = 14.sp)
+                Text(L.cloud.agyCloudUi.cloud, fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+                Text(L.cloud.agyCloudUi.runsInGooglesCloudWithYour, fontSize = 11.sp, color = subtle(), lineHeight = 14.sp)
             }
-            TextButton(onClick = onManage) { Text("Manage", fontSize = 12.5.sp) }
+            TextButton(onClick = onManage) { Text(L.cloud.agyCloudUi.manage, fontSize = 12.5.sp) }
         }
     }
     if (error != null && projects.isEmpty()) {
@@ -293,7 +292,7 @@ fun LazyListScope.cloudProjectsSection(
             Row(Modifier.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Add, null, tint = GeminiBlue, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("New cloud project", color = GeminiBlue, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                Text(L.cloud.agyCloudUi.newCloudProject, color = GeminiBlue, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
             }
         }
     }
@@ -335,14 +334,14 @@ fun CloudProjectsDialog(
                     Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Cloud agents", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("Antigravity Remote Agents · Google AI Pro / Ultra", fontSize = 11.5.sp, color = subtle())
+                        Text(L.cloud.agyCloudUi.cloudAgents, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text(L.cloud.agyCloudUi.antigravityRemoteAgentsGoogleAiPro, fontSize = 11.5.sp, color = subtle())
                     }
-                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close") }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, L.common.close) }
                 }
                 TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
-                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Projects") })
-                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Connections") })
+                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(L.common.projects) })
+                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(L.cloud.agyCloudUi.connections) })
                 }
                 actionError?.let {
                     Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp).clickable { actionError = null })
@@ -355,18 +354,17 @@ fun CloudProjectsDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = GeminiBlue),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("New cloud project")
+                            Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.cloud.agyCloudUi.newCloudProject)
                         }
                         Spacer(Modifier.weight(1f))
                         if (loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        else IconButton(onClick = { scope.launch { AgyCloud.refreshProjects() } }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+                        else IconButton(onClick = { scope.launch { AgyCloud.refreshProjects() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
                     }
                     if (error != null) Text(error!!, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 6.dp))
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
                         if (projects.isEmpty() && !loading && error == null) item {
                             Text(
-                                "No cloud projects yet. A cloud project holds GitHub repos; its chats run in a Google VM with them " +
-                                    "cloned in, and keep working when your phone is off.",
+                                L.cloud.agyCloudUi.noCloudProjectsYetACloud,
                                 fontSize = 13.sp, color = subtle(), lineHeight = 18.sp
                             )
                         }
@@ -389,22 +387,22 @@ fun CloudProjectsDialog(
 
     when (val e = editor) {
         EditorTarget.New -> CloudProjectEditor(
-            title = "New cloud project",
+            title = L.cloud.agyCloudUi.newCloudProject,
             initialName = "",
             initialRepos = emptyList(),
             askName = true,
-            confirm = "Create",
+            confirm = L.common.create,
             onSave = { name, repos ->
                 AgyCloud.createProject(name, repos).map { id -> editor = null; onStartChatIn?.invoke(id) }
             },
             onDismiss = { editor = null }
         )
         is EditorTarget.Repos -> CloudProjectEditor(
-            title = "Repos of ${e.project.name}",
+            title = L.cloud.agyCloudUi.reposOfName(e.project.name),
             initialName = e.project.name,
             initialRepos = e.project.repos,
             askName = false,
-            confirm = "Save",
+            confirm = L.common.save,
             onSave = { _, repos -> AgyCloud.setRepos(e.project.id, repos).map { editor = null } },
             onDismiss = { editor = null }
         )
@@ -415,18 +413,18 @@ fun CloudProjectsDialog(
         var name by remember(p.id) { mutableStateOf(p.name) }
         AlertDialog(
             onDismissRequest = { renaming = null },
-            title = { Text("Rename project") },
-            text = { OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("Name") }) },
+            title = { Text(L.cloud.agyCloudUi.renameProject) },
+            text = { OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(L.common.name) }) },
             confirmButton = {
                 TextButton(enabled = name.isNotBlank(), onClick = {
                     scope.launch {
                         actionError = null
-                        AgyCloud.rename(p.id, name).onFailure { actionError = "Rename failed: ${it.message ?: "unknown error"}" }
+                        AgyCloud.rename(p.id, name).onFailure { actionError = L.cloud.agyCloudUi.renameFailedValue(it.message ?: L.cloud.agyCloudUi.unknownError) }
                         renaming = null
                     }
-                }) { Text("Rename") }
+                }) { Text(L.common.rename) }
             },
-            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text(L.common.cancel) } }
         )
     }
 
@@ -434,17 +432,17 @@ fun CloudProjectsDialog(
         AlertDialog(
             onDismissRequest = { deleting = null },
             title = { Text("Delete ${p.name}?") },
-            text = { Text("The cloud project and its cloud chats are deleted in Google's cloud. Your GitHub repos are not touched.") },
+            text = { Text(L.cloud.agyCloudUi.theCloudProjectAndItsCloud) },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
                         actionError = null
-                        AgyCloud.deleteProject(p.id).onFailure { actionError = "Delete failed: ${it.message ?: "unknown error"}" }
+                        AgyCloud.deleteProject(p.id).onFailure { actionError = L.cloud.agyCloudUi.deleteFailedValue(it.message ?: L.cloud.agyCloudUi.unknownError) }
                         deleting = null
                     }
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -470,18 +468,18 @@ private fun ProjectCard(
                 Spacer(Modifier.width(8.dp))
                 Text(p.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.MoreVert, "More", modifier = Modifier.size(18.dp)) }
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.MoreVert, L.common.more, modifier = Modifier.size(18.dp)) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
-                        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
+                        DropdownMenuItem(text = { Text(L.common.rename) }, onClick = { menu = false; onRename() })
+                        DropdownMenuItem(text = { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
                     }
                 }
             }
             Spacer(Modifier.height(4.dp))
-            if (p.repos.isEmpty()) Text("No repos: the agent starts in an empty folder.", fontSize = 12.sp, color = subtle())
+            if (p.repos.isEmpty()) Text(L.cloud.agyCloudUi.noReposTheAgentStartsIn, fontSize = 12.sp, color = subtle())
             p.repos.forEach { r ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 1.dp)) {
-                    if (r.is_private) Icon(Icons.Outlined.Lock, "Private", tint = subtle(), modifier = Modifier.size(12.dp))
+                    if (r.is_private) Icon(Icons.Outlined.Lock, L.common.private, tint = subtle(), modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(r.display_name.ifBlank { r.resource_id }, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace)
                 }
@@ -489,9 +487,9 @@ private fun ProjectCard(
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (onNewChat != null) Button(onClick = onNewChat, colors = ButtonDefaults.buttonColors(containerColor = GeminiBlue), shape = RoundedCornerShape(12.dp)) {
-                    Text("New chat here", fontSize = 13.sp)
+                    Text(L.cloud.agyCloudUi.newChatHere, fontSize = 13.sp)
                 }
-                OutlinedButton(onClick = onRepos, shape = RoundedCornerShape(12.dp)) { Text("Repos", fontSize = 13.sp) }
+                OutlinedButton(onClick = onRepos, shape = RoundedCornerShape(12.dp)) { Text(L.cloud.agyCloudUi.repos, fontSize = 13.sp) }
             }
         }
     }
@@ -542,28 +540,27 @@ private fun CloudProjectEditor(
         text = {
             Column {
                 if (askName) {
-                    OutlinedTextField(name, { name = it }, singleLine = true, label = { Text("Project name") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(L.cloud.agyCloudUi.projectName) }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("GitHub repos", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { reload++ }, modifier = Modifier.size(30.dp)) { Icon(Icons.Outlined.Refresh, "Reload", modifier = Modifier.size(18.dp)) }
+                    Text(L.cloud.agyCloudUi.githubRepos, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { reload++ }, modifier = Modifier.size(30.dp)) { Icon(Icons.Outlined.Refresh, L.common.reload, modifier = Modifier.size(18.dp)) }
                 }
                 when {
                     notConnected -> {
                         Text(
-                            "GitHub is not connected to your cloud agents yet. Connect opens Antigravity's GitHub page in your " +
-                                "browser, as your Antigravity Google account: connect GitHub there and choose the repos it may use, then come back here.",
+                            L.cloud.agyCloudUi.githubIsNotConnectedToYour,
                             fontSize = 12.5.sp, lineHeight = 17.sp, color = subtle()
                         )
                         Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = { saveError = null; openConnect(connectScope, uri, "github", onError = { saveError = it }) { connecting = true } }) { Text("Connect GitHub") }
+                        OutlinedButton(onClick = { saveError = null; openConnect(connectScope, uri, "github", onError = { saveError = it }) { connecting = true } }) { Text(L.cloud.agyCloudUi.connectGithub) }
                     }
                     loadError != null -> Text(loadError!!, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
                     available == null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Loading your repos…", fontSize = 12.5.sp)
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text(L.cloud.agyCloudUi.loadingYourRepos, fontSize = 12.5.sp)
                     }
-                    all.isEmpty() -> Text("No repos are shared with Antigravity. Add some in GitHub's settings for the Antigravity app.", fontSize = 12.5.sp, color = subtle())
+                    all.isEmpty() -> Text(L.cloud.agyCloudUi.noReposAreSharedWithAntigravity, fontSize = 12.5.sp, color = subtle())
                 }
                 if (all.isNotEmpty()) {
                     LazyColumn(Modifier.heightIn(max = 300.dp)) {
@@ -577,12 +574,12 @@ private fun CloudProjectEditor(
                                 Checkbox(checked = on, onCheckedChange = { picked = if (on) picked - r.resource_id else picked + r.resource_id })
                                 Column(Modifier.weight(1f)) {
                                     Text(r.display_name.ifBlank { r.resource_id }, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    if (r.is_private) Text("private", fontSize = 10.5.sp, color = subtle())
+                                    if (r.is_private) Text(L.cloud.agyCloudUi.private, fontSize = 10.5.sp, color = subtle())
                                 }
                             }
                         }
                     }
-                    Text("Private repos in one project must have the same owner.", fontSize = 11.sp, color = subtle(), modifier = Modifier.padding(top = 4.dp))
+                    Text(L.cloud.agyCloudUi.privateReposInOneProjectMust, fontSize = 11.sp, color = subtle(), modifier = Modifier.padding(top = 4.dp))
                 }
                 saveError?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
             }
@@ -595,13 +592,13 @@ private fun CloudProjectEditor(
                     saveError = null
                     scope.launch {
                         val repos = all.filter { it.resource_id in picked }
-                        onSave(name, repos).onFailure { saveError = "Couldn't save: ${it.message ?: "unknown error"}" }
+                        onSave(name, repos).onFailure { saveError = L.cloud.agyCloudUi.couldntSaveValue(it.message ?: L.cloud.agyCloudUi.unknownError) }
                         saving = false
                     }
                 }
-            ) { Text(if (saving) "Saving…" else confirm) }
+            ) { Text(if (saving) L.common.saving else confirm) }
         },
-        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(enabled = !saving, onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -624,10 +621,10 @@ private fun ConnectionsTab(modifier: Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Connect opens Antigravity's page for it in your browser, as your Antigravity Google account. Connect it there, then come back here.",
+                L.cloud.agyCloudUi.connectOpensAntigravitysPageForIt,
                 fontSize = 12.sp, color = subtle(), lineHeight = 16.sp, modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = { reload++ }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+            IconButton(onClick = { reload++ }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
         }
         if (error != null) Text(error!!, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
         if (plugins == null && error == null) CircularProgressIndicator(Modifier.padding(16.dp).size(22.dp), strokeWidth = 2.dp)
@@ -639,16 +636,16 @@ private fun ConnectionsTab(modifier: Modifier) {
                             Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             Text(
                                 when {
-                                    p.connected -> "Connected" + (p.account.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
-                                    p.expired -> "Expired: connect again"
-                                    else -> "Not connected"
+                                    p.connected -> p.account.takeIf { it.isNotBlank() }?.let { L.cloud.agyCloudUi.connectedAccount(it) } ?: L.cloud.agyCloudUi.connected
+                                    p.expired -> L.cloud.agyCloudUi.expiredConnectAgain
+                                    else -> L.cloud.agyCloudUi.notConnected
                                 },
                                 fontSize = 12.sp,
                                 color = if (p.connected) ai.antigem.theme.AppColors.success else subtle()
                             )
                         }
-                        if (p.connected) TextButton(onClick = { disconnecting = p }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
-                        else OutlinedButton(onClick = { error = null; openConnect(scope, uri, p.id, onError = { error = it }) { connecting = true } }) { Text(if (p.expired) "Reconnect" else "Connect") }
+                        if (p.connected) TextButton(onClick = { disconnecting = p }) { Text(L.common.disconnect, color = MaterialTheme.colorScheme.error) }
+                        else OutlinedButton(onClick = { error = null; openConnect(scope, uri, p.id, onError = { error = it }) { connecting = true } }) { Text(if (p.expired) L.common.reconnect else L.common.connect) }
                     }
                 }
             }
@@ -658,17 +655,17 @@ private fun ConnectionsTab(modifier: Modifier) {
         AlertDialog(
             onDismissRequest = { disconnecting = null },
             title = { Text("Disconnect ${p.name}?") },
-            text = { Text("Cloud agents can no longer use ${p.name} until you connect it again.") },
+            text = { Text(L.cloud.agyCloudUi.cloudAgentsCanNoLongerUse(p.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        AgyCloud.disconnectPlugin(p).onFailure { error = "Disconnect failed: ${it.message ?: "unknown error"}" }
+                        AgyCloud.disconnectPlugin(p).onFailure { error = L.cloud.agyCloudUi.disconnectFailedValue(it.message ?: L.cloud.agyCloudUi.unknownError) }
                         disconnecting = null
                         reload++
                     }
-                }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.common.disconnect, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { disconnecting = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { disconnecting = null }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -689,10 +686,10 @@ fun CloudChatStrip(projectName: String?, onProject: () -> Unit, onPreview: () ->
         ) {
             Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(5.dp))
-            Text(projectName ?: "Cloud", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = GeminiBlue, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(projectName ?: L.cloud.agyCloudUi.cloud, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = GeminiBlue, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        StripChip(Icons.Outlined.Visibility, "Preview", onPreview)
-        StripChip(Icons.Outlined.Terminal, "Run", onRunCommand)
+        StripChip(Icons.Outlined.Visibility, L.common.preview, onPreview)
+        StripChip(Icons.Outlined.Terminal, L.common.run, onRunCommand)
     }
 }
 
@@ -718,11 +715,11 @@ fun CloudRunCommandDialog(onRun: (String) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.Terminal, null) },
-        title = { Text("Run a command in the cloud VM") },
+        title = { Text(L.cloud.agyCloudUi.runACommandInTheCloud) },
         text = {
             Column {
                 OutlinedTextField(
-                    cmd, { cmd = it }, label = { Text("Command") }, singleLine = false, maxLines = 4,
+                    cmd, { cmd = it }, label = { Text(L.common.command) }, singleLine = false, maxLines = 4,
                     textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -735,15 +732,15 @@ fun CloudRunCommandDialog(onRun: (String) -> Unit, onDismiss: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("The agent runs it and the output shows in the chat.", fontSize = 11.5.sp, color = subtle())
+                Text(L.cloud.agyCloudUi.theAgentRunsItAndThe, fontSize = 11.5.sp, color = subtle())
             }
         },
         confirmButton = {
             TextButton(enabled = cmd.isNotBlank(), onClick = { onRun(cmd.trim()); onDismiss() }) {
-                Icon(Icons.Outlined.PlayArrow, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Run")
+                Icon(Icons.Outlined.PlayArrow, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text(L.common.run)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 

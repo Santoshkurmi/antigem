@@ -26,6 +26,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.lang.ref.WeakReference
+import ai.antigem.i18n.L
 
 /** Which view shows the picture: the chat card or the full-screen player (full screen wins while it is open). */
 enum class VideoSlot { INLINE, FULLSCREEN }
@@ -329,18 +330,18 @@ class VideoPlayerController(context: Context, val source: String) {
             return
         }
         phase = Phase.ERROR
-        error = "This video can't be played here"
+        error = L.components.videoPlayerController.thisVideoCantBePlayedHere
     }
 
     private fun downloadThenPlay() {
         val primary = stream.uri.toString()
         val legacy = listOfNotNull(HubMediaResolver.bridgeUrlFor(source))
         phase = Phase.PREPARING
-        runTask("Loading video…") { progress ->
+        runTask(L.components.videoPlayerController.loadingVideo) { progress ->
             val file = HubMediaResolver.downloadBridgeMedia(appContext, primary, legacy, progress)
             if (file == null) {
                 phase = Phase.ERROR
-                error = "Could not load this video from the IDE bridge"
+                error = L.components.videoPlayerController.couldNotLoadThisVideoFrom
             } else {
                 stream = HubMediaResolver.MediaStream(Uri.fromFile(file), emptyMap(), false)
                 playWhenReady = true
@@ -406,18 +407,18 @@ class VideoPlayerController(context: Context, val source: String) {
     /** Opens the video in another app (the user's own player). */
     fun openElsewhere() {
         pause()
-        runTask("Preparing…") { progress ->
+        runTask(L.components.videoPlayerController.preparing) { progress ->
             val uri = shareableUri(progress)
-            if (uri == null) AppToastHelper.showToast("Could not prepare $name", ChatToastType.ERROR)
+            if (uri == null) AppToastHelper.showToast(L.components.videoPlayerController.couldNotPrepareName(name), ChatToastType.ERROR)
             else FileOpener.view(appContext, uri, name, forceChooser = true, contentMime = "video/*")?.let { AppToastHelper.showToast(it, ChatToastType.ERROR) }
         }
     }
 
     fun share() {
-        runTask("Preparing to share…") { progress ->
+        runTask(L.components.videoPlayerController.preparingToShare) { progress ->
             val uri = shareableUri(progress)
             when {
-                uri == null -> AppToastHelper.showToast("Could not prepare $name", ChatToastType.ERROR)
+                uri == null -> AppToastHelper.showToast(L.components.videoPlayerController.couldNotPrepareName(name), ChatToastType.ERROR)
                 uri.scheme == "http" || uri.scheme == "https" -> {
                     // a web video: share its link
                     val send = Intent(Intent.ACTION_SEND).apply {
@@ -425,7 +426,7 @@ class VideoPlayerController(context: Context, val source: String) {
                         putExtra(Intent.EXTRA_TEXT, uri.toString())
                     }
                     runCatching {
-                        appContext.startActivity(Intent.createChooser(send, "Share video link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        appContext.startActivity(Intent.createChooser(send, L.components.videoPlayerController.shareVideoLink).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
                 }
                 else -> FileOpener.share(appContext, listOf(uri to name))?.let { AppToastHelper.showToast(it, ChatToastType.ERROR) }

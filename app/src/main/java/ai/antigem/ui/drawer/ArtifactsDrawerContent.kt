@@ -39,6 +39,7 @@ import ai.antigem.ui.components.LocalFileLinkHandler
 import ai.antigem.ui.components.LocalSnackbarHostState
 import kotlinx.coroutines.launch
 import java.io.File
+import ai.antigem.i18n.L
 
 @Composable
 fun ArtifactsDrawerContent(
@@ -87,7 +88,7 @@ fun ArtifactsDrawerContent(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Artifacts",
+                        text = L.drawer.artifactsDrawer.artifacts,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -108,7 +109,7 @@ fun ArtifactsDrawerContent(
                     }
                 }
                 Text(
-                    text = "Generated files, plans & media",
+                    text = L.drawer.artifactsDrawer.generatedFilesPlansMedia,
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -120,7 +121,7 @@ fun ArtifactsDrawerContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = L.common.close,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -153,14 +154,14 @@ fun ArtifactsDrawerContent(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "No artifacts generated yet",
+                        text = L.drawer.artifactsDrawer.noArtifactsGeneratedYet,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Plans, walkthroughs, and generated images will appear here.",
+                        text = L.drawer.artifactsDrawer.plansWalkthroughsAndGeneratedImagesWill,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -222,9 +223,9 @@ private fun ArtifactCardItem(
     val isWalkthrough = artifact.name.contains("walkthrough", ignoreCase = true) || artifact.absoluteUri.contains("walkthrough", ignoreCase = true)
 
     val displayTitle = if (isPlan) {
-        "Implementation Plan"
+        L.drawer.artifactsDrawer.implementationPlan
     } else if (isWalkthrough) {
-        "Walkthrough"
+        L.drawer.artifactsDrawer.walkthrough
     } else if (artifact.name.isNotBlank()) {
         val clean = artifact.name.substringAfterLast("/").replace("_", " ").replace("-", " ")
         clean.split(" ").filter { it.isNotBlank() }.joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
@@ -333,7 +334,7 @@ private fun ArtifactCardItem(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Download,
-                        contentDescription = "Download to Downloads/AntiGem",
+                        contentDescription = L.drawer.artifactsDrawer.downloadToDownloadsAntigem,
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(17.dp)
                     )

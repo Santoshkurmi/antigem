@@ -26,6 +26,7 @@ import ai.antigem.ui.chat.ChatViewModel
 import ai.antigem.ui.chat.ChatViewModelHolder
 import ai.antigem.ui.ide.IdeScreen
 import ai.antigem.ui.components.pageSnapshotSource
+import ai.antigem.i18n.L
 
 enum class AppViewMode {
     CHAT,
@@ -72,7 +73,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (ai.antigem.ui.components.PermissionUtils.hasNotificationPermission(this)) {
-            ai.antigem.data.service.AntiGemService.start(this)
+            ai.antigem.data.service.AntiGemService.start(this, fromForeground = true)
             ai.antigem.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
         ai.antigem.data.daemon.IdeDaemonManager.init(this)
@@ -312,7 +313,7 @@ class MainActivity : ComponentActivity() {
                         ai.antigem.ui.components.AppPermissionsDialog(
                             onDismissOrCompleted = {
                                 showPermissionsDialog = false
-                                ai.antigem.data.service.AntiGemService.start(context)
+                                ai.antigem.data.service.AntiGemService.start(context, fromForeground = true)
                                 ai.antigem.data.local.LocalServerManager.autoStartOnAppLaunch(context)
                             }
                         )
@@ -870,7 +871,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         instanceRef = java.lang.ref.WeakReference(this)
         if (ai.antigem.ui.components.PermissionUtils.hasNotificationPermission(this)) {
-            ai.antigem.data.service.AntiGemService.start(this)
+            ai.antigem.data.service.AntiGemService.start(this, fromForeground = true)
             ai.antigem.data.local.LocalServerManager.autoStartOnAppLaunch(this)
         }
     }
@@ -996,7 +997,7 @@ class MainActivity : ComponentActivity() {
                     }
                 } catch (e: Exception) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        ai.antigem.ui.components.AppToastHelper.showToast("Could not open ${item.name}", ai.antigem.ui.components.ChatToastType.ERROR)
+                        ai.antigem.ui.components.AppToastHelper.showToast(L.app.mainActivity.couldNotOpenName(item.name), ai.antigem.ui.components.ChatToastType.ERROR)
                     }
                 }
             }

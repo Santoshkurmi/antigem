@@ -34,6 +34,7 @@ class AndroidLocalBridgeServer private constructor() {
         NOTES("notes_mcp"),
         JARVIS("jarvis_mcp"),
         THEME("theme_mcp"),
+        LANGUAGE("language_mcp"),
         MINI_APP_DEVELOPER("mini_app_developer_mcp")
     }
 
@@ -45,6 +46,7 @@ class AndroidLocalBridgeServer private constructor() {
         const val NOTES_MCP_NAME = "notes_mcp"
         const val JARVIS_MCP_NAME = "jarvis_mcp"
         const val THEME_MCP_NAME = "theme_mcp"
+        const val LANGUAGE_MCP_NAME = "language_mcp"
         const val MINI_APP_DEVELOPER_MCP_NAME = "mini_app_developer_mcp"
         fun isDeveloperMcpName(name: String) = name == DEVELOPER_MCP_NAME || name == LEGACY_DEVELOPER_MCP_NAME
         private const val TAG = "AndroidBridgeServer"
@@ -265,6 +267,7 @@ class AndroidLocalBridgeServer private constructor() {
                     path == "/notes" -> handleMcpHttp(McpEndpoint.NOTES, method, body, out)
                     path == "/jarvis" -> handleMcpHttp(McpEndpoint.JARVIS, method, body, out, headers["mcp-session-id"])
                     path == "/theme" -> handleMcpHttp(McpEndpoint.THEME, method, body, out)
+                    path == "/language" -> handleMcpHttp(McpEndpoint.LANGUAGE, method, body, out)
                     path == "/mini_app_developer" -> handleMcpHttp(McpEndpoint.MINI_APP_DEVELOPER, method, body, out)
                     path == "/api/health" -> {
                         val res = JSONObject().apply {
@@ -465,6 +468,7 @@ class AndroidLocalBridgeServer private constructor() {
                     if (endpoint == McpEndpoint.NOTES) put("instructions", ai.antigem.data.notes.NotesMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.JARVIS) put("instructions", ai.antigem.data.jarvis.JarvisMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.THEME) put("instructions", ai.antigem.theme.ThemeMcp.INSTRUCTIONS)
+                    if (endpoint == McpEndpoint.LANGUAGE) put("instructions", ai.antigem.i18n.LanguageMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.MINI_APP_DEVELOPER) put("instructions", ai.antigem.ui.miniapps.MiniAppDevMcp.INSTRUCTIONS)
                     if (endpoint == McpEndpoint.BROWSER) put("instructions", ai.antigem.ui.browser.mcp.BrowserMcp.INSTRUCTIONS + (appContext?.let { ai.antigem.data.rea.ReaManager.browserMcpNote(it) } ?: ""))
                     if (endpoint == McpEndpoint.EXTENSION_DEVELOPER) put("instructions", "Start with webview_extension_docs. Read developer-mcp.md and the required API references, create a draft, write files, install or update, discover tools with webview_extension_test, and inspect logs to fix failures. No app source or manual ZIP handling is needed.")
@@ -519,6 +523,7 @@ class AndroidLocalBridgeServer private constructor() {
         if (endpoint == McpEndpoint.NOTES) return ai.antigem.data.notes.NotesMcp.tools()
         if (endpoint == McpEndpoint.JARVIS) return ai.antigem.data.jarvis.JarvisMcp.tools()
         if (endpoint == McpEndpoint.THEME) return ai.antigem.theme.ThemeMcp.tools()
+        if (endpoint == McpEndpoint.LANGUAGE) return ai.antigem.i18n.LanguageMcp.tools()
         if (endpoint == McpEndpoint.MINI_APP_DEVELOPER) return ai.antigem.ui.miniapps.MiniAppDevMcp.tools()
         if (endpoint == McpEndpoint.BROWSER) return ai.antigem.ui.browser.mcp.BrowserMcp.tools()
         val tools = JSONArray()
@@ -630,6 +635,7 @@ class AndroidLocalBridgeServer private constructor() {
         if (toolName.startsWith("notes_")) return ai.antigem.data.notes.NotesMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("jarvis_")) return ai.antigem.data.jarvis.JarvisMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("theme_")) return ai.antigem.theme.ThemeMcp.call(toolName, args)
+        if (toolName.startsWith("language_")) return ai.antigem.i18n.LanguageMcp.call(toolName, args)
         if (toolName.startsWith("miniapp_")) return ai.antigem.ui.miniapps.MiniAppDevMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("browser_")) return ai.antigem.ui.browser.mcp.BrowserMcp.call(appContext!!, toolName, args)
 

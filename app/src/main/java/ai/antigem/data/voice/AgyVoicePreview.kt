@@ -18,6 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 /** The headers every request to the agy hub carries (security header with the hub token, proxy header). */
 internal fun Request.Builder.agyHubHeaders(): Request.Builder {
@@ -67,7 +68,7 @@ object AgyVoicePreview {
             _loading.value = null
             val file = result.getOrElse {
                 ai.antigem.ui.components.AppToastHelper.showToast(
-                    "Couldn't load $voice's sample: ${it.message}", ai.antigem.ui.components.ChatToastType.ERROR
+                    L.voice.agyVoicePreview.couldntLoadVoiceSSampleMessage(voice, it.message), ai.antigem.ui.components.ChatToastType.ERROR
                 )
                 return@launch
             }

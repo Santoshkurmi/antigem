@@ -38,6 +38,7 @@ import ai.antigem.data.adb.ShizukuShell
 import ai.antigem.theme.QuotaGreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 internal val Amber: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.warning
 
@@ -66,7 +67,7 @@ private fun ModePicker(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: Borde
     val su = if (AdbConnectManager.inChroot) "android-su -c" else "su -c"
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("How AntiGem reaches this phone", fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+            Text(L.settings.adbConnect.howAntigemReachesThisPhone, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 modes.forEachIndexed { i, m ->
                     SegmentedButton(
@@ -79,12 +80,11 @@ private fun ModePicker(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: Borde
             Hint(
                 when (mode) {
                     DeviceAccess.Mode.ADB -> "adb over Wireless debugging: pair once, then AntiGem connects by itself. Runs as the shell user."
-                    DeviceAccess.Mode.SHIZUKU -> "Through the Shizuku app, as the shell user (or root, if Shizuku runs as root). No pairing here."
-                    DeviceAccess.Mode.ROOT -> "Through the phone's su (Magisk, KernelSU, APatch), as root. For rooted phones."
+                    DeviceAccess.Mode.SHIZUKU -> L.settings.adbConnect.throughTheShizukuAppAsThe
+                    DeviceAccess.Mode.ROOT -> L.settings.adbConnect.throughThePhonesSuMagiskKernelsu
                 }
             )
-            Hint("Android Automation uses the one picked here. In chat, you can ask for any one that's set up: " +
-                "\"use adb\" (adb shell …), \"use shizuku\" (rish -c …), \"use su\" ($su …).")
+            Hint(L.settings.adbConnect.androidAutomationUsesTheOnePicked(su))
         }
     }
 }
@@ -126,42 +126,42 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f))
-                    IconButton(onClick = AdbConnectManager::clearMessage) { Icon(Icons.Default.Close, "Dismiss", Modifier.size(18.dp)) }
+                    IconButton(onClick = AdbConnectManager::clearMessage) { Icon(Icons.Default.Close, L.common.dismiss, Modifier.size(18.dp)) }
                 }
             }
         }
 
         // Step 1: adb in the terminal
-        StepCard(1, "Install ADB", if (installed) "Installed" else if (state.adbBroken != null) "Broken" else null, cardBg, cardBorder,
+        StepCard(1, L.settings.adbConnect.installAdb, if (installed) L.common.installed else if (state.adbBroken != null) L.settings.adbConnect.broken else null, cardBg, cardBorder,
             badgeColor = if (installed) QuotaGreen else MaterialTheme.colorScheme.error) {
             when {
-                state.adbInstalled == null -> Hint("Checking the terminal for adb…")
+                state.adbInstalled == null -> Hint(L.settings.adbConnect.checkingTheTerminalForAdb)
                 installed && !state.installing -> Mono(state.adbVersion ?: "adb")
                 state.adbBroken != null && !state.installing -> {
                     Text("adb is installed but can't start:", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                     Mono(state.adbBroken!!)
-                    Hint("Usually a library it needs (such as libprotobuf) is older than adb itself. Repair updates the package lists and upgrades adb and the libraries it uses.")
+                    Hint(L.settings.adbConnect.usuallyALibraryItNeedsSuch)
                     Button(onClick = AdbConnectManager::installAdb) {
-                        Icon(Icons.Outlined.Build, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Repair ADB")
+                        Icon(Icons.Outlined.Build, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.adbConnect.repairAdb)
                     }
                 }
                 !state.installing && AdbConnectManager.inChroot -> {
                     // the Ubuntu chroot is the phone's runtime: its agents use Ubuntu's adb
                     Hint("adb isn't installed in the Ubuntu chroot yet. This installs Ubuntu's adb and fastboot packages: they run as your user, no sudo needed (also for USB / OTG devices).")
                     Button(onClick = AdbConnectManager::installAdb) {
-                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Install adb and fastboot")
+                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.adbConnect.installAdbAndFastboot)
                     }
                 }
                 !state.installing -> {
                     Hint("adb isn't installed in the terminal yet. This installs the android-tools package (adb, fastboot).")
                     Button(onClick = AdbConnectManager::installAdb) {
-                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Install android-tools")
+                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.adbConnect.installAndroidTools)
                     }
                 }
             }
             if (state.installing) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().clip(CircleShape))
-                Hint(state.installLog.lastOrNull { !it.startsWith("$") } ?: "Starting…")
+                Hint(state.installLog.lastOrNull { !it.startsWith("$") } ?: L.common.starting)
             }
             if (state.installLog.isNotEmpty()) LogBox(state.installLog)
             state.installError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
@@ -169,38 +169,38 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
 
         // Step 2: Wireless debugging
         val wirelessReady = devOptionsOn && wirelessOn
-        StepCard(2, "Turn on Wireless debugging", if (wirelessReady) "On" else null, cardBg, cardBorder) {
+        StepCard(2, L.settings.adbConnect.turnOnWirelessDebugging, if (wirelessReady) L.common.on else null, cardBg, cardBorder) {
             if (!AdbConnectManager.isWirelessDebuggingSupported()) {
-                Hint("Wireless debugging needs Android 11 or newer. On this phone, run \"adb tcpip 5555\" from a computer once, then connect to localhost port 5555 below.")
+                Hint(L.settings.adbConnect.wirelessDebuggingNeedsAndroid11Or)
                 return@StepCard
             }
-            CheckRow("Developer options", devOptionsOn)
-            CheckRow("Wireless debugging", wirelessOn)
+            CheckRow(L.settings.adbConnect.developerOptions, devOptionsOn)
+            CheckRow(L.settings.adbConnect.wirelessDebugging, wirelessOn)
             Hint(
                 when {
-                    !devOptionsOn -> "Open About phone and tap Build number 7 times to unlock Developer options."
-                    !wirelessOn -> "In Developer options, turn on Wireless debugging. Your phone must be on Wi-Fi."
-                    else -> "Ready. Wireless debugging uses a new port each time it turns on; AntiGem finds it for you."
+                    !devOptionsOn -> L.settings.adbConnect.openAboutPhoneAndTapBuild
+                    !wirelessOn -> L.settings.adbConnect.inDeveloperOptionsTurnOnWireless
+                    else -> L.settings.adbConnect.readyWirelessDebuggingUsesANew
                 }
             )
             if (!wirelessReady) OutlinedButton(onClick = { AdbConnectManager.openWirelessDebuggingSettings(context) }) {
-                Text(if (devOptionsOn) "Open Wireless debugging" else "Open About phone")
+                Text(if (devOptionsOn) L.settings.adbConnect.openWirelessDebugging else L.settings.adbConnect.openAboutPhone)
             }
         }
 
         // Step 3: one-time pairing through the notification
-        StepCard(3, "Pair this device", if (state.pairedOnce) "Paired" else "Once", cardBg, cardBorder, badgeColor = if (state.pairedOnce) QuotaGreen else Amber) {
+        StepCard(3, L.settings.adbConnect.pairThisDevice, if (state.pairedOnce) L.settings.adbConnect.paired else L.settings.adbConnect.once, cardBg, cardBorder, badgeColor = if (state.pairedOnce) QuotaGreen else Amber) {
             PairingSteps()
             if (!notificationsOn) {
                 Surface(shape = RoundedCornerShape(10.dp), color = Amber.copy(alpha = 0.12f)) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Notifications are off for AntiGem. The pairing code is entered in a notification, so allow them first.", fontSize = 12.sp)
+                        Text(L.settings.adbConnect.notificationsAreOffForAntigemThe, fontSize = 12.sp)
                         TextButton(onClick = {
                             val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                             else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null))
                             runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                        }, contentPadding = PaddingValues(0.dp)) { Text("Allow notifications") }
+                        }, contentPadding = PaddingValues(0.dp)) { Text(L.settings.adbConnect.allowNotifications) }
                     }
                 }
             }
@@ -208,8 +208,8 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
             val pairingActive = state.pairing !is Pairing.Idle && state.pairing !is Pairing.Paired
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (pairingActive) {
-                    OutlinedButton(onClick = { AdbConnectManager.stopPairing(context) }) { Text("Stop") }
-                    Button(onClick = { AdbConnectManager.openWirelessDebuggingSettings(context) }) { Text("Open Wireless debugging") }
+                    OutlinedButton(onClick = { AdbConnectManager.stopPairing(context) }) { Text(L.common.stop) }
+                    Button(onClick = { AdbConnectManager.openWirelessDebuggingSettings(context) }) { Text(L.settings.adbConnect.openWirelessDebugging) }
                 } else {
                     Button(
                         enabled = installed && wirelessReady,
@@ -217,38 +217,38 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
                             AdbConnectManager.startPairing(context)
                             AdbConnectManager.openWirelessDebuggingSettings(context)
                         }
-                    ) { Text(if (state.pairedOnce) "Pair again" else "Start pairing") }
+                    ) { Text(if (state.pairedOnce) L.settings.adbConnect.pairAgain else L.settings.adbConnect.startPairing) }
                 }
             }
-            if (!installed || !wirelessReady) Hint("Finish the steps above first.")
+            if (!installed || !wirelessReady) Hint(L.settings.adbConnect.finishTheStepsAboveFirst)
             ManualPairing(enabled = installed && state.pairing !is Pairing.InProgress)
         }
 
         // Step 4: connect
-        StepCard(4, "Connect", if (connected != null) "Connected" else null, cardBg, cardBorder) {
+        StepCard(4, L.common.connect, if (connected != null) L.settings.adbConnect.connected else null, cardBg, cardBorder) {
             var host by remember(state.host) { mutableStateOf(state.host) }
             var port by remember { mutableStateOf("") }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = host, onValueChange = { host = it.trim() }, label = { Text("IP") }, singleLine = true,
+                    value = host, onValueChange = { host = it.trim() }, label = { Text(L.settings.adbConnect.ip) }, singleLine = true,
                     modifier = Modifier.weight(1.4f)
                 )
                 OutlinedTextField(
-                    value = port, onValueChange = { port = it.filter(Char::isDigit).take(5) }, label = { Text("Port") },
-                    placeholder = { Text("Auto") }, singleLine = true, modifier = Modifier.weight(1f),
+                    value = port, onValueChange = { port = it.filter(Char::isDigit).take(5) }, label = { Text(L.common.port) },
+                    placeholder = { Text(L.common.auto) }, singleLine = true, modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
-            Hint("Leave the port empty to find it automatically (this phone only). For another device, enter its IP and port.")
+            Hint(L.settings.adbConnect.leaveThePortEmptyToFind)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     enabled = installed && state.busy == null,
                     onClick = { AdbConnectManager.setHost(host); AdbConnectManager.connect(port.toIntOrNull()) }
-                ) { Text("Connect") }
+                ) { Text(L.common.connect) }
                 if (state.busy != null) {
-                    OutlinedButton(onClick = AdbConnectManager::cancelConnect) { Text("Cancel") }
+                    OutlinedButton(onClick = AdbConnectManager::cancelConnect) { Text(L.common.cancel) }
                 } else if (connected != null) {
-                    OutlinedButton(onClick = AdbConnectManager::disconnectAll) { Text("Disconnect") }
+                    OutlinedButton(onClick = AdbConnectManager::disconnectAll) { Text(L.common.disconnect) }
                 }
                 if (state.busy != null) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -258,8 +258,8 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Reconnect automatically", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                    Hint("When Wireless debugging turns on again, for example after Wi-Fi reconnects, AntiGem finds the new port and connects while it's running.")
+                    Text(L.settings.adbConnect.reconnectAutomatically, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                    Hint(L.settings.adbConnect.whenWirelessDebuggingTurnsOnAgain)
                 }
                 Spacer(Modifier.width(8.dp))
                 Switch(checked = state.autoReconnect, onCheckedChange = AdbConnectManager::setAutoReconnect)
@@ -268,30 +268,27 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Turn Wireless debugging on by itself", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                        Hint("After a reboot or when Wi-Fi comes back, AntiGem switches Wireless debugging on again (while it runs), " +
-                            "so adb reconnects without opening Settings. Turning this on grants AntiGem a system permission " +
-                            "(WRITE_SECURE_SETTINGS) once, through adb, Shizuku or root. On a Wi-Fi network you haven't allowed " +
-                            "before, Android asks you first.")
+                        Text(L.settings.adbConnect.turnWirelessDebuggingOnByItself, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                        Hint(L.settings.adbConnect.afterARebootOrWhenWi)
                     }
                     Spacer(Modifier.width(8.dp))
                     if (state.grantingSecureSettings) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     else Switch(checked = state.autoWireless && state.secureSettings, onCheckedChange = { AdbConnectManager.setAutoWireless(it) })
                 }
                 if (state.autoWireless && !state.secureSettings) {
-                    Text("The permission is gone (it is removed when the app is reinstalled). Turn this off and on again.",
+                    Text(L.settings.adbConnect.thePermissionIsGoneItIs,
                         fontSize = 12.sp, color = Amber)
                 }
             }
             if (state.devices.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                Text("Devices", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(L.settings.adbConnect.devices, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 state.devices.forEach { device ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(device.serial, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
                         Pill(device.state, if (device.state == "device") QuotaGreen else Amber)
                         IconButton(onClick = { AdbConnectManager.disconnect(device.serial) }) {
-                            Icon(Icons.Outlined.LinkOff, "Disconnect", Modifier.size(18.dp))
+                            Icon(Icons.Outlined.LinkOff, L.common.disconnect, Modifier.size(18.dp))
                         }
                     }
                 }
@@ -301,7 +298,7 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
         if (connected != null) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Use it in the terminal", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(L.settings.adbConnect.useItInTheTerminal, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Mono("adb devices\nadb shell\nadb install app.apk")
                 }
             }
@@ -322,38 +319,37 @@ private fun ShizukuSection(cardBg: Color, cardBorder: BorderStroke) {
         }
     }
     val (icon, tint, title, subtitle) = when {
-        !status.installed -> Quad(Icons.Outlined.Download, Amber, "Shizuku not installed", "Install it below to get started")
-        !status.running -> Quad(Icons.Outlined.PowerSettingsNew, Amber, "Shizuku not running", "Start it in the Shizuku app")
-        status.tooOld -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, "Shizuku too old", "Update Shizuku (v11 or newer)")
-        !status.granted -> Quad(Icons.Outlined.Lock, Amber, "Permission needed", "Allow AntiGem below")
-        else -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, "Ready", "Commands run as ${status.userLabel} (Shizuku ${status.version})")
+        !status.installed -> Quad(Icons.Outlined.Download, Amber, L.settings.adbConnect.shizukuNotInstalled, L.settings.adbConnect.installItBelowToGetStarted)
+        !status.running -> Quad(Icons.Outlined.PowerSettingsNew, Amber, L.settings.adbConnect.shizukuNotRunning, L.settings.adbConnect.startItInTheShizukuApp)
+        status.tooOld -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, L.settings.adbConnect.shizukuTooOld, L.settings.adbConnect.updateShizukuV11OrNewer)
+        !status.granted -> Quad(Icons.Outlined.Lock, Amber, L.settings.adbConnect.permissionNeeded, L.settings.adbConnect.allowAntigemBelow)
+        else -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, L.common.ready, L.settings.adbConnect.commandsRunAsUserlabelShizukuVersion(status.userLabel, status.version))
     }
     HeaderCard(icon, tint, title, subtitle, cardBg, cardBorder) { ShizukuShell.refresh() }
 
-    StepCard(1, "Install Shizuku", if (status.installed) "Installed" else null, cardBg, cardBorder) {
-        Hint("Shizuku is a free app that lets other apps run commands as the shell user (like adb shell), without a PC.")
+    StepCard(1, L.settings.adbConnect.installShizuku, if (status.installed) L.common.installed else null, cardBg, cardBorder) {
+        Hint(L.settings.adbConnect.shizukuIsAFreeAppThat)
         if (!status.installed) Button(onClick = { ShizukuShell.openShizuku(context) }) {
-            Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Get Shizuku")
+            Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.adbConnect.getShizuku)
         }
     }
-    StepCard(2, "Start Shizuku", if (status.running) "Running" else null, cardBg, cardBorder) {
-        Hint("In the Shizuku app, start it with Wireless debugging (no PC needed) or with root. Without root it stops at every " +
-            "reboot: start it there again.")
-        if (status.installed && !status.running) OutlinedButton(onClick = { ShizukuShell.openShizuku(context) }) { Text("Open Shizuku") }
+    StepCard(2, L.settings.adbConnect.startShizuku, if (status.running) L.common.running else null, cardBg, cardBorder) {
+        Hint(L.settings.adbConnect.inTheShizukuAppStartIt)
+        if (status.installed && !status.running) OutlinedButton(onClick = { ShizukuShell.openShizuku(context) }) { Text(L.settings.adbConnect.openShizuku) }
     }
-    StepCard(3, "Allow AntiGem", if (status.granted) "Allowed" else null, cardBg, cardBorder) {
-        Hint("Shizuku asks you once whether AntiGem may use it.")
-        if (status.denied) Text("Denied. Tap Allow again, or allow AntiGem in the Shizuku app's list of apps.", fontSize = 12.sp,
+    StepCard(3, L.settings.adbConnect.allowAntigem, if (status.granted) L.common.allowed else null, cardBg, cardBorder) {
+        Hint(L.settings.adbConnect.shizukuAsksYouOnceWhetherAntigem)
+        if (status.denied) Text(L.settings.adbConnect.deniedTapAllowAgainOrAllow, fontSize = 12.sp,
             color = MaterialTheme.colorScheme.error)
         if (!status.granted) Button(enabled = status.running && !status.tooOld, onClick = { ShizukuShell.requestPermission() }) {
-            Text("Allow AntiGem")
+            Text(L.settings.adbConnect.allowAntigem)
         }
     }
     if (status.ready) TestCard(DeviceAccess.Mode.SHIZUKU, cardBg, cardBorder)
     TerminalCard(
         "rish -c 'pm list packages'\nrish dumpsys battery\nrish            # interactive",
         "rish runs commands on the phone as ${if (status.uid == 0) "root" else "the shell user"}, through AntiGem (it must be running). " +
-            if (AdbConnectManager.inChroot) "It works the same in the Ubuntu chroot." else "It's also installed in the Ubuntu chroot when that is your runtime.",
+            if (AdbConnectManager.inChroot) L.settings.adbConnect.itWorksTheSameInThe else L.settings.adbConnect.itsAlsoInstalledInTheUbuntu,
         cardBg, cardBorder
     )
 }
@@ -364,11 +360,11 @@ private fun RootSection(cardBg: Color, cardBorder: BorderStroke) {
     val scope = rememberCoroutineScope()
     val state by RootShell.state.collectAsState()
     val (icon, tint, title, subtitle) = when (state.check) {
-        RootShell.Check.GRANTED -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, "Root granted", "Commands run as root through su")
-        RootShell.Check.CHECKING -> Quad(Icons.Outlined.Sync, MaterialTheme.colorScheme.primary, "Checking…", "Answer your root manager's prompt")
-        RootShell.Check.DENIED -> Quad(Icons.Outlined.Block, MaterialTheme.colorScheme.error, "Root denied", "Allow AntiGem in your root manager")
-        RootShell.Check.NO_SU -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, "No su", "This phone isn't rooted")
-        RootShell.Check.UNKNOWN -> Quad(Icons.Outlined.Lock, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), "Not checked", "Check root below")
+        RootShell.Check.GRANTED -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, L.settings.adbConnect.rootGranted, L.settings.adbConnect.commandsRunAsRootThroughSu)
+        RootShell.Check.CHECKING -> Quad(Icons.Outlined.Sync, MaterialTheme.colorScheme.primary, L.common.checking, L.settings.adbConnect.answerYourRootManagersPrompt)
+        RootShell.Check.DENIED -> Quad(Icons.Outlined.Block, MaterialTheme.colorScheme.error, L.settings.adbConnect.rootDenied, L.settings.adbConnect.allowAntigemInYourRootManager)
+        RootShell.Check.NO_SU -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, L.settings.adbConnect.noSu, L.settings.adbConnect.thisPhoneIsntRooted)
+        RootShell.Check.UNKNOWN -> Quad(Icons.Outlined.Lock, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), L.settings.adbConnect.notChecked, L.settings.adbConnect.checkRootBelow)
     }
     HeaderCard(icon, tint, title, subtitle, cardBg, cardBorder, refreshing = state.check == RootShell.Check.CHECKING) {
         scope.launch { RootShell.check() }
@@ -378,29 +374,27 @@ private fun RootSection(cardBg: Color, cardBorder: BorderStroke) {
         Row(Modifier.padding(14.dp)) {
             Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
-            Text("Root gives the agents full control of the phone, beyond what adb or Shizuku allow. Use it only with agents you trust.",
+            Text(L.settings.adbConnect.rootGivesTheAgentsFullControl,
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
         }
     }
 
-    StepCard(1, "Allow AntiGem root", if (state.check == RootShell.Check.GRANTED) "Granted" else null, cardBg, cardBorder) {
-        Hint("Tap Check root: your root manager (Magisk, KernelSU, APatch) asks you to allow AntiGem. If it shows a message every " +
-            "time AntiGem uses root, you can turn those off for AntiGem in the root manager.")
+    StepCard(1, L.settings.adbConnect.allowAntigemRoot, if (state.check == RootShell.Check.GRANTED) L.settings.adbConnect.granted else null, cardBg, cardBorder) {
+        Hint(L.settings.adbConnect.tapCheckRootYourRootManager)
         state.message?.let { Text(it, fontSize = 12.sp, color = if (state.check == RootShell.Check.GRANTED) QuotaGreen else MaterialTheme.colorScheme.error) }
         Button(enabled = state.check != RootShell.Check.CHECKING, onClick = { scope.launch { RootShell.check() } }) {
-            Text(if (state.check == RootShell.Check.GRANTED) "Check again" else "Check root")
+            Text(if (state.check == RootShell.Check.GRANTED) L.common.checkAgain else L.settings.adbConnect.checkRoot)
         }
     }
     if (state.check == RootShell.Check.GRANTED) TestCard(DeviceAccess.Mode.ROOT, cardBg, cardBorder)
     if (AdbConnectManager.inChroot) {
         TerminalCard(
             "android-su -c 'pm list packages'\nandroid-su            # interactive",
-            "In the Ubuntu chroot, su and sudo are Ubuntu's (no Android commands there): android-su runs commands as root on " +
-                "the phone itself, through AntiGem (it must be running).",
+            L.settings.adbConnect.inTheUbuntuChrootSuAnd,
             cardBg, cardBorder
         )
     } else {
-        TerminalCard("su -c 'pm list packages'\nsu", "The terminal uses the phone's own su.", cardBg, cardBorder)
+        TerminalCard("su -c 'pm list packages'\nsu", L.settings.adbConnect.theTerminalUsesThePhonesOwn, cardBg, cardBorder)
     }
 }
 
@@ -413,7 +407,7 @@ private fun TestCard(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: BorderS
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Test", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(L.settings.adbConnect.test, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 OutlinedButton(enabled = !running, onClick = {
                     running = true
                     scope.launch {
@@ -421,7 +415,7 @@ private fun TestCard(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: BorderS
                         result = r.output.trim().ifBlank { "exit code ${r.exitCode}" }
                         running = false
                     }
-                }) { Text(if (running) "Running…" else "Run id") }
+                }) { Text(if (running) L.settings.adbConnect.running else L.settings.adbConnect.runId) }
             }
             result?.let { Mono(it) }
         }
@@ -432,7 +426,7 @@ private fun TestCard(mode: DeviceAccess.Mode, cardBg: Color, cardBorder: BorderS
 private fun TerminalCard(commands: String, hint: String, cardBg: Color, cardBorder: BorderStroke) {
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Use it in the terminal", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(L.settings.adbConnect.useItInTheTerminal, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Mono(commands)
             Hint(hint)
         }
@@ -461,7 +455,7 @@ private fun HeaderCard(
                 Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             if (refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
-            else IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, "Refresh") }
+            else IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
         }
     }
 }
@@ -470,12 +464,12 @@ private fun HeaderCard(
 private fun StatusCard(state: AdbConnectManager.State, cardBg: Color, cardBorder: BorderStroke) {
     val connected = state.connectedDevice
     val (icon, tint, title, subtitle) = when {
-        state.adbBroken != null -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, "ADB can't start", "Tap Repair ADB below")
-        state.adbInstalled == false -> Quad(Icons.Outlined.Download, Amber, "ADB not installed", "Install it below to get started")
-        connected != null -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, "Connected", connected.serial)
-        state.busy != null -> Quad(Icons.Outlined.Sync, MaterialTheme.colorScheme.primary, "Connecting…", state.busy)
-        else -> Quad(Icons.Outlined.PhonelinkErase, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), "Not connected",
-            if (state.pairedOnce) "Turn on Wireless debugging to connect" else "Pair once, then connect")
+        state.adbBroken != null -> Quad(Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.error, L.settings.adbConnect.adbCantStart, L.settings.adbConnect.tapRepairAdbBelow)
+        state.adbInstalled == false -> Quad(Icons.Outlined.Download, Amber, L.settings.adbConnect.adbNotInstalled, L.settings.adbConnect.installItBelowToGetStarted)
+        connected != null -> Quad(Icons.Outlined.PhonelinkSetup, QuotaGreen, L.settings.adbConnect.connected, connected.serial)
+        state.busy != null -> Quad(Icons.Outlined.Sync, MaterialTheme.colorScheme.primary, L.common.connecting, state.busy)
+        else -> Quad(Icons.Outlined.PhonelinkErase, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), L.settings.adbConnect.notConnected,
+            if (state.pairedOnce) L.settings.adbConnect.turnOnWirelessDebuggingToConnect else L.settings.adbConnect.pairOnceThenConnect)
     }
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -489,7 +483,7 @@ private fun StatusCard(state: AdbConnectManager.State, cardBg: Color, cardBorder
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             if (state.refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
-            else IconButton(onClick = { AdbConnectManager.refreshAndConnect(quiet = false) }) { Icon(Icons.Outlined.Refresh, "Refresh and connect") }
+            else IconButton(onClick = { AdbConnectManager.refreshAndConnect(quiet = false) }) { Icon(Icons.Outlined.Refresh, L.settings.adbConnect.refreshAndConnect) }
         }
     }
 }
@@ -531,12 +525,12 @@ internal fun StepCard(
 private fun PairingSteps() {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf(
-            "Tap Start pairing. A notification appears and Wireless debugging opens.",
-            "Tap \"Pair device with pairing code\".",
-            "Pull down the notification shade and type the 6-digit code into the AntiGem notification.",
+            L.settings.adbConnect.tapStartPairingANotificationAppears,
+            L.settings.adbConnect.tapPairDeviceWithPairingCode,
+            L.settings.adbConnect.pullDownTheNotificationShadeAnd,
         ).forEachIndexed { i, text -> Hint("${i + 1}. $text") }
         Text(
-            "Stay in Settings while you do this. Android closes the pairing dialog as soon as you leave it.",
+            L.settings.adbConnect.stayInSettingsWhileYouDo,
             fontSize = 12.sp, color = Amber, fontWeight = FontWeight.Medium
         )
     }
@@ -546,10 +540,10 @@ private fun PairingSteps() {
 private fun PairingStatus(pairing: Pairing, host: String) {
     val (text, color) = when (pairing) {
         Pairing.Idle -> return
-        Pairing.Searching -> "Waiting for the pairing dialog…" to MaterialTheme.colorScheme.primary
-        is Pairing.Ready -> "Pairing dialog found on port ${pairing.port}. Enter the code in the notification." to MaterialTheme.colorScheme.primary
-        is Pairing.InProgress -> "Pairing with $host:${pairing.port}…" to MaterialTheme.colorScheme.primary
-        Pairing.Paired -> "Paired. You won't need to do this again on this phone." to QuotaGreen
+        Pairing.Searching -> L.settings.adbConnect.waitingForThePairingDialog to MaterialTheme.colorScheme.primary
+        is Pairing.Ready -> L.settings.adbConnect.pairingDialogFoundOnPortPort(pairing.port) to MaterialTheme.colorScheme.primary
+        is Pairing.InProgress -> L.settings.adbConnect.pairingWithHostPort(host, pairing.port) to MaterialTheme.colorScheme.primary
+        Pairing.Paired -> L.settings.adbConnect.pairedYouWontNeedToDo to QuotaGreen
         is Pairing.Failed -> pairing.message to MaterialTheme.colorScheme.error
     }
     Surface(shape = RoundedCornerShape(10.dp), color = color.copy(alpha = 0.1f)) {
@@ -570,24 +564,24 @@ private fun ManualPairing(enabled: Boolean) {
     var port by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     TextButton(onClick = { open = !open }, contentPadding = PaddingValues(0.dp)) {
-        Text(if (open) "Hide manual pairing" else "Pair manually instead", fontSize = 12.5.sp)
+        Text(if (open) L.settings.adbConnect.hideManualPairing else L.settings.adbConnect.pairManuallyInstead, fontSize = 12.5.sp)
     }
     if (!open) return
-    Hint("Use this on a split screen, or for another device: enter the port and code shown in the pairing dialog.")
+    Hint(L.settings.adbConnect.useThisOnASplitScreen)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
-            value = port, onValueChange = { port = it.filter(Char::isDigit).take(5) }, label = { Text("Port") }, singleLine = true,
+            value = port, onValueChange = { port = it.filter(Char::isDigit).take(5) }, label = { Text(L.common.port) }, singleLine = true,
             modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
         OutlinedTextField(
-            value = code, onValueChange = { code = it.filter(Char::isDigit).take(6) }, label = { Text("Code") }, singleLine = true,
+            value = code, onValueChange = { code = it.filter(Char::isDigit).take(6) }, label = { Text(L.common.code) }, singleLine = true,
             modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
     }
     Button(
         enabled = enabled && port.isNotEmpty() && code.length == 6,
         onClick = { AdbConnectManager.pairManually(context, port.toInt(), code) }
-    ) { Text("Pair") }
+    ) { Text(L.settings.adbConnect.pair) }
 }
 
 @Composable
@@ -599,7 +593,7 @@ internal fun CheckRow(label: String, on: Boolean) {
         )
         Spacer(Modifier.width(8.dp))
         Text(label, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Text(if (on) "On" else "Off", fontSize = 12.sp, color = if (on) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+        Text(if (on) L.common.on else L.common.off, fontSize = 12.sp, color = if (on) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
     }
 }
 

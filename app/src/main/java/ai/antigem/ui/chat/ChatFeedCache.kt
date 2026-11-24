@@ -9,6 +9,7 @@ import ai.antigem.ui.components.parseMarkdownBlocks
 import ai.antigem.ui.components.CodeBlockCache
 import ai.antigem.ui.components.MarkdownTextCache
 import java.util.concurrent.ConcurrentHashMap
+import ai.antigem.i18n.L
 
 @Immutable
 sealed class ChatFeedItem(val key: String, val contentType: String) {
@@ -302,7 +303,7 @@ object ChatFeedCache {
             if (dividers && msg.role == MessageRole.ASSISTANT && msg.modelId != null) {
                 val previous = lastModel
                 if (previous != null && msg.modelId != previous) {
-                    val divider = ChatFeedItem.Divider("model_${msg.id}", "Switched to ${modelName(msg.modelId)}")
+                    val divider = ChatFeedItem.Divider("model_${msg.id}", L.chat.feedCache.switchedToModelname(modelName(msg.modelId)))
                     if (seenKeys.add(divider.key)) result.add(if (promptStart >= 0) promptStart else result.size, divider)
                 }
                 lastModel = msg.modelId

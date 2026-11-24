@@ -28,6 +28,9 @@ import exa.language_server_pb.Timestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import ai.antigem.i18n.L
 
 /**
  * Deterministic State Engine for AGY Hub Conversations.
@@ -253,19 +256,19 @@ class TrajectoryEngine {
 
         val terminationErrorMsg = if (daemonRunning) null else when (liveTerminationReason) {
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_ERROR -> {
-                executionError?.takeIf { it.isNotBlank() } ?: "Execution encountered an error"
+                executionError?.takeIf { it.isNotBlank() } ?: L.chat.trajectoryEngine.executionEncounteredAnError
             }
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_USER_CANCELED -> {
                 null
             }
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_INVOCATIONS -> {
-                "Maximum step limit reached (max generator invocations)"
+                L.chat.trajectoryEngine.maximumStepLimitReachedMaxGenerator
             }
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_FORCED_INVOCATIONS -> {
-                "Maximum forced invocation limit reached"
+                L.chat.trajectoryEngine.maximumForcedInvocationLimitReached
             }
             ExecutorTerminationReason.EXECUTOR_TERMINATION_REASON_MAX_TOKEN_BUDGET_EXCEEDED -> {
-                "Maximum token budget exceeded"
+                L.chat.trajectoryEngine.maximumTokenBudgetExceeded
             }
             else -> null
         }
@@ -729,7 +732,7 @@ class TrajectoryEngine {
                                 if (toolCalls.none { it.stepIndex == block.stepIndex }) {
                                     val permCmd = block.interaction.permission?.resource?.target?.takeIf { it.isNotBlank() }
                                         ?: block.interaction.permission?.actionDescription?.takeIf { it.isNotBlank() }
-                                        ?: "Permission Required"
+                                        ?: L.chat.trajectoryEngine.permissionRequired
                                     val permTool = ToolCall(
                                         id = block.stepIndex.toString(),
                                         name = block.interaction.permission?.resource?.action ?: "permission",
@@ -744,12 +747,16 @@ class TrajectoryEngine {
                                 }
                             }
                             is TurnBlock.ErrorNotice -> {
-                                val errJson = buildString {
-                                    append("{\"title\":\"${block.title}\",\"userMessage\":\"${block.userMessage}\",\"shortError\":\"${block.shortError}\",\"fullError\":\"${block.fullError}\"")
-                                    if (block.errorCode != null) append(",\"errorCode\":${block.errorCode}")
-                                    if (block.errorId.isNotBlank()) append(",\"errorId\":\"${block.errorId}\"")
-                                    append("}")
-                                }
+                                // escaped JSON on one line: a quote or line break in the message no longer breaks the
+                                // card (it then showed the whole raw payload as the message)
+                                val errJson = buildJsonObject {
+                                    put("title", block.title)
+                                    put("userMessage", block.userMessage)
+                                    put("shortError", block.shortError)
+                                    put("fullError", block.fullError)
+                                    if (block.errorCode != null) put("errorCode", block.errorCode)
+                                    if (block.errorId.isNotBlank()) put("errorId", block.errorId)
+                                }.toString()
                                 contentParts.add("<!-- error:${block.stepIndex} -->\n$errJson\n<!-- /error -->")
                             }
                             is TurnBlock.SystemNotice -> {
@@ -760,7 +767,7 @@ class TrajectoryEngine {
                                             id = noticeToolId,
                                             name = "system_notice",
                                             toolType = ToolType.SYSTEM_NOTIFICATION,
-                                            command = block.title.ifBlank { "System Notification" },
+                                            command = block.title.ifBlank { L.chat.trajectoryEngine.systemNotification },
                                             status = "SUCCESS",
                                             output = block.content,
                                             exitCode = 0,
@@ -863,7 +870,7 @@ class TrajectoryEngine {
                 stepError != null
 
         if (isErrorType) {
-            val userMsg = stepError?.user_error_message?.takeIf { it.isNotBlank() } ?: "Agent Execution Error"
+            val userMsg = stepError?.user_error_message?.takeIf { it.isNotBlank() } ?: L.chat.trajectoryEngine.agentExecutionError
             val shortErr = stepError?.short_error?.takeIf { it.isNotBlank() }
                 ?: stepError?.model_error_message?.takeIf { it.isNotBlank() }
                 ?: ""
@@ -872,12 +879,12 @@ class TrajectoryEngine {
             val errId = stepError?.error_id ?: ""
 
             val title = when {
-                shortErr.contains("cancel", ignoreCase = true) || userMsg.contains("cancel", ignoreCase = true) || userMsg.contains("stopped by user", ignoreCase = true) -> "Generation Stopped by User"
-                shortErr.contains("auth", ignoreCase = true) || userMsg.contains("auth", ignoreCase = true) -> "Authentication Required"
-                shortErr.contains("quota", ignoreCase = true) || shortErr.contains("credit", ignoreCase = true) || code == 429 -> "Quota / Usage Limit Exceeded"
-                shortErr.contains("model not found", ignoreCase = true) || shortErr.contains("unknown model", ignoreCase = true) -> "Model Configuration Error"
-                shortErr.contains("network", ignoreCase = true) || shortErr.contains("connect", ignoreCase = true) -> "Network / Server Connection Error"
-                else -> "Agent Execution Error"
+                shortErr.contains("cancel", ignoreCase = true) || userMsg.contains("cancel", ignoreCase = true) || userMsg.contains("stopped by user", ignoreCase = true) -> L.chat.trajectoryEngine.generationStoppedByUser
+                shortErr.contains("auth", ignoreCase = true) || userMsg.contains("auth", ignoreCase = true) -> L.chat.trajectoryEngine.authenticationRequired
+                shortErr.contains("quota", ignoreCase = true) || shortErr.contains("credit", ignoreCase = true) || code == 429 -> L.chat.trajectoryEngine.quotaUsageLimitExceeded
+                shortErr.contains("model not found", ignoreCase = true) || shortErr.contains("unknown model", ignoreCase = true) -> L.chat.trajectoryEngine.modelConfigurationError
+                shortErr.contains("network", ignoreCase = true) || shortErr.contains("connect", ignoreCase = true) -> L.chat.trajectoryEngine.networkServerConnectionError
+                else -> L.chat.trajectoryEngine.agentExecutionError
             }
 
             blocks.add(
@@ -1144,7 +1151,7 @@ class TrajectoryEngine {
 
                 val titleText = meta?.tool_action?.takeIf { it.isNotBlank() }
                     ?: meta?.tool_summary?.takeIf { it.isNotBlank() }
-                    ?: "Questionnaire"
+                    ?: L.chat.trajectoryEngine.questionnaire
 
                 if (askQuestions != null && askQuestions.isNotEmpty()) {
                     questionnaire = ChoiceQuestionnaire.fromProto(
@@ -1165,11 +1172,11 @@ class TrajectoryEngine {
                         val selectedIds = resp.selected_option_ids
                         val matchedOpts = resp.options.filter { opt -> selectedIds.contains(opt.id) || selectedIds.contains(opt.text) }
                         val answerText = when {
-                            resp.skipped -> "Skipped"
+                            resp.skipped -> L.chat.trajectoryEngine.skipped
                             matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text }
                             resp.write_in_response.isNotBlank() -> "Other: \"${resp.write_in_response}\""
                             selectedIds.isNotEmpty() -> selectedIds.joinToString(", ")
-                            else -> "Submitted"
+                            else -> L.chat.trajectoryEngine.submitted
                         }
                         "• ${resp.question}: $answerText"
                     }
@@ -1179,11 +1186,11 @@ class TrajectoryEngine {
                         output = answeredQuestions.joinToString("\n\n") { q ->
                             val matchedOpts = q.options.filter { opt -> q.selected_option_ids.contains(opt.id) || q.selected_option_ids.contains(opt.text) }
                             val answerText = when {
-                                q.skipped -> "Skipped"
+                                q.skipped -> L.chat.trajectoryEngine.skipped
                                 matchedOpts.isNotEmpty() -> matchedOpts.joinToString(", ") { it.text }
                                 q.write_in_response.isNotBlank() -> "Other: \"${q.write_in_response}\""
                                 q.selected_option_ids.isNotEmpty() -> q.selected_option_ids.joinToString(", ")
-                                else -> "Submitted"
+                                else -> L.chat.trajectoryEngine.submitted
                             }
                             "• ${q.question}: $answerText"
                         }
@@ -1370,20 +1377,20 @@ class TrajectoryEngine {
     private fun extractTitleFromSystemMessage(msgText: String): String {
         val clean = msgText.trim()
         if (clean.startsWith("Schedule timer:", ignoreCase = true) || clean.startsWith("Schedule timer", ignoreCase = true)) {
-            return "Schedule Timer"
+            return L.chat.trajectoryEngine.scheduleTimer
         }
         if (clean.startsWith("Timer has expired", ignoreCase = true)) {
-            return "Timer Expired"
+            return L.chat.trajectoryEngine.timerExpired
         }
         if (clean.startsWith("Task completed:", ignoreCase = true)) {
-            return "Task Completed"
+            return L.chat.trajectoryEngine.taskCompleted
         }
         if (clean.contains("[Message]", ignoreCase = true)) {
             val prefix = clean.substringBefore("[Message]").trim().removeSuffix(":")
             if (prefix.isNotBlank() && prefix.length <= 40) {
                 return prefix
             }
-            return "System Notification"
+            return L.chat.trajectoryEngine.systemNotification
         }
         val firstLine = clean.lines().firstOrNull()?.trim() ?: ""
         if (firstLine.contains(":") && firstLine.indexOf(":") in 3..40) {
@@ -1392,7 +1399,7 @@ class TrajectoryEngine {
                 return candidate
             }
         }
-        return if (firstLine.isNotBlank() && firstLine.length <= 40) firstLine else "System Notification"
+        return if (firstLine.isNotBlank() && firstLine.length <= 40) firstLine else L.chat.trajectoryEngine.systemNotification
     }
 }
 

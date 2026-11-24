@@ -74,6 +74,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.Calendar
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 /** A native dialog a page asked for; [result] completes when the user answers. */
 sealed class NativeDialog {
@@ -165,7 +166,7 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
         val id = intent.getStringExtra(EXTRA_APP_ID) ?: intent.data?.lastPathSegment
         val found = id?.let { MiniApps.find(this, it) }
         if (found == null) {
-            Toast.makeText(this, "Mini app not found: $id", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, L.miniapps.miniAppActivity.miniAppNotFoundId(id), Toast.LENGTH_SHORT).show()
             finish(); return
         }
         app = found
@@ -194,7 +195,7 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
 
         // a modified installed app, or a development app with Developer mode off, doesn't run at all
         cantRun = when {
-            app.tampered -> "${app.name} was changed after it was installed: its files are no longer the ones ${app.developer} signed. Uninstall it and install it again from its developer."
+            app.tampered -> L.miniapps.miniAppActivity.nameWasChangedAfterItWas(app.name, app.developer)
             !app.signed && !MiniApps.devMode(this) -> "${app.name} is a development app (unsigned, from ~/mini-apps). Development apps only run with Developer mode on (Mini Apps → </>)."
             else -> null
         }
@@ -518,7 +519,7 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
                         stateKey = "miniapp_pick_folder",
                         onDismiss = { d.complete(null) },
                         title = title,
-                        confirmLabel = "Give access to this folder",
+                        confirmLabel = L.miniapps.miniAppActivity.giveAccessToThisFolder,
                         onConfirmFolder = { path -> d.complete(path to ai.antigem.data.files.ExplorerSide.BRIDGE) },
                         onConfirmFolderAt = { path, side -> d.complete(path to side) },
                         showClipboard = false,
@@ -537,14 +538,14 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(icon, null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
-                Text("${app.name} can't open", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 20.dp, bottom = 12.dp))
+                Text(L.miniapps.miniAppActivity.nameCantOpen(app.name), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 20.dp, bottom = 12.dp))
                 Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 if (app.tampered) androidx.compose.material3.Button(onClick = {
                     runCatching { ai.antigem.data.miniapps.MiniAppInstaller.uninstall(this@MiniAppActivity, app) }
-                        .onSuccess { toast("${app.name} uninstalled", false) }.onFailure { toast(it.message ?: "Couldn't uninstall", true) }
+                        .onSuccess { toast("${app.name} uninstalled", false) }.onFailure { toast(it.message ?: L.miniapps.miniAppActivity.couldntUninstall, true) }
                     closeApp()
-                }, modifier = Modifier.padding(top = 24.dp)) { Text("Uninstall") }
-                androidx.compose.material3.TextButton(onClick = { closeApp() }) { Text("Close") }
+                }, modifier = Modifier.padding(top = 24.dp)) { Text(L.common.uninstall) }
+                androidx.compose.material3.TextButton(onClick = { closeApp() }) { Text(L.common.close) }
             }
         }
     }
@@ -556,14 +557,14 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(icon, null, Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
-                Text("${app.name} can't run without", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 20.dp, bottom = 12.dp))
+                Text(L.miniapps.miniAppActivity.nameCantRunWithout(app.name), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 20.dp, bottom = 12.dp))
                 missing.forEach { name ->
                     val info = MiniAppPermissions.describe(app, name)
                     Text("• ${info.title}" + if (info.detail.isNotBlank()) ": ${info.detail}" else "", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 2.dp))
                 }
-                androidx.compose.material3.Button(onClick = { reviewBlocked() }, modifier = Modifier.padding(top = 24.dp)) { Text("Review permissions") }
-                androidx.compose.material3.TextButton(onClick = { closeApp() }) { Text("Close") }
+                androidx.compose.material3.Button(onClick = { reviewBlocked() }, modifier = Modifier.padding(top = 24.dp)) { Text(L.miniapps.miniAppActivity.reviewPermissions) }
+                androidx.compose.material3.TextButton(onClick = { closeApp() }) { Text(L.common.close) }
             }
         }
     }
@@ -577,7 +578,7 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(icon, null, Modifier.size(88.dp).clip(RoundedCornerShape(22.dp)))
                 Text(app.name, color = fg, fontSize = 18.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 16.dp))
-                if (!app.signed) Text("DEV", color = fg.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                if (!app.signed) Text(L.miniapps.miniAppActivity.dev, color = fg.copy(alpha = 0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -593,19 +594,19 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
             modifier = Modifier.offset { offset }.size(40.dp).shadow(4.dp, CircleShape)
                 .pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); offset = IntOffset(offset.x + drag.x.roundToInt(), offset.y + drag.y.roundToInt()) } },
         ) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.MoreHoriz, "Developer menu", tint = MaterialTheme.colorScheme.inverseOnSurface) }
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.MoreHoriz, L.miniapps.miniAppActivity.developerMenu, tint = MaterialTheme.colorScheme.inverseOnSurface) }
         }
     }
 
     @Composable
     private fun DevMenu() {
         val items = listOf(
-            NativeDialog.SheetItem("reload", "Reload", "↻", false),
-            NativeDialog.SheetItem("console", "Console", "▤", false),
-            NativeDialog.SheetItem("devtools", "DevTools (elements, network, storage)", "⚙", false),
-            NativeDialog.SheetItem("info", "App info & permissions", "ⓘ", false),
-            NativeDialog.SheetItem("home", "Add to home screen", "⌂", false),
-            NativeDialog.SheetItem("close", "Close app", "✕", true),
+            NativeDialog.SheetItem("reload", L.common.reload, "↻", false),
+            NativeDialog.SheetItem("console", L.miniapps.miniAppActivity.console, "▤", false),
+            NativeDialog.SheetItem("devtools", L.miniapps.miniAppActivity.devtoolsElementsNetworkStorage, "⚙", false),
+            NativeDialog.SheetItem("info", L.miniapps.miniAppActivity.appInfoPermissions, "ⓘ", false),
+            NativeDialog.SheetItem("home", L.common.addToHomeScreen, "⌂", false),
+            NativeDialog.SheetItem("close", L.miniapps.miniAppActivity.closeApp, "✕", true),
         )
         ActionSheet(title = "${app.name} ${app.version}", items = items, onDismiss = { devMenuOpen = false }) { id ->
             devMenuOpen = false

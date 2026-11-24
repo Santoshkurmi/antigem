@@ -39,6 +39,7 @@ import ai.antigem.theme.QuotaRed
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
+import ai.antigem.i18n.L
 
 @Composable
 fun AppUpdateDialog(
@@ -100,7 +101,7 @@ fun AppUpdateDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.RocketLaunch,
-                            contentDescription = "Update",
+                            contentDescription = L.common.update,
                             tint = primaryColor,
                             modifier = Modifier.size(22.dp)
                         )
@@ -110,13 +111,13 @@ fun AppUpdateDialog(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "New Update Available",
+                            text = L.updater.appUpdate.newUpdateAvailable,
                             color = onSurfaceColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (updateInfo.isCritical) "Critical Release" else "Release Update",
+                            text = if (updateInfo.isCritical) L.updater.appUpdate.criticalRelease else L.updater.appUpdate.releaseUpdate,
                             color = if (updateInfo.isCritical) QuotaRed else primaryColor,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
@@ -165,7 +166,7 @@ fun AppUpdateDialog(
 
                 // Changelog Card
                 Text(
-                    text = "WHAT'S NEW",
+                    text = L.updater.appUpdate.whatsNew,
                     color = onSurfaceVariantColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -219,7 +220,7 @@ fun AppUpdateDialog(
                         .padding(10.dp)
                 ) {
                     // One numbered row per version.json changelog entry
-                    val changelogItems = updateInfo.changelog.ifEmpty { listOf("Performance optimizations", "Stability and UI improvements") }
+                    val changelogItems = updateInfo.changelog.ifEmpty { listOf(L.updater.appUpdate.performanceOptimizations, L.updater.appUpdate.stabilityAndUiImprovements) }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -260,7 +261,7 @@ fun AppUpdateDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Downloading...",
+                                    text = L.updater.appUpdate.downloading,
                                     color = onSurfaceVariantColor,
                                     fontSize = 12.sp
                                 )
@@ -309,7 +310,7 @@ fun AppUpdateDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Downloaded! Launching installer...",
+                                text = L.updater.appUpdate.downloadedLaunchingInstaller,
                                 color = QuotaGreen,
                                 fontSize = 12.sp
                             )
@@ -334,7 +335,7 @@ fun AppUpdateDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Download failed: ${state.message}",
+                                text = L.updater.appUpdate.downloadFailedMessage(state.message),
                                 color = QuotaRed,
                                 fontSize = 11.5.sp,
                                 maxLines = 2
@@ -384,7 +385,7 @@ fun AppUpdateDialog(
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                 colors = ButtonDefaults.textButtonColors(contentColor = onSurfaceVariantColor)
                             ) {
-                                Text("Later", fontSize = 13.sp)
+                                Text(L.common.later, fontSize = 13.sp)
                             }
                         }
 
@@ -418,10 +419,10 @@ fun AppUpdateDialog(
                             modifier = Modifier.height(38.dp)
                         ) {
                             val btnText = when (downloadState) {
-                                is DownloadState.Downloading -> "Downloading..."
-                                is DownloadState.Completed -> "Install"
-                                is DownloadState.Error -> "Retry"
-                                else -> "Update"
+                                is DownloadState.Downloading -> L.updater.appUpdate.downloading
+                                is DownloadState.Completed -> L.common.install
+                                is DownloadState.Error -> L.common.retry
+                                else -> L.common.update
                             }
                             Icon(
                                 imageVector = if (downloadState is DownloadState.Completed) Icons.Rounded.InstallMobile else Icons.Rounded.Download,

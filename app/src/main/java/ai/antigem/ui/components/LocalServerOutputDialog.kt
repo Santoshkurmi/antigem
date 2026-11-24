@@ -37,6 +37,7 @@ import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 @Composable
 fun LocalServerOutputDialog(
@@ -138,19 +139,19 @@ fun LocalServerOutputDialog(
 
                         Column {
                             Text(
-                                text = if (AuthPreferences.currentRemoteMode) "Server Logs (SSH)" else "Local Server Logs",
+                                text = if (AuthPreferences.currentRemoteMode) L.components.localServerOutput.serverLogsSsh else L.components.localServerOutput.localServerLogs,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textPrimary
                             )
 
                             val statusText = when (val s = status) {
-                                is LocalServerStatus.Running -> "Running"
-                                is LocalServerStatus.Starting -> "Starting..."
-                                is LocalServerStatus.Stopping -> "Stopping..."
-                                is LocalServerStatus.Stopped -> "Stopped"
-                                is LocalServerStatus.Error -> "Error: ${s.message.take(25)}"
-                                is LocalServerStatus.Idle -> "Idle"
+                                is LocalServerStatus.Running -> L.common.running
+                                is LocalServerStatus.Starting -> L.components.localServerOutput.starting
+                                is LocalServerStatus.Stopping -> L.components.localServerOutput.stopping
+                                is LocalServerStatus.Stopped -> L.common.stopped
+                                is LocalServerStatus.Error -> L.components.localServerOutput.errorValue(s.message.take(25))
+                                is LocalServerStatus.Idle -> L.components.localServerOutput.idle
                             }
 
                             Text(
@@ -176,18 +177,18 @@ fun LocalServerOutputDialog(
                                     ai.antigem.data.remote.RemoteServerManager.log.value
                                 }
                                 if (text.isBlank()) {
-                                    AppToastHelper.showToast("The log is empty", ChatToastType.INFO)
+                                    AppToastHelper.showToast(L.components.localServerOutput.theLogIsEmpty, ChatToastType.INFO)
                                 } else {
                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                                     clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Server log", text))
-                                    AppToastHelper.showToast("Log copied", ChatToastType.SUCCESS)
+                                    AppToastHelper.showToast(L.components.localServerOutput.logCopied, ChatToastType.SUCCESS)
                                 }
                             },
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy log",
+                                contentDescription = L.components.localServerOutput.copyLog,
                                 tint = textPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -202,7 +203,7 @@ fun LocalServerOutputDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Start Server",
+                                    contentDescription = L.components.localServerOutput.startServer,
                                     tint = if (status is LocalServerStatus.Stopping) Color.Gray else ClaudeTerracotta,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -217,7 +218,7 @@ fun LocalServerOutputDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Stop,
-                                    contentDescription = "Stop Server",
+                                    contentDescription = L.components.localServerOutput.stopServer,
                                     tint = ai.antigem.theme.AppColors.danger,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -231,7 +232,7 @@ fun LocalServerOutputDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = L.common.close,
                                 tint = textPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -348,7 +349,7 @@ fun LocalServerOutputDialog(
                                 .verticalScroll(androidx.compose.foundation.rememberScrollState(), reverseScrolling = true)
                         ) {
                             Text(
-                                text = remoteLog.ifBlank { "SSH: ${sshState.message}\n\nNo log yet. Tap 'Restart' above to start the bridge on the server." },
+                                text = remoteLog.ifBlank { L.components.localServerOutput.sshMessageNoLogYetTap(sshState.message) },
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.sp,
                                 lineHeight = 13.sp,
@@ -364,7 +365,7 @@ fun LocalServerOutputDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No bridge process running.\nTap 'Restart' above to run agy_ide_bridge",
+                                text = L.components.localServerOutput.noBridgeProcessRunningTapRestart,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
                                 color = ai.antigem.theme.AppColors.editorMuted,

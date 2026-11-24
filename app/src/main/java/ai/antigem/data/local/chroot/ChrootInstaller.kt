@@ -23,6 +23,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 enum class UbuntuRelease(val version: String, val label: String) {
     NOBLE("24.04", "Ubuntu 24.04 LTS (Noble)"),
@@ -39,14 +40,16 @@ sealed class ChrootSource {
     data class LocalFile(val uri: Uri, val displayName: String) : ChrootSource()
 }
 
-enum class ChrootPackageBundle(val title: String, val description: String, val packages: List<String>, val nodeJs: Boolean = false) {
-    ESSENTIALS("Essentials", "sudo, certificates, curl, wget, git, ripgrep, procps, tzdata, nano, less, unzip: needed by the bridge and the agents",
+enum class ChrootPackageBundle(private val titleText: () -> String, private val descriptionText: () -> String, val packages: List<String>, val nodeJs: Boolean = false) {
+    ESSENTIALS({ L.local.chrootInstaller.essentials }, { L.local.chrootInstaller.sudoCertificatesCurlWgetGitRipgrep },
         listOf("sudo", "ca-certificates", "curl", "wget", "git", "ripgrep", "procps", "tzdata", "less", "nano", "unzip", "xz-utils", "gnupg", "openssh-client")),
-    BUILD("Build tools", "build-essential, pkg-config, cmake, make", listOf("build-essential", "pkg-config", "cmake", "make")),
-    PYTHON("Python", "python3, pip, venv", listOf("python3", "python3-pip", "python3-venv")),
-    NODE("Node.js 22 LTS", "From NodeSource (Ubuntu's own Node.js is older)", emptyList(), nodeJs = true),
-    TOOLS("Command-line extras", "htop, tmux, jq, zip, file, vim, ping, dig", listOf("htop", "tmux", "jq", "zip", "file", "vim", "iputils-ping", "dnsutils")),
-    ANDROID("Android tools", "adb, fastboot, lsusb: flash or debug another phone over USB OTG", listOf("adb", "fastboot", "usbutils"))
+    BUILD({ L.local.chrootInstaller.buildTools }, { "build-essential, pkg-config, cmake, make" }, listOf("build-essential", "pkg-config", "cmake", "make")),
+    PYTHON({ "Python" }, { "python3, pip, venv" }, listOf("python3", "python3-pip", "python3-venv")),
+    NODE({ "Node.js 22 LTS" }, { L.local.chrootInstaller.fromNodesourceUbuntusOwnNodeJs }, emptyList(), nodeJs = true),
+    TOOLS({ L.local.chrootInstaller.commandLineExtras }, { "htop, tmux, jq, zip, file, vim, ping, dig" }, listOf("htop", "tmux", "jq", "zip", "file", "vim", "iputils-ping", "dnsutils")),
+    ANDROID({ L.local.chrootInstaller.androidTools }, { L.local.chrootInstaller.adbFastbootLsusbFlashOrDebug }, listOf("adb", "fastboot", "usbutils"));
+    val title: String get() = titleText()
+    val description: String get() = descriptionText()
 }
 
 data class ChrootInstallRequest(
@@ -62,14 +65,15 @@ data class ChrootInstallRequest(
     val activate: Boolean = true
 )
 
-enum class ChrootInstallStep(val label: String) {
-    CHECK("Check root and space"),
-    DOWNLOAD("Download"),
-    VERIFY("Verify the checksum"),
-    EXTRACT("Extract the rootfs"),
-    CONFIGURE("Set up Ubuntu and the user"),
-    PACKAGES("Install packages"),
-    FINISH("Finish")
+enum class ChrootInstallStep(private val labelText: () -> String) {
+    CHECK({ L.local.chrootInstaller.checkRootAndSpace }),
+    DOWNLOAD({ L.local.chrootInstaller.download }),
+    VERIFY({ L.local.chrootInstaller.verifyTheChecksum }),
+    EXTRACT({ L.local.chrootInstaller.extractTheRootfs }),
+    CONFIGURE({ L.local.chrootInstaller.setUpUbuntuAndTheUser }),
+    PACKAGES({ L.local.chrootInstaller.installPackages }),
+    FINISH({ L.local.chrootInstaller.finish });
+    val label: String get() = labelText()
 }
 
 data class ChrootInstallState(
@@ -165,7 +169,7 @@ object ChrootInstaller {
     /** Stops between steps and during the download (a running extraction or apt finishes on its own). */
     fun cancel() {
         job?.cancel()
-        _state.value = _state.value.copy(running = false, error = "Cancelled", failedStep = _state.value.step)
+        _state.value = _state.value.copy(running = false, error = L.local.chrootInstaller.cancelled, failedStep = _state.value.step)
     }
 
     fun reset() {
@@ -199,12 +203,12 @@ object ChrootInstaller {
             done(step)
             // the archive is only kept for a retry
             downloaded?.second?.delete(); downloaded = null
-            _state.value = _state.value.copy(running = false, step = null, progress = 1f, detail = "Ready", result = install)
+            _state.value = _state.value.copy(running = false, step = null, progress = 1f, detail = L.local.chrootInstaller.ready, result = install)
             log("✅ Ubuntu chroot ready at ${install.path} (user ${install.user}, uid ${install.uid})")
             if (sha != null) Log.d(TAG, "installed from an archive with sha256 $sha")
         } catch (e: kotlinx.coroutines.CancellationException) {
             log("Cancelled.")
-            _state.value = _state.value.copy(running = false, error = "Cancelled", failedStep = step)
+            _state.value = _state.value.copy(running = false, error = L.local.chrootInstaller.cancelled, failedStep = step)
         } catch (e: Exception) {
             val msg = e.message ?: e.toString()
             log("❌ $msg")
@@ -215,32 +219,32 @@ object ChrootInstaller {
     // ------------------------------------------------------------------ steps
 
     private suspend fun check(context: Context, req: ChrootInstallRequest) {
-        set(ChrootInstallStep.CHECK, "Asking for root access…")
+        set(ChrootInstallStep.CHECK, L.local.chrootInstaller.askingForRootAccess)
         log("Checking root access (accept the root manager's prompt)…")
         val probe = ChrootManager.probe(context)
         if (!probe.rootOk) throw InstallError(probe.error ?: "No root access.")
         log("Root: ${probe.rootManager ?: "granted"} · busybox: ${probe.busybox ?: "none (toybox)"} · SELinux: ${probe.selinux} · kernel ${probe.kernel}")
         if (req.config.nsMode == ChrootNsMode.PRIVATE && !probe.canPrivateNs) {
-            throw InstallError("This phone has no unshare/nsenter for a private mount namespace. Choose the global namespace under Options.")
+            throw InstallError(L.local.chrootInstaller.thisPhoneHasNoUnshareNsenter)
         }
         ChrootManager.validateRootPath(req.path)?.let { throw InstallError(it) }
-        if (!ChrootManager.isUserName(req.user)) throw InstallError("The user name may only have lowercase letters, digits, _ and -.")
+        if (!ChrootManager.isUserName(req.user)) throw InstallError(L.local.chrootInstaller.theUserNameMayOnlyHave)
         if (req.config.nsMode == ChrootNsMode.GLOBAL && ChrootManager.isInAppStorage(context, req.path)) {
-            throw InstallError("A chroot in the app's storage must use the private namespace: Android deletes that folder with the app, and with global mounts it would go through /sdcard.")
+            throw InstallError(L.local.chrootInstaller.aChrootInTheAppsStorage)
         }
         val free = try { StatFs("/data").availableBytes } catch (_: Exception) { -1L }
-        if (free in 0 until MIN_FREE_BYTES) throw InstallError("Only ${free / (1 shl 20)} MB free on /data: at least 1 GB is needed.")
+        if (free in 0 until MIN_FREE_BYTES) throw InstallError(L.local.chrootInstaller.onlyValueMbFreeOnData(free / (1 shl 20)))
         log("Free on /data: ${if (free >= 0) "${free / (1 shl 20)} MB" else "unknown"}")
     }
 
     /** Downloads the source (unless the same verified archive is still there): the file and its expected sha256. */
     private suspend fun download(context: Context, source: ChrootSource): Pair<File, String?> {
-        set(ChrootInstallStep.DOWNLOAD, "Finding the release…")
+        set(ChrootInstallStep.DOWNLOAD, L.local.chrootInstaller.findingTheRelease)
         val (url, sha) = when (source) {
             is ChrootSource.Official -> resolveOfficial(source.release)
             is ChrootSource.Prebuilt -> {
                 val shaText = httpText("${prebuiltUrl()}.sha256")
-                    ?: throw InstallError("AntiGem's prebuilt Ubuntu is not published yet ($PREBUILT_PAGE). Pick Official Ubuntu instead.")
+                    ?: throw InstallError(L.local.chrootInstaller.antigemsPrebuiltUbuntuIsNotPublished(PREBUILT_PAGE))
                 prebuiltUrl() to shaText.trim().split(Regex("\\s+")).firstOrNull()
             }
             is ChrootSource.Url -> source.url to source.sha256?.trim()?.lowercase()?.takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }
@@ -261,11 +265,11 @@ object ChrootInstaller {
         val response = try {
             http.newCall(Request.Builder().url(url).header("User-Agent", "AntiGem-Chroot").build()).execute()
         } catch (e: IOException) {
-            throw InstallError("Download failed: ${e.message}")
+            throw InstallError(L.local.chrootInstaller.downloadFailedMessage(e.message))
         }
         response.use { resp ->
-            if (!resp.isSuccessful) throw InstallError("Download failed: HTTP ${resp.code} for $url")
-            val body = resp.body ?: throw InstallError("Download failed: empty answer")
+            if (!resp.isSuccessful) throw InstallError(L.local.chrootInstaller.downloadFailedHttpCodeForUrl(resp.code, url))
+            val body = resp.body ?: throw InstallError(L.local.chrootInstaller.downloadFailedEmptyAnswer)
             val total = body.contentLength()
             var read = 0L
             val started = System.currentTimeMillis()
@@ -290,9 +294,9 @@ object ChrootInstaller {
                     }
                 }
             }
-            if (total > 0 && read != total) throw InstallError("Download incomplete: $read of $total bytes")
+            if (total > 0 && read != total) throw InstallError(L.local.chrootInstaller.downloadIncompleteReadOfTotalBytes(read, total))
         }
-        if (!part.renameTo(file)) throw InstallError("Could not save the download")
+        if (!part.renameTo(file)) throw InstallError(L.local.chrootInstaller.couldNotSaveTheDownload)
         log("Downloaded ${file.length() / (1 shl 20)} MB")
         downloaded = url to file
         return file to sha
@@ -301,11 +305,11 @@ object ChrootInstaller {
     private fun resolveOfficial(release: UbuntuRelease): Pair<String, String> {
         val arch = if (ChrootManager.defaultArch() == "x86_64") "amd64" else "arm64"
         val dir = "https://cdimage.ubuntu.com/ubuntu-base/releases/${release.version}/release/"
-        val sums = httpText(dir + "SHA256SUMS") ?: throw InstallError("Could not reach cdimage.ubuntu.com (SHA256SUMS)")
+        val sums = httpText(dir + "SHA256SUMS") ?: throw InstallError(L.local.chrootInstaller.couldNotReachCdimageUbuntuCom)
         val pattern = Regex("^([0-9a-f]{64}) \\*?(ubuntu-base-(${Regex.escape(release.version)}(?:\\.\\d+)?)-base-$arch\\.tar\\.gz)$")
         val best = sums.lines().mapNotNull { pattern.find(it.trim()) }
             .maxByOrNull { m -> m.groupValues[3].split('.').map { it.toIntOrNull() ?: 0 }.let { it.getOrElse(2) { 0 } } }
-            ?: throw InstallError("No Ubuntu ${release.version} base image for $arch was found.")
+            ?: throw InstallError(L.local.chrootInstaller.noUbuntuVersionBaseImageFor(release.version, arch))
         log("Newest point release: ${best.groupValues[2]}")
         return (dir + best.groupValues[2]) to best.groupValues[1]
     }
@@ -320,7 +324,7 @@ object ChrootInstaller {
 
     private suspend fun verify(file: File, expected: String?) {
         if (expected == null) {
-            set(ChrootInstallStep.VERIFY, "No checksum given: skipped")
+            set(ChrootInstallStep.VERIFY, L.local.chrootInstaller.noChecksumGivenSkipped)
             log("No checksum to verify against.")
             return
         }
@@ -337,25 +341,25 @@ object ChrootInstaller {
                 digest.update(buf, 0, n)
                 read += n
                 val now = System.currentTimeMillis()
-                if (now - last > 200) { last = now; set(ChrootInstallStep.VERIFY, "Checking…", read.toFloat() / total) }
+                if (now - last > 200) { last = now; set(ChrootInstallStep.VERIFY, L.local.chrootInstaller.checking, read.toFloat() / total) }
             }
         }
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
         if (!actual.equals(expected, ignoreCase = true)) {
             file.delete(); downloaded = null
-            throw InstallError("Checksum mismatch: the download is damaged (got $actual). Try again.")
+            throw InstallError(L.local.chrootInstaller.checksumMismatchTheDownloadIsDamaged(actual))
         }
         log("✅ sha256 matches")
     }
 
     private suspend fun extract(context: Context, req: ChrootInstallRequest, archive: File?) {
-        set(ChrootInstallStep.EXTRACT, "Preparing ${req.path}…")
+        set(ChrootInstallStep.EXTRACT, L.local.chrootInstaller.preparingPath(req.path))
         var prep = ChrootManager.runCtl(context, listOf("prepare", "--root", req.path))
         if (!prep.ok && createdPath == req.path) {
             // our own partial extraction from the failed attempt
             log("Removing the partial extraction from the last attempt…")
             val del = ChrootManager.runCtl(context, listOf("delete", "--root", req.path), timeoutMs = 30 * 60_000L)
-            if (!del.ok) throw InstallError("Could not clear ${req.path}: ${del.message()}")
+            if (!del.ok) throw InstallError(L.local.chrootInstaller.couldNotClearPathMessage(req.path, del.message()))
             prep = ChrootManager.runCtl(context, listOf("prepare", "--root", req.path))
         }
         if (!prep.ok) throw InstallError(prep.message())
@@ -364,7 +368,7 @@ object ChrootInstaller {
         val partial = ChrootInstall(req.path, req.name, "installing", ChrootManager.defaultArch(), req.user,
             android.os.Process.myUid(), sourceLabel(req.source), System.currentTimeMillis(), false)
         ChrootManager.writeMeta(context, req.path, "manifest", partial.toManifest() + "INSTALLING=1\n")
-            .let { if (!it.ok) throw InstallError("Could not write the manifest: ${it.message()}") }
+            .let { if (!it.ok) throw InstallError(L.local.chrootInstaller.couldNotWriteTheManifestMessage(it.message())) }
 
         val (raw, total) = openSource(context, req.source, archive)
         val counting = CountingInputStream(raw)
@@ -382,13 +386,13 @@ object ChrootInstaller {
                     if (now - last > 250) {
                         last = now
                         val mb = counting.count / (1 shl 20)
-                        set(ChrootInstallStep.EXTRACT, "$mb MB${if (total > 0) " of ${total / (1 shl 20)} MB" else ""} read",
+                        set(ChrootInstallStep.EXTRACT, if (total > 0) L.local.chrootInstaller.mbMbOfTotalMbRead(mb, total / (1 shl 20)) else L.local.chrootInstaller.mbMbRead(mb),
                             if (total > 0) counting.count.toFloat() / total else null)
                     }
                 }
             }
         }, onLine = { log(it) }, timeoutMs = 60 * 60_000L)
-        if (!r.ok) throw InstallError("Extraction failed: ${r.message()}")
+        if (!r.ok) throw InstallError(L.local.chrootInstaller.extractionFailedMessage(r.message()))
         log("✅ Extracted")
         // a backup made by AntiGem brings its manifest (the one written before extracting says INSTALLING)
         val f = ChrootManager.scan(context, req.path).firstOrNull { it.path == req.path }
@@ -406,10 +410,10 @@ object ChrootInstaller {
                     if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else -1L
                 } ?: -1L
             } catch (_: Exception) { -1L }
-            (context.contentResolver.openInputStream(source.uri) ?: throw InstallError("Cannot open ${source.displayName}")) to size
+            (context.contentResolver.openInputStream(source.uri) ?: throw InstallError(L.local.chrootInstaller.cannotOpenDisplayname(source.displayName))) to size
         }
         else -> {
-            val f = archive ?: throw InstallError("Nothing was downloaded")
+            val f = archive ?: throw InstallError(L.local.chrootInstaller.nothingWasDownloaded)
             f.inputStream() to f.length()
         }
     }
@@ -428,8 +432,8 @@ object ChrootInstaller {
             n >= 3 && b(0) == 0x42 && b(1) == 0x5a && b(2) == 0x68 ->
                 org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream(input, true)
             n >= 4 && b(0) == 0x28 && b(1) == 0xb5 && b(2) == 0x2f && b(3) == 0xfd ->
-                throw InstallError("zstd archives are not supported: use .tar.gz or .tar.xz")
-            n >= 2 && b(0) == 0x50 && b(1) == 0x4b -> throw InstallError("That is a ZIP file: the chroot needs a rootfs .tar.gz / .tar.xz")
+                throw InstallError(L.local.chrootInstaller.zstdArchivesAreNotSupportedUse)
+            n >= 2 && b(0) == 0x50 && b(1) == 0x4b -> throw InstallError(L.local.chrootInstaller.thatIsAZipFileThe)
             else -> input
         }
     }
@@ -449,31 +453,31 @@ object ChrootInstaller {
         if (backup?.hasConf == true) {
             log("Keeping the backup's settings (mounts, DNS, shared folders): change them on its page.")
         } else {
-            set(ChrootInstallStep.CONFIGURE, "Writing the chroot's settings…")
+            set(ChrootInstallStep.CONFIGURE, L.local.chrootInstaller.writingTheChrootsSettings)
             ChrootManager.writeMeta(context, req.path, "chroot.conf", req.config.toConf())
-                .let { if (!it.ok) throw InstallError("Could not save the settings: ${it.message()}") }
+                .let { if (!it.ok) throw InstallError(L.local.chrootInstaller.couldNotSaveTheSettingsMessage(it.message())) }
         }
-        set(ChrootInstallStep.CONFIGURE, "Mounting and setting up DNS…")
+        set(ChrootInstallStep.CONFIGURE, L.local.chrootInstaller.mountingAndSettingUpDns)
         val draft = ChrootInstall(req.path, req.name, "installing", ChrootManager.defaultArch(), userOf(req),
             android.os.Process.myUid(), sourceLabel(req.source), System.currentTimeMillis(), false)
         val s = ChrootManager.start(context, draft, withBridge = false, onLine = { log(it) })
-        if (!s.ok) throw InstallError("Could not start the chroot: ${s.message}")
-        set(ChrootInstallStep.CONFIGURE, "Network groups and user ${userOf(req)}…")
+        if (!s.ok) throw InstallError(L.local.chrootInstaller.couldNotStartTheChrootMessage(s.message))
+        set(ChrootInstallStep.CONFIGURE, L.local.chrootInstaller.networkGroupsAndUserUserof(userOf(req)))
         val r = ChrootManager.execAsRoot(context, req.path,
             ChrootScripts.userScript(userOf(req), android.os.Process.myUid(), req.password, req.sudoNoPassword, keepSudoers = backup != null),
             onLine = { log(it) })
-        if (!r.ok) throw InstallError("Setting up Ubuntu failed: ${r.message()}")
+        if (!r.ok) throw InstallError(L.local.chrootInstaller.settingUpUbuntuFailedMessage(r.message()))
     }
 
     private suspend fun packages(context: Context, req: ChrootInstallRequest) {
         if (restoredBackup != null) {
-            set(ChrootInstallStep.PACKAGES, "Kept from the backup")
+            set(ChrootInstallStep.PACKAGES, L.local.chrootInstaller.keptFromTheBackup)
             log("Packages: the backup's are kept (none installed now).")
             return
         }
         val bundles = req.bundles + ChrootPackageBundle.ESSENTIALS
         val names = bundles.flatMap { it.packages } + req.extraPackages.filter { ChrootScripts.isPackageName(it) }
-        set(ChrootInstallStep.PACKAGES, "apt: ${names.size} packages${if (bundles.any { it.nodeJs }) " + Node.js" else ""}…")
+        set(ChrootInstallStep.PACKAGES, L.local.chrootInstaller.aptNamescountPackagesValue(names.size, if (bundles.any { it.nodeJs }) " + Node.js" else ""))
         var lastLine = ""
         val r = ChrootManager.execAsRoot(context, req.path, ChrootScripts.packagesScript(names, bundles.any { it.nodeJs }, upgrade = false),
             onLine = { line ->
@@ -483,11 +487,11 @@ object ChrootInstaller {
                     set(ChrootInstallStep.PACKAGES, line.take(120))
                 }
             })
-        if (!r.ok) throw InstallError("Installing packages failed: ${r.message()} (check the log; Retry continues from here)")
+        if (!r.ok) throw InstallError(L.local.chrootInstaller.installingPackagesFailedMessageCheckThe(r.message()))
     }
 
     private suspend fun finish(context: Context, req: ChrootInstallRequest): ChrootInstall {
-        set(ChrootInstallStep.FINISH, "Registering the install…")
+        set(ChrootInstallStep.FINISH, L.local.chrootInstaller.registeringTheInstall)
         val found = ChrootManager.scan(context, req.path).firstOrNull { it.path == req.path }
         val install = ChrootInstall(
             path = req.path, name = req.name, os = found?.os?.takeIf { it.isNotBlank() } ?: "Ubuntu",
@@ -496,10 +500,10 @@ object ChrootInstaller {
             createdAt = System.currentTimeMillis(), legacy = false
         )
         ChrootManager.writeMeta(context, install.path, "manifest", install.toManifest())
-            .let { if (!it.ok) throw InstallError("Could not write the manifest: ${it.message()}") }
+            .let { if (!it.ok) throw InstallError(L.local.chrootInstaller.couldNotWriteTheManifestMessage(it.message())) }
         ChrootManager.runCtl(context, listOf("register", "--root", install.path))
         ChrootManager.addOrUpdate(context, install)
-        set(ChrootInstallStep.FINISH, "Putting the bridge into the chroot…")
+        set(ChrootInstallStep.FINISH, L.local.chrootInstaller.puttingTheBridgeIntoTheChroot)
         val s = ChrootManager.start(context, install, withBridge = true, onLine = { log(it) })
         if (!s.ok) log("⚠️ ${s.message}")
         if (req.activate) ChrootManager.activate(context, install)

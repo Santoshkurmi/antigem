@@ -5,6 +5,7 @@ import android.os.StatFs
 import android.system.ErrnoException
 import android.system.OsConstants
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * Free storage before a big install (a full phone gets "free up X" instead of a half-done install), and a plain
@@ -28,8 +29,7 @@ object StorageSpace {
         val free = freeBytes(dir)
         if (free < 0 || free + reclaimable >= needed) return null
         val have = free + reclaimable
-        return "Not enough storage for $what: it needs about ${format(needed)} free and the phone has ${format(have)}. " +
-            "Free up at least ${format(needed - have)}, then try again."
+        return L.local.storageSpace.notEnoughStorageForWhatIt(what, format(needed), format(have), format(needed - have))
     }
 
     /** True when [e] or one of its causes is a write that failed because the storage is full. */
@@ -45,7 +45,7 @@ object StorageSpace {
 
     /** [what]: what was being installed; null for any task (a script, a build). */
     fun outOfSpaceMessage(what: String? = null): String =
-        "The phone ran out of storage${what?.let { " while installing $it" } ?: ""}. Free up some space, then try again."
+        what?.let { L.local.storageSpace.thePhoneRanOutOfStorage2(it) } ?: L.local.storageSpace.thePhoneRanOutOfStorage
 
     /** An install step's size label ("≈150 MB", "≈1.5 GB", "<1 MB") in bytes; 0 when it has no size. */
     fun parseSize(label: String): Long {

@@ -2,36 +2,38 @@ package ai.antigem.data.remote
 
 import androidx.compose.ui.graphics.Color
 import ai.antigem.data.preferences.AuthPreferences
+import ai.antigem.i18n.L
 
 /**
  * Unified system connection state enum.
  * Single source of truth for UI indicators, status labels, and send gating across the app.
  */
 enum class SystemStatus(
-    val label: String,
+    private val labelText: () -> String,
     val colorHex: Long,
     val canSend: Boolean
 ) {
     /** Bridge (:1234) is offline or unreachable */
-    OFFLINE("Offline", 0xFF9CA3AF, false),
+    OFFLINE({ L.remote.systemConnectionState.offline }, 0xFF9CA3AF, false),
 
     /** Bridge (:1234) is connected, Antigravity Hub (:1235) is starting/idle */
-    STARTING("Starting...", 0xFFF59E0B, false),
+    STARTING({ L.remote.systemConnectionState.starting }, 0xFFF59E0B, false),
 
     /** Hub (:1235) is running, but CSRF token is not yet acquired */
-    ACQUIRING_CSRF("Acquiring Token...", 0xFF06B6D4, false),
+    ACQUIRING_CSRF({ L.remote.systemConnectionState.acquiringToken }, 0xFF06B6D4, false),
 
     /** Hub (:1235) + CSRF token ready, actively verifying authentication */
-    CHECKING_AUTH("Checking Auth...", 0xFF3B82F6, true),
+    CHECKING_AUTH({ L.remote.systemConnectionState.checkingAuth }, 0xFF3B82F6, true),
 
     /** Hub (:1235) + CSRF token ready, but user is not logged in / auth failed */
-    UNAUTHENTICATED("Sign In Required", 0xFFA855F7, true),
+    UNAUTHENTICATED({ L.remote.systemConnectionState.signInRequired }, 0xFFA855F7, true),
 
     /** Everything connected, token ready, user authenticated - fully operational */
-    READY("Ready", 0xFF22C55E, true),
+    READY({ L.remote.systemConnectionState.ready }, 0xFF22C55E, true),
 
     /** Fatal bridge or hub error */
-    ERROR("Error", 0xFFEF4444, false);
+    ERROR({ L.remote.systemConnectionState.error }, 0xFFEF4444, false);
+    val label: String get() = labelText()
 
     val dotColor: Color
         get() = Color(colorHex)

@@ -12,6 +12,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.coroutines.coroutineContext
+import ai.antigem.i18n.L
 
 /**
  * Where the Files screen reads and changes files. [BRIDGE]: the bridge's machine (this phone in local mode, the server
@@ -91,8 +92,8 @@ object PhoneSource : ExplorerSource {
     private fun noAccess(f: File): String {
         val ctx = appContext
         val allowed = ctx != null && ai.antigem.data.local.TermuxStorageSetupManager.hasStoragePermission(ctx)
-        return if (!allowed && f.absolutePath.startsWith("/storage")) "Allow AntiGem to access this phone's storage to see these files."
-        else "Cannot open ${f.absolutePath}"
+        return if (!allowed && f.absolutePath.startsWith("/storage")) L.files.explorerSource.allowAntigemToAccessThisPhones
+        else L.files.explorerSource.cannotOpenAbsolutepath(f.absolutePath)
     }
 
     override suspend fun list(dir: String): Result<ExplorerListing> = withContext(Dispatchers.IO) {
@@ -109,16 +110,16 @@ object PhoneSource : ExplorerSource {
             val st = runCatching { StatFs(f.absolutePath) }.getOrNull()
             out += ExplorerRoot(name, f.absolutePath, kind, st?.totalBytes ?: 0, st?.availableBytes ?: 0)
         }
-        add("Internal storage", File(home), "storage")
-        add("Download", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "folder")
-        add("Documents", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "folder")
-        add("Pictures", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "folder")
+        add(L.files.explorerSource.internalStorage, File(home), "storage")
+        add(L.files.explorerSource.download, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "folder")
+        add(L.files.explorerSource.documents, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "folder")
+        add(L.files.explorerSource.pictures, Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "folder")
         // SD cards / USB drives: the volume root of every external files dir that is not internal storage
         appContext?.getExternalFilesDirs(null)?.filterNotNull()?.forEach { f ->
             val root = f.absolutePath.substringBefore("/Android/")
-            if (root != home && root.startsWith("/storage/")) add("SD card (${root.substringAfterLast('/')})", File(root), "removable")
+            if (root != home && root.startsWith("/storage/")) add(L.files.explorerSource.sdCardName(root.substringAfterLast('/')), File(root), "removable")
         }
-        appContext?.let { add("AntiGem home", ai.antigem.data.local.LocalEnvironmentManager.getHomeDir(it), "home") }
+        appContext?.let { add(L.files.explorerSource.antigemHome, ai.antigem.data.local.LocalEnvironmentManager.getHomeDir(it), "home") }
         home to out
     }
 
@@ -147,19 +148,19 @@ object PhoneSource : ExplorerSource {
     }
 
     override suspend fun create(dir: String, name: String, isDir: Boolean): FsResult = withContext(Dispatchers.IO) {
-        if (name.isBlank() || name.contains('/')) return@withContext FsResult(false, error = "Invalid name")
+        if (name.isBlank() || name.contains('/')) return@withContext FsResult(false, error = L.files.explorerSource.invalidName)
         val f = File(resolve(dir), name)
-        if (f.exists()) return@withContext FsResult(false, error = "\"$name\" already exists")
+        if (f.exists()) return@withContext FsResult(false, error = L.files.explorerSource.nameAlreadyExists(name))
         val ok = runCatching { if (isDir) f.mkdirs() else f.createNewFile() }.getOrDefault(false)
         if (ok) FsResult(true, f.absolutePath) else FsResult(false, error = noAccess(f.parentFile ?: f))
     }
 
     override suspend fun rename(path: String, newName: String): FsResult = withContext(Dispatchers.IO) {
-        if (newName.isBlank() || newName.contains('/')) return@withContext FsResult(false, error = "Invalid name")
+        if (newName.isBlank() || newName.contains('/')) return@withContext FsResult(false, error = L.files.explorerSource.invalidName)
         val f = resolve(path)
         val to = File(f.parentFile, newName)
-        if (to.exists()) return@withContext FsResult(false, error = "\"$newName\" already exists")
-        if (f.renameTo(to)) FsResult(true, to.absolutePath) else FsResult(false, error = "Could not rename ${f.name}")
+        if (to.exists()) return@withContext FsResult(false, error = L.files.explorerSource.newnameAlreadyExists(newName))
+        if (f.renameTo(to)) FsResult(true, to.absolutePath) else FsResult(false, error = L.files.explorerSource.couldNotRenameName(f.name))
     }
 
     override suspend fun transfer(sources: List<String>, targetDir: String, move: Boolean, conflict: ConflictPolicy): FsResult = withContext(Dispatchers.IO) {
@@ -181,7 +182,7 @@ object PhoneSource : ExplorerSource {
                     ConflictPolicy.OVERWRITE -> {}
                 }
             }
-            if (src.isDirectory && to.absolutePath.startsWith(src.absolutePath + "/")) { failed++; error = "Cannot copy a folder into itself"; continue }
+            if (src.isDirectory && to.absolutePath.startsWith(src.absolutePath + "/")) { failed++; error = L.files.explorerSource.cannotCopyAFolderIntoItself; continue }
             val ok = runCatching {
                 if (move && (!to.exists() || conflict != ConflictPolicy.OVERWRITE) && src.renameTo(to)) true
                 else {
@@ -190,7 +191,7 @@ object PhoneSource : ExplorerSource {
                     if (move) src.deleteRecursively() else true
                 }
             }.getOrElse { e -> error = e.message; false }
-            if (ok) done++ else { failed++; if (error == null) error = "Could not ${if (move) "move" else "copy"} ${src.name}" }
+            if (ok) done++ else { failed++; if (error == null) error = if (move) L.files.explorerSource.couldNotMoveName(src.name) else L.files.explorerSource.couldNotCopyName(src.name) }
         }
         FsResult(failed == 0, dest.absolutePath, error, failed, done)
     }
@@ -219,12 +220,12 @@ object PhoneSource : ExplorerSource {
                 }
             }
             FsResult(true, out.absolutePath, count = count)
-        }.getOrElse { e -> out.delete(); FsResult(false, error = e.message ?: "Compress failed") }
+        }.getOrElse { e -> out.delete(); FsResult(false, error = e.message ?: L.files.explorerSource.compressFailed) }
     }
 
     override suspend fun extract(path: String, targetDir: String?): FsResult = withContext(Dispatchers.IO) {
         val zipFile = resolve(path)
-        if (!zipFile.name.endsWith(".zip", true)) return@withContext FsResult(false, error = "Only ZIP files can be extracted on this phone's storage")
+        if (!zipFile.name.endsWith(".zip", true)) return@withContext FsResult(false, error = L.files.explorerSource.onlyZipFilesCanBeExtracted)
         val base = targetDir?.let(::resolve) ?: uniqueFile(zipFile.parentFile ?: File(home), zipFile.nameWithoutExtension)
         var count = 0
         runCatching {
@@ -239,7 +240,7 @@ object PhoneSource : ExplorerSource {
                 }
             }
             FsResult(true, base.absolutePath, count = count)
-        }.getOrElse { e -> FsResult(false, error = e.message ?: "Extract failed") }
+        }.getOrElse { e -> FsResult(false, error = e.message ?: L.files.explorerSource.extractFailed) }
     }
 
     override suspend fun archiveEntries(path: String): Result<Pair<List<ArchiveEntry>, Boolean>> = withContext(Dispatchers.IO) {
@@ -327,7 +328,7 @@ object CrossTransfer {
         onProgress: (Float) -> Unit
     ): FsResult {
         val to = if (from == ExplorerSide.PHONE) ExplorerSide.BRIDGE else ExplorerSide.PHONE
-        val existing = ExplorerSource.of(to).list(destDir).getOrElse { return FsResult(false, error = it.message ?: "Cannot open the target folder") }
+        val existing = ExplorerSource.of(to).list(destDir).getOrElse { return FsResult(false, error = it.message ?: L.files.explorerSource.cannotOpenTheTargetFolder) }
         val destPath = existing.path
         val taken = existing.entries.map { it.name }.toMutableSet()
         // the name each selected item gets there
@@ -352,7 +353,7 @@ object CrossTransfer {
         }
         val plan = try { plan(from, items, topNames) } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            return FsResult(false, error = e.message ?: "Cannot read the files to copy")
+            return FsResult(false, error = e.message ?: L.files.explorerSource.cannotReadTheFilesToCopy)
         }
         val total = plan.filter { !it.isDir }.sumOf { it.size }.coerceAtLeast(1)
         var sent = 0L
@@ -399,7 +400,7 @@ object CrossTransfer {
             val gone = items.filter { e -> topNames[e.path]?.let { it !in failedTops } == true }.map { it.path }
             if (gone.isNotEmpty()) {
                 val r = ExplorerSource.of(from).delete(gone)
-                if (!r.ok) error = (error ?: "") + " The originals could not all be removed: ${r.error}"
+                if (!r.ok) error = L.files.explorerSource.valueTheOriginalsCouldNotAll((error ?: ""), r.error)
             }
         }
         return FsResult(failed == 0, destPath, error?.trim(), failed, done)

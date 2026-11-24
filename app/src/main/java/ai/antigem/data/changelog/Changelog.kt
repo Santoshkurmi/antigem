@@ -5,6 +5,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import ai.antigem.i18n.L
 
 /** One released version, from version.json at the commit that last changed it (see the generateChangelog Gradle task). */
 data class ChangelogEntry(
@@ -16,7 +17,9 @@ data class ChangelogEntry(
 )
 
 /** What a line of the changelog is, guessed from its first word. */
-enum class ChangeKind(val label: String) { NEW("New"), FIXED("Fixed"), IMPROVED("Improved"), REMOVED("Removed") }
+enum class ChangeKind(private val labelText: () -> String) { NEW({ L.changelog.changelog.new }), FIXED({ L.changelog.changelog.fixed }), IMPROVED({ L.changelog.changelog.improved }), REMOVED({ L.changelog.changelog.removed });
+    val label: String get() = labelText()
+}
 
 class ChangeLine(val text: String, val kind: ChangeKind)
 
@@ -86,15 +89,15 @@ object Changelog {
     private fun relative(today: Calendar, date: Calendar): String {
         val days = ((today.timeInMillis - date.timeInMillis) / 86_400_000L).toInt()
         return when {
-            days <= 0 -> "Today"
-            days == 1 -> "Yesterday"
-            days < 7 -> "$days days ago"
-            days < 14 -> "Last week"
-            days < 31 -> "${days / 7} weeks ago"
-            days < 61 -> "Last month"
-            days < 365 -> "${days / 30} months ago"
-            days < 730 -> "Last year"
-            else -> "${days / 365} years ago"
+            days <= 0 -> L.changelog.changelog.today
+            days == 1 -> L.changelog.changelog.yesterday
+            days < 7 -> L.changelog.changelog.countDaysAgo(days)
+            days < 14 -> L.changelog.changelog.lastWeek
+            days < 31 -> L.changelog.changelog.countWeeksAgo(days / 7)
+            days < 61 -> L.changelog.changelog.lastMonth
+            days < 365 -> L.changelog.changelog.countMonthsAgo(days / 30)
+            days < 730 -> L.changelog.changelog.lastYear
+            else -> L.changelog.changelog.countYearsAgo(days / 365)
         }
     }
 

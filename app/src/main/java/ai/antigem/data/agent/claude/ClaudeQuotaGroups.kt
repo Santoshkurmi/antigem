@@ -4,6 +4,7 @@ import ai.antigem.domain.model.QuotaGroup
 import ai.antigem.domain.model.QuotaWindowUi
 import ai.antigem.domain.model.resolveQuotaGroup
 import java.util.Locale
+import ai.antigem.i18n.L
 
 /**
  * Claude's plan limits as quota groups. The 5-hour limit and the weekly limit cover every model ("All models"); a
@@ -48,7 +49,7 @@ object ClaudeQuotaGroups {
             ?: rl?.seven_day?.let { QuotaWindowUi("7d", left((it.utilization ?: 0.0) / 100.0), it.resets_at) }
         val scoped = scopedLimits(rl)
         if (five == null && week == null && scoped.isEmpty()) return emptyList()
-        return listOf(QuotaGroup(ALL, "All models", five, listOfNotNull(week))) + scoped.map { s ->
+        return listOf(QuotaGroup(ALL, L.agent.claudeQuotaGroups.allModels, five, listOfNotNull(week))) + scoped.map { s ->
             QuotaGroup(
                 id = groupId(s.name),
                 title = s.name,

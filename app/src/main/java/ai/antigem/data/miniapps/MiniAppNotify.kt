@@ -27,6 +27,7 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import ai.antigem.i18n.L
 
 /**
  * Mini app notifications, close to what a native app gets from Android:
@@ -71,7 +72,7 @@ object MiniAppNotify {
         if (nm.getNotificationChannel(CHANNEL_STATUS) == null) nm.createNotificationChannel(NotificationChannel(CHANNEL_STATUS, "Mini apps (silent)", NotificationManager.IMPORTANCE_LOW))
         if (nm.getNotificationChannel(CHANNEL_ONGOING) == null) nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ONGOING, "Mini apps (running)", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Timers, downloads and other things in progress"
+                description = L.miniapps.miniAppNotify.timersDownloadsAndOtherThingsIn
                 setSound(null, null); enableVibration(false); setShowBadge(false)
             })
     }

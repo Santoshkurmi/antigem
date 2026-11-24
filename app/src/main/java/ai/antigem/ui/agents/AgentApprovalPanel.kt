@@ -60,6 +60,7 @@ import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.MarkdownContent
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.label
+import ai.antigem.i18n.L
 
 private val AllowGreen: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.success
 private val DenyRed: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.danger
@@ -87,8 +88,8 @@ class ApprovalItem(
     val secondary: List<ApprovalChoice> = emptyList(),
     /** "Always allow…" menu. */
     val always: List<ApprovalChoice> = emptyList(),
-    val denyLabel: String = "Deny",
-    val denyPlaceholder: String = "Tell the agent what to do instead (optional)",
+    val denyLabel: String = L.agents.agentApproval.deny,
+    val denyPlaceholder: String = L.agents.agentApproval.tellTheAgentWhatToDo,
     val onDeny: (feedback: String?) -> Unit
 )
 
@@ -161,17 +162,17 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
             if (count > 1 && (onAllowAll != null || onDenyAll != null)) {
                 Box {
                     IconButton(onClick = { overflow = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.MoreVert, "More", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Outlined.MoreVert, L.common.more, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
                         onAllowAll?.let {
-                            DropdownMenuItem(text = { Text("Allow all $count") }, onClick = {
+                            DropdownMenuItem(text = { Text(L.agents.agentApproval.allowAllCount(count)) }, onClick = {
                                 overflow = false
                                 it()
                             })
                         }
                         onDenyAll?.let {
-                            DropdownMenuItem(text = { Text("Deny all $count", color = DenyRed) }, onClick = {
+                            DropdownMenuItem(text = { Text(L.agents.agentApproval.denyAllCount(count), color = DenyRed) }, onClick = {
                                 overflow = false
                                 it()
                             })
@@ -242,7 +243,7 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
                     maxLines = 4
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { denying = false }) { Text("Back") }
+                    TextButton(onClick = { denying = false }) { Text(L.common.back) }
                     Spacer(Modifier.width(6.dp))
                     Button(
                         onClick = { item.onDeny(feedback.trim().ifBlank { null }) },
@@ -285,7 +286,7 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
                             shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(start = 12.dp, end = 6.dp)
                         ) {
-                            Text("Always…", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                            Text(L.agents.agentApproval.always, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                             Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         }
                         DropdownMenu(expanded = alwaysMenu, onDismissRequest = { alwaysMenu = false }) {

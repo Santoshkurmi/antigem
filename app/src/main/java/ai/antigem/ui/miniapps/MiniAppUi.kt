@@ -76,6 +76,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import ai.antigem.i18n.L
 
 object MiniAppShortcuts {
     /** Home-screen shortcuts made before the launcher activity existed opened the root directly (losing the page): point them at it. */
@@ -94,7 +95,7 @@ object MiniAppShortcuts {
     }
     fun addToHome(context: Context, app: MiniApp) {
         if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
-            Toast.makeText(context, "This launcher can't add shortcuts", Toast.LENGTH_SHORT).show(); return
+            Toast.makeText(context, L.miniapps.miniAppUi.thisLauncherCantAddShortcuts, Toast.LENGTH_SHORT).show(); return
         }
         val info = ShortcutInfoCompat.Builder(context, "miniapp:${app.id}")
             .setShortLabel(app.name)
@@ -192,7 +193,7 @@ private fun PermissionDialog(d: NativeDialog.Permissions) {
     AlertDialog(
         onDismissRequest = { d.result.complete(d.names.associateWith { false }) },
         icon = { Image(icon, null, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))) },
-        title = { Text(if (d.firstLaunch) "${app.name} wants to" else "Allow ${app.name} to use this?", style = MaterialTheme.typography.titleLarge) },
+        title = { Text(if (d.firstLaunch) L.miniapps.miniAppUi.nameWantsTo(app.name) else L.miniapps.miniAppUi.allowNameToUseThis(app.name), style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 d.names.forEach { name ->
@@ -205,14 +206,14 @@ private fun PermissionDialog(d: NativeDialog.Permissions) {
                                 Text(info.title, style = MaterialTheme.typography.titleSmall)
                             }
                             if (info.detail.isNotBlank()) Text(info.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (required) Text("Required: the app won't open without it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            if (required) Text(L.miniapps.miniAppUi.requiredTheAppWontOpenWithout, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
                         if (!single) Switch(checked = choice[name] == true, onCheckedChange = { on ->
                             if (on && name in danger) confirming = name else choice[name] = on
                         })
                     }
                 }
-                if (d.firstLaunch) Text("You can change these later in App info.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                if (d.firstLaunch) Text(L.miniapps.miniAppUi.youCanChangeTheseLaterIn, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         },
         confirmButton = {
@@ -222,11 +223,11 @@ private fun PermissionDialog(d: NativeDialog.Permissions) {
                     if (single) { if (d.names[0] in danger) confirming = d.names[0] else d.result.complete(mapOf(d.names[0] to true)) }
                     else d.result.complete(choice.toMap())
                 },
-            ) { Text(if (single) "Allow" else "Continue") }
+            ) { Text(if (single) L.common.allow else L.common.continueText) }
         },
         dismissButton = {
             TextButton(onClick = { d.result.complete(d.names.associateWith { false }) }) {
-                Text(if (d.names.any { it in app.required }) "Don't allow (app can't run)" else if (d.firstLaunch) "Deny all" else "Don't allow")
+                Text(if (d.names.any { it in app.required }) L.miniapps.miniAppUi.dontAllowAppCantRun else if (d.firstLaunch) L.miniapps.miniAppUi.denyAll else L.miniapps.miniAppUi.dontAllow)
             }
         },
     )
@@ -245,13 +246,13 @@ private fun McpCallDialog(d: NativeDialog.McpCall) {
     AlertDialog(
         onDismissRequest = { d.result.complete(null) },
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = if (MiniAppMcpAccess.isSensitive(d.server)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) },
-        title = { Text("${d.app.name} wants to use ${d.tool}") },
+        title = { Text(L.miniapps.miniAppUi.nameWantsToUseTool(d.app.name, d.tool)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("AntiGem tools: ${d.server}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(L.miniapps.miniAppUi.antigemToolsServer(d.server), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (d.description.isNotBlank()) Text(d.description.take(300), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 if (d.args.isNotBlank() && d.args != "{}") {
-                    Text("With", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                    Text(L.miniapps.miniAppUi.with, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
                     Text(d.args.take(2000), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp))
                 }
@@ -259,11 +260,11 @@ private fun McpCallDialog(d: NativeDialog.McpCall) {
         },
         confirmButton = {
             Row {
-                TextButton(onClick = { d.result.complete("always") }) { Text("Always allow") }
-                TextButton(onClick = { d.result.complete("once") }) { Text("Allow") }
+                TextButton(onClick = { d.result.complete("always") }) { Text(L.miniapps.miniAppUi.alwaysAllow) }
+                TextButton(onClick = { d.result.complete("once") }) { Text(L.common.allow) }
             }
         },
-        dismissButton = { TextButton(onClick = { d.result.complete(null) }) { Text("Deny") } },
+        dismissButton = { TextButton(onClick = { d.result.complete(null) }) { Text(L.miniapps.miniAppUi.deny) } },
     )
 }
 
@@ -271,27 +272,26 @@ private fun McpCallDialog(d: NativeDialog.McpCall) {
 fun TypedConfirmDialog(app: MiniApp, name: String, onResult: (Boolean) -> Unit) {
     if (name.startsWith("mcp:")) return McpTypedConfirmDialog(app, name, onResult)
     var typed by remember { mutableStateOf("") }
-    val scope = if (name == "storage:all") "all your files (shared storage and your home folder)"
-        else app.permissions[name]?.optString("path")?.let { "everything in $it" } ?: name.removePrefix("picked:").let { "everything in $it" }
+    val scope = if (name == "storage:all") L.miniapps.miniAppUi.allYourFilesSharedStorageAnd
+        else app.permissions[name]?.optString("path")?.let { L.miniapps.miniAppUi.everythingInValue(it) } ?: name.removePrefix("picked:").let { L.miniapps.miniAppUi.everythingInValue(it) }
     val access = when (MiniApps.normalizeAccess(app.permissions[name]?.optString("access") ?: app.storagePick)) {
-        "write" -> "change or delete"; "readwrite" -> "read, change or delete"; else -> "read"
+        "write" -> L.miniapps.miniAppUi.changeOrDelete; "readwrite" -> L.miniapps.miniAppUi.readChangeOrDelete; else -> "read"
     }
     val ok = typed.trim().equals(MiniAppPermissions.DANGER_PHRASE, ignoreCase = true)
     // a hidden folder in home (~/.gemini, ~/.ssh…): logins and keys rather than photos and documents
     val hidden = app.permissions[name]?.optString("path")?.trim()?.let { it.startsWith("~/.") || it.contains("/home/.") } == true
-    val what = if (hidden) "logins, keys, tokens and settings of other programs" else "photos, documents, downloads, other apps' exports"
+    val what = if (hidden) L.miniapps.miniAppUi.loginsKeysTokensAndSettingsOf else L.miniapps.miniAppUi.photosDocumentsDownloadsOtherAppsExports
     AlertDialog(
         onDismissRequest = { onResult(false) },
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(36.dp)) },
-        title = { Text("Give ${app.name} access to $scope?") },
+        title = { Text(L.miniapps.miniAppUi.giveNameAccessToScope(app.name, scope)) },
         text = {
             Column {
                 Text(
-                    "${app.name} could $access $scope: $what, and could send them anywhere it can reach. " +
-                        "A mistake or a bad app can delete or leak them. Only continue if you trust this app completely.",
+                    L.miniapps.miniAppUi.nameCouldAccessScopeWhatAnd(app.name, access, scope, what),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Text("Type ${MiniAppPermissions.DANGER_PHRASE} to confirm:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                Text(L.miniapps.miniAppUi.typeDangerPhraseToConfirm(MiniAppPermissions.DANGER_PHRASE), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
                 OutlinedTextField(
                     value = typed, onValueChange = { typed = it }, singleLine = true,
                     placeholder = { Text(MiniAppPermissions.DANGER_PHRASE, fontFamily = FontFamily.Monospace) },
@@ -301,8 +301,8 @@ fun TypedConfirmDialog(app: MiniApp, name: String, onResult: (Boolean) -> Unit) 
                 )
             }
         },
-        confirmButton = { TextButton(enabled = ok, onClick = { onResult(true) }) { Text("Give access", color = if (ok) MaterialTheme.colorScheme.error else Color.Unspecified) } },
-        dismissButton = { TextButton(onClick = { onResult(false) }) { Text("Cancel") } },
+        confirmButton = { TextButton(enabled = ok, onClick = { onResult(true) }) { Text(L.miniapps.miniAppUi.giveAccess, color = if (ok) MaterialTheme.colorScheme.error else Color.Unspecified) } },
+        dismissButton = { TextButton(onClick = { onResult(false) }) { Text(L.common.cancel) } },
     )
 }
 
@@ -319,9 +319,9 @@ fun ConsoleSheet(appId: String, onEval: (String, (String) -> Unit) -> Unit, onDe
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Console", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(L.miniapps.miniAppUi.console, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 TextButton(onClick = onDevtools) { Text("DevTools") }
-                IconButton(onClick = { MiniAppConsole.clear(appId) }) { Icon(Icons.Outlined.DeleteSweep, "Clear") }
+                IconButton(onClick = { MiniAppConsole.clear(appId) }) { Icon(Icons.Outlined.DeleteSweep, L.common.clear) }
             }
             HorizontalDivider()
             LazyColumn(state = list, modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 460.dp)) {
@@ -344,13 +344,13 @@ fun ConsoleSheet(appId: String, onEval: (String, (String) -> Unit) -> Unit, onDe
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = input, onValueChange = { input = it }, singleLine = true,
-                    placeholder = { Text("Run JavaScript…", fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                    placeholder = { Text(L.miniapps.miniAppUi.runJavascript, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { run(context, appId, input, onEval); input = "" }),
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = { run(context, appId, input, onEval); input = "" }) { Icon(Icons.AutoMirrored.Filled.Send, "Run") }
+                IconButton(onClick = { run(context, appId, input, onEval); input = "" }) { Icon(Icons.AutoMirrored.Filled.Send, L.common.run) }
             }
         }
     }
@@ -384,8 +384,8 @@ fun AppInfoSheet(app: MiniApp, onDismiss: () -> Unit, onClearData: () -> Unit) {
                     Text(app.name, style = MaterialTheme.typography.titleLarge)
                     Text("${app.version} · ${app.id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
-                        if (app.signed) "Installed · signed by ${app.developer} · ${ai.antigem.data.miniapps.MiniAppSigning.shortFingerprint(app.signer.orEmpty())}"
-                        else "Development app (unsigned) · ~/mini-apps/${app.folder.name}",
+                        if (app.signed) L.miniapps.miniAppUi.installedSignedByDeveloper(app.developer, ai.antigem.data.miniapps.MiniAppSigning.shortFingerprint(app.signer.orEmpty()))
+                        else L.miniapps.miniAppUi.developmentAppUnsignedMiniAppsName(app.folder.name),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (app.tampered) MaterialTheme.colorScheme.error else if (app.signed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
                     )
@@ -393,8 +393,8 @@ fun AppInfoSheet(app: MiniApp, onDismiss: () -> Unit, onClearData: () -> Unit) {
             }
             if (app.description.isNotBlank()) Text(app.description, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
 
-            Text("Permissions", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
-            if (states.isEmpty()) Text("This app asks for no permissions. It can only use its own storage.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(L.common.permissions, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+            if (states.isEmpty()) Text(L.miniapps.miniAppUi.thisAppAsksForNoPermissions, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             states.forEach { (name, state) ->
                 val info = MiniAppPermissions.describe(app, name)
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -410,18 +410,18 @@ fun AppInfoSheet(app: MiniApp, onDismiss: () -> Unit, onClearData: () -> Unit) {
                         }
                     })
                 }
-                if (name in app.required) Text("Required", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                if (name in app.required) Text(L.common.required, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
             val picked = remember(tick) { MiniAppPermissions.pickedFolders(context, app) }
             if (picked.isNotEmpty()) {
-                Text("Folders you picked", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+                Text(L.miniapps.miniAppUi.foldersYouPicked, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 picked.forEach { f ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(f.optString("path"), style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
                             Text(MiniAppPermissions.accessText(f.optString("access")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        TextButton(onClick = { MiniAppPermissions.removePickedFolder(context, app, f.optString("path")); tick++ }) { Text("Remove") }
+                        TextButton(onClick = { MiniAppPermissions.removePickedFolder(context, app, f.optString("path")); tick++ }) { Text(L.common.remove) }
                     }
                 }
             }
@@ -429,13 +429,13 @@ fun AppInfoSheet(app: MiniApp, onDismiss: () -> Unit, onClearData: () -> Unit) {
             // AntiGem tools (MCP): whether each call needs the user's OK first
             val mcpServers = remember(app) { MiniAppMcpAccess.servers(app) }
             if (mcpServers.isNotEmpty()) {
-                Text("AntiGem tools", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+                Text(L.miniapps.miniAppUi.antigemTools, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 mcpServers.forEach { sv ->
                     val ask = remember(tick) { MiniAppMcpAccess.askSwitch(context, app, sv) }
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Ask before each call: $sv", style = MaterialTheme.typography.bodyLarge)
-                            Text(if (MiniAppMcpAccess.isSensitive(sv)) "Recommended: these tools can act on your phone" else "You see each call and its details first",
+                            Text(L.miniapps.miniAppUi.askBeforeEachCallSv(sv), style = MaterialTheme.typography.bodyLarge)
+                            Text(if (MiniAppMcpAccess.isSensitive(sv)) L.miniapps.miniAppUi.recommendedTheseToolsCanActOn else L.miniapps.miniAppUi.youSeeEachCallAndIts,
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Switch(checked = ask, onCheckedChange = { MiniAppMcpAccess.setAsk(context, app, sv, it); tick++ })
@@ -445,44 +445,47 @@ fun AppInfoSheet(app: MiniApp, onDismiss: () -> Unit, onClearData: () -> Unit) {
 
             BackgroundSection(app, tick) { tick++ }
 
-            Text("Storage", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
-            Text((if (app.signed) "Code: installed by AntiGem (read-only, checked against its signature)" else "Code: ~/mini-apps/${app.folder.name}") + "\nData: ~/.antigem/mini-apps/${app.id}",
+            Text(L.miniapps.miniAppUi.storage, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+            Text(L.miniapps.miniAppUi.valueDataAntigemMiniAppsId((if (app.signed) L.miniapps.miniAppUi.codeInstalledByAntigemReadOnly else L.miniapps.miniAppUi.codeMiniAppsName(app.folder.name)), app.id),
                 style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
             app.sharedId?.let { sid ->
                 val group = remember(app) { MiniApps.sharedGroup(context, app, fresh = true) }
                 Text(
-                    "Shared data (\"$sid\"): " + if (group.isEmpty()) "no other app in this group yet" else
-                        group.joinToString { it.name } + if (app.signed) ", same developer: each can read and change the other's files" else ", development apps",
+                    when {
+                        group.isEmpty() -> L.miniapps.miniAppUi.sharedDataSidNoOtherApp(sid)
+                        app.signed -> L.miniapps.miniAppUi.sharedDataSidAppsSameDeveloper(sid, group.joinToString { it.name })
+                        else -> L.miniapps.miniAppUi.sharedDataSidAppsDevelopmentApps(sid, group.joinToString { it.name })
+                    },
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp),
                 )
             }
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { confirmClear = true }) { Text("Clear data") }
-                OutlinedButton(onClick = { MiniAppPermissions.reset(context, app); tick++ }) { Text("Reset permissions") }
+                OutlinedButton(onClick = { confirmClear = true }) { Text(L.miniapps.miniAppUi.clearData) }
+                OutlinedButton(onClick = { MiniAppPermissions.reset(context, app); tick++ }) { Text(L.miniapps.miniAppUi.resetPermissions) }
             }
             Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { MiniAppShortcuts.addToHome(context, app) }) { Text("Add to home screen") }
-                if (app.signed) OutlinedButton(onClick = { confirmUninstall = true }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
+                OutlinedButton(onClick = { MiniAppShortcuts.addToHome(context, app) }) { Text(L.common.addToHomeScreen) }
+                if (app.signed) OutlinedButton(onClick = { confirmUninstall = true }) { Text(L.common.uninstall, color = MaterialTheme.colorScheme.error) }
                 else OutlinedButton(enabled = !exporting, onClick = {
                     if (!ai.antigem.data.miniapps.MiniAppSigning.hasKey(context)) {
-                        Toast.makeText(context, "Create a developer key first (Mini Apps → key icon)", Toast.LENGTH_LONG).show(); return@OutlinedButton
+                        Toast.makeText(context, L.miniapps.miniAppUi.createADeveloperKeyFirstMini, Toast.LENGTH_LONG).show(); return@OutlinedButton
                     }
                     exporting = true
                     scope.launch {
                         runCatching { exportSignedPackage(context, app) }
-                            .onSuccess { f -> Toast.makeText(context, "Signed: ~/mini-apps-dist/${f.name}", Toast.LENGTH_LONG).show(); MiniAppPackages.sharePackage(context, f) }
-                            .onFailure { Toast.makeText(context, it.message ?: "Export failed", Toast.LENGTH_LONG).show() }
+                            .onSuccess { f -> Toast.makeText(context, L.miniapps.miniAppUi.signedMiniAppsDistName(f.name), Toast.LENGTH_LONG).show(); MiniAppPackages.sharePackage(context, f) }
+                            .onFailure { Toast.makeText(context, it.message ?: L.miniapps.miniAppUi.exportFailed, Toast.LENGTH_LONG).show() }
                         exporting = false
                     }
-                }) { Text(if (exporting) "Signing…" else "Export signed package") }
+                }) { Text(if (exporting) L.miniapps.miniAppUi.signing else L.miniapps.miniAppUi.exportSignedPackage) }
             }
             // an installed app is shared as the exact package it was installed from (still the developer's signature)
             if (app.signed) Row(Modifier.padding(top = 4.dp)) {
                 OutlinedButton(onClick = {
                     val f = runCatching { ai.antigem.data.miniapps.MiniAppInstaller.shareablePackage(context, app) }.getOrNull()
-                    if (f == null) Toast.makeText(context, "The package isn't kept for apps installed before sharing existed: install it again to share it", Toast.LENGTH_LONG).show()
+                    if (f == null) Toast.makeText(context, L.miniapps.miniAppUi.thePackageIsntKeptForApps, Toast.LENGTH_LONG).show()
                     else MiniAppPackages.sharePackage(context, f)
-                }) { Text("Share app") }
+                }) { Text(L.miniapps.miniAppUi.shareApp) }
             }
             Spacer(Modifier.size(8.dp))
         }
@@ -491,40 +494,40 @@ fun AppInfoSheet(app: MiniApp, onDismiss: () -> Unit, onClearData: () -> Unit) {
     confirmOff?.let { name ->
         AlertDialog(
             onDismissRequest = { confirmOff = null },
-            title = { Text("${app.name} needs this") },
-            text = { Text("\"${MiniAppPermissions.describe(app, name).title}\" is required: without it ${app.name} won't open. Turn it off anyway?") },
-            confirmButton = { TextButton(onClick = { MiniAppPermissions.set(context, app, name, false); confirmOff = null; tick++ }) { Text("Turn off", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmOff = null }) { Text("Keep") } },
+            title = { Text(L.miniapps.miniAppUi.nameNeedsThis(app.name)) },
+            text = { Text(L.miniapps.miniAppUi.valueIsRequiredWithoutItName(MiniAppPermissions.describe(app, name).title, app.name)) },
+            confirmButton = { TextButton(onClick = { MiniAppPermissions.set(context, app, name, false); confirmOff = null; tick++ }) { Text(L.miniapps.miniAppUi.turnOff, color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmOff = null }) { Text(L.miniapps.miniAppUi.keep) } },
         )
     }
     if (confirmUninstall) AlertDialog(
         onDismissRequest = { confirmUninstall = false },
         title = { Text("Uninstall ${app.name}?") },
-        text = { Text("The app and all its data (storage, files, reminders, background tasks, notifications) are removed.") },
+        text = { Text(L.miniapps.miniAppUi.theAppAndAllItsData) },
         confirmButton = {
             TextButton(onClick = {
                 confirmUninstall = false
                 runCatching { ai.antigem.data.miniapps.MiniAppInstaller.uninstall(context, app) }
                     .onSuccess { Toast.makeText(context, "${app.name} uninstalled", Toast.LENGTH_SHORT).show(); onDismiss() }
-                    .onFailure { Toast.makeText(context, it.message ?: "Couldn't uninstall", Toast.LENGTH_LONG).show() }
-            }) { Text("Uninstall", color = MaterialTheme.colorScheme.error) }
+                    .onFailure { Toast.makeText(context, it.message ?: L.miniapps.miniAppUi.couldntUninstall, Toast.LENGTH_LONG).show() }
+            }) { Text(L.common.uninstall, color = MaterialTheme.colorScheme.error) }
         },
-        dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text(L.common.cancel) } },
     )
     if (confirmClear) AlertDialog(
         onDismissRequest = { confirmClear = false },
-        title = { Text("Clear ${app.name}'s data?") },
-        text = { Text("Its storage, databases, files and logs are deleted. The app itself stays.") },
+        title = { Text(L.miniapps.miniAppUi.clearNameSData(app.name)) },
+        text = { Text(L.miniapps.miniAppUi.itsStorageDatabasesFilesAndLogs) },
         confirmButton = {
             TextButton(onClick = {
                 confirmClear = false
                 MiniAppNet.forgetApp(app.id)
                 MiniAppRuntime.clearData(context, app)
-                Toast.makeText(context, "Data cleared", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, L.miniapps.miniAppUi.dataCleared, Toast.LENGTH_SHORT).show()
                 onClearData()
-            }) { Text("Clear", color = MaterialTheme.colorScheme.error) }
+            }) { Text(L.common.clear, color = MaterialTheme.colorScheme.error) }
         },
-        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(L.common.cancel) } },
     )
 }
 
@@ -540,10 +543,10 @@ private fun BackgroundSection(app: MiniApp, tick: Int, refresh: () -> Unit) {
     val (reminders, tasks, runs) = data ?: return
     if (reminders.length() == 0 && tasks.length() == 0 && app.backgroundScript == null) return
     val time = remember { SimpleDateFormat("EEE HH:mm", Locale.getDefault()) }
-    Text("Background", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
+    Text(L.miniapps.miniAppUi.background, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 20.dp, bottom = 4.dp))
     if (reminders.length() > 0) {
         val next = reminders.optJSONObject(0)?.optLong("at") ?: 0L
-        Text("${reminders.length()} reminder${if (reminders.length() == 1) "" else "s"} scheduled · next ${time.format(Date(next))}", style = MaterialTheme.typography.bodyMedium)
+        Text(L.miniapps.miniAppUi.reminderscountReminderValueScheduledNext(reminders.length(), if (reminders.length() == 1) "" else "s", time.format(Date(next))), style = MaterialTheme.typography.bodyMedium)
     }
     for (i in 0 until tasks.length()) {
         val t = tasks.getJSONObject(i)
@@ -551,8 +554,8 @@ private fun BackgroundSection(app: MiniApp, tick: Int, refresh: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("${t.optString("name")} · ${t.optString("schedule")}", style = MaterialTheme.typography.bodyLarge)
-                val lastText = if (last == null) "Not run yet" else
-                    "Last: ${time.format(Date(last.optLong("at")))} · ${last.optString("status")}" + (if (last.optString("status") == "ok") " in ${last.optLong("ms")} ms" else "") +
+                val lastText = if (last == null) L.miniapps.miniAppUi.notRunYet else
+                    "Last: ${time.format(Date(last.optLong("at")))} · ${last.optString("status")}" + (if (last.optString("status") == "ok") L.miniapps.miniAppUi.inOptlongMs(last.optLong("ms")) else "") +
                         last.optString("detail").takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
                 Text(lastText, style = MaterialTheme.typography.bodySmall, maxLines = 3,
                     color = if (last?.optString("status") == "error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -560,26 +563,26 @@ private fun BackgroundSection(app: MiniApp, tick: Int, refresh: () -> Unit) {
             TextButton(onClick = {
                 MiniAppScheduler.runNow(context, app.id, t.optString("name"), "manual")
                 Toast.makeText(context, "Running ${t.optString("name")}…", Toast.LENGTH_SHORT).show()
-            }) { Text("Run now") }
+            }) { Text(L.miniapps.miniAppUi.runNow) }
         }
     }
     if ((reminders.length() > 0 || tasks.length() > 0) && !MiniAppScheduler.canExact(context)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Reminders may come late: AntiGem has no \"Alarms & reminders\" access.", style = MaterialTheme.typography.bodySmall,
+            Text(L.miniapps.miniAppUi.remindersMayComeLateAntigemHas, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
             TextButton(onClick = {
                 runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.parse("package:${context.packageName}"))) }
                 MiniAppScheduler.rearmAsync(context)
                 refresh()
-            }) { Text("Fix") }
+            }) { Text(L.miniapps.miniAppUi.fix) }
         }
     }
     if (tasks.length() > 0 || app.backgroundScript != null) {
-        Text("$runs of ${MiniAppScheduler.MAX_RUNS_PER_DAY} background runs used in the last 24 h", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(L.miniapps.miniAppUi.runsOfMaxRunsPerDay(runs, MiniAppScheduler.MAX_RUNS_PER_DAY), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         val pm = context.getSystemService(android.os.PowerManager::class.java)
         if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Android may delay or skip background tasks while AntiGem's battery use is optimized.", style = MaterialTheme.typography.bodySmall,
+                Text(L.miniapps.miniAppUi.androidMayDelayOrSkipBackground, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
                 @android.annotation.SuppressLint("BatteryLife")
                 val allow = {
@@ -588,7 +591,7 @@ private fun BackgroundSection(app: MiniApp, tick: Int, refresh: () -> Unit) {
                     }
                     refresh()
                 }
-                TextButton(onClick = allow) { Text("Allow") }
+                TextButton(onClick = allow) { Text(L.common.allow) }
             }
         }
     }
@@ -606,26 +609,24 @@ private fun McpTypedConfirmDialog(app: MiniApp, name: String, onResult: (Boolean
     var typed by remember { mutableStateOf("") }
     val server = name.removePrefix("mcp:").substringBefore('/')
     val tool = name.substringAfter('/', "")
-    val what = if (tool.isNotEmpty()) "the $tool tool of $server" else "$server"
+    val what = if (tool.isNotEmpty()) L.miniapps.miniAppUi.theToolToolOfServer(tool, server) else "$server"
     val ok = typed.trim().equals(MiniAppPermissions.DANGER_PHRASE, ignoreCase = true)
     AlertDialog(
         onDismissRequest = { onResult(false) },
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(36.dp)) },
-        title = { Text("Let ${app.name} use $what?") },
+        title = { Text(L.miniapps.miniAppUi.letNameUseWhat(app.name, what)) },
         text = {
             Column {
                 Text(
-                    "Through $server an app can run commands, tap and type on your phone, or read and act in the browser, depending on the tool. " +
-                        "A mistake or a bad app can delete things, send messages or leak what's on screen. Only continue if you trust this app completely. " +
-                        "By default AntiGem still asks you before each call (App info → Ask before each call).",
+                    L.miniapps.miniAppUi.throughServerAnAppCanRun(server),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Text("Type ${MiniAppPermissions.DANGER_PHRASE} to confirm:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                Text(L.miniapps.miniAppUi.typeDangerPhraseToConfirm(MiniAppPermissions.DANGER_PHRASE), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
                 OutlinedTextField(value = typed, onValueChange = { typed = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text(MiniAppPermissions.DANGER_PHRASE, fontFamily = FontFamily.Monospace) })
             }
         },
-        confirmButton = { TextButton(enabled = ok, onClick = { onResult(true) }) { Text("Allow", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { onResult(false) }) { Text("Cancel") } },
+        confirmButton = { TextButton(enabled = ok, onClick = { onResult(true) }) { Text(L.common.allow, color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { onResult(false) }) { Text(L.common.cancel) } },
     )
 }

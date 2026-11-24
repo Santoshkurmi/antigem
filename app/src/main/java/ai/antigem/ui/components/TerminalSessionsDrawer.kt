@@ -89,6 +89,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 /** Same width as Termux's drawer. */
 private val DRAWER_WIDTH = 240.dp
@@ -314,7 +315,7 @@ fun TerminalSessionsDrawer(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Settings,
-                                contentDescription = "Terminal settings",
+                                contentDescription = L.components.terminalSessionsDrawer.terminalSettings,
                                 tint = AppColors.editorText.copy(alpha = 0.8f),
                                 modifier = Modifier.size(22.dp)
                             )
@@ -391,7 +392,7 @@ private fun DrawerSessionRow(
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .background(if (isActive) ClaudeTerracotta.copy(alpha = 0.18f) else Color.Transparent)
-            .clickable(onClickLabel = "Switch to this session", onClick = onClick)
+            .clickable(onClickLabel = L.components.terminalSessionsDrawer.switchToThisSession, onClick = onClick)
             .padding(start = 14.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -409,7 +410,7 @@ private fun DrawerSessionRow(
         IconButton(onClick = onRename, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.Outlined.Edit,
-                contentDescription = "Rename session",
+                contentDescription = L.components.terminalSessionsDrawer.renameSession,
                 tint = AppColors.editorText.copy(alpha = 0.75f),
                 modifier = Modifier.size(18.dp)
             )
@@ -418,7 +419,7 @@ private fun DrawerSessionRow(
         IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.Outlined.Delete,
-                contentDescription = "Close session",
+                contentDescription = L.components.terminalSessionsDrawer.closeSession,
                 tint = AppColors.danger.copy(alpha = 0.85f),
                 modifier = Modifier.size(18.dp)
             )
@@ -472,13 +473,13 @@ private fun RenameSessionDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(18.dp),
         containerColor = AppColors.editorBg,
-        title = { Text("Rename session", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White) },
+        title = { Text(L.components.terminalSessionsDrawer.renameSession, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                placeholder = { Text("Session name", color = Color.Gray) },
+                placeholder = { Text(L.components.terminalSessionsDrawer.sessionName, color = Color.Gray) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
@@ -498,12 +499,12 @@ private fun RenameSessionDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Rename", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.common.rename, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
-                Text("Cancel", color = Color.Gray, fontSize = 13.sp)
+                Text(L.common.cancel, color = Color.Gray, fontSize = 13.sp)
             }
         }
     )

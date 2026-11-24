@@ -37,6 +37,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.theme.ClaudeTerracotta
 import kotlinx.coroutines.delay
+import ai.antigem.i18n.L
 
 class InteractiveUiJsBridge(
     private val context: Context,
@@ -52,7 +53,7 @@ class InteractiveUiJsBridge(
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("Interactive UI", text)
         clipboard.setPrimaryClip(clip)
-        onToast("Copied to clipboard")
+        onToast(L.components.interactiveUiView.copiedToClipboard)
     }
 }
 
@@ -60,7 +61,7 @@ class InteractiveUiJsBridge(
 @Composable
 fun InteractiveUiView(
     htmlCode: String,
-    title: String = "Interactive App",
+    title: String = L.components.interactiveUiView.interactiveApp,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -178,7 +179,7 @@ fun InteractiveUiView(
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "App",
+                                text = L.components.interactiveUiView.app,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (selectedTab == 0) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -192,7 +193,7 @@ fun InteractiveUiView(
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Code",
+                                text = L.common.code,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (selectedTab == 1) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -209,7 +210,7 @@ fun InteractiveUiView(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Restart App",
+                            contentDescription = L.components.interactiveUiView.restartApp,
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             modifier = Modifier.size(15.dp)
                         )
@@ -222,7 +223,7 @@ fun InteractiveUiView(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Fullscreen,
-                            contentDescription = "Open Fullscreen",
+                            contentDescription = L.components.interactiveUiView.openFullscreen,
                             tint = ClaudeTerracotta,
                             modifier = Modifier.size(18.dp)
                         )
@@ -333,14 +334,14 @@ fun InteractiveUiView(
                             IconButton(onClick = { reloadKey++ }) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Restart App",
+                                    contentDescription = L.components.interactiveUiView.restartApp,
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             IconButton(onClick = { isFullscreen = false }) {
                                 Icon(
                                     imageVector = Icons.Default.FullscreenExit,
-                                    contentDescription = "Exit Fullscreen",
+                                    contentDescription = L.components.interactiveUiView.exitFullscreen,
                                     tint = ClaudeTerracotta
                                 )
                             }

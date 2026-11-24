@@ -24,6 +24,7 @@ object MiniAppMcpAccess {
     private val READ_ONLY = mapOf(
         "notes_mcp" to setOf("notes_list", "notes_get"),
         "theme_mcp" to setOf("theme_list", "theme_get", "theme_tokens", "theme_export"),
+        "language_mcp" to setOf("language_list", "language_sections", "language_missing", "language_get", "language_export"),
         "browser_mcp" to setOf("browser_list_tabs", "browser_read_page", "browser_find", "browser_get_page_text", "browser_get_console_logs", "browser_read_network"),
         "terminal_mcp" to setOf("terminal_list_sessions", "terminal_read_output"),
     )

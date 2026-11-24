@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import ai.antigem.i18n.L
 
 /** One of Antigravity's voice-mode voices (the same list the Antigravity desktop app offers), with its orb colours. */
 data class AgyVoice(
@@ -18,16 +19,16 @@ data class AgyVoice(
 
 /** Settings of Antigravity voice calls (voice, speed, speaker, captions). Every value is live for the call screen. */
 object AgyVoicePreferences {
-    val voices = listOf(
-        AgyVoice("Fola", "Clear and friendly", 0x1E2E6C, 0x688EE4, 0xCEDEFA),
-        AgyVoice("Arlo", "Confident and clear", 0x5C3C1C, 0xE4B468, 0xF8E4BC),
-        AgyVoice("Cleo", "Warm and engaging", 0x50244E, 0xC87EC0, 0xF0D0EC),
-        AgyVoice("Finn", "Warm and approachable", 0x1C4844, 0x68B0A2, 0xC8ECE2),
-        AgyVoice("Gero", "Clear and friendly", 0x5E302E, 0xE29280, 0xF8D4C8),
-        AgyVoice("Lora", "Clear and friendly", 0x1A445E, 0x72B6DC, 0xD0ECF8),
-        AgyVoice("Neno", "Deep and velvety", 0x2A4026, 0x8CB274, 0xD8EAC8),
-        AgyVoice("Olin", "Light and precise", 0x3A3068, 0x9E8EE2, 0xE0DAFA),
-        AgyVoice("Tari", "Confident and clear", 0x4C481C, 0xC4BE60, 0xEEECC4)
+    val voices get() = listOf(
+        AgyVoice("Fola", L.voice.agyVoicePreferences.clearAndFriendly, 0x1E2E6C, 0x688EE4, 0xCEDEFA),
+        AgyVoice("Arlo", L.voice.agyVoicePreferences.confidentAndClear, 0x5C3C1C, 0xE4B468, 0xF8E4BC),
+        AgyVoice("Cleo", L.voice.agyVoicePreferences.warmAndEngaging, 0x50244E, 0xC87EC0, 0xF0D0EC),
+        AgyVoice("Finn", L.voice.agyVoicePreferences.warmAndApproachable, 0x1C4844, 0x68B0A2, 0xC8ECE2),
+        AgyVoice("Gero", L.voice.agyVoicePreferences.clearAndFriendly, 0x5E302E, 0xE29280, 0xF8D4C8),
+        AgyVoice("Lora", L.voice.agyVoicePreferences.clearAndFriendly, 0x1A445E, 0x72B6DC, 0xD0ECF8),
+        AgyVoice("Neno", L.voice.agyVoicePreferences.deepAndVelvety, 0x2A4026, 0x8CB274, 0xD8EAC8),
+        AgyVoice("Olin", L.voice.agyVoicePreferences.lightAndPrecise, 0x3A3068, 0x9E8EE2, 0xE0DAFA),
+        AgyVoice("Tari", L.voice.agyVoicePreferences.confidentAndClear, 0x4C481C, 0xC4BE60, 0xEEECC4)
     )
 
     /** Playback speeds the voice service accepts. */
@@ -37,35 +38,35 @@ object AgyVoicePreferences {
     const val LANGUAGE_AUTO = "auto"
 
     /** Languages offered for calls (BCP 47 tag → name in that language, English name). */
-    val languages = listOf(
-        Triple("en-US", "English", "English"),
-        Triple("hi-IN", "हिन्दी", "Hindi"),
-        Triple("ne-NP", "नेपाली", "Nepali"),
-        Triple("bn-IN", "বাংলা", "Bengali"),
-        Triple("ur-PK", "اردو", "Urdu"),
-        Triple("mr-IN", "मराठी", "Marathi"),
-        Triple("ta-IN", "தமிழ்", "Tamil"),
-        Triple("te-IN", "తెలుగు", "Telugu"),
-        Triple("gu-IN", "ગુજરાતી", "Gujarati"),
-        Triple("kn-IN", "ಕನ್ನಡ", "Kannada"),
-        Triple("ml-IN", "മലയാളം", "Malayalam"),
-        Triple("pa-IN", "ਪੰਜਾਬੀ", "Punjabi"),
-        Triple("es-ES", "Español", "Spanish"),
-        Triple("fr-FR", "Français", "French"),
-        Triple("de-DE", "Deutsch", "German"),
-        Triple("pt-BR", "Português", "Portuguese"),
-        Triple("it-IT", "Italiano", "Italian"),
-        Triple("ru-RU", "Русский", "Russian"),
-        Triple("ar-SA", "العربية", "Arabic"),
-        Triple("id-ID", "Bahasa Indonesia", "Indonesian"),
-        Triple("ja-JP", "日本語", "Japanese"),
-        Triple("ko-KR", "한국어", "Korean"),
-        Triple("zh-CN", "中文", "Chinese")
+    val languages get() = listOf(
+        Triple("en-US", "English", L.voice.agyVoicePreferences.english),
+        Triple("hi-IN", "हिन्दी", L.voice.agyVoicePreferences.hindi),
+        Triple("ne-NP", "नेपाली", L.voice.agyVoicePreferences.nepali),
+        Triple("bn-IN", "বাংলা", L.voice.agyVoicePreferences.bengali),
+        Triple("ur-PK", "اردو", L.voice.agyVoicePreferences.urdu),
+        Triple("mr-IN", "मराठी", L.voice.agyVoicePreferences.marathi),
+        Triple("ta-IN", "தமிழ்", L.voice.agyVoicePreferences.tamil),
+        Triple("te-IN", "తెలుగు", L.voice.agyVoicePreferences.telugu),
+        Triple("gu-IN", "ગુજરાતી", L.voice.agyVoicePreferences.gujarati),
+        Triple("kn-IN", "ಕನ್ನಡ", L.voice.agyVoicePreferences.kannada),
+        Triple("ml-IN", "മലയാളം", L.voice.agyVoicePreferences.malayalam),
+        Triple("pa-IN", "ਪੰਜਾਬੀ", L.voice.agyVoicePreferences.punjabi),
+        Triple("es-ES", "Español", L.voice.agyVoicePreferences.spanish),
+        Triple("fr-FR", "Français", L.voice.agyVoicePreferences.french),
+        Triple("de-DE", "Deutsch", L.voice.agyVoicePreferences.german),
+        Triple("pt-BR", "Português", L.voice.agyVoicePreferences.portuguese),
+        Triple("it-IT", "Italiano", L.voice.agyVoicePreferences.italian),
+        Triple("ru-RU", "Русский", L.voice.agyVoicePreferences.russian),
+        Triple("ar-SA", "العربية", L.voice.agyVoicePreferences.arabic),
+        Triple("id-ID", "Bahasa Indonesia", L.voice.agyVoicePreferences.indonesian),
+        Triple("ja-JP", "日本語", L.voice.agyVoicePreferences.japanese),
+        Triple("ko-KR", "한국어", L.voice.agyVoicePreferences.korean),
+        Triple("zh-CN", "中文", L.voice.agyVoicePreferences.chinese)
     )
 
     /** Short name of a language setting for the call screen. */
     fun languageLabel(tag: String): String =
-        if (tag == LANGUAGE_AUTO) "Phone language" else languages.firstOrNull { it.first == tag }?.second ?: tag
+        if (tag == LANGUAGE_AUTO) L.voice.agyVoicePreferences.phoneLanguage else languages.firstOrNull { it.first == tag }?.second ?: tag
 
     /**
      * The Accept-Language header a call sends: the hub takes the caller's language from it (as from a browser's).

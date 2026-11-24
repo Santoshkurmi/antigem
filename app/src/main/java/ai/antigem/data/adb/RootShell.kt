@@ -11,6 +11,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.io.SequenceInputStream
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 /**
  * Root mode: commands run as root through the phone's own `su` (Magisk, KernelSU, APatch). The first `su` makes the
@@ -45,7 +46,7 @@ object RootShell {
             // the root manager's dialog waits for the user (Magisk: 10 s by default)
             val finished = p.waitFor(60, TimeUnit.SECONDS)
             val out = p.inputStream.bufferedReader().readText().trim()
-            if (!finished) { p.destroy(); State(Check.DENIED, "No answer from su (the root prompt timed out).") }
+            if (!finished) { p.destroy(); State(Check.DENIED, L.adb.rootShell.noAnswerFromSuTheRoot) }
             else if (p.exitValue() == 0 && out.lineSequence().lastOrNull()?.trim() == "0") State(Check.GRANTED)
             else State(Check.DENIED, out.ifBlank { "su exited with code ${p.exitValue()}" }.take(300))
         } catch (e: Exception) {

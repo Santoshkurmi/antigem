@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** The full-page Ubuntu chroot setup, shown over whatever opened it (first-launch installer, Settings). */
 @Composable
@@ -230,10 +231,10 @@ fun ChrootSetupScreen(
     Column(Modifier.fillMaxSize()) {
         // header
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = AppColors.onBackground) }
+            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, L.common.back, tint = AppColors.onBackground) }
             Column(Modifier.weight(1f)) {
-                Text(if (restore) "Restore an Ubuntu backup" else "Ubuntu chroot (root)", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AppColors.onBackground)
-                Text("A real Ubuntu on this phone for the bridge, the agents and the terminal", fontSize = 11.5.sp, color = AppColors.textSecondary)
+                Text(if (restore) L.settings.chrootSetup.restoreAnUbuntuBackup else L.common.ubuntuChrootRoot, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AppColors.onBackground)
+                Text(L.settings.chrootSetup.aRealUbuntuOnThisPhone, fontSize = 11.5.sp, color = AppColors.textSecondary)
             }
         }
         HorizontalDivider(color = AppColors.border.copy(alpha = 0.5f))
@@ -246,45 +247,45 @@ fun ChrootSetupScreen(
                 InstallProgress(state.step, state.progress, state.detail, state.done, state.error, state.result != null, logs)
             } else {
                 // ---------------- the phone
-                ChrootSection("This phone", "Root, the mount tools and free space", Icons.Outlined.Search) {
+                ChrootSection(L.common.thisPhone, L.settings.chrootSetup.rootTheMountToolsAndFree, Icons.Outlined.Search) {
                     when {
                         checking -> Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeTerracotta)
                             Spacer(Modifier.width(10.dp))
-                            Text("Checking (accept the root manager's prompt)…", fontSize = 12.5.sp, color = AppColors.onBackground)
+                            Text(L.settings.chrootSetup.checkingAcceptTheRootManagersPrompt, fontSize = 12.5.sp, color = AppColors.onBackground)
                         }
-                        probe == null -> Text("Not checked yet", fontSize = 12.5.sp, color = AppColors.textSecondary)
+                        probe == null -> Text(L.settings.chrootSetup.notCheckedYet, fontSize = 12.5.sp, color = AppColors.textSecondary)
                         probe?.rootOk != true -> {
-                            Text(probe?.error ?: "No root access", fontSize = 12.5.sp, color = AppColors.danger)
+                            Text(probe?.error ?: L.settings.chrootSetup.noRootAccess, fontSize = 12.5.sp, color = AppColors.danger)
                         }
                         else -> {
                             val p = probe!!
-                            ChrootKeyValue("Root", p.rootManager ?: "granted", AppColors.success)
+                            ChrootKeyValue(L.common.root, p.rootManager ?: "granted", AppColors.success)
                             ChrootKeyValue("CPU", "${p.machine ?: "?"} · kernel ${p.kernel ?: "?"}")
                             ChrootKeyValue("SELinux", p.selinux ?: "?")
-                            ChrootKeyValue("Mount tools", if (p.canPrivateNs) "unshare + nsenter (${p.busybox ?: "toybox"})" else "no unshare/nsenter: global namespace only",
+                            ChrootKeyValue(L.settings.chrootSetup.mountTools, if (p.canPrivateNs) "unshare + nsenter (${p.busybox ?: "toybox"})" else L.settings.chrootSetup.noUnshareNsenterGlobalNamespaceOnly,
                                 if (p.canPrivateNs) AppColors.success else AppColors.warning)
                             val free = runCatching { android.os.StatFs("/data").availableBytes }.getOrDefault(-1L)
-                            if (free >= 0) ChrootKeyValue("Free on /data", formatBytes(free), if (free < (2L shl 30)) AppColors.warning else AppColors.onBackground)
+                            if (free >= 0) ChrootKeyValue(L.settings.chrootSetup.freeOnData, formatBytes(free), if (free < (2L shl 30)) AppColors.warning else AppColors.onBackground)
                         }
                     }
                     if (!checking) {
-                        TextButton(onClick = { runCheck() }) { Text(if (probe == null) "Check" else "Check again", color = ClaudeTerracotta) }
+                        TextButton(onClick = { runCheck() }) { Text(if (probe == null) L.common.check else L.common.checkAgain, color = ClaudeTerracotta) }
                     }
                 }
 
                 // ---------------- installs already on the phone
                 val foundList = found.orEmpty()
                 if (foundList.isNotEmpty()) {
-                    ChrootSection("Found on this phone", "Use an install that is already here instead of downloading a new one", Icons.Outlined.Storage) {
+                    ChrootSection(L.settings.chrootSetup.foundOnThisPhone, L.settings.chrootSetup.useAnInstallThatIsAlready, Icons.Outlined.Storage) {
                         foundList.forEach { f ->
                             val known = installs.firstOrNull { it.path == f.path }
                             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(f.os.ifBlank { "Linux" }, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground, modifier = Modifier.weight(1f))
+                                    Text(f.os.ifBlank { L.settings.chrootSetup.linux }, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground, modifier = Modifier.weight(1f))
                                     if (f.running) ChrootTag("running", AppColors.success)
-                                    else if (f.mounted) ChrootTag("mounted, nothing running", AppColors.warning)
-                                    if (!f.hasManifest) { Spacer(Modifier.width(4.dp)); ChrootTag("not AntiGem's yet", AppColors.warning) }
+                                    else if (f.mounted) ChrootTag(L.settings.chrootSetup.mountedNothingRunning, AppColors.warning)
+                                    if (!f.hasManifest) { Spacer(Modifier.width(4.dp)); ChrootTag(L.settings.chrootSetup.notAntigemsYet, AppColors.warning) }
                                 }
                                 Text("${f.path} · ${f.arch}", fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, color = AppColors.textSecondary)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
@@ -299,12 +300,12 @@ fun ChrootSetupScreen(
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(10.dp)
-                                        ) { Text("Use this", fontSize = 12.5.sp) }
+                                        ) { Text(L.settings.chrootSetup.useThis, fontSize = 12.5.sp) }
                                     } else {
                                         Button(
                                             onClick = { adoptTarget = f; adoptError = null },
                                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(10.dp)
-                                        ) { Text("Adopt…", fontSize = 12.5.sp) }
+                                        ) { Text(L.settings.chrootSetup.adopt, fontSize = 12.5.sp) }
                                     }
                                 }
                                 if (adoptTarget?.path == f.path) {
@@ -329,68 +330,68 @@ fun ChrootSetupScreen(
                 }
 
                 // ---------------- source
-                ChrootSection("Source", "Where the Ubuntu rootfs comes from", Icons.Outlined.Cloud) {
+                ChrootSection(L.settings.chrootSetup.source, L.settings.chrootSetup.whereTheUbuntuRootfsComesFrom, Icons.Outlined.Cloud) {
                     ChrootRadioRow(
-                        "AntiGem Ubuntu (prebuilt)",
-                        "Ubuntu 24.04 with sudo, git, curl, Node.js, Python and the Android fixes already set up: the quickest start.",
+                        L.settings.chrootSetup.antigemUbuntuPrebuilt,
+                        L.settings.chrootSetup.ubuntu2404WithSudoGit,
                         selected = source == SourceChoice.PREBUILT,
                         enabled = prebuiltAvailable == true,
-                        tag = when (prebuiltAvailable) { true -> "recommended"; false -> "not published yet"; null -> "checking…" },
+                        tag = when (prebuiltAvailable) { true -> "recommended"; false -> L.settings.chrootSetup.notPublishedYet; null -> "checking…" },
                         tagColor = if (prebuiltAvailable == true) AppColors.success else AppColors.textSecondary
                     ) { source = SourceChoice.PREBUILT }
-                    ChrootRadioRow(UbuntuRelease.NOBLE.label, "Official Ubuntu Base from cdimage.ubuntu.com (newest point release, checksum checked) · ~30 MB",
+                    ChrootRadioRow(UbuntuRelease.NOBLE.label, L.settings.chrootSetup.officialUbuntuBaseFromCdimageUbuntu,
                         source == SourceChoice.OFFICIAL_2404, tag = "LTS") { source = SourceChoice.OFFICIAL_2404 }
-                    ChrootRadioRow(UbuntuRelease.RESOLUTE.label, "Official Ubuntu Base, the newest LTS", source == SourceChoice.OFFICIAL_2604) { source = SourceChoice.OFFICIAL_2604 }
-                    ChrootRadioRow(UbuntuRelease.JAMMY.label, "Official Ubuntu Base, the older LTS", source == SourceChoice.OFFICIAL_2204) { source = SourceChoice.OFFICIAL_2204 }
-                    ChrootRadioRow("Another URL", "Any rootfs .tar.gz / .tar.xz (Debian, Kali, Arch ARM …)", source == SourceChoice.URL) { source = SourceChoice.URL }
+                    ChrootRadioRow(UbuntuRelease.RESOLUTE.label, L.settings.chrootSetup.officialUbuntuBaseTheNewestLts, source == SourceChoice.OFFICIAL_2604) { source = SourceChoice.OFFICIAL_2604 }
+                    ChrootRadioRow(UbuntuRelease.JAMMY.label, L.settings.chrootSetup.officialUbuntuBaseTheOlderLts, source == SourceChoice.OFFICIAL_2204) { source = SourceChoice.OFFICIAL_2204 }
+                    ChrootRadioRow(L.settings.chrootSetup.anotherUrl, L.settings.chrootSetup.anyRootfsTarGzTarXz, source == SourceChoice.URL) { source = SourceChoice.URL }
                     if (source == SourceChoice.URL) {
-                        OutlinedTextField(url, { url = it }, label = { Text("Rootfs URL") }, singleLine = true,
+                        OutlinedTextField(url, { url = it }, label = { Text(L.settings.chrootSetup.rootfsUrl) }, singleLine = true,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(6.dp))
-                        OutlinedTextField(sha, { sha = it }, label = { Text("sha256 (optional)") }, singleLine = true,
+                        OutlinedTextField(sha, { sha = it }, label = { Text(L.settings.chrootSetup.sha256Optional) }, singleLine = true,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                     }
-                    ChrootRadioRow("A file on this phone", "An AntiGem backup (keeps its user, home, settings and packages), or any rootfs .tar.gz / .tar.xz", source == SourceChoice.FILE) {
+                    ChrootRadioRow(L.settings.chrootSetup.aFileOnThisPhone, L.settings.chrootSetup.anAntigemBackupKeepsItsUser, source == SourceChoice.FILE) {
                         if (fileUri == null) filePicker.launch(arrayOf("*/*")) else source = SourceChoice.FILE
                     }
                     if (source == SourceChoice.FILE) {
                         OutlinedButton(onClick = { filePicker.launch(arrayOf("*/*")) }, shape = RoundedCornerShape(10.dp)) {
                             Icon(Icons.Outlined.FolderOpen, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text(if (fileUri == null) "Choose a file" else fileName.ifBlank { "Chosen" }, fontSize = 12.5.sp)
+                            Text(if (fileUri == null) L.settings.chrootSetup.chooseAFile else fileName.ifBlank { L.settings.chrootSetup.chosen }, fontSize = 12.5.sp)
                         }
                     }
                 }
 
                 // ---------------- location
-                ChrootSection("Location", "The rootfs needs Linux permissions, so it lives on /data (never on /sdcard)", Icons.Outlined.Storage) {
-                    ChrootRadioRow("${ChrootManager.BASE_DIR}/<name>", "Stays when AntiGem is uninstalled or its data is cleared, and is found again after a reinstall.",
+                ChrootSection(L.common.location, L.settings.chrootSetup.theRootfsNeedsLinuxPermissionsSo, Icons.Outlined.Storage) {
+                    ChrootRadioRow("${ChrootManager.BASE_DIR}/<name>", L.settings.chrootSetup.staysWhenAntigemIsUninstalledOr,
                         location == LocationChoice.DEFAULT, tag = "recommended") { location = LocationChoice.DEFAULT }
-                    ChrootRadioRow("AntiGem's app storage", "Removed together with the app (uninstall or Clear data). Private mount namespace only.",
+                    ChrootRadioRow(L.settings.chrootSetup.antigemsAppStorage, L.settings.chrootSetup.removedTogetherWithTheAppUninstall,
                         location == LocationChoice.APP) { location = LocationChoice.APP; nsMode = ChrootNsMode.PRIVATE }
-                    ChrootRadioRow("Another folder on /data", null, location == LocationChoice.CUSTOM) { location = LocationChoice.CUSTOM }
+                    ChrootRadioRow(L.settings.chrootSetup.anotherFolderOnData, null, location == LocationChoice.CUSTOM) { location = LocationChoice.CUSTOM }
                     if (location == LocationChoice.CUSTOM) {
-                        OutlinedTextField(customPath, { customPath = it }, label = { Text("Folder") }, singleLine = true,
+                        OutlinedTextField(customPath, { customPath = it }, label = { Text(L.settings.chrootSetup.folder) }, singleLine = true,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                     } else {
-                        OutlinedTextField(name, { name = it.trim(); nameEdited = true }, label = { Text("Name") }, singleLine = true,
+                        OutlinedTextField(name, { name = it.trim(); nameEdited = true }, label = { Text(L.common.name) }, singleLine = true,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                     }
-                    ChrootNote("Installs into: $path")
+                    ChrootNote(L.settings.chrootSetup.installsIntoPath(path))
                     val pathError = ChrootManager.validateRootPath(path)
-                        ?: if (location != LocationChoice.CUSTOM && !ChrootManager.isInstallName(name)) "The name may use letters, digits, . _ and -." else null
+                        ?: if (location != LocationChoice.CUSTOM && !ChrootManager.isInstallName(name)) L.settings.chrootSetup.theNameMayUseLettersDigits else null
                     if (pathError != null) ChrootNote(pathError, AppColors.danger)
-                    if (installs.any { it.path == path }) ChrootNote("AntiGem already has an install there: pick another name.", AppColors.danger)
+                    if (installs.any { it.path == path }) ChrootNote(L.settings.chrootSetup.antigemAlreadyHasAnInstallThere, AppColors.danger)
                 }
 
                 // ---------------- user
-                ChrootSection("User", "The normal user the bridge, the agents and the terminal run as (it gets AntiGem's own uid)", Icons.Outlined.Person) {
-                    if (source == SourceChoice.FILE) ChrootNote("Restoring an AntiGem backup keeps the backup's own user (and its settings): these fields are used for other rootfs files.", AppColors.info)
-                    OutlinedTextField(user, { user = it.trim().lowercase() }, label = { Text("User name") }, singleLine = true,
+                ChrootSection(L.common.user, L.settings.chrootSetup.theNormalUserTheBridgeThe, Icons.Outlined.Person) {
+                    if (source == SourceChoice.FILE) ChrootNote(L.settings.chrootSetup.restoringAnAntigemBackupKeepsThe, AppColors.info)
+                    OutlinedTextField(user, { user = it.trim().lowercase() }, label = { Text(L.settings.chrootSetup.userName) }, singleLine = true,
                         isError = !ChrootManager.isUserName(user), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
-                        password, { password = it.replace("\n", "") }, label = { Text("Password (optional)") }, singleLine = true,
+                        password, { password = it.replace("\n", "") }, label = { Text(L.settings.chrootSetup.passwordOptional) }, singleLine = true,
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {
@@ -400,39 +401,39 @@ fun ChrootSetupScreen(
                         },
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
                     )
-                    ChrootSwitchRow("sudo without a password", "Agents can install packages without asking (recommended for agents)",
+                    ChrootSwitchRow("sudo without a password", L.settings.chrootSetup.agentsCanInstallPackagesWithoutAsking,
                         sudoNoPassword) { sudoNoPassword = it }
-                    if (!sudoNoPassword && password.isBlank()) ChrootNote("Without a password sudo could never be used: set one, or keep this on.", AppColors.danger)
+                    if (!sudoNoPassword && password.isBlank()) ChrootNote(L.settings.chrootSetup.withoutAPasswordSudoCouldNever, AppColors.danger)
                 }
 
                 // ---------------- options
-                ChrootSection("Options", "All of these can be changed later on the chroot's own page", Icons.Outlined.Settings) {
-                    ChrootSwitchRow("Phone storage at /sdcard", "Your files (Download, DCIM …) inside the chroot", mountSdcard) { mountSdcard = it }
-                    if (mountSdcard) ChrootSwitchRow("Read-only", "Programs in the chroot can read the phone's files but never change or delete them", sdcardRo) { sdcardRo = it }
-                    if (mountSdcard) ChrootSwitchRow("USB drives and SD cards (/storage)",
-                        if (sdcardRo) "Off with a read-only /sdcard (the phone's storage would be writable through /storage)"
-                        else "Every volume at /storage/…, also drives plugged in after the chroot started",
+                ChrootSection(L.common.options, L.settings.chrootSetup.allOfTheseCanBeChanged, Icons.Outlined.Settings) {
+                    ChrootSwitchRow(L.settings.chrootSetup.phoneStorageAtSdcard, L.settings.chrootSetup.yourFilesDownloadDcimInsideThe, mountSdcard) { mountSdcard = it }
+                    if (mountSdcard) ChrootSwitchRow(L.settings.chrootSetup.readOnly, L.settings.chrootSetup.programsInTheChrootCanRead, sdcardRo) { sdcardRo = it }
+                    if (mountSdcard) ChrootSwitchRow(L.settings.chrootSetup.usbDrivesAndSdCardsStorage,
+                        if (sdcardRo) L.settings.chrootSetup.offWithAReadOnlySdcard
+                        else L.settings.chrootSetup.everyVolumeAtStorageAlsoDrives,
                         mountStorage && !sdcardRo, enabled = !sdcardRo) { mountStorage = it }
-                    ChrootNote("USB devices (fastboot, adb, serial adapters over OTG) are always reachable at /dev/bus/usb; the user is in Android's usb group.")
-                    ChrootSwitchRow("Automatic DNS", "Uses the phone's DNS servers at every start (custom servers otherwise)", dnsAuto) { dnsAuto = it }
+                    ChrootNote(L.settings.chrootSetup.usbDevicesFastbootAdbSerialAdapters)
+                    ChrootSwitchRow(L.settings.chrootSetup.automaticDns, L.settings.chrootSetup.usesThePhonesDnsServersAt, dnsAuto) { dnsAuto = it }
                     if (!dnsAuto) {
-                        OutlinedTextField(dnsCustom, { dnsCustom = it }, label = { Text("DNS servers (comma separated)") }, singleLine = true,
+                        OutlinedTextField(dnsCustom, { dnsCustom = it }, label = { Text(L.settings.chrootSetup.dnsServersCommaSeparated) }, singleLine = true,
                             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                     }
                     Spacer(Modifier.height(4.dp))
-                    Text("Mount namespace", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
+                    Text(L.settings.chrootSetup.mountNamespace, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
                     ChrootRadioRow(ChrootNsMode.PRIVATE.label,
-                        "The chroot's mounts (/dev, /proc, /sdcard …) exist only for its own processes. Nothing outside can reach your files through the rootfs, even a root file manager deleting it. USB drives plugged in later still show up.",
+                        L.settings.chrootSetup.theChrootsMountsDevProcSdcard,
                         nsMode == ChrootNsMode.PRIVATE, enabled = probe?.canPrivateNs != false) { nsMode = ChrootNsMode.PRIVATE }
                     ChrootRadioRow(ChrootNsMode.GLOBAL.label,
-                        "Mounts visible to the whole phone until stopped (like Linux Deploy). For advanced users: deleting the rootfs folder with another tool while it runs would go into /sdcard.",
+                        L.settings.chrootSetup.mountsVisibleToTheWholePhone,
                         nsMode == ChrootNsMode.GLOBAL, enabled = !inAppStorage) { nsMode = ChrootNsMode.GLOBAL }
                     Spacer(Modifier.height(10.dp))
                     ChrootFoldersEditor(user = user, binds = sharedFolders) { sharedFolders = it }
                 }
 
                 // ---------------- packages
-                ChrootSection("Packages", "Installed with apt right after the rootfs (more can be added later)", Icons.Outlined.Inventory2) {
+                ChrootSection(L.settings.chrootSetup.packages, L.settings.chrootSetup.installedWithAptRightAfterThe, Icons.Outlined.Inventory2) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                         Checkbox(true, null, enabled = false)
                         Column(Modifier.weight(1f)) {
@@ -450,10 +451,10 @@ fun ChrootSetupScreen(
                             }
                         }
                     }
-                    OutlinedTextField(extraPackages, { extraPackages = it }, label = { Text("More packages (space separated)") },
+                    OutlinedTextField(extraPackages, { extraPackages = it }, label = { Text(L.settings.chrootSetup.morePackagesSpaceSeparated) },
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
                     val bad = extraPackages.split(Regex("[\\s,]+")).filter { it.isNotBlank() && !ChrootScripts.isPackageName(it) }
-                    if (bad.isNotEmpty()) ChrootNote("Not package names: ${bad.joinToString(" ")}", AppColors.danger)
+                    if (bad.isNotEmpty()) ChrootNote(L.settings.chrootSetup.notPackageNamesValue(bad.joinToString(" ")), AppColors.danger)
                 }
             }
         }
@@ -466,23 +467,23 @@ fun ChrootSetupScreen(
                     onClick = { val r = state.result!!; ChrootInstaller.reset(); onDone(r) },
                     modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                ) { Text("Done", fontWeight = FontWeight.SemiBold) }
+                ) { Text(L.common.done, fontWeight = FontWeight.SemiBold) }
                 state.running -> {
                     val canCancel = state.step == null || state.step!!.ordinal <= ChrootInstallStep.VERIFY.ordinal
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
-                            Text("Continue in background")
+                            Text(L.settings.chrootSetup.continueInBackground)
                         }
                         if (canCancel) OutlinedButton(onClick = { ChrootInstaller.cancel() }, modifier = Modifier.height(48.dp), shape = RoundedCornerShape(14.dp)) {
-                            Text("Cancel", color = AppColors.danger)
+                            Text(L.common.cancel, color = AppColors.danger)
                         }
                     }
                 }
                 state.error != null -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { ChrootInstaller.retry(context) }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)) { Text("Retry") }
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)) { Text(L.common.retry) }
                     OutlinedButton(onClick = { ChrootInstaller.reset() }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
-                        Text("Change options")
+                        Text(L.settings.chrootSetup.changeOptions)
                     }
                 }
                 else -> {
@@ -497,15 +498,15 @@ fun ChrootSetupScreen(
                     }
                     val dnsList = dnsCustom.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
                     val problem = when {
-                        probe?.rootOk != true -> "Root access is needed (Check above)."
-                        src == null -> if (source == SourceChoice.FILE) "Choose a file." else "Enter an http(s) URL."
+                        probe?.rootOk != true -> L.settings.chrootSetup.rootAccessIsNeededCheckAbove
+                        src == null -> if (source == SourceChoice.FILE) L.settings.chrootSetup.chooseAFile2 else "Enter an http(s) URL."
                         ChrootManager.validateRootPath(path) != null -> ChrootManager.validateRootPath(path)
-                        location != LocationChoice.CUSTOM && !ChrootManager.isInstallName(name) -> "Check the name."
-                        installs.any { it.path == path } -> "That folder is already an install."
-                        !ChrootManager.isUserName(user) -> "Check the user name."
-                        !sudoNoPassword && password.isBlank() -> "Set a password, or keep sudo without a password."
-                        !dnsAuto && (dnsList.isEmpty() || dnsList.any { !ChrootManager.isDnsServer(it) }) -> "Check the DNS servers."
-                        extra.any { !ChrootScripts.isPackageName(it) } -> "Check the package names."
+                        location != LocationChoice.CUSTOM && !ChrootManager.isInstallName(name) -> L.settings.chrootSetup.checkTheName
+                        installs.any { it.path == path } -> L.settings.chrootSetup.thatFolderIsAlreadyAnInstall
+                        !ChrootManager.isUserName(user) -> L.settings.chrootSetup.checkTheUserName
+                        !sudoNoPassword && password.isBlank() -> L.settings.chrootSetup.setAPasswordOrKeepSudo
+                        !dnsAuto && (dnsList.isEmpty() || dnsList.any { !ChrootManager.isDnsServer(it) }) -> L.settings.chrootSetup.checkTheDnsServers
+                        extra.any { !ChrootScripts.isPackageName(it) } -> L.settings.chrootSetup.checkThePackageNames
                         else -> null
                     }
                     if (problem != null) Text(problem, fontSize = 12.sp, color = AppColors.warning)
@@ -536,7 +537,7 @@ fun ChrootSetupScreen(
                         enabled = problem == null,
                         modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
-                    ) { Text("Install Ubuntu chroot", fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
+                    ) { Text(L.settings.chrootSetup.installUbuntuChroot, fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
                 }
             }
         }
@@ -549,11 +550,10 @@ private fun AdoptPanel(found: ChrootFound, busy: Boolean, error: String?, onAdop
     Surface(shape = RoundedCornerShape(12.dp), color = AppColors.surface, border = BorderStroke(1.dp, AppColors.border.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Column(Modifier.padding(12.dp)) {
-            Text("AntiGem writes its manifest and settings into this rootfs and gives its user AntiGem's uid " +
-                "(files in that user's home move with it). Its running processes are stopped first.",
+            Text(L.settings.chrootSetup.antigemWritesItsManifestAndSettings,
                 fontSize = 11.5.sp, lineHeight = 15.sp, color = AppColors.textSecondary)
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(user, { user = it.trim().lowercase() }, label = { Text("User") }, singleLine = true,
+            OutlinedTextField(user, { user = it.trim().lowercase() }, label = { Text(L.common.user) }, singleLine = true,
                 isError = !ChrootManager.isUserName(user), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
             if (error != null) ChrootNote(error, AppColors.danger)
             Spacer(Modifier.height(8.dp))
@@ -563,7 +563,7 @@ private fun AdoptPanel(found: ChrootFound, busy: Boolean, error: String?, onAdop
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = AppColors.onBackground)
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (busy) "Adopting…" else "Adopt and use", fontSize = 12.5.sp)
+                Text(if (busy) L.settings.chrootSetup.adopting else L.settings.chrootSetup.adoptAndUse, fontSize = 12.5.sp)
             }
         }
     }
@@ -580,8 +580,8 @@ private fun InstallProgress(
     logs: List<String>
 ) {
     ChrootSection(
-        when { finished -> "Ubuntu chroot is ready"; error != null -> "Installation stopped"; else -> "Installing…" },
-        if (finished) "The bridge and the terminal use it from now on (switch in Settings → Where agents run)" else null,
+        when { finished -> L.settings.chrootSetup.ubuntuChrootIsReady; error != null -> L.settings.chrootSetup.installationStopped; else -> L.common.installing },
+        if (finished) L.settings.chrootSetup.theBridgeAndTheTerminalUse else null,
         if (finished) Icons.Filled.CheckCircle else if (error != null) Icons.Filled.Error else Icons.Outlined.Inventory2,
         tint = if (finished) AppColors.success else if (error != null) AppColors.danger else ClaudeTerracotta
     ) {
@@ -614,5 +614,5 @@ private fun InstallProgress(
             Text(error, fontSize = 12.5.sp, lineHeight = 17.sp, color = AppColors.danger)
         }
     }
-    ChrootSection("Log", null) { ChrootLog(logs, maxHeight = 320) }
+    ChrootSection(L.settings.chrootSetup.log, null) { ChrootLog(logs, maxHeight = 320) }
 }

@@ -25,14 +25,17 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import ai.antigem.i18n.L
 
 object ConversationExportHelper {
     private const val TAG = "ConversationExport"
 
-    enum class ExportFormat(val extension: String, val mimeType: String, val displayName: String) {
-        MARKDOWN("md", "text/markdown", "Markdown (.md)"),
-        HTML("html", "text/html", "Standalone HTML (.html)")
-    }
+    enum class ExportFormat(val extension: String, val mimeType: String, private val displayNameText: () -> String) {
+        MARKDOWN("md", "text/markdown", { L.components.conversationExportHelper.markdownMd }),
+        HTML("html", "text/html", { L.components.conversationExportHelper.standaloneHtmlHtml })
+    ;
+    val displayName: String get() = displayNameText()
+}
 
     /**
      * Exports a conversation by ID, saving it to Downloads/AntiGem/Exports and opening it.
@@ -57,7 +60,7 @@ object ConversationExportHelper {
                     engine.ingestStepsDirect(stepsRes.getOrThrow(), conversationId)
                 } else {
                     withContext(Dispatchers.Main) {
-                        AppToastHelper.showToast("Failed to load conversation: ${stepsRes.exceptionOrNull()?.message}", ChatToastType.ERROR)
+                        AppToastHelper.showToast(L.components.conversationExportHelper.failedToLoadConversationValue(stepsRes.exceptionOrNull()?.message), ChatToastType.ERROR)
                     }
                     return@withContext
                 }
@@ -65,7 +68,7 @@ object ConversationExportHelper {
 
             if (messages.isEmpty()) {
                 withContext(Dispatchers.Main) {
-                    AppToastHelper.showToast("No messages to export", ChatToastType.INFO)
+                    AppToastHelper.showToast(L.components.conversationExportHelper.noMessagesToExport, ChatToastType.INFO)
                 }
                 return@withContext
             }
@@ -86,25 +89,25 @@ object ConversationExportHelper {
                 if (savedUri != null) {
                     if (snackbarHostState != null) {
                         val result = snackbarHostState.showSnackbar(
-                            message = "$savedFileName saved to Downloads/AntiGem/Exports",
-                            actionLabel = "Open",
+                            message = L.components.conversationExportHelper.savedfilenameSavedToDownloadsAntigem(savedFileName),
+                            actionLabel = L.common.open,
                             duration = SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) {
                             openFile(context, savedUri, mimeType)
                         }
                     } else {
-                        AppToastHelper.showToast("$savedFileName saved to Downloads/AntiGem/Exports", ChatToastType.SUCCESS)
+                        AppToastHelper.showToast(L.components.conversationExportHelper.savedfilenameSavedToDownloadsAntigem(savedFileName), ChatToastType.SUCCESS)
                         openFile(context, savedUri, mimeType)
                     }
                 } else {
-                    AppToastHelper.showToast("Failed to save export to Downloads", ChatToastType.ERROR)
+                    AppToastHelper.showToast(L.components.conversationExportHelper.failedToSaveExportToDownloads, ChatToastType.ERROR)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Export failed: ${e.message}", e)
             withContext(Dispatchers.Main) {
-                AppToastHelper.showToast("Export error: ${e.message}", ChatToastType.ERROR)
+                AppToastHelper.showToast(L.components.conversationExportHelper.exportErrorMessage(e.message), ChatToastType.ERROR)
             }
         }
     }
@@ -116,14 +119,14 @@ object ConversationExportHelper {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val chooser = Intent.createChooser(intent, "Open Exported Conversation").apply {
+            val chooser = Intent.createChooser(intent, L.components.conversationExportHelper.openExportedConversation).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
         } catch (e: Exception) {
             Log.w(TAG, "No default app to open file: ${e.message}")
             try {
-                Toast.makeText(context, "No app found to open file", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, L.components.conversationExportHelper.noAppFoundToOpenFile, Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {}
         }
     }
@@ -181,7 +184,7 @@ object ConversationExportHelper {
         val sb = StringBuilder()
         val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 
-        sb.append("# ").append(title.ifBlank { "Antigravity Chat" }).append("\n\n")
+        sb.append("# ").append(title.ifBlank { L.components.conversationExportHelper.antigravityChat }).append("\n\n")
         sb.append("> **Exported on:** ").append(dateStr).append("\n")
         sb.append("> **Conversation ID:** `").append(conversationId).append("`\n\n")
         sb.append("---\n\n")
@@ -243,7 +246,7 @@ object ConversationExportHelper {
 
     private fun generateHtml(title: String, conversationId: String, messages: List<ChatMessage>): String {
         val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-        val htmlTitle = escapeHtml(title.ifBlank { "Antigravity Chat" })
+        val htmlTitle = escapeHtml(title.ifBlank { L.components.conversationExportHelper.antigravityChat })
 
         val sb = StringBuilder()
         sb.append("<!DOCTYPE html>\n")

@@ -36,6 +36,7 @@ import ai.antigem.domain.model.AgentKind
 import ai.antigem.data.agent.ChatSessionStore
 import ai.antigem.ui.chat.PendingToolApproval
 import kotlinx.coroutines.CoroutineScope
+import ai.antigem.i18n.L
 
 /**
  * Antigravity (agy --hub) chat backend: conversation sync, live trajectory stream, prompts, approvals,
@@ -429,7 +430,7 @@ class AgyChatBackend(
                             _pendingLoginUrl.value = null
                             agyBridgeService.updateAuthChecking(false)
                             _agyLoginIssue.value = AgyLoginIssue(
-                                message = reason ?: "Your account needs verification before you can sign in.",
+                                message = reason ?: L.agent.agyChatBackend.yourAccountNeedsVerificationBeforeYou,
                                 verificationUrl = verificationUrl
                             )
                         }
@@ -613,7 +614,7 @@ class AgyChatBackend(
                             "error" -> {
                                 _isServerOnline.value = false
                                 _isConversationsLoading.value = false
-                                _conversationError.value = "Antigravity Hub failed to start: ${status.error ?: "Check server logs"}"
+                                _conversationError.value = L.agent.agyChatBackend.antigravityHubFailedToStartValue(status.error ?: L.agent.agyChatBackend.checkServerLogs)
                             }
                             "stopped" -> {
                                 _isServerOnline.value = false
@@ -932,9 +933,9 @@ class AgyChatBackend(
                     }
                     val rawErr = e.message ?: "Connection failed"
                     val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
-                        "Cannot connect to Antigravity Hub (${AuthPreferences.currentHubUrl}). Make sure 'agy --hub' is running."
+                        L.agent.agyChatBackend.cannotConnectToAntigravityHubUrl(AuthPreferences.currentHubUrl)
                     } else {
-                        "Antigravity Hub unreachable: $rawErr"
+                        L.agent.agyChatBackend.antigravityHubUnreachableRawerr(rawErr)
                     }
                     val isStarting = agyBridgeService.hubStatus.value.status == "starting"
                     if (_conversations.value.isEmpty() && !isStarting) {
@@ -1168,7 +1169,7 @@ class AgyChatBackend(
                 .exceptionOrNull()?.let { if (!isAlreadyOnHub(it.message)) throw it }
             knownDaemonCascadeIds.add(id)
             // no longer an unsaved "New Chat": the live stream may start (the hub names the chat later)
-            val named = conv.copy(title = if (conv.title == "New Chat") "Voice chat" else conv.title, workspaceUri = ws)
+            val named = conv.copy(title = if (conv.title == "New Chat") L.agent.agyChatBackend.voiceChat else conv.title, workspaceUri = ws)
             withContext(Dispatchers.Main) {
                 if (_currentConversation.value?.id == id) _currentConversation.value = named
             }
@@ -1335,7 +1336,7 @@ class AgyChatBackend(
                             val isKnownExisting = _conversations.value.any { it.id == conversationId && it.title != "New Chat" }
                             if (activeStreamConversationId == conversationId) {
                                 if (isKnownExisting && _messages.value.isEmpty()) {
-                                    _conversationError.value = "No messages received from Antigravity. Tap Retry."
+                                    _conversationError.value = L.agent.agyChatBackend.noMessagesReceivedFromAntigravityTap
                                     _isServerOnline.value = isHubOnline
                                 } else {
                                     _conversationError.value = null
@@ -1365,9 +1366,9 @@ class AgyChatBackend(
                     Log.w("ChatViewModel", "Persistent stream error ($conversationId): ${e.message}")
                     val rawErr = e.localizedMessage ?: e.message ?: e.toString()
                     val helpfulMsg = if (rawErr.contains("Connect", ignoreCase = true) || rawErr.contains("Failed to connect", ignoreCase = true)) {
-                        "Cannot connect to Antigravity. Make sure Antigravity is running and tap Retry."
+                        L.agent.agyChatBackend.cannotConnectToAntigravityMakeSure
                     } else {
-                        "Error loading conversation: $rawErr"
+                        L.agent.agyChatBackend.errorLoadingConversationRawerr(rawErr)
                     }
 
                     withContext(Dispatchers.Main) {
@@ -1440,7 +1441,7 @@ class AgyChatBackend(
             val msg = list[i]
             if (msg.role == MessageRole.ASSISTANT && msg.isStreaming) {
                 val newContent = if (msg.content.isBlank() && msg.toolCalls.isEmpty()) {
-                    "⚠️ Connection to Antigravity daemon was interrupted."
+                    L.agent.agyChatBackend.connectionToAntigravityDaemonWas
                 } else {
                     msg.content
                 }
@@ -1485,7 +1486,7 @@ class AgyChatBackend(
                     _currentConversation.value?.let { if (it.id == id && it.title == clean) _currentConversation.value = it.copy(title = oldTitle) }
                 }
                 ai.antigem.ui.components.AppToastHelper.showToast(
-                    "Could not rename: ${e.message}", ai.antigem.ui.components.ChatToastType.ERROR
+                    L.agent.agyChatBackend.couldNotRenameMessage(e.message), ai.antigem.ui.components.ChatToastType.ERROR
                 )
             }
         }
@@ -1503,7 +1504,7 @@ class AgyChatBackend(
                 _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = before) else it }
                 _currentConversation.value?.let { if (it.id == id) _currentConversation.value = it.copy(archived = before) }
                 ai.antigem.ui.components.AppToastHelper.showToast(
-                    "Could not ${if (archived) "archive" else "unarchive"}: ${e.message}", ai.antigem.ui.components.ChatToastType.ERROR
+                    if (archived) L.agent.agyChatBackend.couldNotArchiveError(e.message) else L.agent.agyChatBackend.couldNotUnarchiveError(e.message), ai.antigem.ui.components.ChatToastType.ERROR
                 )
             }
         }
@@ -1522,11 +1523,11 @@ class AgyChatBackend(
                         selectConversation(newCascadeId)
                     }
                 } else {
-                    _conversationError.value = "Fork failed: ${res.exceptionOrNull()?.message}"
+                    _conversationError.value = L.agent.agyChatBackend.forkFailedValue(res.exceptionOrNull()?.message)
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ChatViewModel", "Fork failed: ${e.message}")
-                _conversationError.value = "Fork error: ${e.message}"
+                _conversationError.value = L.agent.agyChatBackend.forkErrorMessage(e.message)
             } finally {
                 _isLoadingConversation.value = false
             }
@@ -1582,13 +1583,13 @@ class AgyChatBackend(
         val state = systemConnectionState.value
         if (!state.canSend) {
             val reason = when (state.status) {
-                ai.antigem.data.remote.SystemStatus.OFFLINE -> "Server is offline. Please start the server."
-                ai.antigem.data.remote.SystemStatus.STARTING -> "Server is starting up. Please wait..."
-                ai.antigem.data.remote.SystemStatus.ACQUIRING_CSRF -> "Acquiring security token. Please wait..."
-                ai.antigem.data.remote.SystemStatus.CHECKING_AUTH -> "Verifying authentication. Please wait..."
-                ai.antigem.data.remote.SystemStatus.UNAUTHENTICATED -> "Please sign in to send messages."
-                ai.antigem.data.remote.SystemStatus.ERROR -> "Server error. Please check server logs."
-                else -> "Cannot send message right now."
+                ai.antigem.data.remote.SystemStatus.OFFLINE -> L.agent.agyChatBackend.serverIsOfflinePleaseStartThe
+                ai.antigem.data.remote.SystemStatus.STARTING -> L.agent.agyChatBackend.serverIsStartingUpPleaseWait
+                ai.antigem.data.remote.SystemStatus.ACQUIRING_CSRF -> L.agent.agyChatBackend.acquiringSecurityTokenPleaseWait
+                ai.antigem.data.remote.SystemStatus.CHECKING_AUTH -> L.agent.agyChatBackend.verifyingAuthenticationPleaseWait
+                ai.antigem.data.remote.SystemStatus.UNAUTHENTICATED -> L.agent.agyChatBackend.pleaseSignInToSendMessages
+                ai.antigem.data.remote.SystemStatus.ERROR -> L.agent.agyChatBackend.serverErrorPleaseCheckServerLogs
+                else -> L.agent.agyChatBackend.cannotSendMessageRightNow
             }
             android.widget.Toast.makeText(application, reason, android.widget.Toast.LENGTH_SHORT).show()
             return
@@ -1612,7 +1613,7 @@ class AgyChatBackend(
         val isFirstUserMsg = _messages.value.none { it.role == MessageRole.USER }
         val isGenericTitle = updatedConv.title == "New Chat" || updatedConv.title == "Antigravity Chat" || updatedConv.title.isBlank()
         if (isGenericTitle || isFirstUserMsg) {
-            val firstLine = ai.antigem.data.remote.PromptExpansion.collapse(finalPrompt).trim().lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            val firstLine = ai.antigem.data.remote.PromptExpansion.collapse(finalPrompt).trim().lines().firstOrNull { it.isNotBlank() } ?: L.agent.agyChatBackend.chat
             val cleanTitle = firstLine.take(40) + if (firstLine.length > 40) "..." else ""
             updatedConv = updatedConv.copy(title = cleanTitle)
         }
@@ -1759,7 +1760,7 @@ class AgyChatBackend(
                     clearOptimisticSend()
                     hiddenQueuedIds.remove(id)
                     refreshQueuedMessages(conv.id)
-                    android.widget.Toast.makeText(application, "Couldn't send the queued message: ${res.exceptionOrNull()?.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(application, L.agent.agyChatBackend.couldntSendTheQueuedMessageValue(res.exceptionOrNull()?.message), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -1775,7 +1776,7 @@ class AgyChatBackend(
                 withContext(Dispatchers.Main) {
                     hiddenQueuedIds.remove(id)
                     refreshQueuedMessages(conv.id)
-                    android.widget.Toast.makeText(application, "Couldn't delete the queued message: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(application, L.agent.agyChatBackend.couldntDeleteTheQueuedMessageMessage(e.message), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -1813,10 +1814,10 @@ class AgyChatBackend(
                     if (text.isNotBlank()) {
                         onDone(text)
                     } else {
-                        onError("No speech recognized in recording")
+                        onError(L.agent.agyChatBackend.noSpeechRecognizedInRecording)
                     }
                 } else {
-                    val msg = res.exceptionOrNull()?.message ?: "Transcription failed"
+                    val msg = res.exceptionOrNull()?.message ?: L.agent.agyChatBackend.transcriptionFailed
                     onError(msg)
                 }
             } catch (e: Exception) {
@@ -1977,7 +1978,7 @@ class AgyChatBackend(
         suspend fun failQueued(err: String) = withContext(Dispatchers.Main) {
             localQueued[conv.id]?.let { synchronized(it) { it.remove(clientTag) } }
             refreshQueuedMessages(conv.id)
-            android.widget.Toast.makeText(application, "Couldn't queue the message: $err", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(application, L.agent.agyChatBackend.couldntQueueTheMessageErr(err), android.widget.Toast.LENGTH_SHORT).show()
         }
 
         if (queued) {
@@ -2037,12 +2038,12 @@ class AgyChatBackend(
                     )
                     // already on the hub (e.g. a voice call started it): nothing to start, carry on and send
                     if (startRes.isFailure && !isAlreadyOnHub(startRes.exceptionOrNull()?.message)) {
-                        val rawErr = startRes.exceptionOrNull()?.message ?: "Failed to start conversation on daemon"
+                        val rawErr = startRes.exceptionOrNull()?.message ?: L.agent.agyChatBackend.failedToStartConversationOnDaemon
                         val err = if (conv.isCloud) AgyCloud.friendlyError(rawErr) else rawErr
                         Log.e("ChatViewModel", "startCascade error: $rawErr")
                         val formattedErr = formatStructuredErrorMessage(
-                            title = if (conv.isCloud) "The cloud agent couldn't start"
-                                else if (err.contains("auth", ignoreCase = true)) "Authentication Required" else "Failed to Start Conversation",
+                            title = if (conv.isCloud) L.agent.agyChatBackend.theCloudAgentCouldntStart
+                                else if (err.contains("auth", ignoreCase = true)) L.agent.agyChatBackend.authenticationRequired else L.agent.agyChatBackend.failedToStartConversation,
                             userMessage = err,
                             shortError = err
                         )
@@ -2120,7 +2121,7 @@ class AgyChatBackend(
                 )
 
                 if (sendRes.isFailure) {
-                    val err = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
+                    val err = sendRes.exceptionOrNull()?.message ?: L.agent.agyChatBackend.failedToSendMessage
                     Log.e("ChatViewModel", "sendUserPrompt error: $err")
                     // If trajectory was not found on daemon (e.g. daemon restarted or session expired),
                     // attempt to re-start cascade and retry sending the prompt once!
@@ -2154,20 +2155,20 @@ class AgyChatBackend(
                 if (sendRes.isSuccess) {
                     isPromptInFlight = false
                 } else if (queued) {
-                    failQueued(sendRes.exceptionOrNull()?.message ?: "Failed to send message")
+                    failQueued(sendRes.exceptionOrNull()?.message ?: L.agent.agyChatBackend.failedToSendMessage)
                 } else {
-                    val rawErr = sendRes.exceptionOrNull()?.message ?: "Failed to send message"
+                    val rawErr = sendRes.exceptionOrNull()?.message ?: L.agent.agyChatBackend.failedToSendMessage
                     // a cloud chat: Google's limits (busy, daily VM time, chat limits) in plain words
                     val err = if (conv.isCloud) AgyCloud.friendlyError(rawErr) else rawErr
                     Log.e("ChatViewModel", "sendUserPrompt final error: $rawErr")
                     val formattedErr = formatStructuredErrorMessage(
                         title = when {
-                            conv.isCloud -> "Cloud agent"
-                            err.contains("auth", ignoreCase = true) -> "Authentication Required"
-                            err.contains("quota", ignoreCase = true) || err.contains("credit", ignoreCase = true) || err.contains("429") -> "Quota Limit Exceeded"
-                            err.contains("model not found", ignoreCase = true) -> "Model Not Found"
-                            err.contains("connect", ignoreCase = true) || err.contains("network", ignoreCase = true) -> "Server Connection Error"
-                            else -> "Message Delivery Error"
+                            conv.isCloud -> L.agent.agyChatBackend.cloudAgent
+                            err.contains("auth", ignoreCase = true) -> L.agent.agyChatBackend.authenticationRequired
+                            err.contains("quota", ignoreCase = true) || err.contains("credit", ignoreCase = true) || err.contains("429") -> L.agent.agyChatBackend.quotaLimitExceeded
+                            err.contains("model not found", ignoreCase = true) -> L.agent.agyChatBackend.modelNotFound
+                            err.contains("connect", ignoreCase = true) || err.contains("network", ignoreCase = true) -> L.agent.agyChatBackend.serverConnectionError
+                            else -> L.agent.agyChatBackend.messageDeliveryError
                         },
                         userMessage = err,
                         shortError = err
@@ -2190,12 +2191,12 @@ class AgyChatBackend(
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "sendUserPrompt exception: ${e.message}", e)
                 if (queued) {
-                    failQueued(e.message ?: "Unknown error")
+                    failQueued(e.message ?: L.agent.agyChatBackend.unknownError)
                     return@launch
                 }
                 val formattedErr = formatStructuredErrorMessage(
-                    title = "Execution Failure",
-                    userMessage = e.message ?: "Unknown error",
+                    title = L.agent.agyChatBackend.executionFailure,
+                    userMessage = e.message ?: L.agent.agyChatBackend.unknownError,
                     shortError = e.message ?: "",
                     fullError = e.stackTraceToString()
                 )
@@ -2428,13 +2429,13 @@ class AgyChatBackend(
                     withContext(Dispatchers.Main) {
                         if (failureError != null) {
                             val msg = if (failureError.contains("Connect", ignoreCase = true) || failureError.contains("failed to connect", ignoreCase = true)) {
-                                "Failed to refresh: Antigravity Hub (${AuthPreferences.currentHubUrl}) unreachable"
+                                L.agent.agyChatBackend.failedToRefreshAntigravityHubUrl(AuthPreferences.currentHubUrl)
                             } else {
-                                "Failed to refresh: $failureError"
+                                L.agent.agyChatBackend.failedToRefreshFailureerror(failureError)
                             }
                             android.widget.Toast.makeText(application, msg, android.widget.Toast.LENGTH_LONG).show()
                         } else {
-                            android.widget.Toast.makeText(application, "Quotas & models refreshed", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(application, L.agent.agyChatBackend.quotasModelsRefreshed, android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -2471,9 +2472,9 @@ class AgyChatBackend(
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
-                val err = res.exceptionOrNull()?.message ?: "Failed to approve tool"
+                val err = res.exceptionOrNull()?.message ?: L.agent.agyChatBackend.failedToApproveTool
                 Log.e("ChatViewModel", "handleCascadeUserInteraction (approve) error: $err")
-                _conversationError.value = "Approval failed: $err"
+                _conversationError.value = L.agent.agyChatBackend.approvalFailedErr(err)
                 _isStreaming.value = false
 
                 // Roll back optimistic state on failure so UI accurately reflects reality
@@ -2510,9 +2511,9 @@ class AgyChatBackend(
                 hubUrl = hubUrl
             )
             if (res.isFailure) {
-                val err = res.exceptionOrNull()?.message ?: "Failed to reject tool"
+                val err = res.exceptionOrNull()?.message ?: L.agent.agyChatBackend.failedToRejectTool
                 Log.e("ChatViewModel", "handleCascadeUserInteraction (deny) error: $err")
-                _conversationError.value = "Rejection failed: $err"
+                _conversationError.value = L.agent.agyChatBackend.rejectionFailedErr(err)
 
                 // Roll back optimistic state on failure so UI accurately reflects reality
                 trajectoryEngine.unmarkStepResponded(stepIndex)
@@ -2542,7 +2543,7 @@ class AgyChatBackend(
         trajectoryEngine.optimisticUpdateStepStatus(
             stepIndex = stepIndex,
             status = ai.antigem.data.remote.dto.CortexStepStatuses.CANCELED,
-            output = "Command terminated by user."
+            output = L.agent.agyChatBackend.commandTerminatedByUser
         )
         _messages.value = trajectoryEngine.toChatMessages(conv.id)
 
@@ -2651,7 +2652,7 @@ class AgyChatBackend(
     ) {
         val conv = _currentConversation.value ?: return
         val stepIndex = toolCall.stepIndex
-        val skipSummary = "Skipped by user"
+        val skipSummary = L.agent.agyChatBackend.skippedByUser
 
         if (stepIndex != null) {
             trajectoryEngine.markStepResponded(stepIndex)
@@ -2721,7 +2722,7 @@ class AgyChatBackend(
             trajectoryEngine.optimisticUpdateStepStatus(
                 stepIndex = stepIndex,
                 status = ai.antigem.data.remote.dto.CortexStepStatuses.CANCELED,
-                output = "Questionnaire cancelled by user."
+                output = L.agent.agyChatBackend.questionnaireCancelledByUser
             )
             _messages.value = trajectoryEngine.toChatMessages(conv.id)
         }
@@ -2729,7 +2730,7 @@ class AgyChatBackend(
         val msg = _messages.value.find { it.id == messageId }
         val canceledToolCall = toolCall.copy(
             status = "CANCELED",
-            output = "Cancelled by user."
+            output = L.agent.agyChatBackend.cancelledByUser
         )
         if (msg != null) {
             val updatedToolCalls = msg.toolCalls.map { if (it.stepIndex != null && it.stepIndex == toolCall.stepIndex) canceledToolCall else it }

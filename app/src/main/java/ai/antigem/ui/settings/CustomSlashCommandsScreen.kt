@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import ai.antigem.data.remote.CustomSlashCommand
 import ai.antigem.data.remote.CustomSlashCommands
 import ai.antigem.ui.browser.BrowserExtensionManager
+import ai.antigem.i18n.L
 
 @Composable
 fun CustomSlashCommandsScreen() {
@@ -24,29 +25,29 @@ fun CustomSlashCommandsScreen() {
     var deleting by remember { mutableStateOf<CustomSlashCommand?>(null) }
 
     Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Create your own / commands for chat. When you send one, the model gets the text it expands to, while the chat keeps showing the short command.", style = MaterialTheme.typography.bodyMedium)
-        Text("Use \$ARGUMENTS in the expansion to insert whatever you type after the command. A command can also attach a custom AntiGem plugin and one of its skills, like /plu: does.", style = MaterialTheme.typography.bodySmall)
+        Text(L.settings.customSlashCommands.createYourOwnCommandsForChat, style = MaterialTheme.typography.bodyMedium)
+        Text(L.settings.customSlashCommands.useArgumentsInTheExpansionTo, style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { creating = true }) { Text("Add command") }
-            OutlinedButton(onClick = { CustomSlashCommands.restoreDefaults() }) { Text("Restore defaults") }
+            Button(onClick = { creating = true }) { Text(L.settings.customSlashCommands.addCommand) }
+            OutlinedButton(onClick = { CustomSlashCommands.restoreDefaults() }) { Text(L.settings.customSlashCommands.restoreDefaults) }
         }
-        if (CustomSlashCommands.commands.isEmpty()) Text("No custom commands yet.", style = MaterialTheme.typography.bodySmall)
+        if (CustomSlashCommands.commands.isEmpty()) Text(L.settings.customSlashCommands.noCustomCommandsYet, style = MaterialTheme.typography.bodySmall)
         CustomSlashCommands.commands.forEach { command ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("/${command.name}", style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace)
                         if (CustomSlashCommands.isDefault(command.name)) Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.secondaryContainer) {
-                            Text("Built-in", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                            Text(L.common.builtIn, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                         }
                     }
                     if (command.description.isNotBlank()) Text(command.description, style = MaterialTheme.typography.bodySmall)
-                    if (command.pluginId.isNotBlank()) Text("Plugin: ${command.pluginId}${if (command.skill.isNotBlank()) " · skill: ${command.skill}" else ""}", style = MaterialTheme.typography.bodySmall)
+                    if (command.pluginId.isNotBlank()) Text(L.settings.customSlashCommands.pluginPluginidValue(command.pluginId, if (command.skill.isNotBlank()) " · skill: ${command.skill}" else ""), style = MaterialTheme.typography.bodySmall)
                     if (command.expansion.isNotBlank()) Text(command.expansion, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { editing = command }) { Text("Edit") }
-                        TextButton(onClick = { deleting = command }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                        TextButton(onClick = { editing = command }) { Text(L.common.edit) }
+                        TextButton(onClick = { deleting = command }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }
@@ -59,8 +60,8 @@ fun CustomSlashCommandsScreen() {
     )
     deleting?.let { command -> AlertDialog(
         onDismissRequest = { deleting = null }, title = { Text("Delete /${command.name}?") },
-        confirmButton = { TextButton(onClick = { CustomSlashCommands.delete(command.name); deleting = null }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }
+        confirmButton = { TextButton(onClick = { CustomSlashCommands.delete(command.name); deleting = null }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { deleting = null }) { Text(L.common.cancel) } }
     ) }
 }
 
@@ -78,25 +79,25 @@ private fun CustomSlashCommandDialog(initial: CustomSlashCommand?, onDismiss: ()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "New slash command" else "Edit /${initial.name}") },
+        title = { Text(if (initial == null) L.settings.customSlashCommands.newSlashCommand else L.settings.customSlashCommands.editName(initial.name)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it.removePrefix("/").trim() }, label = { Text("Name") }, prefix = { Text("/") }, singleLine = true)
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (shown in the / list)") }, singleLine = true)
-                OutlinedTextField(value = expansion, onValueChange = { expansion = it }, label = { Text("Expands to") },
-                    placeholder = { Text("e.g. Review \$ARGUMENTS for bugs and explain each one") }, minLines = 4, maxLines = 10)
-                Choice("Plugin", plugin?.let { "${it.folderName} (${it.name})" } ?: "None",
-                    listOf("" to "None") + plugins.map { it.id to "${it.folderName} (${it.name})" }) { pluginId = it; skill = "" }
-                if (plugin != null && skills.isNotEmpty()) Choice("Skill", skill.ifBlank { "None (whole plugin)" },
-                    listOf("" to "None (whole plugin)") + skills.map { it.name to it.name }) { skill = it }
+                OutlinedTextField(value = name, onValueChange = { name = it.removePrefix("/").trim() }, label = { Text(L.common.name) }, prefix = { Text("/") }, singleLine = true)
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text(L.settings.customSlashCommands.descriptionShownInTheList) }, singleLine = true)
+                OutlinedTextField(value = expansion, onValueChange = { expansion = it }, label = { Text(L.settings.customSlashCommands.expandsTo) },
+                    placeholder = { Text(L.settings.customSlashCommands.eGReviewArgumentsForBugs) }, minLines = 4, maxLines = 10)
+                Choice(L.settings.customSlashCommands.plugin, plugin?.let { "${it.folderName} (${it.name})" } ?: L.settings.customSlashCommands.none,
+                    listOf("" to L.settings.customSlashCommands.none) + plugins.map { it.id to "${it.folderName} (${it.name})" }) { pluginId = it; skill = "" }
+                if (plugin != null && skills.isNotEmpty()) Choice(L.settings.customSlashCommands.skill, skill.ifBlank { L.settings.customSlashCommands.noneWholePlugin },
+                    listOf("" to L.settings.customSlashCommands.noneWholePlugin) + skills.map { it.name to it.name }) { skill = it }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = { TextButton(onClick = {
             runCatching { CustomSlashCommands.save(CustomSlashCommand(name, description.trim(), expansion.trim(), pluginId, skill), initial?.name) }
                 .onSuccess { onDismiss() }.onFailure { error = it.message }
-        }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        }) { Text(L.common.save) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 

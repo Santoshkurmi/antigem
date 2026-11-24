@@ -44,6 +44,9 @@ import ai.antigem.data.local.LocalServerManager
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.data.remote.BridgeInfo
 import ai.antigem.data.remote.RemoteServerManager
+import ai.antigem.i18n.L
+import ai.antigem.domain.model.AgentKind
+import ai.antigem.ui.components.label
 
 private val Ok: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.success
 private val Warn: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.warning
@@ -62,20 +65,15 @@ fun BridgeVersionDialog() {
     if (cmp == 0 || snoozed == b) return
 
     val remote = AuthPreferences.currentRemoteMode
-    val where = if (remote) "on your server" else "on this phone"
+    val where = if (remote) L.agents.bridgeUi.onYourServer else L.agents.bridgeUi.onThisPhone
     val text = when {
         cmp > 0 -> "The IDE bridge $where is version $b, newer than this app (${BridgeInfo.appVersion}). Update the app so they match."
-        remote -> "The IDE bridge $where is version $b, but this app is version ${BridgeInfo.appVersion}.\n\n" +
-            "Update the bridge for better support: newer app features may not work with an older bridge.\n\n" +
-            "Build the bridge from this app version (agy_ide_bridge), copy it to ${RemoteServerManager.bridgeBinaryPath(context)} on the server " +
-            "and chmod +x it, then tap Restart server. Steps: docs/remote-server.md, section Updating."
-        else -> "The IDE bridge $where is version $b, but this app is version ${BridgeInfo.appVersion}.\n\n" +
-            "It is updated together with the app. Tap Restart server to start the bridge that came with this app. " +
-            "If the version still differs, reinstall the app."
+        remote -> L.agents.bridgeUi.theIdeBridgeWhereIsVersion(where, b, BridgeInfo.appVersion, RemoteServerManager.bridgeBinaryPath(context))
+        else -> L.agents.bridgeUi.theIdeBridgeWhereIsVersion2(where, b, BridgeInfo.appVersion)
     }
     AlertDialog(
         onDismissRequest = { BridgeInfo.snooze(b) },
-        title = { Text("Update the IDE bridge", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+        title = { Text(L.agents.bridgeUi.updateTheIdeBridge, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
         text = { Text(text, fontSize = 13.sp, lineHeight = 18.sp) },
         confirmButton = {
             if (cmp < 0) {
@@ -83,10 +81,10 @@ fun BridgeVersionDialog() {
                     BridgeInfo.snooze(b)
                     BridgeInfo.reset()
                     LocalServerManager.restartServer(context)
-                }) { Text("Restart server") }
+                }) { Text(L.common.restartServer) }
             }
         },
-        dismissButton = { TextButton(onClick = { BridgeInfo.snooze(b) }) { Text("Later") } }
+        dismissButton = { TextButton(onClick = { BridgeInfo.snooze(b) }) { Text(L.common.later) } }
     )
 }
 
@@ -96,9 +94,9 @@ fun BridgeVersionLine(modifier: Modifier = Modifier) {
     val bridge by BridgeInfo.version.collectAsState()
     val b = bridge
     val (text, color) = when {
-        b == null -> "Bridge version: not connected" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-        BridgeInfo.compareBridgeToApp(b) == 0 -> "Bridge version: $b (matches the app)" to Ok
-        BridgeInfo.compareBridgeToApp(b) < 0 -> "Bridge version: $b, the app is ${BridgeInfo.appVersion}: update the bridge" to Warn
+        b == null -> L.agents.bridgeUi.bridgeVersionNotConnected to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+        BridgeInfo.compareBridgeToApp(b) == 0 -> L.agents.bridgeUi.bridgeVersionBMatchesTheApp(b) to Ok
+        BridgeInfo.compareBridgeToApp(b) < 0 -> L.agents.bridgeUi.bridgeVersionBTheAppIs(b, BridgeInfo.appVersion) to Warn
         else -> "Bridge version: $b, newer than the app (${BridgeInfo.appVersion}): update the app" to Warn
     }
     Text(text, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = color, modifier = modifier)
@@ -122,16 +120,16 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Antigravity CLI (agy)", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(L.agents.bridgeUi.antigravityCliAgy, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 if (checking) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                else IconButton(onClick = { BridgeInfo.refreshAgyCli() }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+                else IconButton(onClick = { BridgeInfo.refreshAgyCli() }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
             }
             val running = job?.running == true
             when {
                 error != null -> Text(error!!, fontSize = 12.sp, color = Color.Red)
-                cli == null -> Text("Checking…", fontSize = 12.5.sp, color = subtle)
+                cli == null -> Text(L.common.checking, fontSize = 12.5.sp, color = subtle)
                 cli!!.installed -> {
-                    Text(cli!!.version.ifBlank { "Installed (version unknown)" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(cli!!.version.ifBlank { L.agents.bridgeUi.installedVersionUnknown }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(cli!!.path, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = subtle)
                 }
                 else -> {
@@ -145,7 +143,7 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
             if (cli?.installed == false && error == null) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { BridgeInfo.installAgy() }, enabled = !running) { Text("Install agy") }
+                    Button(onClick = { BridgeInfo.installAgy() }, enabled = !running) { Text(L.agents.bridgeUi.installAgy) }
                     if (running) {
                         Spacer(Modifier.width(10.dp))
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -158,7 +156,7 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = { BridgeInfo.updateAgy(context) }, enabled = !running) {
-                        Text(if (running && job?.kind == "update") "Checking…" else "Check for updates")
+                        Text(if (running && job?.kind == "update") L.common.checking else L.common.checkForUpdates)
                     }
                     if (running) {
                         Spacer(Modifier.width(10.dp))
@@ -168,13 +166,13 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
                 // a newer agy was installed: the server was restarted so the hub runs it
                 updatedTo?.let {
                     Spacer(Modifier.height(6.dp))
-                    Text("Updated to agy $it. The server restarted to use it.", fontSize = 12.sp, color = Ok)
+                    Text(L.agents.bridgeUi.updatedToAgyValueTheServer(it), fontSize = 12.sp, color = Ok)
                 }
             }
             job?.let { j ->
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${j.kind}: " + if (j.running) "running…" else "finished (exit ${j.exitCode})",
+                    "${j.kind}: " + if (j.running) L.agents.bridgeUi.running else L.agents.bridgeUi.finishedExitExitcode(j.exitCode),
                     fontSize = 12.sp,
                     color = if (!j.running && j.exitCode != 0) Color.Red else subtle
                 )
@@ -190,15 +188,9 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
             Text(
                 // x86_64 build on this device: the bridge installs agy's Linux build behind a launcher (hub/agy_linux_build.go)
                 if (!remote && ai.antigem.BuildConfig.TARGET_ABI == "x86_64")
-                    "Google has no Android build of agy for x86_64, so its Linux x64 build is installed into ~/.local/bin " +
-                        "and runs through the app's glibc. Its own updater is off; Check for updates installs Google's newest " +
-                        "Linux x64 release and, when it is newer, restarts the server so it is used " +
-                        "(voice calls need agy 1.5 or newer)."
+                    L.agents.bridgeUi.googleHasNoAndroidBuildOf
                 else
-                    "Installed with Google's official installer (antigravity.google/cli/install.sh) into ~/.local/bin on " +
-                        (if (remote) "the server" else "this device") + ". agy updates itself when you run it in a terminal; " +
-                        "Check for updates runs `agy update` and, when a newer agy was installed, restarts the server so it is used " +
-                        "(voice calls need agy 1.5 or newer).",
+                    L.agents.bridgeUi.installedWithGooglesOfficialInstaller((if (remote) L.agents.bridgeUi.theServer else L.agents.bridgeUi.thisDevice)),
                 fontSize = 11.sp, color = subtle
             )
         }
@@ -225,25 +217,28 @@ fun AgyAccountCard(
         modifier = modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(14.dp)) {
-            Text("Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(L.common.account, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Spacer(Modifier.height(6.dp))
             when {
-                entry == null -> Text("Checking…", fontSize = 12.5.sp, color = subtle)
-                cli?.installed == false -> Text("Install agy above, then sign in here with Google.", fontSize = 12.5.sp, color = subtle)
+                entry == null -> Text(L.common.checking, fontSize = 12.5.sp, color = subtle)
+                cli?.installed == false -> Text(L.agents.bridgeUi.installAgyAboveThenSignIn, fontSize = 12.5.sp, color = subtle)
                 entry.isReady -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(auth.displayName.ifBlank { auth.email.ifBlank { "Signed in" } }, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                        Text(auth.displayName.ifBlank { auth.email.ifBlank { L.common.signedIn } }, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
                         listOf(auth.email.takeIf { it != auth.displayName }.orEmpty(), auth.userTier.ifBlank { auth.planName })
                             .filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotBlank() }
                             ?.let { Text(it, fontSize = 12.sp, color = subtle) }
                     }
                     Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = onSignOut) { Text("Sign out", color = MaterialTheme.colorScheme.error) }
+                    // asks first: this button takes the place of Check the moment the sign-in lands, so a repeated tap hit it
+                    var confirmSignOut by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { confirmSignOut = true }) { Text(L.common.signOut, color = MaterialTheme.colorScheme.error) }
+                    if (confirmSignOut) ConfirmSignOutDialog(AgentKind.AGY.label(), auth.email, onConfirm = onSignOut, onDismiss = { confirmSignOut = false })
                 }
                 entry.isSignedOut -> {
-                    Text("Sign in with Google to chat with Antigravity.", fontSize = 12.5.sp, color = subtle)
+                    Text(L.agents.bridgeUi.signInWithGoogleToChat, fontSize = 12.5.sp, color = subtle)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { entry.action?.onClick?.invoke() }) { Text("Sign in with Google") }
+                    Button(onClick = { entry.action?.onClick?.invoke() }) { Text(L.agents.bridgeUi.signInWithGoogle) }
                 }
                 // signing in: Check (the browser sign-in finished) or Cancel
                 entry.pending && entry.action != null -> {
@@ -253,16 +248,16 @@ fun AgyAccountCard(
                         // tapped: shows "Checking…" until the sign-in state changes (agy needs a few seconds after the browser)
                         var checking by remember(entry.label) { mutableStateOf(false) }
                         Button(enabled = !checking, onClick = { checking = true; entry.action.onClick() }) {
-                            Text(if (checking) "Checking…" else entry.action.label)
+                            Text(if (checking) L.common.checking else entry.action.label)
                         }
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = onCancelSignIn) { Text("Cancel") }
+                        TextButton(onClick = onCancelSignIn) { Text(L.common.cancel) }
                     }
                 }
                 else -> {
                     Text(entry.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = entry.color)
                     entry.detail?.let { Text(it, fontSize = 12.sp, color = subtle, maxLines = 4) }
-                    Text("Sign-in is available once Antigravity is running.", fontSize = 11.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
+                    Text(L.agents.bridgeUi.signInIsAvailableOnceAntigravity, fontSize = 11.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }

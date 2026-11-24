@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import ai.antigem.i18n.L
 
 /**
  * One Codex chat (thread) as the app shows it. Codex describes a chat as turns, each a list of items (the user's
@@ -427,7 +428,7 @@ class CodexTranscript(var threadId: String = "") {
                     "contextCompaction" -> {
                         flush(false)
                         out.add(ChatMessage(id = item.id, conversationId = conversationId, role = MessageRole.SUMMARY,
-                            content = "The conversation was compacted.", contextSummary = "The conversation was compacted.",
+                            content = L.agent.codexTranscript.theConversationWasCompacted, contextSummary = L.agent.codexTranscript.theConversationWasCompacted,
                             createdAt = item.startedAt ?: t.startedAt ?: 0L))
                     }
                     else -> group.add(item)
@@ -576,7 +577,7 @@ class CodexTranscript(var threadId: String = "") {
             "fileChange" -> {
                 val changes = j.a("changes").orEmpty().mapNotNull { it.obj() }
                 ToolCall(id = id, name = "apply_patch", toolType = ToolType.EDIT_FILE,
-                    command = changes.mapNotNull { it.str("path")?.substringAfterLast('/') }.distinct().joinToString(", ").ifBlank { "Edit files" },
+                    command = changes.mapNotNull { it.str("path")?.substringAfterLast('/') }.distinct().joinToString(", ").ifBlank { L.agent.codexTranscript.editFiles },
                     status = status(j.str("status")), output = changes.joinToString("\n") { diffOf(it) },
                     durationMs = duration, interactionType = "codex")
             }
@@ -629,7 +630,7 @@ class CodexTranscript(var threadId: String = "") {
             )
         }
         if (questions.isEmpty()) return null
-        return ChoiceQuestionnaire(title = "Codex has a question", questions = questions, allowCustomNote = false)
+        return ChoiceQuestionnaire(title = L.agent.codexTranscript.codexHasAQuestion, questions = questions, allowCustomNote = false)
     }
 
     companion object {
@@ -666,14 +667,14 @@ class CodexTranscript(var threadId: String = "") {
             val info = e["codexErrorInfo"]
             val kind = (info as? JsonPrimitive)?.contentOrNull ?: (info as? JsonObject)?.keys?.firstOrNull().orEmpty()
             return when (kind) {
-                "usageLimitExceeded" -> "Usage limit reached"
-                "unauthorized" -> "Not signed in to Codex"
-                "contextWindowExceeded" -> "The conversation is too long"
-                "rateLimitExceeded", "serverOverloaded" -> "Codex is busy"
-                "modelNotFound" -> "Model not available"
-                "sandboxError" -> "Sandbox error"
-                "httpConnectionFailed", "responseStreamConnectionFailed", "responseStreamDisconnected" -> "Connection problem"
-                else -> "Codex error"
+                "usageLimitExceeded" -> L.agent.codexTranscript.usageLimitReached
+                "unauthorized" -> L.agent.codexTranscript.notSignedInToCodex
+                "contextWindowExceeded" -> L.agent.codexTranscript.theConversationIsTooLong
+                "rateLimitExceeded", "serverOverloaded" -> L.agent.codexTranscript.codexIsBusy
+                "modelNotFound" -> L.agent.codexTranscript.modelNotAvailable
+                "sandboxError" -> L.agent.codexTranscript.sandboxError
+                "httpConnectionFailed", "responseStreamConnectionFailed", "responseStreamDisconnected" -> L.agent.codexTranscript.connectionProblem
+                else -> L.agent.codexTranscript.codexError
             }
         }
 

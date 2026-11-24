@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 @Composable
 fun EngineWarmingUpView(
@@ -57,7 +58,7 @@ fun EngineWarmingUpView(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Waking up Antigravity...",
+            text = L.components.conversationLoadingSkeleton.wakingUpAntigravity,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -67,7 +68,7 @@ fun EngineWarmingUpView(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "The background AI engine is starting up. Your chats and workspace will be ready in a moment.",
+            text = L.components.conversationLoadingSkeleton.theBackgroundAiEngineIsStarting,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             textAlign = TextAlign.Center,
@@ -105,7 +106,7 @@ fun DrawerEngineWarmingUpView(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Waking up Antigravity...",
+            text = L.components.conversationLoadingSkeleton.wakingUpAntigravity,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -115,7 +116,7 @@ fun DrawerEngineWarmingUpView(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Your chats will appear as soon as the engine connects.",
+            text = L.components.conversationLoadingSkeleton.yourChatsWillAppearAsSoon,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             textAlign = TextAlign.Center,
@@ -380,7 +381,7 @@ fun NewChatSignInPromptCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Sign in to Antigravity",
+            text = L.components.conversationLoadingSkeleton.signInToAntigravity,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -390,7 +391,7 @@ fun NewChatSignInPromptCard(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Please sign in to send messages, manage chat history, and interact with your workspace.",
+            text = L.components.conversationLoadingSkeleton.pleaseSignInToSendMessages,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             textAlign = TextAlign.Center,
@@ -415,7 +416,7 @@ fun NewChatSignInPromptCard(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Sign In",
+                text = L.components.conversationLoadingSkeleton.signIn,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -461,14 +462,14 @@ fun NewChatOfflinePromptCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "You seem to be offline",
+                    text = L.components.conversationLoadingSkeleton.youSeemToBeOffline,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "No internet connection detected. You can still type your prompt below.",
+                    text = L.components.conversationLoadingSkeleton.noInternetConnectionDetectedYouCan,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                 )
@@ -509,7 +510,7 @@ fun NewChatCheckingAuthPromptCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Checking account status...",
+            text = L.components.conversationLoadingSkeleton.checkingAccountStatus,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -519,7 +520,7 @@ fun NewChatCheckingAuthPromptCard(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Verifying your sign-in with Antigravity. You can start typing your message below anytime!",
+            text = L.components.conversationLoadingSkeleton.verifyingYourSignInWithAntigravity,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             textAlign = TextAlign.Center,
@@ -561,7 +562,7 @@ fun ServerStoppedPromptCard(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Antigravity is stopped",
+            text = L.components.conversationLoadingSkeleton.antigravityIsStopped,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -571,7 +572,7 @@ fun ServerStoppedPromptCard(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "The local AI engine is currently stopped. Tap the status dot in the top header to start, restart, or stop the server and inspect live logs.",
+            text = L.components.conversationLoadingSkeleton.theLocalAiEngineIsCurrently,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
             textAlign = TextAlign.Center,

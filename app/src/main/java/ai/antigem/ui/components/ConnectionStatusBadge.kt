@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.data.remote.AgyActiveInstance
 import ai.antigem.data.remote.BridgeConnectionState
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 @Composable
 fun ConnectionStatusBadge(
@@ -35,12 +36,12 @@ fun ConnectionStatusBadge(
     var showDialog by remember { mutableStateOf(false) }
 
     val (dotColor, labelText) = when (state) {
-        BridgeConnectionState.CONNECTED_READY -> Pair(ai.antigem.theme.AppColors.success, "Bridge Ready")
-        BridgeConnectionState.STREAMING -> Pair(ai.antigem.theme.AppColors.success, "Generating...")
-        BridgeConnectionState.SPAWNING_INSTANCE -> Pair(ai.antigem.theme.AppColors.warning, "Warming Instance...")
-        BridgeConnectionState.CONNECTING -> Pair(ai.antigem.theme.AppColors.info, "Connecting...")
-        BridgeConnectionState.RECONNECTING -> Pair(ai.antigem.theme.AppColors.info, "Reconnecting...")
-        BridgeConnectionState.OFFLINE_ERROR -> Pair(ai.antigem.theme.AppColors.danger, "Bridge Offline")
+        BridgeConnectionState.CONNECTED_READY -> Pair(ai.antigem.theme.AppColors.success, L.components.connectionStatusBadge.bridgeReady)
+        BridgeConnectionState.STREAMING -> Pair(ai.antigem.theme.AppColors.success, L.components.connectionStatusBadge.generating)
+        BridgeConnectionState.SPAWNING_INSTANCE -> Pair(ai.antigem.theme.AppColors.warning, L.components.connectionStatusBadge.warmingInstance)
+        BridgeConnectionState.CONNECTING -> Pair(ai.antigem.theme.AppColors.info, L.components.connectionStatusBadge.connecting)
+        BridgeConnectionState.RECONNECTING -> Pair(ai.antigem.theme.AppColors.info, L.components.connectionStatusBadge.reconnecting)
+        BridgeConnectionState.OFFLINE_ERROR -> Pair(ai.antigem.theme.AppColors.danger, L.components.connectionStatusBadge.bridgeOffline)
     }
 
     Box(
@@ -69,20 +70,20 @@ fun ConnectionStatusBadge(
                             .background(dotColor, CircleShape)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Bridge Status", style = MaterialTheme.typography.titleMedium)
+                    Text(text = L.components.connectionStatusBadge.bridgeStatus, style = MaterialTheme.typography.titleMedium)
                 }
             },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Status: $labelText",
+                        text = L.components.connectionStatusBadge.statusLabeltext(labelText),
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Endpoint: $bridgeUrl",
+                        text = L.components.connectionStatusBadge.endpointBridgeurl(bridgeUrl),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -100,7 +101,7 @@ fun ConnectionStatusBadge(
 
                     if (activeInstances.isEmpty()) {
                         Text(
-                            text = "No active warm processes in RAM.",
+                            text = L.components.connectionStatusBadge.noActiveWarmProcessesInRam,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -125,14 +126,14 @@ fun ConnectionStatusBadge(
                                             color = ClaudeTerracotta
                                         )
                                         Text(
-                                            text = "PID: ${inst.pid}",
+                                            text = L.components.connectionStatusBadge.pidPid(inst.pid),
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "Chat: ${inst.conversationId.take(12)}... | Uptime: ${inst.uptimeSeconds}s",
+                                        text = L.components.connectionStatusBadge.chatValueUptimeUptimesecondsS(inst.conversationId.take(12), inst.uptimeSeconds),
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -151,12 +152,12 @@ fun ConnectionStatusBadge(
                 ) {
                     Icon(imageVector = Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Reconnect")
+                    Text(L.common.reconnect)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("Close")
+                    Text(L.common.close)
                 }
             }
         )

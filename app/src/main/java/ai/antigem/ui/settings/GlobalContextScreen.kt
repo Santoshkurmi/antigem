@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.data.context.GlobalContext
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.i18n.L
 
 /** The row on Settings → Agents that opens [GlobalContextScreen]. */
 @Composable
@@ -46,9 +47,9 @@ fun GlobalContextEntryRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
             ) { Icon(Icons.Outlined.Psychology, null, tint = MaterialTheme.colorScheme.primary) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Global context", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.settings.globalContext.globalContext, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Built-in ${if (builtInOn) "on" else "off"}  ·  $own of yours on",
+                    L.settings.globalContext.builtInValueOwnOfYours(if (builtInOn) "on" else "off", own),
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -73,8 +74,7 @@ fun GlobalContextScreen() {
 
     Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(
-            "Added hidden in front of your messages, for every agent (the chat does not show it). First-message context goes " +
-                "once per chat, and again only when it changes; every-message entries go with each message.",
+            L.settings.globalContext.addedHiddenInFrontOfYour,
             fontSize = 12.5.sp, lineHeight = 17.sp, color = muted
         )
         Spacer(Modifier.height(16.dp))
@@ -84,30 +84,29 @@ fun GlobalContextScreen() {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Built-in context", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.settings.globalContext.builtInContext, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.Lock, null, tint = muted, modifier = Modifier.size(12.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("By AntiGem · read-only · first message", fontSize = 12.sp, color = muted)
+                            Text(L.settings.globalContext.byAntigemReadOnlyFirstMessage, fontSize = 12.sp, color = muted)
                         }
                     }
                     Switch(checked = builtInOn, onCheckedChange = { GlobalContext.setBuiltInEnabled(it) })
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Tells the agent where it runs (" + when (GlobalContext.runPlace) {
-                        GlobalContext.RunPlace.ANTIGEM -> "AntiGem's built-in environment on this phone: \$TMPDIR, not /tmp; pkg, not sudo"
-                        GlobalContext.RunPlace.CHROOT -> "the Ubuntu chroot on this phone: apt, and sudo is root of the whole phone"
-                        GlobalContext.RunPlace.SERVER -> "your server"
-                        GlobalContext.RunPlace.PC -> "your computer, through Connect to PC"
-                    } + "), never to use sudo, su or root on its own (only when you ask), and how to show images, videos and files in " +
-                        "this chat. Jarvis and the chats it starts get it too.",
+                    L.settings.globalContext.tellsTheAgentWhereItRuns(when (GlobalContext.runPlace) {
+                        GlobalContext.RunPlace.ANTIGEM -> L.settings.globalContext.antigemsBuiltInEnvironmentOnThis
+                        GlobalContext.RunPlace.CHROOT -> L.settings.globalContext.theUbuntuChrootOnThisPhone
+                        GlobalContext.RunPlace.SERVER -> L.settings.globalContext.yourServer
+                        GlobalContext.RunPlace.PC -> L.settings.globalContext.yourComputerThroughConnectToPc
+                    }),
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
                 Spacer(Modifier.height(4.dp))
-                Text("The \"Where you run\" part follows Settings → Where agents run.", fontSize = 11.5.sp, color = muted)
+                Text(L.settings.globalContext.theWhereYouRunPartFollows, fontSize = 11.5.sp, color = muted)
                 TextButton(onClick = { showBuiltIn = !showBuiltIn }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                    Text(if (showBuiltIn) "Hide the text" else "Show exactly what is sent")
+                    Text(if (showBuiltIn) L.settings.globalContext.hideTheText else L.settings.globalContext.showExactlyWhatIsSent)
                 }
                 if (showBuiltIn) {
                     SelectionContainer {
@@ -131,19 +130,19 @@ fun GlobalContextScreen() {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Your context", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Your own instructions for every chat", fontSize = 12.sp, color = muted)
+                Text(L.settings.globalContext.yourContext, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.settings.globalContext.yourOwnInstructionsForEveryChat, fontSize = 12.sp, color = muted)
             }
             FilledTonalButton(onClick = { editing = GlobalContext.Entry(title = "", text = "") }) {
                 Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Add")
+                Text(L.common.add)
             }
         }
         Spacer(Modifier.height(10.dp))
         if (entries.isEmpty()) {
             Text(
-                "Nothing yet. Examples: \"Reply in Hindi\", \"Never run git push\", \"My projects are in ~/work\".",
+                L.settings.globalContext.nothingYetExamplesReplyInHindi,
                 fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp)
             )
         }
@@ -175,15 +174,15 @@ private fun EntryCard(e: GlobalContext.Entry, onToggle: (Boolean) -> Unit, onCli
     ) {
         Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(e.title.ifBlank { "Untitled" }, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(e.title.ifBlank { L.common.untitled }, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     e.text.trim(), fontSize = 12.5.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Chip(if (e.everyMessage) "Every message" else "First message", highlight = e.everyMessage)
-                    if (e.forJarvis) Chip("Jarvis too", highlight = false)
+                    Chip(if (e.everyMessage) L.settings.globalContext.everyMessage else L.settings.globalContext.firstMessage, highlight = e.everyMessage)
+                    if (e.forJarvis) Chip(L.settings.globalContext.jarvisToo, highlight = false)
                 }
             }
             Switch(checked = e.enabled, onCheckedChange = onToggle)
@@ -219,35 +218,34 @@ private fun EntryEditor(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
-        title = { Text(if (isNew) "New context" else "Edit context", fontWeight = FontWeight.SemiBold) },
+        title = { Text(if (isNew) L.settings.globalContext.newContext else L.settings.globalContext.editContext, fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = title, onValueChange = { title = it }, singleLine = true,
-                    label = { Text("Title") }, placeholder = { Text("e.g. Language") },
+                    label = { Text(L.settings.globalContext.title) }, placeholder = { Text(L.settings.globalContext.eGLanguage) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = text, onValueChange = { text = it },
-                    label = { Text("What the agent should know or do") },
+                    label = { Text(L.settings.globalContext.whatTheAgentShouldKnowOr) },
                     minLines = 5, maxLines = 12,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(14.dp))
-                Text("When to send", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                WhenOption("First message of each chat", "Enough for most things. Sent again when you change it.", !everyMessage) { everyMessage = false }
-                WhenOption("Every message", "For rules the agent must never forget, even in long chats. Costs a few tokens each time.", everyMessage) { everyMessage = true }
+                Text(L.settings.globalContext.whenToSend, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                WhenOption(L.settings.globalContext.firstMessageOfEachChat, L.settings.globalContext.enoughForMostThingsSentAgain, !everyMessage) { everyMessage = false }
+                WhenOption(L.settings.globalContext.everyMessage, L.settings.globalContext.forRulesTheAgentMustNever, everyMessage) { everyMessage = true }
                 Spacer(Modifier.height(10.dp))
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { forJarvis = !forJarvis }.padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Also for Jarvis", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text(L.settings.globalContext.alsoForJarvis, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                         Text(
-                            "Jarvis has strict rules of its own (speaking, not waiting for tasks), so a note meant for normal chats can clash. " +
-                                "When on, Jarvis gets it marked \"Jarvis rules win on conflict\". It also reaches the chats Jarvis starts for tasks.",
+                            L.settings.globalContext.jarvisHasStrictRulesOfIts,
                             fontSize = 11.5.sp, lineHeight = 15.sp, color = muted
                         )
                     }
@@ -260,12 +258,12 @@ private fun EntryEditor(
             Button(
                 enabled = text.isNotBlank(),
                 onClick = { onSave(entry.copy(title = title.trim(), text = text.trim(), everyMessage = everyMessage, forJarvis = forJarvis)) }
-            ) { Text("Save") }
+            ) { Text(L.common.save) }
         },
         dismissButton = {
             Row {
-                if (!isNew) TextButton(onClick = { confirmDelete = true }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                if (!isNew) TextButton(onClick = { confirmDelete = true }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text(L.common.cancel) }
             }
         }
     )
@@ -274,9 +272,9 @@ private fun EntryEditor(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete \"${entry.title.ifBlank { "Untitled" }}\"?") },
-            text = { Text("New messages will no longer carry it. Chats that already got it keep what they were told.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+            text = { Text(L.settings.globalContext.newMessagesWillNoLongerCarry) },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(L.common.cancel) } }
         )
     }
 }

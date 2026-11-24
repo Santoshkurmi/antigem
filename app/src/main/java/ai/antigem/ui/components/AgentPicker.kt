@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.domain.model.AgentKind
+import ai.antigem.i18n.L
 
 val ClaudeAccent = Color(0xFFD97757)
 
@@ -38,10 +39,10 @@ val OpenCodeAccent = Color(0xFF10B981)
 val CodexAccent = Color(0xFF8B5CF6)
 
 fun AgentKind.label(): String = when (this) {
-    AgentKind.AGY -> "Antigravity"
-    AgentKind.CLAUDE -> "Claude Code"
+    AgentKind.AGY -> L.common.antigravity
+    AgentKind.CLAUDE -> L.common.claudeCode
     AgentKind.OPENCODE -> "OpenCode"
-    AgentKind.CODEX -> "Codex"
+    AgentKind.CODEX -> L.common.codex
 }
 
 fun AgentKind.accent(): Color = when (this) {
@@ -110,6 +111,6 @@ fun ClaudeBadge(modifier: Modifier = Modifier) {
             .background(ClaudeAccent.copy(alpha = 0.16f))
             .padding(horizontal = 5.dp, vertical = 1.dp)
     ) {
-        Text(text = "Claude", fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = ClaudeAccent)
+        Text(text = L.common.claude, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, color = ClaudeAccent)
     }
 }

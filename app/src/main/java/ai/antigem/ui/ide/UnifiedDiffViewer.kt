@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.theme.ClaudeTerracotta
 import java.io.File
+import ai.antigem.i18n.L
 
 sealed class DiffLineType {
     object HunkHeader : DiffLineType()
@@ -159,7 +160,7 @@ fun UnifiedDiffViewer(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = "Open Current File (Editable)",
+                        contentDescription = L.ide.unifiedDiffViewer.openCurrentFileEditable,
                         tint = ai.antigem.theme.AppColors.success,
                         modifier = Modifier.size(17.dp)
                     )
@@ -172,7 +173,7 @@ fun UnifiedDiffViewer(
                 ) {
                     Icon(
                         imageVector = Icons.Default.History,
-                        contentDescription = "Open Revision File (Read-Only)",
+                        contentDescription = L.ide.unifiedDiffViewer.openRevisionFileReadOnly,
                         tint = ClaudeTerracotta,
                         modifier = Modifier.size(18.dp)
                     )
@@ -185,7 +186,7 @@ fun UnifiedDiffViewer(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close Diff",
+                        contentDescription = L.ide.unifiedDiffViewer.closeDiff,
                         tint = ai.antigem.theme.AppColors.editorMuted,
                         modifier = Modifier.size(18.dp)
                     )
@@ -203,7 +204,7 @@ fun UnifiedDiffViewer(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No changes detected or binary file.",
+                    text = L.ide.unifiedDiffViewer.noChangesDetectedOrBinaryFile,
                     color = Color.Gray,
                     fontSize = 14.sp
                 )

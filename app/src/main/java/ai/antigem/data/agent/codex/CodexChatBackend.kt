@@ -41,17 +41,19 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.UUID
+import ai.antigem.i18n.L
 
 /** Whether Codex can be used, as the chat screen and the settings show it. */
-enum class CodexState(val label: String) {
-    CHECKING("Checking…"),
-    READY("Ready"),
-    SIGNED_OUT("Not signed in"),
-    NOT_INSTALLED("Not installed"),
-    DISABLED("Turned off on the server"),
-    OUTDATED("Server update needed"),
-    OFFLINE("Server offline"),
-    ERROR("Error");
+enum class CodexState(private val labelText: () -> String) {
+    CHECKING({ L.agent.codexChatBackend.checking }),
+    READY({ L.agent.codexChatBackend.ready }),
+    SIGNED_OUT({ L.agent.codexChatBackend.notSignedIn }),
+    NOT_INSTALLED({ L.agent.codexChatBackend.notInstalled }),
+    DISABLED({ L.agent.codexChatBackend.turnedOffOnTheServer }),
+    OUTDATED({ L.agent.codexChatBackend.serverUpdateNeeded }),
+    OFFLINE({ L.agent.codexChatBackend.serverOffline }),
+    ERROR({ L.agent.codexChatBackend.error });
+    val label: String get() = labelText()
 
     /** Sending a message cannot work in this state. */
     val isBlocking get() = this == NOT_INSTALLED || this == DISABLED || this == OUTDATED || this == OFFLINE || this == SIGNED_OUT
@@ -468,7 +470,7 @@ class CodexChatBackend(
                             )
                         }
                         _availableModels.value = list
-                        _modelsError.value = if (list.isEmpty()) "No models: sign in to Codex in Settings → Codex." else null
+                        _modelsError.value = if (list.isEmpty()) L.agent.codexChatBackend.noModelsSignInToCodex else null
                         val cur = _selectedModelId.value
                         if (cur.isBlank() || list.none { it.id == cur }) {
                             val conv = store.currentConversation.value
@@ -596,7 +598,7 @@ class CodexChatBackend(
 
     override fun selectConversation(id: String) {
         val conv = _conversations.value.find { it.id == id }
-            ?: Conversation(id = id, title = "Codex Chat", sessionId = id, agent = AgentKind.CODEX)
+            ?: Conversation(id = id, title = L.agent.codexChatBackend.codexChat, sessionId = id, agent = AgentKind.CODEX)
         store.currentConversation.value = conv
         if (conv.modelId.isNotBlank()) { _selectedModelId.value = conv.modelId; syncEfforts() }
         _planMode.value = false
@@ -632,7 +634,7 @@ class CodexChatBackend(
     private suspend fun reload(id: String, restoreChoices: Boolean = false) {
         val reloadStartedAt = System.nanoTime()
         val read = client.rpc("thread/read", buildJsonObject { put("threadId", id) }).getOrElse { e ->
-            if (attachedId == id) _conversationError.value = "Could not load this chat: ${e.message}"
+            if (attachedId == id) _conversationError.value = L.agent.codexChatBackend.couldNotLoadThisChatMessage(e.message)
             return
         }.obj().o("thread")
         val turns = mutableListOf<JsonObject>()
@@ -643,7 +645,7 @@ class CodexChatBackend(
                 put("threadId", id); put("limit", 30); put("itemsView", "full"); put("sortDirection", "desc")
                 cursor?.let { put("cursor", it) }
             }).getOrElse { e ->
-                if (attachedId == id) _conversationError.value = "Could not load this chat: ${e.message}"
+                if (attachedId == id) _conversationError.value = L.agent.codexChatBackend.couldNotLoadThisChatMessage(e.message)
                 return
             }.obj()
             turns.addAll(page.a("data").orEmpty().mapNotNull { it.obj() })
@@ -687,7 +689,7 @@ class CodexChatBackend(
         store.attachments.value = emptyList()
         val text = content.trim()
         val title = if (conv.title == "New Chat" || conv.title.isBlank()) {
-            val first = ai.antigem.data.remote.PromptExpansion.collapse(text.ifBlank { "Attachment" }).lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            val first = ai.antigem.data.remote.PromptExpansion.collapse(text.ifBlank { L.agent.codexChatBackend.attachment }).lines().firstOrNull { it.isNotBlank() } ?: L.agent.codexChatBackend.chat
             first.take(40) + if (first.length > 40) "..." else ""
         } else conv.title
         val updated = conv.copy(title = title, updatedAt = System.currentTimeMillis(), modelId = _selectedModelId.value)
@@ -741,7 +743,7 @@ class CodexChatBackend(
                 })
                 val tid = r.getOrNull().obj().o("thread").str("id")
                 if (tid == null) {
-                    fail(clientId, "Could not start the Codex chat", r.exceptionOrNull())
+                    fail(clientId, L.agent.codexChatBackend.couldNotStartTheCodexChat, r.exceptionOrNull())
                     return@launch
                 }
                 threadId = tid
@@ -767,7 +769,7 @@ class CodexChatBackend(
                 put("sandboxPolicy", CodexPreferences.sandboxPolicy(mode))
                 collaborationMode()?.let { put("collaborationMode", it) }
             })
-            if (r.isFailure) fail(clientId, "Codex did not take the message", r.exceptionOrNull())
+            if (r.isFailure) fail(clientId, L.agent.codexChatBackend.codexDidNotTakeTheMessage, r.exceptionOrNull())
             // the chat knows the message by its turn id once Codex has it
             else if (checkpoint != null) r.getOrNull().obj().o("turn").str("id")?.let { turnId ->
                 backendScope.launch { ai.antigem.data.checkpoint.ProjectCheckpoints.bind(updated.workspaceUri, checkpoint, turnId) }
@@ -834,7 +836,7 @@ class CodexChatBackend(
     private fun fail(clientId: String, title: String, e: Throwable?) {
         Log.w(TAG, "$title: ${e?.message}")
         transcript.removeLocalPrompt(clientId)
-        transcript.addError(title, e?.message ?: "Unknown error")
+        transcript.addError(title, e?.message ?: L.agent.codexChatBackend.unknownError)
         attachedId?.let { running.remove(it) }
         publishConversations()
         emitNow()
@@ -1009,7 +1011,7 @@ class CodexChatBackend(
                 ai.antigem.data.remote.SlashCommandItem(
                     name = n, command = "/$n",
                     description = sk.str("shortDescription")?.ifBlank { null } ?: sk.str("description").orEmpty(),
-                    type = "skill", argumentHint = "what to do"
+                    type = "skill", argumentHint = L.agent.codexChatBackend.whatToDo
                 )
             }
         }
@@ -1442,7 +1444,7 @@ class CodexChatBackend(
         if (tid == null) return
         when (method) {
             "turn/started" -> { turnStartedAt = System.nanoTime(); _notice.value = null }
-            "error" -> if (p.str("willRetry") == "true") _notice.value = "Reconnecting… ${p.o("error").str("message").orEmpty().take(140)}"
+            "error" -> if (p.str("willRetry") == "true") _notice.value = L.agent.codexChatBackend.reconnectingO(p.o("error").str("message").orEmpty().take(140))
         }
         val changed = transcript.apply(method, p)
         if (method == "turn/completed") {
@@ -1637,15 +1639,15 @@ class CodexChatBackend(
         }
 
         /** Codex's own commands in the "/" menu of a Codex chat. */
-        val BUILTIN_COMMANDS = listOf(
-            ai.antigem.data.remote.SlashCommandItem("compact", "/compact", "Summarize the chat so far to free up context", "command"),
-            ai.antigem.data.remote.SlashCommandItem("review", "/review", "Review the uncommitted changes (or: /review what to check)", "command"),
-            ai.antigem.data.remote.SlashCommandItem("plan", "/plan", "Plan mode: plan before changing anything (or: /plan the task)", "command"),
-            ai.antigem.data.remote.SlashCommandItem("fork", "/fork", "Copy this chat into a new one", "command"),
-            ai.antigem.data.remote.SlashCommandItem("model", "/model", "Pick the model", "app"),
-            ai.antigem.data.remote.SlashCommandItem("status", "/status", "Account, usage limits and settings", "app"),
-            ai.antigem.data.remote.SlashCommandItem("mcp", "/mcp", "MCP servers Codex can use", "app"),
-            ai.antigem.data.remote.SlashCommandItem("new", "/new", "Start a new Codex chat", "app")
+        val BUILTIN_COMMANDS get() = listOf(
+            ai.antigem.data.remote.SlashCommandItem("compact", "/compact", L.agent.codexChatBackend.summarizeTheChatSoFarTo, "command"),
+            ai.antigem.data.remote.SlashCommandItem("review", "/review", L.agent.codexChatBackend.reviewTheUncommittedChangesOrReview, "command"),
+            ai.antigem.data.remote.SlashCommandItem("plan", "/plan", L.agent.codexChatBackend.planModePlanBeforeChangingAnything, "command"),
+            ai.antigem.data.remote.SlashCommandItem("fork", "/fork", L.agent.codexChatBackend.copyThisChatIntoANew, "command"),
+            ai.antigem.data.remote.SlashCommandItem("model", "/model", L.agent.codexChatBackend.pickTheModel, "app"),
+            ai.antigem.data.remote.SlashCommandItem("status", "/status", L.agent.codexChatBackend.accountUsageLimitsAndSettings, "app"),
+            ai.antigem.data.remote.SlashCommandItem("mcp", "/mcp", L.agent.codexChatBackend.mcpServersCodexCanUse, "app"),
+            ai.antigem.data.remote.SlashCommandItem("new", "/new", L.agent.codexChatBackend.startANewCodexChat, "app")
         )
     }
 }

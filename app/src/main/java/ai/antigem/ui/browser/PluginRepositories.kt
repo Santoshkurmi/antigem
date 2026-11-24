@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
+import ai.antigem.i18n.L
 
 /** A public GitHub repository holding plugin folders; [ref] is a branch or tag, blank for the default branch. */
 data class PluginRepo(val owner: String, val name: String, val ref: String = "") {
@@ -35,7 +36,7 @@ data class RepoInstallProgress(val phase: String, val bytesDone: Long, val bytes
 
 /** Dotted numeric versions, as shown and compared in the plugin screens. */
 object PluginVersions {
-    fun label(version: String) = if (version.isBlank()) "no version" else "v" + version.removePrefix("v")
+    fun label(version: String) = if (version.isBlank()) L.browser.pluginRepositories.noVersion else "v" + version.removePrefix("v")
 
     /** Part-by-part comparison; null when either version is missing or not numeric. */
     fun compare(a: String, b: String): Int? {
@@ -125,7 +126,7 @@ object PluginRepositories {
         val result = runCatching { PluginBridge.repoList(repo.label) }
         withContext(Dispatchers.Main) {
             result.onSuccess { listings[repo.label] = it; errors.remove(repo.label) }
-                .onFailure { errors[repo.label] = it.message ?: "Could not read ${repo.label}" }
+                .onFailure { errors[repo.label] = it.message ?: L.browser.pluginRepositories.couldNotReadLabel(repo.label) }
             loading.remove(repo.label)
         }
     }

@@ -19,6 +19,7 @@ import java.io.InputStream
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
+import ai.antigem.i18n.L
 
 /** One file or folder as the Files screen shows it. */
 data class ExplorerEntry(
@@ -114,9 +115,9 @@ object FileExplorerApi {
         val msg = runCatching { JSONObject(body ?: "").optString("error") }.getOrNull().orEmpty()
         return when {
             msg.isNotBlank() -> msg
-            code == 404 -> "The IDE bridge is outdated. Restart it (or update it on your server) to use this."
-            code == 401 -> "The IDE bridge refused the request (security token)."
-            else -> "Request failed ($code)"
+            code == 404 -> L.files.fileExplorerApi.theIdeBridgeIsOutdatedRestart
+            code == 401 -> L.files.fileExplorerApi.theIdeBridgeRefusedTheRequest
+            else -> L.files.fileExplorerApi.requestFailedCode(code)
         }
     }
 
@@ -199,7 +200,7 @@ object FileExplorerApi {
 
     private fun simple(code: Int, o: JSONObject?): FsResult =
         if (code == 200 && o?.optBoolean("success") == true) FsResult(true, o.optString("path").ifBlank { null }, count = o.optInt("files"))
-        else FsResult(false, error = o?.err(code) ?: "Failed")
+        else FsResult(false, error = o?.err(code) ?: L.files.fileExplorerApi.failed)
 
     suspend fun create(dir: String, name: String, isDir: Boolean): FsResult =
         post("/api/fs/new", JSONObject().put("dir", dir).put("name", name).put("isDir", isDir)).let { (c, o) -> simple(c, o) }
@@ -211,7 +212,7 @@ object FileExplorerApi {
         post("/api/fs/chmod", JSONObject().put("path", path).put("mode", mode)).let { (c, o) -> simple(c, o) }
 
     private fun batch(code: Int, o: JSONObject?, total: Int): FsResult {
-        if (o == null || !o.has("results")) return FsResult(false, error = o?.err(code) ?: "Failed", failed = total)
+        if (o == null || !o.has("results")) return FsResult(false, error = o?.err(code) ?: L.files.fileExplorerApi.failed, failed = total)
         val results = o.optJSONArray("results") ?: JSONArray()
         val firstError = (0 until results.length()).map { results.getJSONObject(it) }
             .firstOrNull { it.optString("error").isNotBlank() }
@@ -235,7 +236,7 @@ object FileExplorerApi {
     suspend fun extract(path: String, targetDir: String? = null): FsResult {
         val (c, o) = post("/api/fs/extract", JSONObject().put("path", path).put("targetDir", targetDir ?: ""))
         return if (c == 200 && o?.optBoolean("success") == true) FsResult(true, o.optString("targetDir"), count = o.optInt("files"))
-        else FsResult(false, error = o?.err(c) ?: "Extract failed")
+        else FsResult(false, error = o?.err(c) ?: L.files.fileExplorerApi.extractFailed)
     }
 
     suspend fun archiveEntries(path: String): Result<Pair<List<ArchiveEntry>, Boolean>> {
@@ -331,7 +332,7 @@ object FileExplorerApi {
                 else FsResult(false, error = o?.optString("error")?.ifBlank { null } ?: errorOf(resp.code, raw))
             }
         } catch (e: Exception) {
-            FsResult(false, error = e.message ?: "Upload failed")
+            FsResult(false, error = e.message ?: L.files.fileExplorerApi.uploadFailed)
         }
     }
 
@@ -340,7 +341,7 @@ object FileExplorerApi {
         try {
             transferClient.newCall(Request.Builder().url(rawUrl(path)).get().build()).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext FsResult(false, error = errorOf(resp.code, resp.body?.string()))
-                val body = resp.body ?: return@withContext FsResult(false, error = "Empty response")
+                val body = resp.body ?: return@withContext FsResult(false, error = L.files.fileExplorerApi.emptyResponse)
                 val total = body.contentLength()
                 dest.parentFile?.mkdirs()
                 val tmp = File(dest.path + ".part")
@@ -358,11 +359,11 @@ object FileExplorerApi {
                     }
                 }
                 if (dest.exists()) dest.delete()
-                if (!tmp.renameTo(dest)) return@withContext FsResult(false, error = "Could not save download")
+                if (!tmp.renameTo(dest)) return@withContext FsResult(false, error = L.files.fileExplorerApi.couldNotSaveDownload)
                 FsResult(true, dest.absolutePath)
             }
         } catch (e: Exception) {
-            FsResult(false, error = e.message ?: "Download failed")
+            FsResult(false, error = e.message ?: L.files.fileExplorerApi.downloadFailed)
         }
     }
 }

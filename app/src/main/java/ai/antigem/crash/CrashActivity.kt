@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.cos
 import kotlin.math.sin
+import ai.antigem.i18n.L
 
 /**
  * Shown (in the `:crash` process) after the app crashed: a dizzy little character, the error, and buttons to report
@@ -88,7 +89,7 @@ class CrashActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val report = runCatching { CrashHandler.reportFile(this).readText() }.getOrNull()
-            ?.takeIf { it.isNotBlank() } ?: "No crash report was saved."
+            ?.takeIf { it.isNotBlank() } ?: L.crash.activity.noCrashReportWasSaved
         // The error line (like "java.lang.OutOfMemoryError: …") is the first line after the header block.
         val errorLine = report.substringAfter("\n\n", report).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
         setContent {
@@ -102,7 +103,7 @@ class CrashActivity : ComponentActivity() {
                         errorLine = errorLine,
                         report = report,
                         onReport = { reportOnGitHub(report, errorLine) },
-                        onCopy = { copy(report); toast("Report copied") },
+                        onCopy = { copy(report); toast(L.crash.activity.reportCopied) },
                         onShare = { share(report) },
                         onRestart = { restartApp() },
                         onClose = { finishAndRemoveTask() }
@@ -115,7 +116,7 @@ class CrashActivity : ComponentActivity() {
     /** Copies the full report and opens a new GitHub issue with it filled in (cut to fit the link if it is long). */
     private fun reportOnGitHub(report: String, errorLine: String) {
         copy(report)
-        val title = "Crash: " + errorLine.ifBlank { "the app crashed" }.take(120)
+        val title = L.crash.activity.crashTitle(errorLine.ifBlank { L.crash.activity.theAppCrashed }.take(120))
         fun body(text: String, cut: Boolean) = buildString {
             appendLine("**What were you doing when it crashed?**")
             appendLine()
@@ -128,7 +129,7 @@ class CrashActivity : ComponentActivity() {
             appendLine("```")
             if (cut) {
                 appendLine()
-                appendLine("_The report was cut to fit. The full report is in your clipboard: paste it here._")
+                appendLine(L.crash.activity.theReportWasCutToFit)
             }
         }
         fun url(body: String) = "$ISSUES_URL?title=${Uri.encode(title)}&body=${Uri.encode(body)}"
@@ -142,7 +143,7 @@ class CrashActivity : ComponentActivity() {
         val opened = runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }.isSuccess
-        toast(if (opened) "Report copied too: paste it in the issue if anything is missing" else "No browser found. The report is copied.")
+        toast(if (opened) L.crash.activity.reportCopiedTooPasteItIn else L.crash.activity.noBrowserFoundTheReportIs)
     }
 
     private fun copy(text: String) {
@@ -159,10 +160,10 @@ class CrashActivity : ComponentActivity() {
                     Intent(Intent.ACTION_SEND).setType("text/plain")
                         .putExtra(Intent.EXTRA_SUBJECT, "AntiGem crash report")
                         .putExtra(Intent.EXTRA_TEXT, text),
-                    "Share crash report"
+                    L.crash.activity.shareCrashReport
                 )
             )
-        }.onFailure { toast("Nothing to share with") }
+        }.onFailure { toast(L.crash.activity.nothingToShareWith) }
     }
 
     private fun restartApp() {
@@ -204,14 +205,14 @@ private fun CrashScreen(
         Spacer(Modifier.height(12.dp))
         DizzyBlob(Modifier.size(190.dp))
         Text(
-            "Oops! AntiGem tripped over something",
+            L.crash.activity.oopsAntigemTrippedOverSomething,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "An error happened and the app had to stop. Sorry about that! Reporting it on GitHub helps get it fixed.",
+            L.crash.activity.anErrorHappenedAndTheApp,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -236,30 +237,30 @@ private fun CrashScreen(
         Spacer(Modifier.height(20.dp))
         Button(onClick = onReport, modifier = Modifier.fillMaxWidth().height(48.dp)) {
             ButtonIcon(Icons.Default.BugReport)
-            Text("Report on GitHub")
+            Text(L.crash.activity.reportOnGithub)
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f)) {
                 ButtonIcon(Icons.Default.ContentCopy)
-                Text("Copy")
+                Text(L.common.copy)
             }
             OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
                 ButtonIcon(Icons.Default.Share)
-                Text("Share")
+                Text(L.common.share)
             }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onRestart, modifier = Modifier.weight(1f)) {
                 ButtonIcon(Icons.Default.Refresh)
-                Text("Restart app")
+                Text(L.crash.activity.restartApp)
             }
-            TextButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text("Close") }
+            TextButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text(L.common.close) }
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "The report has the error, the app and Android versions and the phone model. Check it before posting: it may contain file or folder names.",
+            L.crash.activity.theReportHasTheErrorThe,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -267,7 +268,7 @@ private fun CrashScreen(
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = { showDetails = !showDetails }) {
             ButtonIcon(if (showDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore)
-            Text(if (showDetails) "Hide details" else "Show details")
+            Text(if (showDetails) L.crash.activity.hideDetails else L.crash.activity.showDetails)
         }
         AnimatedVisibility(visible = showDetails) {
             Surface(

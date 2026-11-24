@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.data.rea.ReaManager
 import ai.antigem.theme.QuotaGreen
+import ai.antigem.i18n.L
 
 /**
  * Settings → REA → Tool groups: the groups of REA tools that REA MCP servers show. Built-in groups come with the
@@ -54,25 +55,25 @@ fun ReaGroupsScreen(cardBg: Color, cardBorder: BorderStroke, onOpenRea: () -> Un
 
     when (val d = dialog) {
         null -> Unit
-        is GroupDialog.Create -> GroupInfoDialog("New tool group", "", "", onDismiss = { dialog = null }) { name, description ->
+        is GroupDialog.Create -> GroupInfoDialog(L.settings.reaGroups.newToolGroup, "", "", onDismiss = { dialog = null }) { name, description ->
             editing = ReaManager.createGroup(name, description)
             dialog = null
         }
-        is GroupDialog.Edit -> GroupInfoDialog("Edit group", d.group.name, d.group.description, onDismiss = { dialog = null }) { name, description ->
+        is GroupDialog.Edit -> GroupInfoDialog(L.settings.reaGroups.editGroup, d.group.name, d.group.description, onDismiss = { dialog = null }) { name, description ->
             ReaManager.updateGroup(d.group.id, name, description)
             dialog = null
         }
         is GroupDialog.Delete -> ConfirmDialog(
             "Delete ${d.group.name}?",
-            if (d.group.builtin) "REA servers that use this group stop showing its tools. You can bring it back with Reset all groups."
-            else "REA servers that use this group stop showing its tools.",
-            "Delete", onDismiss = { dialog = null }
+            if (d.group.builtin) L.settings.reaGroups.reaServersThatUseThisGroup
+            else L.settings.reaGroups.reaServersThatUseThisGroup2,
+            L.common.delete, onDismiss = { dialog = null }
         ) { ReaManager.deleteGroup(d.group.id); dialog = null }
         is GroupDialog.Reset -> ConfirmDialog(
-            "Reset ${d.group.name}?", "Its name, description and tools go back to the defaults.", "Reset", onDismiss = { dialog = null }
+            "Reset ${d.group.name}?", L.settings.reaGroups.itsNameDescriptionAndToolsGo, L.settings.reaGroups.reset, onDismiss = { dialog = null }
         ) { ReaManager.resetGroup(d.group.id); dialog = null }
         GroupDialog.ResetAll -> ConfirmDialog(
-            "Reset all groups?", "Every built-in group goes back to its defaults and your own groups are deleted.", "Reset all", onDismiss = { dialog = null }
+            L.settings.reaGroups.resetAllGroups, L.settings.reaGroups.everyBuiltInGroupGoesBack, L.settings.reaGroups.resetAll, onDismiss = { dialog = null }
         ) { ReaManager.resetAllGroups(); dialog = null }
     }
 }
@@ -106,18 +107,18 @@ private fun GroupList(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Category, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text("Tool groups", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(L.settings.reaGroups.toolGroups, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     }
-                    Hint("Each REA MCP server lets the agent use the tools of the groups chosen for it (the REA preset in each agent's MCP settings). Open a group to add or remove tools; a tool can be in several groups. Sizes are what a group costs per request on a server that shows its tools directly; on demand, groups cost nothing up front. Tools marked ✎ change things (apps, files, sessions). Changes apply when the server restarts.")
+                    Hint(L.settings.reaGroups.eachReaMcpServerLetsThe)
                     Text(
-                        state.toolsServer?.let { "${state.allToolNames.size} tools, from $it" } ?: "Install REA to see every tool with its description.",
+                        state.toolsServer?.let { L.settings.reaGroups.alltoolnamescountToolsFromValue(state.allToolNames.size, it) } ?: L.settings.reaGroups.installReaToSeeEveryTool,
                         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(enabled = state.groups.isNotEmpty() || state.filesReady, onClick = { onDialog(GroupDialog.Create) }) {
-                            Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("New group")
+                            Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.reaGroups.newGroup)
                         }
-                        OutlinedButton(enabled = !state.busy && state.usable, onClick = ReaManager::refreshTools) { Text("Refresh tools") }
+                        OutlinedButton(enabled = !state.busy && state.usable, onClick = ReaManager::refreshTools) { Text(L.settings.reaGroups.refreshTools) }
                     }
                     if (state.task == "tools") LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
@@ -127,9 +128,9 @@ private fun GroupList(
             item {
                 Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("No groups yet", fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
-                        Hint("The built-in groups come with REA's setup files. Get them on the REA page (step 1), or create your own group here.")
-                        OutlinedButton(onClick = onOpenRea) { Text("Open REA setup") }
+                        Text(L.settings.reaGroups.noGroupsYet, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+                        Hint(L.settings.reaGroups.theBuiltInGroupsComeWith)
+                        OutlinedButton(onClick = onOpenRea) { Text(L.settings.reaGroups.openReaSetup) }
                     }
                 }
             }
@@ -141,9 +142,9 @@ private fun GroupList(
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("In no group (${state.ungrouped.size})", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { showUngrouped = !showUngrouped }) { Text(if (showUngrouped) "Hide" else "Show", fontSize = 12.5.sp) }
+                            TextButton(onClick = { showUngrouped = !showUngrouped }) { Text(if (showUngrouped) L.common.hide else L.common.show, fontSize = 12.5.sp) }
                         }
-                        Hint("Only servers that show all tools offer these. New tools from REA updates appear here: add them to a group.")
+                        Hint(L.settings.reaGroups.onlyServersThatShowAllTools)
                     }
                 }
             }
@@ -152,7 +153,7 @@ private fun GroupList(
         if (state.defaultGroups.isNotEmpty()) {
             item {
                 TextButton(onClick = { onDialog(GroupDialog.ResetAll) }) {
-                    Text("Reset all groups to the defaults", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
+                    Text(L.settings.reaGroups.resetAllGroupsToTheDefaults, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -179,24 +180,24 @@ private fun GroupCard(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(g.name, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    if (g.builtin) Pill("Built-in", MaterialTheme.colorScheme.primary) else Pill("Yours", QuotaGreen)
+                    if (g.builtin) Pill(L.common.builtIn, MaterialTheme.colorScheme.primary) else Pill(L.settings.reaGroups.yours, QuotaGreen)
                 }
                 Text(
                     "${g.tools.size} tools" + (tokens?.let { " · ≈${formatTokens(it)} tokens" } ?: "") + " · id ${g.id}",
                     fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
                 if (g.description.isNotBlank()) Text(g.description, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
-                if (unknown > 0) Text("$unknown tools this REA version doesn't have", fontSize = 11.5.sp, color = Amber)
+                if (unknown > 0) Text(L.settings.reaGroups.unknownToolsThisReaVersionDoesnt(unknown), fontSize = 11.5.sp, color = Amber)
             }
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "More") }
+                IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, L.common.more) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Edit tools") }, onClick = { menu = false; onOpen() })
-                    DropdownMenuItem(text = { Text("Rename / describe") }, onClick = { menu = false; onDialog(GroupDialog.Edit(g)) })
+                    DropdownMenuItem(text = { Text(L.settings.reaGroups.editTools) }, onClick = { menu = false; onOpen() })
+                    DropdownMenuItem(text = { Text(L.settings.reaGroups.renameDescribe) }, onClick = { menu = false; onDialog(GroupDialog.Edit(g)) })
                     if (g.builtin && state.defaultGroups.any { it.id == g.id }) {
-                        DropdownMenuItem(text = { Text("Reset to default") }, onClick = { menu = false; onDialog(GroupDialog.Reset(g)) })
+                        DropdownMenuItem(text = { Text(L.settings.reaGroups.resetToDefault) }, onClick = { menu = false; onDialog(GroupDialog.Reset(g)) })
                     }
-                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDialog(GroupDialog.Delete(g)) })
+                    DropdownMenuItem(text = { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDialog(GroupDialog.Delete(g)) })
                 }
             }
         }
@@ -214,7 +215,7 @@ private fun UngroupedRow(name: String, state: ReaManager.State) {
                 tool?.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 11.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) }
             }
             Box {
-                TextButton(enabled = state.groups.isNotEmpty(), onClick = { menu = true }) { Text("Add to…", fontSize = 12.sp) }
+                TextButton(enabled = state.groups.isNotEmpty(), onClick = { menu = true }) { Text(L.settings.reaGroups.addTo, fontSize = 12.sp) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     state.groups.forEach { g ->
                         DropdownMenuItem(text = { Text(g.name) }, onClick = { menu = false; ReaManager.toggleTool(g.id, name) })
@@ -225,7 +226,9 @@ private fun UngroupedRow(name: String, state: ReaManager.State) {
     }
 }
 
-private enum class ToolFilter(val label: String) { ALL("All"), IN("In group"), OUT("Not in group"), NONE("In no group") }
+private enum class ToolFilter(private val labelText: () -> String) { ALL({ L.settings.reaGroups.all }), IN({ L.settings.reaGroups.inGroup }), OUT({ L.settings.reaGroups.notInGroup }), NONE({ L.settings.reaGroups.inNoGroup }) ;
+    val label: String get() = labelText()
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -259,7 +262,7 @@ private fun GroupEditor(
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back to groups") }
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, L.settings.reaGroups.backToGroups) }
                         Column(Modifier.weight(1f)) {
                             Text(group.name, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             Text(
@@ -267,12 +270,12 @@ private fun GroupEditor(
                                 fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
-                        IconButton(onClick = onEditInfo) { Icon(Icons.Outlined.Edit, "Rename") }
+                        IconButton(onClick = onEditInfo) { Icon(Icons.Outlined.Edit, L.common.rename) }
                     }
                     if (group.description.isNotBlank()) Hint(group.description)
                     OutlinedTextField(
                         value = query, onValueChange = { query = it }, singleLine = true,
-                        placeholder = { Text("Search tools") },
+                        placeholder = { Text(L.settings.reaGroups.searchTools) },
                         leadingIcon = { Icon(Icons.Outlined.Search, null) },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -281,10 +284,10 @@ private fun GroupEditor(
                             FilterChip(selected = filter == f, onClick = { filter = f }, label = {
                                 Text(
                                     when (f) {
-                                        ToolFilter.ALL -> "All ${state.allToolNames.size}"
-                                        ToolFilter.IN -> "In group ${inGroup.size}"
-                                        ToolFilter.OUT -> "Not in group"
-                                        ToolFilter.NONE -> "In no group ${ungrouped.size}"
+                                        ToolFilter.ALL -> L.settings.reaGroups.allAlltoolnamescount(state.allToolNames.size)
+                                        ToolFilter.IN -> L.settings.reaGroups.inGroupIngroupcount(inGroup.size)
+                                        ToolFilter.OUT -> L.settings.reaGroups.notInGroup
+                                        ToolFilter.NONE -> L.settings.reaGroups.inNoGroupUngroupedcount(ungrouped.size)
                                     },
                                     fontSize = 12.sp
                                 )
@@ -293,17 +296,17 @@ private fun GroupEditor(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = shown.any { it !in inGroup }, onClick = { ReaManager.setGroupTools(group.id, group.tools + shown) }) {
-                            Text("Add ${shown.count { it !in inGroup }} shown", fontSize = 12.5.sp)
+                            Text(L.settings.reaGroups.addValueShown(shown.count { it !in inGroup }), fontSize = 12.5.sp)
                         }
                         OutlinedButton(enabled = shown.any { it in inGroup }, onClick = { ReaManager.setGroupTools(group.id, group.tools - shown.toSet()) }) {
-                            Text("Remove ${shown.count { it in inGroup }} shown", fontSize = 12.5.sp)
+                            Text(L.settings.reaGroups.removeValueShown(shown.count { it in inGroup }), fontSize = 12.5.sp)
                         }
                     }
-                    if (state.tools.isEmpty()) Hint("Install REA (and Refresh tools) to see every tool with its description. Until then only tools already in groups are listed.")
+                    if (state.tools.isEmpty()) Hint(L.settings.reaGroups.installReaAndRefreshToolsTo)
                 }
             }
         }
-        if (shown.isEmpty()) item { Hint("No tools match.") }
+        if (shown.isEmpty()) item { Hint(L.settings.reaGroups.noToolsMatch) }
         items(shown, key = { it }) { name ->
             ToolRow(name, name in inGroup, byName[name], state.groups.filter { it.id != group.id && name in it.tools }.map { it.name }) {
                 ReaManager.toggleTool(group.id, name)
@@ -324,15 +327,15 @@ private fun ToolRow(name: String, checked: Boolean, tool: ReaManager.Tool?, also
             Column(Modifier.weight(1f).padding(top = 10.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(name, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium)
                 if (tool == null) {
-                    Text("Not in the installed REA's tool list", fontSize = 11.sp, color = Amber)
+                    Text(L.settings.reaGroups.notInTheInstalledReasTool, fontSize = 11.sp, color = Amber)
                 } else if (tool.description.isNotBlank()) {
                     Text(tool.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 }
                 val meta = listOfNotNull(
-                    tool?.takeIf { it.changes }?.let { "✎ changes things" },
+                    tool?.takeIf { it.changes }?.let { L.settings.reaGroups.changesThings },
                     tool?.required?.takeIf { it.isNotEmpty() }?.let { "needs ${it.joinToString(", ")}" },
                     tool?.bytes?.takeIf { it > 0 }?.let { "≈${formatTokens(it / 4)} tokens" },
-                    alsoIn.takeIf { it.isNotEmpty() }?.let { "also in ${it.joinToString(", ")}" }
+                    alsoIn.takeIf { it.isNotEmpty() }?.let { L.settings.reaGroups.alsoInValue(it.joinToString(", ")) }
                 )
                 if (meta.isNotEmpty()) Text(meta.joinToString(" · "), fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
@@ -349,12 +352,12 @@ private fun GroupInfoDialog(title: String, name0: String, description0: String, 
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it.take(60) }, singleLine = true, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = description, onValueChange = { description = it.take(300) }, label = { Text("What it is for (optional)") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = name, onValueChange = { name = it.take(60) }, singleLine = true, label = { Text(L.common.name) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = description, onValueChange = { description = it.take(300) }, label = { Text(L.settings.reaGroups.whatItIsForOptional) }, minLines = 2, modifier = Modifier.fillMaxWidth())
             }
         },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onSave(name, description) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onSave(name, description) }) { Text(L.common.save) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -365,6 +368,6 @@ private fun ConfirmDialog(title: String, text: String, action: String, onDismiss
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(action, color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }

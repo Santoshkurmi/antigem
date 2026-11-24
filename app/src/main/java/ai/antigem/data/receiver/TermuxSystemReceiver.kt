@@ -8,6 +8,7 @@ import ai.antigem.data.local.TermuxStorageSetupManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 open class TermuxSystemReceiver : BroadcastReceiver() {
 
@@ -22,7 +23,7 @@ open class TermuxSystemReceiver : BroadcastReceiver() {
                         CoroutineScope(Dispatchers.Main).launch {
                             Toast.makeText(
                                 context,
-                                if (success) "Storage symlinks setup in ~/storage" else "Failed setting up storage symlinks",
+                                if (success) L.receiver.termuxSystemReceiver.storageSymlinksSetupInStorage else L.receiver.termuxSystemReceiver.failedSettingUpStorageSymlinks,
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -38,7 +39,7 @@ open class TermuxSystemReceiver : BroadcastReceiver() {
                         CoroutineScope(Dispatchers.Main).launch {
                             Toast.makeText(
                                 context,
-                                if (success) "Storage symlinks setup in ~/storage" else "Failed setting up storage symlinks",
+                                if (success) L.receiver.termuxSystemReceiver.storageSymlinksSetupInStorage else L.receiver.termuxSystemReceiver.failedSettingUpStorageSymlinks,
                                 Toast.LENGTH_SHORT
                             ).show()
                         }

@@ -30,6 +30,7 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import ai.antigem.i18n.L
 
 @Composable
 fun FileDetailsDialog(
@@ -69,43 +70,43 @@ fun FileDetailsDialog(
                 val r = if (localFile.canRead()) "r" else "-"
                 val w = if (localFile.canWrite()) "w" else "-"
                 val x = if (localFile.canExecute()) "x" else "-"
-                val readStr = if (localFile.canRead()) "Yes" else "No"
-                val writeStr = if (localFile.canWrite()) "Yes" else "No"
-                val execStr = if (localFile.canExecute()) "Yes" else "No"
-                "$r$w$x (Read: $readStr, Write: $writeStr, Exec: $execStr)"
+                val readStr = if (localFile.canRead()) L.components.fileDetails.yes else L.components.fileDetails.no
+                val writeStr = if (localFile.canWrite()) L.components.fileDetails.yes else L.components.fileDetails.no
+                val execStr = if (localFile.canExecute()) L.components.fileDetails.yes else L.components.fileDetails.no
+                L.components.fileDetails.rWXReadReadstrWrite(r, w, x, readStr, writeStr, execStr)
             } catch (_: Exception) {
-                "Read/Write Access (Bridge Managed)"
+                L.components.fileDetails.readWriteAccessBridgeManaged
             }
         } else {
-            "Read/Write Access (Bridge Managed)"
+            L.components.fileDetails.readWriteAccessBridgeManaged
         }
     }
 
     val ext = remember(name) { name.substringAfterLast('.', "").lowercase() }
     val typeName = remember(isDir, ext) {
-        if (isDir) "Folder (Directory)"
+        if (isDir) L.components.fileDetails.folderDirectory
         else when (ext) {
-            "kt", "kts" -> "Kotlin Source File (.${ext})"
-            "java" -> "Java Source File (.java)"
-            "py" -> "Python Script (.py)"
-            "js" -> "JavaScript File (.js)"
-            "ts" -> "TypeScript File (.ts)"
-            "jsx", "tsx" -> "React Component (.${ext})"
-            "html", "htm" -> "HTML Document (.${ext})"
+            "kt", "kts" -> L.components.fileDetails.kotlinSourceFileExt(ext)
+            "java" -> L.components.fileDetails.javaSourceFileJava
+            "py" -> L.components.fileDetails.pythonScriptPy
+            "js" -> L.components.fileDetails.javascriptFileJs
+            "ts" -> L.components.fileDetails.typescriptFileTs
+            "jsx", "tsx" -> L.components.fileDetails.reactComponentExt(ext)
+            "html", "htm" -> L.components.fileDetails.htmlDocumentExt(ext)
             "css", "scss", "sass" -> "Stylesheet (.${ext})"
-            "json" -> "JSON Data (.json)"
-            "xml" -> "XML Document (.xml)"
-            "yaml", "yml" -> "YAML Configuration (.${ext})"
-            "toml" -> "TOML Configuration (.toml)"
-            "md", "markdown" -> "Markdown Document (.${ext})"
-            "txt", "log" -> "Text Document (.${ext})"
-            "sh", "bash", "zsh" -> "Shell Script (.${ext})"
-            "c", "cpp", "h", "hpp" -> "C/C++ Source (.${ext})"
-            "go" -> "Go Source File (.go)"
-            "rs" -> "Rust Source File (.rs)"
-            "png", "jpg", "jpeg", "webp", "gif", "svg" -> "Image Asset (.${ext})"
-            "zip", "tar", "gz", "rar" -> "Archive File (.${ext})"
-            "" -> "File"
+            "json" -> L.components.fileDetails.jsonDataJson
+            "xml" -> L.components.fileDetails.xmlDocumentXml
+            "yaml", "yml" -> L.components.fileDetails.yamlConfigurationExt(ext)
+            "toml" -> L.components.fileDetails.tomlConfigurationToml
+            "md", "markdown" -> L.components.fileDetails.markdownDocumentExt(ext)
+            "txt", "log" -> L.components.fileDetails.textDocumentExt(ext)
+            "sh", "bash", "zsh" -> L.components.fileDetails.shellScriptExt(ext)
+            "c", "cpp", "h", "hpp" -> L.components.fileDetails.cCSourceExt(ext)
+            "go" -> L.components.fileDetails.goSourceFileGo
+            "rs" -> L.components.fileDetails.rustSourceFileRs
+            "png", "jpg", "jpeg", "webp", "gif", "svg" -> L.components.fileDetails.imageAssetExt(ext)
+            "zip", "tar", "gz", "rar" -> L.components.fileDetails.archiveFileExt(ext)
+            "" -> L.common.file
             else -> "${ext.uppercase()} File (.$ext)"
         }
     }
@@ -164,7 +165,7 @@ fun FileDetailsDialog(
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                         ) {
                             Text(
-                                text = if (isDir) "DIRECTORY" else "FILE",
+                                text = if (isDir) L.components.fileDetails.directory else L.components.fileDetails.file,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -182,7 +183,7 @@ fun FileDetailsDialog(
                 // Detail Items
                 DetailRow(
                     icon = Icons.Outlined.Category,
-                    label = "Type",
+                    label = L.components.fileDetails.type,
                     value = typeName
                 )
 
@@ -190,14 +191,14 @@ fun FileDetailsDialog(
 
                 DetailRow(
                     icon = Icons.Outlined.FolderOpen,
-                    label = "Location",
+                    label = L.common.location,
                     value = path,
                     isMonospace = true,
                     actionIcon = Icons.Default.ContentCopy,
-                    actionDescription = "Copy Path",
+                    actionDescription = L.components.fileDetails.copyPath,
                     onActionClick = {
                         clipboardManager.setText(AnnotatedString(path))
-                        Toast.makeText(context, "Path copied to clipboard", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, L.components.fileDetails.pathCopiedToClipboard, Toast.LENGTH_SHORT).show()
                     }
                 )
 
@@ -206,7 +207,7 @@ fun FileDetailsDialog(
                 val parentPath = remember(path) { File(path).parent ?: "/" }
                 DetailRow(
                     icon = Icons.Outlined.DriveFileMove,
-                    label = "Parent Directory",
+                    label = L.components.fileDetails.parentDirectory,
                     value = parentPath,
                     isMonospace = true
                 )
@@ -217,14 +218,14 @@ fun FileDetailsDialog(
                     if (isDir) {
                         if (childCount != null) "$childCount items"
                         else if (resolvedSize > 0) formatDetailedFileSize(resolvedSize)
-                        else "Directory"
+                        else L.components.fileDetails.directory2
                     } else {
                         formatDetailedFileSize(resolvedSize)
                     }
                 }
                 DetailRow(
                     icon = Icons.Outlined.DataUsage,
-                    label = "Size",
+                    label = L.common.size,
                     value = sizeText
                 )
 
@@ -232,7 +233,7 @@ fun FileDetailsDialog(
 
                 DetailRow(
                     icon = Icons.Outlined.Security,
-                    label = "Permissions",
+                    label = L.common.permissions,
                     value = permissionsInfo,
                     isMonospace = true
                 )
@@ -242,7 +243,7 @@ fun FileDetailsDialog(
                     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy · hh:mm:ss a", Locale.getDefault()) }
                     DetailRow(
                         icon = Icons.Outlined.Schedule,
-                        label = "Last Modified",
+                        label = L.components.fileDetails.lastModified,
                         value = dateFormat.format(Date(resolvedModTime))
                     )
                 }
@@ -255,7 +256,7 @@ fun FileDetailsDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Close", fontWeight = FontWeight.SemiBold)
+                        Text(L.common.close, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -329,7 +330,7 @@ private fun DetailRow(
 }
 
 fun formatDetailedFileSize(size: Long): String {
-    if (size <= 0) return "0 B (0 bytes)"
+    if (size <= 0) return L.components.fileDetails.n0B0Bytes
     val units = arrayOf("B", "KB", "MB", "GB", "TB")
     val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt().coerceIn(0, units.size - 1)
     val formattedVal = DecimalFormat("#,##0.#").format(size / Math.pow(1024.0, digitGroups.toDouble()))

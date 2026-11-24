@@ -53,6 +53,7 @@ import ai.antigem.data.daemon.IdeDaemonManager
 import ai.antigem.data.files.*
 import ai.antigem.ui.components.MarkdownDocViewerModal
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** Files picked with Copy / Cut, shared by every explorer (copy in the Files screen, paste in a picker). */
 object ExplorerClipboard {
@@ -131,7 +132,7 @@ val LocalExplorerSide = staticCompositionLocalOf { ExplorerSide.BRIDGE }
 
 /** The bridge's machine as the tab names it: the PC in use (Connect to PC), or the server. */
 private fun bridgeTabName(): String =
-    ai.antigem.data.preferences.AuthPreferences.pcOverride?.pcName?.takeIf { it.isNotBlank() } ?: "Server"
+    ai.antigem.data.preferences.AuthPreferences.pcOverride?.pcName?.takeIf { it.isNotBlank() } ?: L.common.server
 
 private data class PendingConflict(val names: List<String>, val move: Boolean, val run: (ConflictPolicy) -> Unit)
 
@@ -153,11 +154,11 @@ fun FileExplorer(
     isVisible: Boolean = true,
     inDialog: Boolean = false,
     title: String? = null,
-    confirmLabel: String = "Choose this folder",
+    confirmLabel: String = L.files.fileExplorer.chooseThisFolder,
     onConfirmFolder: ((String) -> Unit)? = null,
     onPickFile: ((ExplorerEntry) -> Unit)? = null,
     onPickFiles: ((List<ExplorerEntry>) -> Unit)? = null,
-    pickFilesLabel: String = "Pick",
+    pickFilesLabel: String = L.files.fileExplorer.pick,
     saveFileName: String? = null,
     onSave: ((folder: String, name: String) -> Unit)? = null,
     onOpenedInIde: (() -> Unit)? = null,
@@ -284,7 +285,7 @@ fun FileExplorer(
             }
             ExplorerPrefs.addRecentFolder(l.path)
         }.onFailure {
-            if (!loaded) loadError = it.message else snack(it.message ?: "Cannot open folder")
+            if (!loaded) loadError = it.message else snack(it.message ?: L.files.fileExplorer.cannotOpenFolder)
         }
         return res.isSuccess
     }
@@ -304,7 +305,7 @@ fun FileExplorer(
                 loadError = null
                 loaded = true
                 selected.keys.retainAll(keep.intersect(l.entries.map { it.path }.toSet()))
-            }.onFailure { if (!silent) snack(it.message ?: "Refresh failed") }
+            }.onFailure { if (!silent) snack(it.message ?: L.files.fileExplorer.refreshFailed) }
             refreshing = false
         }
     }
@@ -376,7 +377,7 @@ fun FileExplorer(
             if (!load(path, null) && path != "~") {
                 // the remembered folder is gone: start at home and say why
                 val missing = path
-                if (load("~", null)) snack("\"$missing\" is not available. Showing Home.")
+                if (load("~", null)) snack(L.files.fileExplorer.missingIsNotAvailableShowingHome(missing))
             }
         } else {
             reload()
@@ -400,7 +401,7 @@ fun FileExplorer(
         // consume() just changed navRequest, which cancels this effect: load in the explorer's own scope
         scope.launch {
             if (load(target, pushFrom = from)) return@launch
-            snack("Cannot open $target")
+            snack(L.files.fileExplorer.cannotOpenTarget(target))
             // nothing shown yet: fall back to home instead of an empty screen
             if (!loaded && target != "~") load("~", null)
         }
@@ -429,7 +430,7 @@ fun FileExplorer(
             val uri = FileOpener.uriFor(context, e.path, e.size, local = side == ExplorerSide.PHONE) { busyProgress = it }
             busy = null
             uri.onSuccess { FileOpener.view(context, it, e.name, chooser)?.let(::snack) }
-                .onFailure { snack(it.message ?: "Could not open ${e.name}") }
+                .onFailure { snack(it.message ?: L.files.fileExplorer.couldNotOpenName(e.name)) }
         }
     }
 
@@ -442,7 +443,7 @@ fun FileExplorer(
             val uri = FileOpener.uriFor(context, e.path, e.size, local = side == ExplorerSide.PHONE) { busyProgress = it }
             busy = null
             uri.onSuccess { FileOpener.share(context, listOf(it to e.name))?.let(::snack) }
-                .onFailure { snack(it.message ?: "Could not share ${e.name}") }
+                .onFailure { snack(it.message ?: L.files.fileExplorer.couldNotShareName(e.name)) }
         }
     }
 
@@ -470,7 +471,7 @@ fun FileExplorer(
                 val content = if (side == ExplorerSide.PHONE) runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { java.io.File(e.path).readText() } }.getOrNull()
                     else IdeApiClient.readFile(e.path)
                 busy = null
-                if (content == null) snack("Cannot read ${e.name}") else markdownDoc = e.path to content
+                if (content == null) snack(L.files.fileExplorer.cannotReadName(e.name)) else markdownDoc = e.path to content
             }
         } else {
             archiveFor = e
@@ -525,7 +526,7 @@ fun FileExplorer(
             }
             val n = items.size
             val noun = if (n == 1) "\"${items.first().name}\"" else "$n items"
-            val where = if (!across) "" else if (to == ExplorerSide.PHONE) " to this phone" else " to ${bridgeTabName()}"
+            val where = if (!across) "" else if (to == ExplorerSide.PHONE) L.files.fileExplorer.toThisPhone else " to ${bridgeTabName()}"
             runOp(if (move) "Moving $noun$where…" else "Copying $noun$where…", {
                 if (across) CrossTransfer.run(from, items, dest, move, policy ?: ConflictPolicy.RENAME) { busyProgress = it }
                 else ExplorerSource.of(to).transfer(items.map { it.path }, dest, move, policy ?: ConflictPolicy.RENAME)
@@ -533,9 +534,9 @@ fun FileExplorer(
                 if (r.ok) {
                     if (ExplorerClipboard.entries.map { it.path }.toSet() == items.map { it.path }.toSet()) ExplorerClipboard.clear()
                     val place = if (dest == path && to == side) "here" else "to ${dest.trimEnd('/').substringAfterLast('/')}"
-                    snack("${if (move) "Moved" else "Copied"} $noun $place" + if (across) (if (to == ExplorerSide.PHONE) " on this phone" else " on ${bridgeTabName()}") else "")
+                    snack("${if (move) "Moved" else "Copied"} $noun $place" + if (across) (if (to == ExplorerSide.PHONE) L.files.fileExplorer.onThisPhone else " on ${bridgeTabName()}") else "")
                 } else if (r.count > 0) {
-                    snack("${r.count} done, ${r.failed} failed: ${r.error ?: ""}")
+                    snack(L.files.fileExplorer.rcountDoneFailedFailedValue(r.count, r.failed, r.error ?: ""))
                 }
             }
         }
@@ -543,19 +544,19 @@ fun FileExplorer(
 
     fun shareEntries(items: List<ExplorerEntry>) {
         val files = items.filter { !it.isDir }
-        if (files.isEmpty()) { snack("Folders cannot be shared. Compress them to ZIP first."); return }
+        if (files.isEmpty()) { snack(L.files.fileExplorer.foldersCannotBeSharedCompressThem); return }
         scope.launch {
-            busy = "Preparing to share…"
+            busy = L.files.fileExplorer.preparingToShare
             val uris = files.mapNotNull { f -> FileOpener.uriFor(context, f.path, f.size, local = side == ExplorerSide.PHONE).getOrNull()?.let { it to f.name } }
             busy = null
-            if (uris.isEmpty()) snack("Could not prepare files to share") else FileOpener.share(context, uris)?.let(::snack)
+            if (uris.isEmpty()) snack(L.files.fileExplorer.couldNotPrepareFilesToShare) else FileOpener.share(context, uris)?.let(::snack)
         }
     }
 
     fun extract(e: ExplorerEntry, targetDir: String?) {
         runOp("Extracting ${e.name}…", { src().extract(e.path, targetDir) }) { r ->
             if (r.ok && r.path != null) {
-                val res = snackbar.showSnackbar("Extracted ${r.count} files", actionLabel = "Open", withDismissAction = true, duration = SnackbarDuration.Long)
+                val res = snackbar.showSnackbar(L.files.fileExplorer.extractedRcountFiles(r.count), actionLabel = L.common.open, withDismissAction = true, duration = SnackbarDuration.Long)
                 if (res == SnackbarResult.ActionPerformed) go(r.path)
             }
         }
@@ -608,23 +609,23 @@ fun FileExplorer(
                             allSelected = selected.size == visible.size && visible.isNotEmpty(),
                             onClear = { selected.clear() },
                             onSelectAll = { if (selected.size == visible.size) selected.clear() else visible.forEach { selected[it.path] = it } },
-                            onCopy = { ExplorerClipboard.set(selected.values.toList(), move = false, side); selected.clear(); snack(if (phoneTab) "Copied. Open a folder (either tab) and tap Paste." else "Copied. Open a folder and tap Paste.") },
-                            onCut = { ExplorerClipboard.set(selected.values.toList(), move = true, side); selected.clear(); snack(if (phoneTab) "Cut. Open a folder (either tab) and tap Paste." else "Cut. Open a folder and tap Paste.") },
+                            onCopy = { ExplorerClipboard.set(selected.values.toList(), move = false, side); selected.clear(); snack(if (phoneTab) L.files.fileExplorer.copiedOpenAFolderEitherTab else L.files.fileExplorer.copiedOpenAFolderAndTap) },
+                            onCut = { ExplorerClipboard.set(selected.values.toList(), move = true, side); selected.clear(); snack(if (phoneTab) L.files.fileExplorer.cutOpenAFolderEitherTab else L.files.fileExplorer.cutOpenAFolderAndTap) },
                             onDelete = { deleteTargets = selected.values.toList() },
                             menuOpen = selMenuOpen,
                             onMenu = { selMenuOpen = it },
                             menu = {
                                 val sel = selected.values.toList()
-                                DropdownMenuItem(text = { Text("Share") }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { selMenuOpen = false; shareEntries(sel) })
-                                DropdownMenuItem(text = { Text("Compress to ZIP") }, leadingIcon = { Icon(Icons.Outlined.FolderZip, null) }, onClick = { selMenuOpen = false; compressTargets = sel })
-                                DropdownMenuItem(text = { Text("Copy to…") }, leadingIcon = { Icon(Icons.Outlined.FileCopy, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.COPY, sel, side) })
-                                DropdownMenuItem(text = { Text("Move to…") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.MOVE, sel, side) })
+                                DropdownMenuItem(text = { Text(L.common.share) }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = { selMenuOpen = false; shareEntries(sel) })
+                                DropdownMenuItem(text = { Text(L.files.fileExplorer.compressToZip) }, leadingIcon = { Icon(Icons.Outlined.FolderZip, null) }, onClick = { selMenuOpen = false; compressTargets = sel })
+                                DropdownMenuItem(text = { Text(L.files.fileExplorer.copyTo) }, leadingIcon = { Icon(Icons.Outlined.FileCopy, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.COPY, sel, side) })
+                                DropdownMenuItem(text = { Text(L.files.fileExplorer.moveTo) }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, null) }, onClick = { selMenuOpen = false; destRequest = DestRequest(DestOp.MOVE, sel, side) })
                                 if (sel.size == 1) {
-                                    DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) }, onClick = { selMenuOpen = false; renameTarget = sel.first() })
-                                    DropdownMenuItem(text = { Text("Details") }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = { selMenuOpen = false; detailsFor = sel.first() })
+                                    DropdownMenuItem(text = { Text(L.common.rename) }, leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) }, onClick = { selMenuOpen = false; renameTarget = sel.first() })
+                                    DropdownMenuItem(text = { Text(L.common.details) }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = { selMenuOpen = false; detailsFor = sel.first() })
                                 }
-                                DropdownMenuItem(text = { Text("Copy paths") }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = {
-                                    selMenuOpen = false; copyText(context, sel.joinToString("\n") { it.path }); snack("Paths copied")
+                                DropdownMenuItem(text = { Text(L.files.fileExplorer.copyPaths) }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = {
+                                    selMenuOpen = false; copyText(context, sel.joinToString("\n") { it.path }); snack(L.files.fileExplorer.pathsCopied)
                                 })
                             }
                         )
@@ -642,7 +643,7 @@ fun FileExplorer(
                                         deepLoading = true
                                         src().search(path, query.trim(), settings.showHidden)
                                             .onSuccess { deepResults = it.first; deepTruncated = it.second }
-                                            .onFailure { snack(it.message ?: "Search failed") }
+                                            .onFailure { snack(it.message ?: L.files.fileExplorer.searchFailed) }
                                         deepLoading = false
                                     }
                                 }
@@ -655,7 +656,7 @@ fun FileExplorer(
                                         deepLoading = true
                                         src().search(path, query.trim(), settings.showHidden)
                                             .onSuccess { deepResults = it.first; deepTruncated = it.second }
-                                            .onFailure { snack(it.message ?: "Search failed") }
+                                            .onFailure { snack(it.message ?: L.files.fileExplorer.searchFailed) }
                                         deepLoading = false
                                     }
                                 }
@@ -663,44 +664,44 @@ fun FileExplorer(
                         )
                         else -> Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { if (!goBack()) onClose() }) {
-                                Icon(if (inDialog && history.isEmpty()) Icons.Outlined.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(if (inDialog && history.isEmpty()) Icons.Outlined.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = L.common.back)
                             }
                             Column(Modifier.weight(1f).padding(start = 2.dp)) {
                                 if (title != null) Text(title, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(folderName, fontSize = if (title != null) 18.sp else 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
+                            IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, contentDescription = L.common.search) }
                             // phone-only mode: tabs on demand (server / PC mode always shows them)
                             if (multiTab && !phoneTab) {
                                 IconButton(onClick = { setTabsOn(!tabMode) }) {
-                                    Icon(Icons.Outlined.Tab, contentDescription = if (tabMode) "Turn off tabs" else "Open folders in tabs",
+                                    Icon(Icons.Outlined.Tab, contentDescription = if (tabMode) L.files.fileExplorer.turnOffTabs else L.files.fileExplorer.openFoldersInTabs,
                                         tint = if (tabMode) MaterialTheme.colorScheme.primary else LocalContentColor.current)
                                 }
                             }
                             IconButton(onClick = { ExplorerPrefs.update { it.copy(grid = !it.grid) } }) {
-                                Icon(if (settings.grid) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView, contentDescription = if (settings.grid) "List view" else "Grid view")
+                                Icon(if (settings.grid) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView, contentDescription = if (settings.grid) L.files.fileExplorer.listView else L.files.fileExplorer.gridView)
                             }
                             Box {
-                                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = "More") }
+                                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = L.common.more) }
                                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, shape = RoundedCornerShape(14.dp)) {
-                                    DropdownMenuItem(text = { Text("New folder") }, leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) }, onClick = { menuOpen = false; newIsDir = true })
-                                    DropdownMenuItem(text = { Text("New file") }, leadingIcon = { Icon(Icons.Outlined.NoteAdd, null) }, onClick = { menuOpen = false; newIsDir = false })
+                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.newFolder) }, leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) }, onClick = { menuOpen = false; newIsDir = true })
+                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.newFile) }, leadingIcon = { Icon(Icons.Outlined.NoteAdd, null) }, onClick = { menuOpen = false; newIsDir = false })
                                     HorizontalDivider()
-                                    DropdownMenuItem(text = { Text("Select all") }, leadingIcon = { Icon(Icons.Outlined.SelectAll, null) }, onClick = { menuOpen = false; visible.forEach { selected[it.path] = it } })
+                                    DropdownMenuItem(text = { Text(L.common.selectAll) }, leadingIcon = { Icon(Icons.Outlined.SelectAll, null) }, onClick = { menuOpen = false; visible.forEach { selected[it.path] = it } })
                                     DropdownMenuItem(
-                                        text = { Text("Show hidden files") },
+                                        text = { Text(L.files.fileExplorer.showHiddenFiles) },
                                         leadingIcon = { Icon(if (settings.showHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) },
                                         trailingIcon = { Checkbox(checked = settings.showHidden, onCheckedChange = null) },
                                         onClick = { ExplorerPrefs.update { it.copy(showHidden = !it.showHidden) } }
                                     )
-                                    DropdownMenuItem(text = { Text("Sort & view…") }, leadingIcon = { Icon(Icons.Outlined.Sort, null) }, onClick = { menuOpen = false; viewOptionsOpen = true })
-                                    DropdownMenuItem(text = { Text("Refresh") }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) }, onClick = { menuOpen = false; reload(silent = false) })
+                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.sortView) }, leadingIcon = { Icon(Icons.Outlined.Sort, null) }, onClick = { menuOpen = false; viewOptionsOpen = true })
+                                    DropdownMenuItem(text = { Text(L.common.refresh) }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) }, onClick = { menuOpen = false; reload(silent = false) })
                                     HorizontalDivider()
                                     if (onOpenFolderInIde != null && side == ExplorerSide.BRIDGE) {
-                                        DropdownMenuItem(text = { Text("Open this folder in IDE") }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = { menuOpen = false; onOpenFolderInIde(path) })
+                                        DropdownMenuItem(text = { Text(L.files.fileExplorer.openThisFolderInIde) }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = { menuOpen = false; onOpenFolderInIde(path) })
                                     }
-                                    DropdownMenuItem(text = { Text("Copy folder path") }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = { menuOpen = false; copyText(context, path); snack("Path copied") })
-                                    DropdownMenuItem(text = { Text("Folder details") }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = {
+                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.copyFolderPath) }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = { menuOpen = false; copyText(context, path); snack(L.files.fileExplorer.pathCopied) })
+                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.folderDetails) }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = {
                                         menuOpen = false
                                         detailsFor = ExplorerEntry(name = path.trimEnd('/').substringAfterLast('/').ifBlank { "/" }, path = path, isDir = true, childCount = entries.size)
                                     })
@@ -712,8 +713,8 @@ fun FileExplorer(
                         FolderTabs(
                             tabs = tabs.map { t ->
                                 val label = when {
-                                    t.path == "~" -> if (t.side == ExplorerSide.PHONE) "Phone" else "Home"
-                                    t.side == ExplorerSide.PHONE && t.path.trimEnd('/') == PhoneSource.home -> "Internal storage"
+                                    t.path == "~" -> if (t.side == ExplorerSide.PHONE) L.files.fileExplorer.phone else L.common.home
+                                    t.side == ExplorerSide.PHONE && t.path.trimEnd('/') == PhoneSource.home -> L.files.fileExplorer.internalStorage
                                     else -> t.path.trimEnd('/').substringAfterLast('/').ifBlank { "/" }
                                 }
                                 FolderTab(t.id, label, t.side)
@@ -736,7 +737,7 @@ fun FileExplorer(
                                 scope.launch { roots = src().roots().second }
                             },
                             onCrumb = { c -> if (c.path != path) go(c.path) },
-                            onCopyPath = { copyText(context, path); snack("Path copied") }
+                            onCopyPath = { copyText(context, path); snack(L.files.fileExplorer.pathCopied) }
                         )
                     }
                     if (busy != null || loading || deepLoading) {
@@ -776,7 +777,7 @@ fun FileExplorer(
                         firstName = ExplorerClipboard.entries.first().name,
                         move = ExplorerClipboard.move,
                         enabled = busy == null && loaded && pasteable,
-                        fromLabel = if (clipSide == side) null else if (clipSide == ExplorerSide.PHONE) "from this phone" else "from ${bridgeTabName()}",
+                        fromLabel = if (clipSide == side) null else if (clipSide == ExplorerSide.PHONE) L.files.fileExplorer.fromThisPhone else "from ${bridgeTabName()}",
                         onPaste = { transfer(ExplorerClipboard.entries.toList(), path, ExplorerClipboard.move, null, from = clipSide, to = side) },
                         onCancel = { ExplorerClipboard.clear() }
                     )
@@ -812,7 +813,7 @@ fun FileExplorer(
                     shape = RoundedCornerShape(18.dp),
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
-                ) { Icon(Icons.Outlined.Add, contentDescription = "Create") }
+                ) { Icon(Icons.Outlined.Add, contentDescription = L.common.create) }
             }
         }
     ) { padding ->
@@ -830,33 +831,33 @@ fun FileExplorer(
             }
             when {
                 !storageOk && (!loaded || entries.isEmpty()) -> EmptyState(
-                    Icons.Outlined.PhoneAndroid, "Allow access to this phone's files",
-                    "AntiGem needs \"All files access\" to show and copy this phone's storage."
+                    Icons.Outlined.PhoneAndroid, L.files.fileExplorer.allowAccessToThisPhonesFiles,
+                    L.files.fileExplorer.antigemNeedsAllFilesAccessTo
                 ) {
-                    Button(onClick = { ai.antigem.data.local.TermuxStorageSetupManager.requestStoragePermission(context) }) { Text("Allow") }
+                    Button(onClick = { ai.antigem.data.local.TermuxStorageSetupManager.requestStoragePermission(context) }) { Text(L.common.allow) }
                 }
                 !loaded && loadError == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                !loaded -> EmptyState(Icons.Outlined.CloudOff, "Files are not available", loadError ?: "") {
+                !loaded -> EmptyState(Icons.Outlined.CloudOff, L.files.fileExplorer.filesAreNotAvailable, loadError ?: "") {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { scope.launch { loadError = null; load(path, null) } }) { Text("Retry") }
-                        OutlinedButton(onClick = { scope.launch { loadError = null; load("~", null) } }) { Text("Go home") }
+                        Button(onClick = { scope.launch { loadError = null; load(path, null) } }) { Text(L.common.retry) }
+                        OutlinedButton(onClick = { scope.launch { loadError = null; load("~", null) } }) { Text(L.files.fileExplorer.goHome) }
                     }
                 }
                 searching && deep && deepLoading && deepResults == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("Searching all subfolders of $folderName…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(L.files.fileExplorer.searchingAllSubfoldersOfFoldername(folderName), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 searching && visible.isEmpty() && query.isNotBlank() -> EmptyState(
-                    Icons.Outlined.SearchOff, "No matches",
-                    if (deep) "Nothing named like \"$query\" below $folderName." else "Nothing in this folder. Press search on the keyboard to look in all subfolders."
+                    Icons.Outlined.SearchOff, L.files.fileExplorer.noMatches,
+                    if (deep) L.files.fileExplorer.nothingNamedLikeQueryBelowFoldername(query, folderName) else L.files.fileExplorer.nothingInThisFolderPressSearch
                 )
                 visible.isEmpty() && !searching -> EmptyState(
                     Icons.Outlined.FolderOpen,
-                    if (entries.isEmpty()) "This folder is empty" else "Only hidden files here",
-                    if (entries.isEmpty()) "Tap + to create a file or folder." else "Turn on \"Show hidden files\" in the menu to see them."
+                    if (entries.isEmpty()) L.files.fileExplorer.thisFolderIsEmpty else L.files.fileExplorer.onlyHiddenFilesHere,
+                    if (entries.isEmpty()) L.files.fileExplorer.tapToCreateAFileOr else L.files.fileExplorer.turnOnShowHiddenFilesIn
                 )
                 else -> Box(Modifier.fillMaxSize()) {
                     // iOS bounce at both ends, also when the folder fits on screen. Pull-to-refresh rides on it:
@@ -881,7 +882,7 @@ fun FileExplorer(
                         append(if (files == 1) "1 file" else "$files files")
                         val bytes = visible.filter { !it.isDir }.sumOf { it.size }
                         if (bytes > 0) append("  ·  ${FileKinds.formatSize(bytes)}")
-                        if (searching && deep && deepTruncated) append("  ·  more results not shown")
+                        if (searching && deep && deepTruncated) append(L.files.fileExplorer.moreResultsNotShown)
                     }
                     val rowClick: (ExplorerEntry) -> Unit = { e -> if (selecting) toggle(e) else openEntry(e) }
                     val rowLong: (ExplorerEntry) -> Unit = { e -> toggle(e) }
@@ -985,7 +986,7 @@ fun FileExplorer(
             settings = settings,
             onChange = { ExplorerPrefs.update(it) },
             rememberedCount = remembered,
-            onForgetChoices = { ExplorerPrefs.forgetChoices(); remembered = 0; snack("\"Always open with\" choices cleared") },
+            onForgetChoices = { ExplorerPrefs.forgetChoices(); remembered = 0; snack(L.files.fileExplorer.alwaysOpenWithChoicesCleared) },
             onDismiss = { viewOptionsOpen = false }
         )
     }
@@ -1002,26 +1003,26 @@ fun FileExplorer(
 
     newIsDir?.let { isDir ->
         NameDialog(
-            title = if (isDir) "New folder" else "New file",
+            title = if (isDir) L.files.fileExplorer.newFolder else L.files.fileExplorer.newFile,
             icon = if (isDir) Icons.Outlined.CreateNewFolder else Icons.Outlined.NoteAdd,
             initial = "",
-            confirmLabel = "Create",
+            confirmLabel = L.common.create,
             selectStem = false,
             existingNames = existingNames,
-            helper = if (isDir) "Created in $folderName" else "Include the extension, e.g. main.py",
+            helper = if (isDir) L.files.fileExplorer.createdInFoldername(folderName) else L.files.fileExplorer.includeTheExtensionEGMain,
             onConfirm = { name ->
                 val r = src().create(path, name, isDir)
                 if (r.ok) {
                     newIsDir = null
                     reload()
                     if (isDir) {
-                        snack("Created folder $name")
+                        snack(L.files.fileExplorer.createdFolderName(name))
                     } else if (ideAvailable && onSave == null && onPickFile == null) {
                         scope.launch {
-                            val res = snackbar.showSnackbar("Created $name", actionLabel = "Edit", withDismissAction = true)
+                            val res = snackbar.showSnackbar(L.files.fileExplorer.createdName(name), actionLabel = L.common.edit, withDismissAction = true)
                             if (res == SnackbarResult.ActionPerformed) openInIde(ExplorerEntry(name, r.path ?: "$path/$name", false))
                         }
-                    } else snack("Created $name")
+                    } else snack(L.files.fileExplorer.createdName(name))
                     null
                 } else r.error
             },
@@ -1037,7 +1038,7 @@ fun FileExplorer(
                     newProjectOpen = false
                     onProjectCreated(created)
                     null
-                } else "Could not create the project (does it already exist?)"
+                } else L.files.fileExplorer.couldNotCreateTheProjectDoes
             },
             onDismiss = { newProjectOpen = false }
         )
@@ -1054,8 +1055,8 @@ fun FileExplorer(
             onOpenInIde = { close(); openInIde(e) },
             onOpenFolderInIde = { close(); onOpenFolderInIde?.invoke(e.path) },
             onShare = { close(); shareEntries(listOf(e)) },
-            onCopy = { close(); ExplorerClipboard.set(listOf(e), move = false, side); snack(if (phoneTab) "Copied. Open a folder (either tab) and tap Paste." else "Copied. Open a folder and tap Paste.") },
-            onCut = { close(); ExplorerClipboard.set(listOf(e), move = true, side); snack(if (phoneTab) "Cut. Open a folder (either tab) and tap Paste." else "Cut. Open a folder and tap Paste.") },
+            onCopy = { close(); ExplorerClipboard.set(listOf(e), move = false, side); snack(if (phoneTab) L.files.fileExplorer.copiedOpenAFolderEitherTab else L.files.fileExplorer.copiedOpenAFolderAndTap) },
+            onCut = { close(); ExplorerClipboard.set(listOf(e), move = true, side); snack(if (phoneTab) L.files.fileExplorer.cutOpenAFolderEitherTab else L.files.fileExplorer.cutOpenAFolderAndTap) },
             onCopyTo = { close(); destRequest = DestRequest(DestOp.COPY, listOf(e), side) },
             onMoveTo = { close(); destRequest = DestRequest(DestOp.MOVE, listOf(e), side) },
             onRename = { close(); renameTarget = e },
@@ -1064,7 +1065,7 @@ fun FileExplorer(
             onExtractHere = { close(); extract(e, null) },
             onExtractTo = { close(); destRequest = DestRequest(DestOp.EXTRACT, listOf(e)) },
             onViewArchive = { close(); archiveFor = e },
-            onCopyPath = { close(); copyText(context, e.path); snack("Path copied") },
+            onCopyPath = { close(); copyText(context, e.path); snack(L.files.fileExplorer.pathCopied) },
             onDetails = { close(); detailsFor = e },
             onDelete = { close(); deleteTargets = listOf(e) }
         )
@@ -1103,8 +1104,8 @@ fun FileExplorer(
                         .filter { tab -> targets.any { t -> tab == t.path || (t.isDir && tab.startsWith(t.path.trimEnd('/') + "/")) } }
                     gone.forEach { IdeDaemonManager.closeTab(it) }
                     ExplorerClipboard.entries.removeAll { c -> targets.any { c.path == it.path || c.path.startsWith(it.path + "/") } }
-                    if (r.ok) snack("Deleted $noun")
-                    else if (r.count > 0) snack("Deleted ${r.count}, ${r.failed} failed: ${r.error}")
+                    if (r.ok) snack(L.files.fileExplorer.deletedNoun(noun))
+                    else if (r.count > 0) snack(L.files.fileExplorer.deletedRcountFailedFailedError(r.count, r.failed, r.error))
                 }
             }
         )
@@ -1112,10 +1113,10 @@ fun FileExplorer(
 
     renameTarget?.let { e ->
         NameDialog(
-            title = "Rename",
+            title = L.common.rename,
             icon = Icons.Outlined.DriveFileRenameOutline,
             initial = e.name,
-            confirmLabel = "Rename",
+            confirmLabel = L.common.rename,
             selectStem = !e.isDir,
             existingNames = existingNames,
             onConfirm = { name ->
@@ -1126,7 +1127,7 @@ fun FileExplorer(
                         val newPath = r.path ?: "${parentOf(e.path)}/$name"
                         if (!e.isDir) IdeDaemonManager.renameTab(e.path, newPath, name)
                         reload()
-                        snack("Renamed to $name")
+                        snack(L.files.fileExplorer.renamedToName(name))
                         null
                     } else r.error
                 }
@@ -1138,17 +1139,17 @@ fun FileExplorer(
     compressTargets?.let { targets ->
         val suggested = if (targets.size == 1) targets.first().name.substringBeforeLast('.').ifBlank { targets.first().name } + ".zip" else "$folderName.zip"
         NameDialog(
-            title = if (targets.size == 1) "Compress \"${targets.first().name}\"" else "Compress ${targets.size} items",
+            title = if (targets.size == 1) "Compress \"${targets.first().name}\"" else L.files.fileExplorer.compressTargetscountItems(targets.size),
             icon = Icons.Outlined.FolderZip,
             initial = suggested,
-            confirmLabel = "Compress",
+            confirmLabel = L.files.fileExplorer.compress,
             selectStem = true,
             existingNames = emptySet(),
-            helper = "Saved in $folderName (renamed if the name is taken)",
+            helper = L.files.fileExplorer.savedInFoldernameRenamedIfThe(folderName),
             onConfirm = { name ->
                 compressTargets = null
-                runOp("Compressing…", { src().compress(targets.map { it.path }, "$path/$name") }) { r ->
-                    if (r.ok) snack("Created ${r.path?.substringAfterLast('/') ?: name} (${r.count} files)")
+                runOp(L.files.fileExplorer.compressing, { src().compress(targets.map { it.path }, "$path/$name") }) { r ->
+                    if (r.ok) snack(L.files.fileExplorer.createdValueRcountFiles(r.path?.substringAfterLast('/') ?: name, r.count))
                 }
                 null
             },
@@ -1157,7 +1158,7 @@ fun FileExplorer(
     }
 
     detailsFor?.let { e ->
-        DetailsSheet(entry = e, onCopyPath = { copyText(context, it); snack("Path copied") }, onDismiss = { detailsFor = null }, side = side)
+        DetailsSheet(entry = e, onCopyPath = { copyText(context, it); snack(L.files.fileExplorer.pathCopied) }, onDismiss = { detailsFor = null }, side = side)
     }
 
     archiveFor?.let { e ->
@@ -1200,11 +1201,11 @@ fun FileExplorer(
             onDismissRequest = { confirmOverwrite = null },
             icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text("Replace \"$name\"?", fontWeight = FontWeight.SemiBold) },
-            text = { Text("A file with this name already exists in $folderName. Saving replaces its contents.") },
+            text = { Text(L.files.fileExplorer.aFileWithThisNameAlready(folderName)) },
             confirmButton = {
-                TextButton(onClick = { confirmOverwrite = null; onSave?.invoke(path, name) }) { Text("Replace", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { confirmOverwrite = null; onSave?.invoke(path, name) }) { Text(L.common.replace, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmOverwrite = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmOverwrite = null }) { Text(L.common.cancel) } }
         )
     }
 
@@ -1218,14 +1219,14 @@ fun FileExplorer(
             allowPhoneTab = phoneTab && req.op != DestOp.EXTRACT,
             initialSide = req.side,
             title = when (req.op) {
-                DestOp.COPY -> "Copy $noun to"
-                DestOp.MOVE -> "Move $noun to"
-                DestOp.EXTRACT -> "Extract $noun to"
+                DestOp.COPY -> L.files.fileExplorer.copyNounTo(noun)
+                DestOp.MOVE -> L.files.fileExplorer.moveNounTo(noun)
+                DestOp.EXTRACT -> L.files.fileExplorer.extractNounTo(noun)
             },
             confirmLabel = when (req.op) {
-                DestOp.COPY -> "Copy here"
-                DestOp.MOVE -> "Move here"
-                DestOp.EXTRACT -> "Extract here"
+                DestOp.COPY -> L.files.fileExplorer.copyHere
+                DestOp.MOVE -> L.files.fileExplorer.moveHere
+                DestOp.EXTRACT -> L.common.extractHere
             },
             showClipboard = false,
             onConfirmFolder = {},
@@ -1249,11 +1250,11 @@ fun FileExplorerDialog(
     onDismiss: () -> Unit,
     initialPath: String? = null,
     title: String? = null,
-    confirmLabel: String = "Choose this folder",
+    confirmLabel: String = L.files.fileExplorer.chooseThisFolder,
     onConfirmFolder: ((String) -> Unit)? = null,
     onPickFile: ((ExplorerEntry) -> Unit)? = null,
     onPickFiles: ((List<ExplorerEntry>) -> Unit)? = null,
-    pickFilesLabel: String = "Pick",
+    pickFilesLabel: String = L.files.fileExplorer.pick,
     saveFileName: String? = null,
     onSave: ((folder: String, name: String) -> Unit)? = null,
     onOpenedInIde: (() -> Unit)? = null,
@@ -1307,9 +1308,9 @@ private fun PickSelectionBar(
     onPick: () -> Unit
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = "Clear selection") }
-        Text("$count selected", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = "Select all files") }
+        IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.clearSelection) }
+        Text(L.files.fileExplorer.countSelected(count), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = L.files.fileExplorer.selectAllFiles) }
         Button(onClick = onPick, enabled = count > 0, modifier = Modifier.padding(end = 8.dp)) { Text("$label ($count)") }
     }
 }
@@ -1328,14 +1329,14 @@ private fun SelectionBar(
     menu: @Composable ColumnScope.() -> Unit
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = "Clear selection") }
-        Text("$count selected", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = "Select all") }
-        IconButton(onClick = onCopy) { Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy") }
-        IconButton(onClick = onCut) { Icon(Icons.Outlined.ContentCut, contentDescription = "Cut") }
-        IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) }
+        IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.clearSelection) }
+        Text(L.files.fileExplorer.countSelected(count), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = L.common.selectAll) }
+        IconButton(onClick = onCopy) { Icon(Icons.Outlined.ContentCopy, contentDescription = L.common.copy) }
+        IconButton(onClick = onCut) { Icon(Icons.Outlined.ContentCut, contentDescription = L.files.fileExplorer.cut) }
+        IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = L.common.delete, tint = MaterialTheme.colorScheme.error) }
         Box {
-            IconButton(onClick = { onMenu(true) }) { Icon(Icons.Outlined.MoreVert, contentDescription = "More") }
+            IconButton(onClick = { onMenu(true) }) { Icon(Icons.Outlined.MoreVert, contentDescription = L.common.more) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { onMenu(false) }, shape = RoundedCornerShape(14.dp), content = menu)
         }
     }
@@ -1355,26 +1356,26 @@ private fun SearchBar(
     LaunchedEffect(Unit) { focus.requestFocus() }
     Column {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = L.files.fileExplorer.closeSearch) }
             TextField(
                 value = query,
                 onValueChange = onQuery,
-                placeholder = { Text("Search in $folderName", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                placeholder = { Text(L.files.fileExplorer.searchInFoldername(folderName), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
                 colors = TextFieldDefaults.colors(
                     focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                     unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
                 ),
-                trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { onQuery("") }) { Icon(Icons.Outlined.Close, "Clear") } }) else null,
+                trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { onQuery("") }) { Icon(Icons.Outlined.Close, L.common.clear) } }) else null,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
                 modifier = Modifier.weight(1f).padding(end = 8.dp).focusRequester(focus)
             )
         }
         Row(Modifier.padding(start = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !deep, onClick = { onDeep(false) }, label = { Text("This folder") })
-            FilterChip(selected = deep, onClick = { onDeep(true) }, label = { Text("All subfolders") }, leadingIcon = { Icon(Icons.Outlined.AccountTree, null, Modifier.size(16.dp)) })
+            FilterChip(selected = !deep, onClick = { onDeep(false) }, label = { Text(L.files.fileExplorer.thisFolder) })
+            FilterChip(selected = deep, onClick = { onDeep(true) }, label = { Text(L.files.fileExplorer.allSubfolders) }, leadingIcon = { Icon(Icons.Outlined.AccountTree, null, Modifier.size(16.dp)) })
         }
     }
 }
@@ -1397,13 +1398,13 @@ private fun ClipboardBar(count: Int, firstName: String, move: Boolean, enabled: 
                     fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSecondaryContainer, maxLines = 1, overflow = TextOverflow.MiddleEllipsis
                 )
                 Text(
-                    if (fromLabel != null) "${fromLabel.replaceFirstChar { it.uppercase() }} · open the destination, then paste" else "Open the destination, then paste",
+                    if (fromLabel != null) L.files.fileExplorer.valueOpenTheDestinationThenPaste(fromLabel.replaceFirstChar { it.uppercase() }) else L.files.fileExplorer.openTheDestinationThenPaste,
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = onCancel) { Text(L.common.cancel) }
             Button(onClick = onPaste, enabled = enabled, shape = RoundedCornerShape(12.dp)) {
-                Icon(Icons.Outlined.ContentPaste, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("Paste")
+                Icon(Icons.Outlined.ContentPaste, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text(L.files.fileExplorer.paste)
             }
         }
     }
@@ -1431,14 +1432,14 @@ private fun ConfirmFolderBar(folderName: String, path: String, label: String, en
 private fun SaveBar(name: String, folderName: String, onName: (String) -> Unit, enabled: Boolean, onSave: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Text("Save in $folderName", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(L.files.fileExplorer.saveInFoldername(folderName), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = onName,
                     singleLine = true,
-                    placeholder = { Text("File name") },
+                    placeholder = { Text(L.files.fileExplorer.fileName) },
                     leadingIcon = { Icon(Icons.Outlined.Description, null) },
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -1447,7 +1448,7 @@ private fun SaveBar(name: String, folderName: String, onName: (String) -> Unit, 
                 )
                 Spacer(Modifier.width(10.dp))
                 Button(onClick = onSave, enabled = enabled, shape = RoundedCornerShape(12.dp), modifier = Modifier.height(52.dp)) {
-                    Icon(Icons.Outlined.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save")
+                    Icon(Icons.Outlined.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.common.save)
                 }
             }
         }
@@ -1489,7 +1490,7 @@ private fun SideTabs(side: ExplorerSide, bridgeName: String, enabled: Boolean, o
             }
         }
         Tab(ExplorerSide.BRIDGE, bridgeName, Icons.Outlined.Computer, Modifier.weight(1f))
-        Tab(ExplorerSide.PHONE, "This phone", Icons.Outlined.PhoneAndroid, Modifier.weight(1f))
+        Tab(ExplorerSide.PHONE, L.common.thisPhone, Icons.Outlined.PhoneAndroid, Modifier.weight(1f))
     }
 }
 
@@ -1548,7 +1549,7 @@ private fun FolderTabs(
                         )
                         if (tabs.size > 1) {
                             IconButton(onClick = { onClose(i) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Close tab", modifier = Modifier.size(14.dp),
+                                Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.closeTab, modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -1558,12 +1559,12 @@ private fun FolderTabs(
         }
         Box {
             IconButton(onClick = { if (showSides) addMenu = true else onAdd(ExplorerSide.BRIDGE) }) {
-                Icon(Icons.Outlined.Add, contentDescription = "New tab")
+                Icon(Icons.Outlined.Add, contentDescription = L.common.newTab)
             }
             DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, shape = RoundedCornerShape(14.dp)) {
-                DropdownMenuItem(text = { Text("New tab on $bridgeName") }, leadingIcon = { Icon(Icons.Outlined.Computer, null) },
+                DropdownMenuItem(text = { Text(L.files.fileExplorer.newTabOnBridgename(bridgeName)) }, leadingIcon = { Icon(Icons.Outlined.Computer, null) },
                     onClick = { addMenu = false; onAdd(ExplorerSide.BRIDGE) })
-                DropdownMenuItem(text = { Text("New tab on this phone") }, leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, null) },
+                DropdownMenuItem(text = { Text(L.files.fileExplorer.newTabOnThisPhone) }, leadingIcon = { Icon(Icons.Outlined.PhoneAndroid, null) },
                     onClick = { addMenu = false; onAdd(ExplorerSide.PHONE) })
             }
         }

@@ -41,6 +41,7 @@ import ai.antigem.data.memory.AgentMemory
 import ai.antigem.data.memory.MemoryBridgeClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** Agent memory: the ```antigem-memory blocks agents write in their replies (the bridge saves them, the chat shows a chip). */
 object MemoryBlocks {
@@ -136,17 +137,17 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
 
     val s = status
     val title = when {
-        !complete -> "Saving to memory…"
-        !enabled -> "Agent memory is off: not saved"
+        !complete -> L.components.memoryChip.savingToMemory
+        !enabled -> L.components.memoryChip.agentMemoryIsOffNotSaved
         error != null -> error!!
-        s?.found == true && s.undone -> "Undone"
-        s?.found == true && s.action == "error" -> "Not saved: ${s.error}"
-        s?.found == true && s.action == "deleted" -> "Deleted from memory"
-        s?.found == true && s.action == "updated" -> "Memory updated"
-        s?.found == true -> "Saved to memory"
-        asked -> "Not saved yet"
-        info.delete -> "Deleting from memory…"
-        else -> "Saving to memory…"
+        s?.found == true && s.undone -> L.components.memoryChip.undone
+        s?.found == true && s.action == "error" -> L.components.memoryChip.notSavedError(s.error)
+        s?.found == true && s.action == "deleted" -> L.components.memoryChip.deletedFromMemory
+        s?.found == true && s.action == "updated" -> L.components.memoryChip.memoryUpdated
+        s?.found == true -> L.components.memoryChip.savedToMemory
+        asked -> L.components.memoryChip.notSavedYet
+        info.delete -> L.components.memoryChip.deletingFromMemory
+        else -> L.components.memoryChip.savingToMemory
     }
     val description = s?.description?.takeIf { it.isNotBlank() } ?: info.description
     val summary = listOf(info.file, description).filter { it.isNotBlank() }.joinToString(" — ")
@@ -176,12 +177,12 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
                 } else if (canUndo) {
                     TextButton(onClick = { confirmUndo = true }) {
                         Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Text("Undo", fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
+                        Text(L.common.undo, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
                 Icon(
                     if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Hide what was written" else "Show what was written",
+                    contentDescription = if (expanded) L.components.memoryChip.hideWhatWasWritten else L.components.memoryChip.showWhatWasWritten,
                     tint = muted,
                     modifier = Modifier.padding(end = 6.dp).size(20.dp)
                 )
@@ -190,12 +191,12 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
                     if (info.delete) {
-                        MemoryField("Asked to delete", info.file.ifBlank { "(no name)" })
+                        MemoryField(L.components.memoryChip.askedToDelete, info.file.ifBlank { L.components.memoryChip.noName })
                     } else {
-                        MemoryField("Name", info.file)
-                        MemoryField("Mode", when (info.mode) {
-                            "always" -> "Always: every chat gets it in full"
-                            "passive" -> "Passive: listed when relevant"
+                        MemoryField(L.common.name, info.file)
+                        MemoryField(L.components.memoryChip.mode, when (info.mode) {
+                            "always" -> L.components.memoryChip.alwaysEveryChatGetsItIn
+                            "passive" -> L.components.memoryChip.passiveListedWhenRelevant
                             else -> ""
                         })
                         val savedScope = when {
@@ -203,14 +204,14 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
                             s?.id?.startsWith("global/") == true -> "global"
                             else -> info.scope
                         }
-                        MemoryField("Scope", when (savedScope) {
-                            "project" -> "This project"
-                            "global" -> "All projects"
+                        MemoryField(L.components.memoryChip.scope, when (savedScope) {
+                            "project" -> L.components.memoryChip.thisProject
+                            "global" -> L.common.allProjects
                             else -> ""
                         })
-                        MemoryField("Description", info.description)
+                        MemoryField(L.components.memoryChip.description, info.description)
                     }
-                    if (s?.found == true && s.id.isNotBlank()) MemoryField("File", s.id)
+                    if (s?.found == true && s.id.isNotBlank()) MemoryField(L.common.file, s.id)
                     if (info.text.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
                         Surface(
@@ -229,19 +230,18 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
     }
 
     if (confirmUndo) {
-        val name = info.file.ifBlank { "this memory" }
+        val name = info.file.ifBlank { L.components.memoryChip.thisMemory }
         val what = when (s?.action) {
-            "deleted" -> "The memory \"$name\" comes back as it was."
-            "updated" -> "The memory \"$name\" goes back to its earlier text."
-            else -> "The memory \"$name\" is removed."
+            "deleted" -> L.components.memoryChip.theMemoryNameComesBackAs(name)
+            "updated" -> L.components.memoryChip.theMemoryNameGoesBackTo(name)
+            else -> L.components.memoryChip.theMemoryNameIsRemoved(name)
         }
         AlertDialog(
             onDismissRequest = { confirmUndo = false },
-            title = { Text("Undo this memory change?") },
+            title = { Text(L.components.memoryChip.undoThisMemoryChange) },
             text = {
                 Text(
-                    "$what This cannot be undone: to save it again, ask the agent or add it in " +
-                        "Settings → Agents → Agent memory & history."
+                    L.components.memoryChip.whatThisCannotBeUndoneTo(what)
                 )
             },
             confirmButton = {
@@ -257,12 +257,12 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
                                 // the chat's history file then notes it as undone
                                 ai.antigem.data.memory.MemorySync.refreshOpenChat()
                             }
-                            .onFailure { error = it.message ?: "Undo failed" }
+                            .onFailure { error = it.message ?: L.components.memoryChip.undoFailed }
                         busy = false
                     }
-                }) { Text("Undo", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.common.undo, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmUndo = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmUndo = false }) { Text(L.common.cancel) } }
         )
     }
 }

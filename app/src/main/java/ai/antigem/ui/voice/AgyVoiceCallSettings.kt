@@ -42,6 +42,7 @@ import ai.antigem.data.voice.AgyVoicePreferences
 import ai.antigem.data.voice.VoiceCallLauncher
 import ai.antigem.ui.components.AppToastHelper
 import ai.antigem.ui.components.ChatToastType
+import ai.antigem.i18n.L
 
 /**
  * Settings → Antigravity → Voice calls: calling from outside the app (the Voice call tile and the "Voice call" app
@@ -75,14 +76,11 @@ fun AgyVoiceCallSettingsCard(modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.HeadsetMic, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Call from anywhere", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(L.voice.agyVoiceCallSettings.callFromAnywhere, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "The Voice call tile in Quick Settings and the \"Voice call\" shortcut (long-press the AntiGem icon) call " +
-                        "Antigravity in the last chat that had a call, or a new chat the first time. When AntiGem is " +
-                        "running the call starts without opening it; otherwise the app opens and calls once the server is up. " +
-                        "During a call, a tap on the tile ends it.",
+                    L.voice.agyVoiceCallSettings.theVoiceCallTileInQuick,
                     fontSize = 12.5.sp, color = subtleText()
                 )
                 Spacer(Modifier.height(10.dp))
@@ -90,20 +88,20 @@ fun AgyVoiceCallSettingsCard(modifier: Modifier = Modifier) {
                     if (VoiceCallLauncher.canRequestTile) {
                         OutlinedButton(onClick = {
                             if (!VoiceCallLauncher.requestAddTile(context)) {
-                                AppToastHelper.showToast("Add it by editing the Quick Settings tiles.", ChatToastType.INFO)
+                                AppToastHelper.showToast(L.voice.agyVoiceCallSettings.addItByEditingTheQuick, ChatToastType.INFO)
                             }
-                        }) { Text("Add tile") }
+                        }) { Text(L.voice.agyVoiceCallSettings.addTile) }
                     }
                     OutlinedButton(onClick = {
                         if (!VoiceCallLauncher.pinShortcut(context)) {
-                            AppToastHelper.showToast("This launcher can't add shortcuts. Long-press the AntiGem icon instead.", ChatToastType.INFO)
+                            AppToastHelper.showToast(L.voice.agyVoiceCallSettings.thisLauncherCantAddShortcutsLong, ChatToastType.INFO)
                         }
-                    }) { Text("Add to home screen") }
+                    }) { Text(L.common.addToHomeScreen) }
                 }
                 if (!VoiceCallLauncher.canRequestTile) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "To add the tile: pull down Quick Settings, tap the pencil (edit) and drag \"Voice call\" up.",
+                        L.voice.agyVoiceCallSettings.toAddTheTilePullDown,
                         fontSize = 12.sp, color = subtleText()
                     )
                 }
@@ -114,7 +112,7 @@ fun AgyVoiceCallSettingsCard(modifier: Modifier = Modifier) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.BubbleChart, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Floating call window", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text(L.voice.agyVoiceCallSettings.floatingCallWindow, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Switch(checked = bubbleOn, onCheckedChange = { on ->
                         AgyVoicePreferences.setBubble(on)
                         if (on && !canDraw) openOverlaySettings()
@@ -122,21 +120,17 @@ fun AgyVoiceCallSettingsCard(modifier: Modifier = Modifier) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "While a call runs and AntiGem is not on screen, the call shows over other apps: a panel on the lower half " +
-                        "of the screen with the status (and when the agent is working), the voice's orb, live captions and the " +
-                        "call's buttons. Minimize it (⌄ or drag it down) to a small circle you can drag anywhere; tap the circle " +
-                        "to open the panel again. Calls from the tile or shortcut open as the panel; leaving the app during a " +
-                        "call shows the circle.",
+                    L.voice.agyVoiceCallSettings.whileACallRunsAndAntigem,
                     fontSize = 12.5.sp, color = subtleText()
                 )
                 if (bubbleOn && !canDraw) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Needs \"Display over other apps\" for AntiGem.",
+                        L.voice.agyVoiceCallSettings.needsDisplayOverOtherAppsFor,
                         fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.height(6.dp))
-                    OutlinedButton(onClick = openOverlaySettings) { Text("Allow") }
+                    OutlinedButton(onClick = openOverlaySettings) { Text(L.common.allow) }
                 }
             }
         }

@@ -2,11 +2,13 @@ package ai.antigem.data.local.chroot
 
 import org.json.JSONArray
 import org.json.JSONObject
+import ai.antigem.i18n.L
 
 /** Where the chroot's mounts live (see chrootctl.sh). */
-enum class ChrootNsMode(val conf: String, val label: String) {
-    PRIVATE("private", "Private (recommended)"),
-    GLOBAL("global", "Global (whole phone)");
+enum class ChrootNsMode(val conf: String, private val labelText: () -> String) {
+    PRIVATE("private", { L.local.chrootModels.privateRecommended }),
+    GLOBAL("global", { L.local.chrootModels.globalWholePhone });
+    val label: String get() = labelText()
 
     companion object {
         fun of(value: String?) = entries.firstOrNull { it.conf == value } ?: PRIVATE
@@ -22,10 +24,12 @@ enum class ChrootDnsMode(val conf: String) {
 }
 
 /** What happens to the chroot when AntiGem is exited (notification or drawer Exit). */
-enum class ChrootExitBehavior(val label: String, val description: String) {
-    KEEP_RUNNING("Keep running", "The bridge and the agents keep working while AntiGem is closed; AntiGem reconnects when opened."),
-    STOP_BRIDGE("Stop the bridge and agents", "The chroot's mounts stay, so the next start is quick."),
-    STOP_ALL("Stop everything", "Every process of the chroot is stopped and its folders are unmounted.")
+enum class ChrootExitBehavior(private val labelText: () -> String, private val descriptionText: () -> String) {
+    KEEP_RUNNING({ L.local.chrootModels.keepRunning }, { L.local.chrootModels.theBridgeAndTheAgentsKeep }),
+    STOP_BRIDGE({ L.local.chrootModels.stopTheBridgeAndAgents }, { L.local.chrootModels.theChrootsMountsStaySoThe }),
+    STOP_ALL({ L.local.chrootModels.stopEverything }, { L.local.chrootModels.everyProcessOfTheChrootIs });
+    val label: String get() = labelText()
+    val description: String get() = descriptionText()
 }
 
 /** A host folder shown inside the chroot. */
@@ -154,7 +158,7 @@ data class ChrootFound(
         arch = manifest["ARCH"]?.takeIf { it.isNotBlank() } ?: arch,
         user = manifest["USER"]?.takeIf { it.isNotBlank() } ?: legacyUser ?: "ubuntu",
         uid = manifest["UID"]?.toIntOrNull() ?: -1,
-        source = manifest["SOURCE"] ?: "found on this phone",
+        source = manifest["SOURCE"] ?: L.local.chrootModels.foundOnThisPhone,
         createdAt = manifest["CREATED"]?.toLongOrNull() ?: 0L,
         legacy = !hasManifest
     )

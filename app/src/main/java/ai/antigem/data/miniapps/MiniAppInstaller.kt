@@ -5,6 +5,7 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
+import ai.antigem.i18n.L
 
 /**
  * Installed (signed) mini apps, with Android's rules:
@@ -96,16 +97,13 @@ object MiniAppInstaller {
             else -> Kind.DOWNGRADE
         }
         val blocked = when {
-            parsed.isFailure -> "Its manifest.json is invalid: ${parsed.exceptionOrNull()?.message}"
+            parsed.isFailure -> L.miniapps.miniAppInstaller.itsManifestJsonIsInvalidValue(parsed.exceptionOrNull()?.message)
             prev != null && prev.fingerprint != pkg.fingerprint ->
-                "This package is signed by a different developer than the installed ${pkg.manifest.optString("name")} (${prev.developer}, key ${MiniAppSigning.shortFingerprint(prev.fingerprint)}). " +
-                    "Uninstall the installed app first; its data will be deleted."
+                L.miniapps.miniAppInstaller.thisPackageIsSignedByA(pkg.manifest.optString("name"), prev.developer, MiniAppSigning.shortFingerprint(prev.fingerprint))
             prev == null && devFolder != null ->
-                "A development app with the id ${pkg.id} is in ~/mini-apps/$devFolder. A package can't take its id (it would get that app's data): " +
-                    "give the development app another id, or delete it, then install."
+                L.miniapps.miniAppInstaller.aDevelopmentAppWithTheId(pkg.id, devFolder)
             stranger != null ->
-                "It shares data with the apps of \"$sharedId\", and ${stranger.name} there is signed by ${stranger.developer} " +
-                    "(key ${MiniAppSigning.shortFingerprint(stranger.signer.orEmpty())}), not by this package's developer. Only apps signed with the same key can share data."
+                L.miniapps.miniAppInstaller.itSharesDataWithTheApps(sharedId, stranger.name, stranger.developer, MiniAppSigning.shortFingerprint(stranger.signer.orEmpty()))
             else -> null
         }
         val oldPerms = prev?.let { r -> runCatching { MiniApps.parse(appDir(context, r.id), JSONObject(File(appDir(context, r.id), "manifest.json").readText())).permissions.keys }.getOrNull() }.orEmpty()
@@ -170,7 +168,7 @@ object MiniAppInstaller {
         appDir(context, rec.id).deleteRecursively()
         packageFile(context, rec.id).delete()
         save(context, records(context) - rec.id)
-        runCatching { androidx.core.content.pm.ShortcutManagerCompat.disableShortcuts(context, listOf("miniapp:${app.id}"), "${app.name} was uninstalled") }
+        runCatching { androidx.core.content.pm.ShortcutManagerCompat.disableShortcuts(context, listOf("miniapp:${app.id}"), L.miniapps.miniAppInstaller.nameWasUninstalled(app.name)) }
         MiniApps.scan(context)
     }
 

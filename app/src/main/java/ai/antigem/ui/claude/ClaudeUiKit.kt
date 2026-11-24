@@ -38,6 +38,7 @@ import ai.antigem.theme.QuotaGreen
 import ai.antigem.theme.QuotaRed
 import ai.antigem.theme.isAppInDarkTheme
 import ai.antigem.ui.components.ClaudeAccent
+import ai.antigem.i18n.L
 
 @Composable
 fun claudeCardColor(): Color = ai.antigem.theme.AppColors.card
@@ -165,35 +166,35 @@ fun formatReset(iso: String?, epochSeconds: Long? = null): String? {
     if (diff <= 0) return "now"
     val mins = diff / 60_000
     return when {
-        mins < 60 -> "in ${mins}m"
-        mins < 24 * 60 -> "in ${mins / 60}h ${mins % 60}m"
+        mins < 60 -> L.claude.uiKit.inMinsM(mins)
+        mins < 24 * 60 -> L.claude.uiKit.inValueHValue2M(mins / 60, mins % 60)
         else -> java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault()).format(java.util.Date(millis))
     }
 }
 
 /** Human label for a Claude permission mode. */
 fun permissionModeLabel(mode: String): String = when (mode) {
-    "default" -> "Manual"
-    "acceptEdits" -> "Accept edits"
-    "plan" -> "Plan"
-    "auto" -> "Auto"
-    "dontAsk" -> "Don't ask"
-    "bypassPermissions" -> "Bypass"
+    "default" -> L.common.manual
+    "acceptEdits" -> L.claude.uiKit.acceptEdits
+    "plan" -> L.claude.uiKit.plan
+    "auto" -> L.common.auto
+    "dontAsk" -> L.claude.uiKit.dontAsk
+    "bypassPermissions" -> L.claude.uiKit.bypass
     else -> mode
 }
 
 fun permissionModeDescription(mode: String): String = when (mode) {
-    "default" -> "Ask before edits and commands"
-    "acceptEdits" -> "Apply file edits without asking"
-    "plan" -> "Explore and propose a plan, no changes"
-    "auto" -> "Claude decides what is safe to run"
-    "dontAsk" -> "Never ask; deny anything not pre-allowed"
-    "bypassPermissions" -> "Allow everything (sandboxes only)"
+    "default" -> L.claude.uiKit.askBeforeEditsAndCommands
+    "acceptEdits" -> L.claude.uiKit.applyFileEditsWithoutAsking
+    "plan" -> L.claude.uiKit.exploreAndProposeAPlanNo
+    "auto" -> L.claude.uiKit.claudeDecidesWhatIsSafeTo
+    "dontAsk" -> L.claude.uiKit.neverAskDenyAnythingNotPre
+    "bypassPermissions" -> L.claude.uiKit.allowEverythingSandboxesOnly
     else -> ""
 }
 
 fun effortLabel(level: String?): String = when (level) {
-    null -> "Default"
-    "xhigh" -> "Extra high"
+    null -> L.common.default
+    "xhigh" -> L.claude.uiKit.extraHigh
     else -> level.replaceFirstChar { it.uppercase() }
 }

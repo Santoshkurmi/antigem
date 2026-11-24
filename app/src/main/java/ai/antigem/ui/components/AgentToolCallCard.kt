@@ -47,6 +47,7 @@ import ai.antigem.data.remote.dto.AskQuestionResponseItemDto
 import ai.antigem.domain.model.ToolCall
 import ai.antigem.domain.model.ToolType
 import ai.antigem.theme.*
+import ai.antigem.i18n.L
 
 private val IMAGE_FILE_REGEX = Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)
 
@@ -128,36 +129,36 @@ fun AgentToolCallCard(
     val isFailed = toolCall.status == "FAILED" || (toolCall.exitCode != null && toolCall.exitCode != 0 && !isTerminated && !isRejected)
 
     val actionPrefix = when {
-        isPendingApproval && isMcp -> "Approve MCP:"
-        isPendingApproval -> "Approve Command:"
-        isRunning && isSearch -> "Searching web..."
-        isRunning && isReader -> "Fetching page..."
-        isRunning && isMath -> "Evaluating math..."
-        isRunning && isViewFile -> "Reading file..."
-        isRunning && isEditFile -> "Editing file..."
-        isRunning && isListDir -> "Listing directory..."
-        isRunning && (isFind || isGrep) -> "Searching code..."
-        isRunning && isGenImg -> "Generating image..."
-        isRunning && isMcp -> "Executing MCP tool..."
-        isRunning && isSystemNotice -> "System event..."
-        isRunning -> "Executing in Termux..."
+        isPendingApproval && isMcp -> L.components.agentToolCallCard.approveMcp
+        isPendingApproval -> L.components.agentToolCallCard.approveCommand
+        isRunning && isSearch -> L.components.agentToolCallCard.searchingWeb
+        isRunning && isReader -> L.components.agentToolCallCard.fetchingPage
+        isRunning && isMath -> L.components.agentToolCallCard.evaluatingMath
+        isRunning && isViewFile -> L.components.agentToolCallCard.readingFile
+        isRunning && isEditFile -> L.components.agentToolCallCard.editingFile
+        isRunning && isListDir -> L.components.agentToolCallCard.listingDirectory
+        isRunning && (isFind || isGrep) -> L.components.agentToolCallCard.searchingCode
+        isRunning && isGenImg -> L.components.agentToolCallCard.generatingImage
+        isRunning && isMcp -> L.components.agentToolCallCard.executingMcpTool
+        isRunning && isSystemNotice -> L.components.agentToolCallCard.systemEvent
+        isRunning -> L.components.agentToolCallCard.executingInTermux
 
-        isSuccess && isSystemNotice -> "System:"
-        isSuccess && isSearch -> "Web search"
-        isSuccess && isReader -> "Read page"
-        isSuccess && isMath -> "Math evaluated"
-        isSuccess && isViewFile -> "Read file"
-        isSuccess && isEditFile -> "Edited file"
-        isSuccess && isListDir -> "Listed directory"
-        isSuccess && (isFind || isGrep) -> "Searched code"
-        isSuccess && isGenImg -> "Generated image"
-        isSuccess && isMcp -> "MCP tool"
-        isSuccess -> "Ran bash"
+        isSuccess && isSystemNotice -> L.components.agentToolCallCard.system
+        isSuccess && isSearch -> L.components.agentToolCallCard.webSearch
+        isSuccess && isReader -> L.components.agentToolCallCard.readPage
+        isSuccess && isMath -> L.components.agentToolCallCard.mathEvaluated
+        isSuccess && isViewFile -> L.components.agentToolCallCard.readFile
+        isSuccess && isEditFile -> L.components.agentToolCallCard.editedFile
+        isSuccess && isListDir -> L.components.agentToolCallCard.listedDirectory
+        isSuccess && (isFind || isGrep) -> L.components.agentToolCallCard.searchedCode
+        isSuccess && isGenImg -> L.components.agentToolCallCard.generatedImage
+        isSuccess && isMcp -> L.components.agentToolCallCard.mcpTool
+        isSuccess -> L.components.agentToolCallCard.ranBash
 
-        isTerminated -> "Stopped:"
-        isRejected -> "Rejected:"
-        isFailed -> "Failed:"
-        else -> "Tool:"
+        isTerminated -> L.components.agentToolCallCard.stopped
+        isRejected -> L.components.agentToolCallCard.rejected
+        isFailed -> L.components.agentToolCallCard.failed
+        else -> L.components.agentToolCallCard.tool
     }
 
     val actionColor = when {
@@ -192,7 +193,7 @@ fun AgentToolCallCard(
             // Frontend Expand Chevron (-> / rotating arrow)
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(16.dp)
@@ -220,14 +221,14 @@ fun AgentToolCallCard(
             if (isPendingApproval) {
                 Icon(
                     imageVector = Icons.Default.HourglassEmpty,
-                    contentDescription = "Pending Approval",
+                    contentDescription = L.components.agentToolCallCard.pendingApproval,
                     tint = ai.antigem.theme.AppColors.warning,
                     modifier = Modifier.size(14.dp)
                 )
             } else if (isRunning) {
                 Icon(
                     imageVector = toolIcon,
-                    contentDescription = "Running",
+                    contentDescription = L.common.running,
                     tint = ClaudeTerracotta,
                     modifier = Modifier.size(14.dp)
                 )
@@ -241,21 +242,21 @@ fun AgentToolCallCard(
             } else if (isTerminated) {
                 Icon(
                     imageVector = Icons.Default.Cancel,
-                    contentDescription = "Terminated",
+                    contentDescription = L.components.agentToolCallCard.terminated,
                     tint = ai.antigem.theme.AppColors.danger,
                     modifier = Modifier.size(14.dp)
                 )
             } else if (isRejected) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Rejected",
+                    contentDescription = L.components.agentToolCallCard.rejected2,
                     tint = Color.Gray,
                     modifier = Modifier.size(14.dp)
                 )
             } else if (isFailed) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = "Failed",
+                    contentDescription = L.common.failed,
                     tint = Color.Red,
                     modifier = Modifier.size(14.dp)
                 )
@@ -300,7 +301,7 @@ fun AgentToolCallCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Stop,
-                        contentDescription = "Stop command",
+                        contentDescription = L.components.agentToolCallCard.stopCommand,
                         tint = ai.antigem.theme.AppColors.danger,
                         modifier = Modifier.size(12.dp)
                     )
@@ -328,7 +329,7 @@ fun AgentToolCallCard(
                         .padding(horizontal = 4.dp, vertical = 1.dp)
                 ) {
                     Text(
-                        text = "stopped",
+                        text = L.components.agentToolCallCard.stopped2,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.Red
@@ -409,7 +410,7 @@ fun AgentToolCallCard(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "Loading image...",
+                                        text = L.components.agentToolCallCard.loadingImage,
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -437,7 +438,7 @@ fun AgentToolCallCard(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Tap image to enlarge • Double-tap zoom",
+                                text = L.components.agentToolCallCard.tapImageToEnlargeDoubleTap,
                                 fontSize = 11.sp,
                                 color = Color.Gray,
                                 modifier = Modifier.weight(1f)
@@ -449,7 +450,7 @@ fun AgentToolCallCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Fullscreen,
-                                    contentDescription = "Full view",
+                                    contentDescription = L.components.agentToolCallCard.fullView,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -471,7 +472,7 @@ fun AgentToolCallCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Download,
-                                    contentDescription = "Download Image",
+                                    contentDescription = L.components.agentToolCallCard.downloadImage,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -506,16 +507,16 @@ fun AgentToolCallCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val commandPrefix = when {
-                            isSystemNotice -> "Notification: ${toolCall.command}"
-                            isSearch -> "Search Query: \"${toolCall.command}\""
+                            isSystemNotice -> L.components.agentToolCallCard.notificationCommand(toolCall.command)
+                            isSearch -> L.components.agentToolCallCard.searchQueryCommand(toolCall.command)
                             isReader -> "URL: ${toolCall.command}"
-                            isMath -> "CAS Expr: ${toolCall.command}"
-                            isViewFile -> "File: ${toolCall.command}"
-                            isEditFile -> "File: ${toolCall.command}"
-                            isListDir -> "Directory: ${toolCall.command}"
-                            isGrep -> "Grep: ${toolCall.command}"
-                            isFind -> "Find: ${toolCall.command}"
-                            isGenImg -> "Prompt: ${toolCall.command}"
+                            isMath -> L.components.agentToolCallCard.casExprCommand(toolCall.command)
+                            isViewFile -> L.components.agentToolCallCard.fileCommand(toolCall.command)
+                            isEditFile -> L.components.agentToolCallCard.fileCommand(toolCall.command)
+                            isListDir -> L.components.agentToolCallCard.directoryCommand(toolCall.command)
+                            isGrep -> L.components.agentToolCallCard.grepCommand(toolCall.command)
+                            isFind -> L.components.agentToolCallCard.findCommand(toolCall.command)
+                            isGenImg -> L.components.agentToolCallCard.promptCommand(toolCall.command)
                             isMcp -> "MCP: ${toolCall.command}"
                             else -> if (isBash) "$ ${toolCall.command}" else toolCall.command
                         }
@@ -543,13 +544,13 @@ fun AgentToolCallCard(
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = ClipData.newPlainText("Tool Output", toolCall.output)
                                 clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "Output copied", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.components.agentToolCallCard.outputCopied, Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ContentCopy,
-                                contentDescription = "Copy Output",
+                                contentDescription = L.components.agentToolCallCard.copyOutput,
                                 tint = Color.Gray,
                                 modifier = Modifier.size(13.dp)
                             )
@@ -560,22 +561,22 @@ fun AgentToolCallCard(
 
                     if (toolCall.output.isEmpty()) {
                         val emptyMessage = when {
-                            isRunning && isViewFile -> "Reading file contents..."
-                            isRunning && isEditFile -> "Applying file modifications..."
-                            isRunning && isListDir -> "Scanning directory..."
-                            isRunning && (isFind || isGrep) -> "Searching..."
-                            isRunning && isGenImg -> "Generating image..."
-                            isRunning && isMcp -> "Executing MCP tool..."
-                            isRunning && isBash -> "Running in Termux..."
-                            isRunning -> "Processing..."
-                            isPendingApproval -> "(Waiting for approval)"
-                            isViewFile -> "(File inspected by model)"
-                            isEditFile -> "(File modification completed)"
-                            isListDir -> "(Directory contents scanned)"
-                            isFind || isGrep -> "(Search completed - no output)"
-                            isGenImg -> "(Image generation completed)"
-                            isMcp -> "(MCP tool executed - no output)"
-                            else -> "(No output returned)"
+                            isRunning && isViewFile -> L.components.agentToolCallCard.readingFileContents
+                            isRunning && isEditFile -> L.components.agentToolCallCard.applyingFileModifications
+                            isRunning && isListDir -> L.components.agentToolCallCard.scanningDirectory
+                            isRunning && (isFind || isGrep) -> L.components.agentToolCallCard.searching
+                            isRunning && isGenImg -> L.components.agentToolCallCard.generatingImage
+                            isRunning && isMcp -> L.components.agentToolCallCard.executingMcpTool
+                            isRunning && isBash -> L.components.agentToolCallCard.runningInTermux
+                            isRunning -> L.components.agentToolCallCard.processing
+                            isPendingApproval -> L.components.agentToolCallCard.waitingForApproval
+                            isViewFile -> L.components.agentToolCallCard.fileInspectedByModel
+                            isEditFile -> L.components.agentToolCallCard.fileModificationCompleted
+                            isListDir -> L.components.agentToolCallCard.directoryContentsScanned
+                            isFind || isGrep -> L.components.agentToolCallCard.searchCompletedNoOutput
+                            isGenImg -> L.components.agentToolCallCard.imageGenerationCompleted
+                            isMcp -> L.components.agentToolCallCard.mcpToolExecutedNoOutput
+                            else -> L.components.agentToolCallCard.noOutputReturned
                         }
                         Text(
                             text = emptyMessage,

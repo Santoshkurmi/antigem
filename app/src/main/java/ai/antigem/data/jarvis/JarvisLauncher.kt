@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * Talking to Jarvis from outside the app: the Jarvis Quick Settings tile, the "Jarvis" app shortcut and the floating
@@ -154,7 +155,7 @@ object JarvisLauncher {
     private fun shortcut(context: Context): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, SHORTCUT_ID)
             .setShortLabel("Jarvis")
-            .setLongLabel("Talk to Jarvis")
+            .setLongLabel(L.jarvis.launcher.talkToJarvis)
             .setIcon(IconCompat.createWithResource(context, R.drawable.ic_shortcut_jarvis))
             .setIntent(Intent(context, JarvisTalkActivity::class.java).setAction(ACTION_TALK))
             .build()

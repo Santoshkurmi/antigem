@@ -48,6 +48,7 @@ import ai.antigem.data.homescreen.HomeLinks
 import ai.antigem.data.homescreen.HomePrefs
 import ai.antigem.data.homescreen.HomeSnapshot
 import ai.antigem.domain.model.AgentKind
+import ai.antigem.i18n.L
 
 /**
  * The Chats widget: pinned chats first, then the newest (or only pinned ones, or one agent's: its setup screen), each
@@ -73,12 +74,12 @@ class ChatsWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 /** Chats for the widget picker's preview when there are none yet. */
-internal val SAMPLE_CHATS = listOf(
-    HomeChat("s1", AgentKind.CLAUDE.name, "Fix the login bug", "my-app", System.currentTimeMillis() - 60_000, running = true, pinned = true),
-    HomeChat("s2", AgentKind.AGY.name, "Dark mode for settings", "my-app", System.currentTimeMillis() - 25 * 60_000, done = true,
-        reply = "Done! Settings now follows the system theme, with a manual switch on top. I also fixed the contrast of the switches in dark mode."),
-    HomeChat("s3", AgentKind.CODEX.name, "Write release notes", "website", System.currentTimeMillis() - 3 * 3_600_000),
-    HomeChat("s4", AgentKind.OPENCODE.name, "Plan the new API", "server", System.currentTimeMillis() - 26 * 3_600_000)
+internal val SAMPLE_CHATS get() = listOf(
+    HomeChat("s1", AgentKind.CLAUDE.name, L.homescreen.chatsWidget.fixTheLoginBug, "my-app", System.currentTimeMillis() - 60_000, running = true, pinned = true),
+    HomeChat("s2", AgentKind.AGY.name, L.homescreen.chatsWidget.darkModeForSettings, "my-app", System.currentTimeMillis() - 25 * 60_000, done = true,
+        reply = L.homescreen.chatsWidget.doneSettingsNowFollowsTheSystem),
+    HomeChat("s3", AgentKind.CODEX.name, L.homescreen.chatsWidget.writeReleaseNotes, "website", System.currentTimeMillis() - 3 * 3_600_000),
+    HomeChat("s4", AgentKind.OPENCODE.name, L.homescreen.chatsWidget.planTheNewApi, "server", System.currentTimeMillis() - 26 * 3_600_000)
 )
 
 @Composable
@@ -94,15 +95,15 @@ private fun ChatsContent(preview: Boolean) {
     val compact = size.width < 210.dp
     val c = GlanceTheme.colors
     val title = when {
-        filter == "pinned" -> "Pinned chats"
+        filter == "pinned" -> L.homescreen.chatsWidget.pinnedChats
         agentFilter != null -> HomeIcons.agentLabel(agentFilter)
-        else -> "Chats"
+        else -> L.homescreen.chatsWidget.chats
     }
     val working = chats.count { it.running }
     val finished = chats.count { it.done }
     val subtitle = when {
-        !data.loaded && !preview -> "Open AntiGem once"
-        working > 0 && finished > 0 -> "$working working · $finished done"
+        !data.loaded && !preview -> L.homescreen.chatsWidget.openAntigemOnce
+        working > 0 && finished > 0 -> L.homescreen.chatsWidget.workingWorkingFinishedDone(working, finished)
         working > 0 -> "$working working"
         finished > 0 -> "$finished done"
         else -> "AntiGem"
@@ -188,12 +189,12 @@ internal fun StatusLine(chat: HomeChat) {
             chat.running -> {
                 CircularProgressIndicator(GlanceModifier.size(12.dp), color = accent)
                 Spacer(GlanceModifier.width(6.dp))
-                Label("Working…", 12.sp, accent, bold = true)
+                Label(L.common.working, 12.sp, accent, bold = true)
             }
             chat.done -> {
                 Glyph(R.drawable.ic_home_check, 13.dp, green)
                 Spacer(GlanceModifier.width(4.dp))
-                Label("Done · new reply", 12.sp, green, bold = true)
+                Label(L.homescreen.chatsWidget.doneNewReply, 12.sp, green, bold = true)
             }
             else -> Label(
                 listOf(HomeIcons.agentLabel(chat.agentKind), chat.project).filter { it.isNotBlank() }.joinToString(" · "),
@@ -208,9 +209,9 @@ private fun Empty(data: HomeData, filter: String) {
     val ctx = LocalContext.current
     val c = GlanceTheme.colors
     val (head, sub) = when {
-        !data.loaded -> "Open AntiGem once" to "Your chats show up here, live"
-        filter == "pinned" -> "No pinned chats" to "In the sidebar: ⋮ on a chat → Pin to top"
-        else -> "No chats yet" to "Tap + to start one"
+        !data.loaded -> L.homescreen.chatsWidget.openAntigemOnce to L.homescreen.chatsWidget.yourChatsShowUpHereLive
+        filter == "pinned" -> L.homescreen.chatsWidget.noPinnedChats to L.homescreen.chatsWidget.inTheSidebarOnAChat
+        else -> L.homescreen.chatsWidget.noChatsYet to L.homescreen.chatsWidget.tapToStartOne
     }
     Column(
         GlanceModifier.fillMaxSize().clickable(open(ctx, HomeLinks.Target.OpenPage(HomeLinks.Page.CHAT))),

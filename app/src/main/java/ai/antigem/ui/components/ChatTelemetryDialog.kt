@@ -26,6 +26,7 @@ import ai.antigem.domain.model.MessageRole
 import ai.antigem.theme.*
 import java.text.NumberFormat
 import java.util.Locale
+import ai.antigem.i18n.L
 
 @Composable
 fun ChatTelemetryDialog(
@@ -77,7 +78,7 @@ fun ChatTelemetryDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Chat Telemetry & Tokens",
+                        text = L.components.chatTelemetry.chatTelemetryTokens,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -86,7 +87,7 @@ fun ChatTelemetryDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Aggregated usage telemetry for \"${conversation?.title ?: "Current Chat"}\":",
+                    text = L.components.chatTelemetry.aggregatedUsageTelemetryForValue(conversation?.title ?: L.components.chatTelemetry.currentChat),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -111,14 +112,14 @@ fun ChatTelemetryDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TelemetryMetricCard(
-                            title = "Input Tokens",
+                            title = L.components.chatTelemetry.inputTokens,
                             value = numberFormat.format(totalPromptTokens),
                             icon = Icons.Outlined.ArrowDownward,
                             iconColor = inputColor,
                             modifier = Modifier.weight(1f)
                         )
                         TelemetryMetricCard(
-                            title = "Output Tokens",
+                            title = L.components.chatTelemetry.outputTokens,
                             value = numberFormat.format(totalOutputTokens),
                             icon = Icons.Outlined.ArrowUpward,
                             iconColor = outputColor,
@@ -131,14 +132,14 @@ fun ChatTelemetryDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TelemetryMetricCard(
-                            title = "Cache Read Hits",
+                            title = L.components.chatTelemetry.cacheReadHits,
                             value = if (totalCachedTokens > 0) "${numberFormat.format(totalCachedTokens)} ($cacheEfficiencyPct%)" else "0",
                             icon = Icons.Outlined.FlashOn,
                             iconColor = cacheColor,
                             modifier = Modifier.weight(1f)
                         )
                         TelemetryMetricCard(
-                            title = "Total Consumption",
+                            title = L.components.chatTelemetry.totalConsumption,
                             value = numberFormat.format(totalCombinedTokens),
                             icon = Icons.Outlined.Functions,
                             iconColor = ClaudeTerracotta,
@@ -156,19 +157,19 @@ fun ChatTelemetryDialog(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Conversation Stats",
+                                text = L.components.chatTelemetry.conversationStats,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            TelemetryRow(label = "Active Model", value = conversation?.modelId ?: "Default")
-                            TelemetryRow(label = "User Turns", value = "$userMessagesCount turns")
-                            TelemetryRow(label = "Model Responses", value = "$assistantMessagesCount responses")
-                            TelemetryRow(label = "Tools Executed", value = "$toolsExecutedCount tools")
-                            TelemetryRow(label = "Active Context Summary", value = if (!conversation?.summary.isNullOrBlank()) "Active" else "None")
-                            TelemetryRow(label = "Custom System Prompt", value = if (!conversation?.customSystemPrompt.isNullOrBlank()) "Configured" else "Default")
+                            TelemetryRow(label = L.components.chatTelemetry.activeModel, value = conversation?.modelId ?: L.common.default)
+                            TelemetryRow(label = L.components.chatTelemetry.userTurns, value = L.components.chatTelemetry.countTurns(userMessagesCount))
+                            TelemetryRow(label = L.components.chatTelemetry.modelResponses, value = L.components.chatTelemetry.countResponses(assistantMessagesCount))
+                            TelemetryRow(label = L.components.chatTelemetry.toolsExecuted, value = L.components.chatTelemetry.countTools(toolsExecutedCount))
+                            TelemetryRow(label = L.components.chatTelemetry.activeContextSummary, value = if (!conversation?.summary.isNullOrBlank()) L.common.active else L.components.chatTelemetry.none)
+                            TelemetryRow(label = L.components.chatTelemetry.customSystemPrompt, value = if (!conversation?.customSystemPrompt.isNullOrBlank()) L.components.chatTelemetry.configured else L.common.default)
                         }
                     }
 
@@ -195,13 +196,13 @@ fun ChatTelemetryDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Chat System Prompt",
+                                    text = L.components.chatTelemetry.chatSystemPrompt,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (!conversation?.customSystemPrompt.isNullOrBlank()) "Custom instructions active" else "Using default system instruction",
+                                    text = if (!conversation?.customSystemPrompt.isNullOrBlank()) L.components.chatTelemetry.customInstructionsActive else L.components.chatTelemetry.usingDefaultSystemInstruction,
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -213,7 +214,7 @@ fun ChatTelemetryDialog(
                                         onOpenSystemPrompt()
                                     }
                                 ) {
-                                    Text("Edit", fontSize = 12.5.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
+                                    Text(L.common.edit, fontSize = 12.5.sp, color = ClaudeTerracotta, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -228,7 +229,7 @@ fun ChatTelemetryDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Close", color = Color.White, fontSize = 13.sp)
+                    Text(L.common.close, color = Color.White, fontSize = 13.sp)
                 }
             }
         }

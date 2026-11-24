@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import ai.antigem.i18n.L
 
 /**
  * One-time "Meet Gemmy" dialog, shown in chat once the first-launch setup is done. The switch starts on (Gemmy is on
@@ -81,22 +82,21 @@ fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
                     )
                 }
                 Text(
-                    text = "psst… tap it!",
+                    text = L.onboarding.gemmyIntro.psstTapIt,
                     fontSize = 11.sp,
                     color = ClaudeTerracotta.copy(alpha = 0.85f)
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Meet Gemmy 👋",
+                    text = L.onboarding.gemmyIntro.meetGemmy,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "A little buddy that floats over the app. Drag it around or fling it, tap or double-tap it, " +
-                        "long-press it for its menu. It thinks while your agent works and cheers when it's done.",
+                    text = L.onboarding.gemmyIntro.aLittleBuddyThatFloatsOver,
                     fontSize = 13.sp,
                     lineHeight = 18.sp,
                     textAlign = TextAlign.Center,
@@ -116,13 +116,13 @@ fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
                     ) {
                         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                             Text(
-                                text = "Show Gemmy",
+                                text = L.onboarding.gemmyIntro.showGemmy,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (enabled) "It will float on your screens" else "It stays hidden",
+                                text = if (enabled) L.onboarding.gemmyIntro.itWillFloatOnYourScreens else L.onboarding.gemmyIntro.itStaysHidden,
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -146,13 +146,13 @@ fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White)
                 ) {
                     Text(
-                        text = if (enabled) "Let's go!" else "Continue without Gemmy",
+                        text = if (enabled) L.onboarding.gemmyIntro.letsGo else L.onboarding.gemmyIntro.continueWithoutGemmy,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "You can change this anytime in Settings → Appearance.",
+                    text = L.onboarding.gemmyIntro.youCanChangeThisAnytimeIn,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)

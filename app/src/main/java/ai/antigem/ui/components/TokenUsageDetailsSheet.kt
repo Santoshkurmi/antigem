@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.domain.model.TokenUsage
+import ai.antigem.i18n.L
 
 /** The model name as the usage pill shows it (short); the sheet shows the full id. */
 fun shortModelName(model: String): String = model.substringAfterLast('/').removePrefix("claude-")
@@ -60,7 +61,7 @@ private fun grouped(n: Int): String = String.format(java.util.Locale.US, "%,d", 
 private fun durationText(ms: Long): String = when {
     ms < 1000 -> "$ms ms"
     ms < 60_000 -> String.format(java.util.Locale.US, "%.1f s", ms / 1000.0)
-    else -> "${ms / 60_000} min ${(ms % 60_000) / 1000} s"
+    else -> L.components.tokenUsageDetails.valueMinValue2S(ms / 60_000, (ms % 60_000) / 1000)
 }
 
 /**
@@ -80,8 +81,8 @@ fun TokenUsageDetailsSheet(usage: TokenUsage, onViewPayload: (() -> Unit)?, onDi
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 22.dp).navigationBarsPadding()) {
-            Text("Reply details", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text(if (usage.isEstimated) "Token counts are estimates" else "What this reply used", fontSize = 12.sp, color = muted)
+            Text(L.components.tokenUsageDetails.replyDetails, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(if (usage.isEstimated) L.components.tokenUsageDetails.tokenCountsAreEstimates else L.components.tokenUsageDetails.whatThisReplyUsed, fontSize = 12.sp, color = muted)
             Spacer(Modifier.height(14.dp))
 
             // model: full id, selectable, with a copy button
@@ -98,16 +99,16 @@ fun TokenUsageDetailsSheet(usage: TokenUsage, onViewPayload: (() -> Unit)?, onDi
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Model", fontSize = 11.sp, color = muted)
+                            Text(L.components.tokenUsageDetails.model, fontSize = 11.sp, color = muted)
                             SelectionContainer {
                                 Text(model.substringAfter('/').takeIf { model.contains('/') } ?: model, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)
                             }
-                            if (model.contains('/')) Text("Provider: ${model.substringBefore('/')}", fontSize = 11.5.sp, color = muted)
+                            if (model.contains('/')) Text(L.components.tokenUsageDetails.providerSubstringbefore(model.substringBefore('/')), fontSize = 11.5.sp, color = muted)
                         }
                         IconButton(onClick = {
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Model", model))
-                            Toast.makeText(context, "Model name copied", Toast.LENGTH_SHORT).show()
-                        }) { Icon(Icons.Outlined.ContentCopy, "Copy model name", tint = muted, modifier = Modifier.size(18.dp)) }
+                            Toast.makeText(context, L.components.tokenUsageDetails.modelNameCopied, Toast.LENGTH_SHORT).show()
+                        }) { Icon(Icons.Outlined.ContentCopy, L.components.tokenUsageDetails.copyModelName, tint = muted, modifier = Modifier.size(18.dp)) }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -121,19 +122,19 @@ fun TokenUsageDetailsSheet(usage: TokenUsage, onViewPayload: (() -> Unit)?, onDi
             ) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
                     val rows = buildList<Triple<ImageVector, Pair<String, String>, Color>> {
-                        add(Triple(Icons.Outlined.Download, "Input tokens" to grouped(usage.promptTokens), c.info))
-                        add(Triple(Icons.Outlined.Upload, "Output tokens" to grouped(usage.outputTokens), c.success))
+                        add(Triple(Icons.Outlined.Download, L.components.tokenUsageDetails.inputTokens to grouped(usage.promptTokens), c.info))
+                        add(Triple(Icons.Outlined.Upload, L.components.tokenUsageDetails.outputTokens to grouped(usage.outputTokens), c.success))
                         if (usage.cachedTokens > 0) {
                             val pct = if (usage.promptTokens + usage.cachedTokens > 0)
                                 (usage.cachedTokens * 100.0 / (usage.promptTokens + usage.cachedTokens)).toInt() else 0
-                            add(Triple(Icons.Outlined.Bolt, "Cache read" to "${grouped(usage.cachedTokens)}  ($pct% of the input)", c.warning))
+                            add(Triple(Icons.Outlined.Bolt, L.components.tokenUsageDetails.cacheRead to L.components.tokenUsageDetails.groupedPctOfTheInput(grouped(usage.cachedTokens), pct), c.warning))
                         }
-                        if (usage.cacheCreationTokens > 0) add(Triple(Icons.Outlined.Save, "Cache write" to grouped(usage.cacheCreationTokens), c.warning))
+                        if (usage.cacheCreationTokens > 0) add(Triple(Icons.Outlined.Save, L.components.tokenUsageDetails.cacheWrite to grouped(usage.cacheCreationTokens), c.warning))
                         val total = usage.totalTokens.takeIf { it > 0 }
                             ?: (usage.promptTokens + usage.outputTokens + usage.cachedTokens + usage.cacheCreationTokens)
-                        add(Triple(Icons.Outlined.Functions, "Total" to grouped(total), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)))
-                        if (usage.durationMs > 0) add(Triple(Icons.Outlined.Timer, "Time" to durationText(usage.durationMs), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)))
-                        usage.costUsd?.takeIf { it > 0 }?.let { add(Triple(Icons.Outlined.Paid, "Cost" to String.format(java.util.Locale.US, "$%.4f", it), c.accentTeal)) }
+                        add(Triple(Icons.Outlined.Functions, L.components.tokenUsageDetails.total to grouped(total), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)))
+                        if (usage.durationMs > 0) add(Triple(Icons.Outlined.Timer, L.components.tokenUsageDetails.time to durationText(usage.durationMs), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)))
+                        usage.costUsd?.takeIf { it > 0 }?.let { add(Triple(Icons.Outlined.Paid, L.components.tokenUsageDetails.cost to String.format(java.util.Locale.US, "$%.4f", it), c.accentTeal)) }
                     }
                     rows.forEachIndexed { i, (icon, kv, color) ->
                         if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
@@ -152,7 +153,7 @@ fun TokenUsageDetailsSheet(usage: TokenUsage, onViewPayload: (() -> Unit)?, onDi
                 OutlinedButton(onClick = { onDismiss(); onViewPayload() }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Outlined.DataObject, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("View raw payload")
+                    Text(L.components.tokenUsageDetails.viewRawPayload)
                 }
             }
         }

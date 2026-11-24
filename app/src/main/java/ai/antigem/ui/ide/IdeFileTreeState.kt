@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import ai.antigem.i18n.L
 
 /** One row of the sidebar's tree: a file or folder, a folder still loading, or a note under a folder. */
 sealed class TreeRow(val key: String, val depth: Int) {
@@ -68,9 +69,9 @@ class IdeFileTreeState {
                         if (open) walk(node.path, depth + 1)
                     }
                     if (listing.truncated) {
-                        out += TreeRow.Note(dir, depth, "Only the first ${listing.entries.size} entries are shown", isError = false)
+                        out += TreeRow.Note(dir, depth, L.ide.fileTreeState.onlyTheFirstEntriescountEntriesAre(listing.entries.size), isError = false)
                     } else if (listing.entries.isEmpty() && dir != r) {
-                        out += TreeRow.Note(dir, depth, "Empty folder", isError = false)
+                        out += TreeRow.Note(dir, depth, L.ide.fileTreeState.emptyFolder, isError = false)
                     }
                 }
             }

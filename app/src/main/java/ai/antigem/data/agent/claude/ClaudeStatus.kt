@@ -1,37 +1,39 @@
 package ai.antigem.data.agent.claude
 
 import androidx.compose.ui.graphics.Color
+import ai.antigem.i18n.L
 
 /**
  * Claude Code health as the UI shows it (status dot, accounts, empty chat). Colors follow AGY's [SystemStatus]
  * palette so both agents read the same way: grey offline, blue checking, purple signed out, green ready, red error.
  */
 enum class ClaudeStatus(
-    val label: String,
+    private val labelText: () -> String,
     val colorHex: Long
 ) {
     /** First status check still running. */
-    CHECKING("Checking…", 0xFF3B82F6),
+    CHECKING({ L.agent.claudeStatus.checking }, 0xFF3B82F6),
 
     /** The bridge did not answer. */
-    BRIDGE_OFFLINE("Bridge offline", 0xFF9CA3AF),
+    BRIDGE_OFFLINE({ L.agent.claudeStatus.bridgeOffline }, 0xFF9CA3AF),
 
     /** The running bridge cannot serve Claude (an older binary, or started with Claude turned off): restart it. */
-    BRIDGE_OUTDATED("Restart needed", 0xFFF97316),
+    BRIDGE_OUTDATED({ L.agent.claudeStatus.restartNeeded }, 0xFFF97316),
 
     /** No `claude` binary on the device. */
-    NOT_INSTALLED("Claude Code not found", 0xFFF97316),
+    NOT_INSTALLED({ L.agent.claudeStatus.claudeCodeNotFound }, 0xFFF97316),
 
     /** Installed but not signed in. */
-    SIGNED_OUT("Sign in required", 0xFFA855F7),
+    SIGNED_OUT({ L.agent.claudeStatus.signInRequired }, 0xFFA855F7),
 
     /** OAuth sign-in in progress. */
-    SIGNING_IN("Signing in…", 0xFF06B6D4),
+    SIGNING_IN({ L.agent.claudeStatus.signingIn }, 0xFF06B6D4),
 
-    READY("Ready", 0xFF22C55E),
+    READY({ L.agent.claudeStatus.ready }, 0xFF22C55E),
 
     /** The bridge answered but the check failed (e.g. `claude auth status` crashed). */
-    ERROR("Error", 0xFFEF4444);
+    ERROR({ L.agent.claudeStatus.error }, 0xFFEF4444);
+    val label: String get() = labelText()
 
     val dotColor: Color
         get() = Color(colorHex)

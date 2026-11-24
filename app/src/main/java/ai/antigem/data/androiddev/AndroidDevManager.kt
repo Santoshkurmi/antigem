@@ -32,6 +32,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 /**
  * Settings → Android Development: sets up what agents (and the user) need to build Android apps on the phone:
@@ -66,10 +67,14 @@ object AndroidDevManager {
     private const val PLATFORM = "android-36"
 
     /** What the user wants to build; each needs some [Component]s. */
-    enum class Framework(val key: String, val label: String, val description: String, val size: String) {
-        KOTLIN("compose", "Kotlin / Java · Jetpack Compose", "Native Android apps with Gradle: Kotlin or Java, Jetpack Compose or XML views. Flutter and React Native need this too. Apps are built for this phone (arm64-v8a only).", "≈1.2 GB with Gradle's first downloads"),
-        FLUTTER("flutter", "Flutter", "Dart apps with Flutter (stable channel), debug and release builds.", "+≈1.6 GB"),
-        REACT_NATIVE("rn", "React Native", "JavaScript / TypeScript apps with the React Native CLI. Needs Node.js and the NDK (React Native compiles C++); npm downloads the rest per project.", "+≈1.8 GB, ≈400 MB per project")
+    enum class Framework(val key: String, private val labelText: () -> String, private val descriptionText: () -> String, private val sizeText: () -> String) {
+        KOTLIN("compose", { L.androiddev.manager.kotlinJavaJetpackCompose }, { L.androiddev.manager.nativeAndroidAppsWithGradleKotlin }, { L.androiddev.manager.n12GbWithGradlesFirst }),
+        FLUTTER("flutter", { L.androiddev.manager.flutter }, { L.androiddev.manager.dartAppsWithFlutterStableChannel }, { "+≈1.6 GB" }),
+        REACT_NATIVE("rn", { L.androiddev.manager.reactNative }, { L.androiddev.manager.javascriptTypescriptAppsWithTheReact }, { L.androiddev.manager.n18Gb400MbPer });
+
+        val label: String get() = labelText()
+        val description: String get() = descriptionText()
+        val size: String get() = sizeText()
     }
 
     /**
@@ -78,31 +83,31 @@ object AndroidDevManager {
      */
     enum class Component(
         val step: String,
-        private val termuxLabel: String,
-        private val termuxDescription: String,
+        private val termuxLabel: () -> String,
+        private val termuxDescription: () -> String,
         val size: String,
         /** The wording when the tools install into the Ubuntu chroot (null: the same). */
-        private val chrootLabel: String? = null,
-        private val chrootDescription: String? = null
+        private val chrootLabel: (() -> String)? = null,
+        private val chrootDescription: (() -> String)? = null
     ) {
-        CONTAINER("container", "Ubuntu container", "proot-distro and an Ubuntu 24.04 container the tools run in (the same one REA uses).", "≈150 MB",
-            "Ubuntu chroot", "This phone's Ubuntu chroot: the tools install right into it, nothing to add."),
-        BASE("base", "Base tools", "curl, git, zip, unzip, xz, Python and binutils in Ubuntu. Flutter, the SDK download and stripping .so files need them.", "≈70 MB"),
-        JAVA("java", "Java 21", "OpenJDK 21, headless. Gradle and the Android SDK tools run on it (shared with REA).", "≈290 MB"),
-        SDK("sdk", "Android SDK", "Command-line tools, the Android 16 (API 36) platform and build-tools 36, Termux's arm64 aapt2 (Google's is x86_64 only) and Gradle settings that suit the phone.", "≈500 MB",
-            chrootDescription = "Command-line tools, the Android 16 (API 36) platform and build-tools 36, Ubuntu's arm64 aapt2 (Google's is x86_64 only) and Gradle settings that suit the phone."),
-        LAUNCHER("launcher", "adev commands", "adev runs a command in the container with every tool on PATH (adev ./gradlew assembleDebug); adev-new creates a working hello-world project.", "<1 MB",
-            chrootDescription = "adev runs a command with every tool on PATH (adev ./gradlew assembleDebug); adev-new creates a working hello-world project."),
-        FLUTTER("flutter", "Flutter", "Flutter stable, cloned from GitHub, and its Android engine files. Install again to update it.", "≈1.5 GB"),
-        FLUTTER_RELEASE("flutter-release", "Flutter release builds", "Flutter's release compiler (gen_snapshot) only exists for x86-64 PCs. This runs it through qemu (Termux) with Ubuntu's x86-64 C library, so flutter build apk --release works; each release build takes a few minutes longer. Debug builds do not need it.", "≈110 MB",
-            chrootDescription = "Flutter's release compiler (gen_snapshot) only exists for x86-64 PCs. This runs it through Ubuntu's qemu-user with Ubuntu's x86-64 C library, so flutter build apk --release works; each release build takes a few minutes longer. Debug builds do not need it."),
-        NODE("node", "Node.js 24", "Installed with nvm (the same Node.js REA uses). React Native and Expo run on it.", "≈240 MB"),
-        NDK("ndk", "C/C++ (NDK)", "The Android NDK and CMake for C/C++ code: React Native's new architecture, apps and plugins with CMake. Google builds them for x86-64 PCs only, so their programs are swapped for Ubuntu's arm64 LLVM, CMake and Ninja.", "≈1.5 GB"),
-        ADB("adb", "adb", "adb in the terminal, to install and debug the apps you build on this phone. Connect it in ADB Connect.", "≈10 MB",
-            "adb and fastboot", "Ubuntu's adb and fastboot, to install and debug the apps you build on this phone; no sudo needed (USB / OTG devices too). Connect adb in ADB Connect.");
+        CONTAINER("container", { L.androiddev.manager.ubuntuContainer }, { L.androiddev.manager.prootDistroAndAnUbuntu24 }, "≈150 MB",
+            { L.androiddev.manager.ubuntuChroot }, { L.androiddev.manager.thisPhonesUbuntuChrootTheTools }),
+        BASE("base", { L.androiddev.manager.baseTools }, { L.androiddev.manager.curlGitZipUnzipXzPython }, "≈70 MB"),
+        JAVA("java", { "Java 21" }, { L.androiddev.manager.openjdk21HeadlessGradleAndThe }, "≈290 MB"),
+        SDK("sdk", { L.androiddev.manager.androidSdk }, { L.androiddev.manager.commandLineToolsTheAndroid16 }, "≈500 MB",
+            chrootDescription = { L.androiddev.manager.commandLineToolsTheAndroid162 }),
+        LAUNCHER("launcher", { L.androiddev.manager.adevCommands }, { L.androiddev.manager.adevRunsACommandInThe }, "<1 MB",
+            chrootDescription = { L.androiddev.manager.adevRunsACommandWithEvery }),
+        FLUTTER("flutter", { L.androiddev.manager.flutter }, { L.androiddev.manager.flutterStableClonedFromGithubAnd }, "≈1.5 GB"),
+        FLUTTER_RELEASE("flutter-release", { L.androiddev.manager.flutterReleaseBuilds }, { L.androiddev.manager.fluttersReleaseCompilerGenSnapshotOnly }, "≈110 MB",
+            chrootDescription = { L.androiddev.manager.fluttersReleaseCompilerGenSnapshotOnly2 }),
+        NODE("node", { L.androiddev.manager.nodeJs24 }, { L.androiddev.manager.installedWithNvmTheSameNode }, "≈240 MB"),
+        NDK("ndk", { L.androiddev.manager.cCNdk }, { L.androiddev.manager.theAndroidNdkAndCmakeFor }, "≈1.5 GB"),
+        ADB("adb", { "adb" }, { L.androiddev.manager.adbInTheTerminalToInstall }, "≈10 MB",
+            { L.androiddev.manager.adbAndFastboot }, { L.androiddev.manager.ubuntusAdbAndFastbootToInstall });
 
-        val label: String get() = chrootLabel?.takeIf { ChrootSetup.install() != null } ?: termuxLabel
-        val description: String get() = chrootDescription?.takeIf { ChrootSetup.install() != null } ?: termuxDescription
+        val label: String get() = chrootLabel?.takeIf { ChrootSetup.install() != null }?.invoke() ?: termuxLabel()
+        val description: String get() = chrootDescription?.takeIf { ChrootSetup.install() != null }?.invoke() ?: termuxDescription()
 
         val needs: List<Component>
             get() = when (this) {
@@ -267,8 +272,7 @@ object AndroidDevManager {
 
     private fun chrootFilesError(): String {
         val v = runCatching { JSONObject(File(shareDir, "files.json").readText()).optString("version") }.getOrNull()?.ifBlank { null }
-        return "These setup files (${v ?: "unknown version"}) are from before the Ubuntu chroot was supported. Get the setup files again " +
-            "once their source has version 1.1.0 or newer."
+        return L.androiddev.manager.theseSetupFilesVersionAreFrom(v ?: L.androiddev.manager.unknownVersion)
     }
 
     /** The downloaded setup files, copied into the chroot's [CHROOT_SHARE] (they run there). */
@@ -363,18 +367,18 @@ object AndroidDevManager {
     fun downloadSetupFiles() = runTask("files") { fetchSetupFiles() }
 
     private suspend fun fetchSetupFiles() {
-        _state.update { it.copy(progress = "Reading the file list…") }
+        _state.update { it.copy(progress = L.androiddev.manager.readingTheFileList) }
         val listUrl = rawUrl("files.json")
-        appendLog("Source: ${_state.value.source}")
+        appendLog(L.androiddev.manager.sourceSource(_state.value.source))
         appendLog(listUrl)
         val index = JSONObject(httpGet(listUrl))
-        val version = index.optString("version").ifBlank { throw IllegalStateException("files.json has no version") }
-        val files = index.optJSONArray("files") ?: throw IllegalStateException("files.json lists no files")
+        val version = index.optString("version").ifBlank { throw IllegalStateException(L.androiddev.manager.filesJsonHasNoVersion) }
+        val files = index.optJSONArray("files") ?: throw IllegalStateException(L.androiddev.manager.filesJsonListsNoFiles)
         shareDir.mkdirs()
         for (i in 0 until files.length()) {
             val name = files.getString(i)
             require(Regex("[A-Za-z0-9._-]+").matches(name)) { "Bad file name in files.json: $name" }
-            _state.update { it.copy(progress = "Downloading $name (${i + 1}/${files.length()})…") }
+            _state.update { it.copy(progress = L.androiddev.manager.downloadingNameIndexTotal(name, i + 1, files.length())) }
             val target = File(shareDir, name)
             val partial = File(shareDir, "$name.part")
             partial.writeText(httpGet(rawUrl(name)))
@@ -384,15 +388,15 @@ object AndroidDevManager {
         }
         File(shareDir, "files.json").writeText(index.toString(1))
         relocateSetupFiles()
-        appendLog("✓ Setup files $version in ${shareDir.absolutePath}")
+        appendLog(L.androiddev.manager.setupFilesVersionInAbsolutepath(version, shareDir.absolutePath))
         ChrootSetup.install()?.let { install ->
             if (!filesSupportChroot()) throw IllegalStateException(chrootFilesError())
-            if (!copyFilesToChroot(install)) throw IllegalStateException("Could not copy the setup files into the Ubuntu chroot")
-            appendLog("✓ Copied into the Ubuntu chroot: $CHROOT_SHARE")
+            if (!copyFilesToChroot(install)) throw IllegalStateException(L.androiddev.manager.couldNotCopyTheSetupFiles)
+            appendLog(L.androiddev.manager.copiedIntoTheUbuntuChrootChroot(CHROOT_SHARE))
         }
         _state.update { it.copy(filesUpdate = null) }
         // New adev / adev-new versions reach the terminal through the launcher step
-        if (Component.LAUNCHER in _state.value.installed) shellTask("Updating the adev commands…", "launcher", 600)
+        if (Component.LAUNCHER in _state.value.installed) shellTask(L.androiddev.manager.updatingTheAdevCommands, "launcher", 600)
     }
 
     fun checkForUpdate() = scope.launch {
@@ -425,7 +429,7 @@ object AndroidDevManager {
     /** Installs [components] (already planned) one step after another, stopping at the first failure. */
     fun installAll(components: List<Component>, single: Component? = null) {
         if (components.isEmpty()) {
-            report("Everything selected is already installed.")
+            report(L.androiddev.manager.everythingSelectedIsAlreadyInstalled)
             return
         }
         runTask(single?.step ?: "batch") {
@@ -433,7 +437,7 @@ object AndroidDevManager {
             val chroot = ChrootSetup.install()
             val needed = components.sumOf { if (chroot != null && it == Component.CONTAINER) 0L else StorageSpace.parseSize(it.size) }
             StorageSpace.shortage(chroot?.let { File(it.path) } ?: appContext.filesDir, needed + StorageSpace.MARGIN_BYTES,
-                if (components.size == 1) components[0].label else "these ${components.size} parts")?.let {
+                if (components.size == 1) components[0].label else L.androiddev.manager.theseComponentscountParts(components.size))?.let {
                 report(it, isError = true)
                 return@runTask
             }
@@ -441,19 +445,19 @@ object AndroidDevManager {
             _state.update { it.copy(batch = components, batchIndex = 0) }
             for ((i, c) in components.withIndex()) {
                 _state.update { it.copy(installing = c, batchIndex = i) }
-                val label = if (components.size > 1) "Step ${i + 1} of ${components.size} · ${c.label}" else c.label
+                val label = if (components.size > 1) L.androiddev.manager.stepValueOfComponentscountLabel(i + 1, components.size, c.label) else c.label
                 if (!shellTask("$label…", c.step, 3600)) return@runTask
                 refreshNow(force = true)
             }
-            report(if (components.size == 1) "${components[0].label} installed." else "Installed ${components.size} parts.")
+            report(if (components.size == 1) L.androiddev.manager.labelInstalled(components[0].label) else L.androiddev.manager.installedComponentscountParts(components.size))
         }
     }
 
     /** Creates (once) and builds a hello-world app of [framework] in ~/AndroidProjects, to check the setup works. */
     fun testBuild(framework: Framework) = runTask("test-${framework.key}") {
-        if (shellTask("Building a ${framework.label} hello world (the first build downloads a lot and takes several minutes)…", "test ${framework.key}", 3600)) {
+        if (shellTask(L.androiddev.manager.buildingALabelHelloWorldThe(framework.label), "test ${framework.key}", 3600)) {
             refreshNow(force = true)
-            report("${framework.label} works: the test APK is ${_state.value.testApks[framework.key] ?: testApk(framework)}")
+            report(L.androiddev.manager.labelWorksTheTestApkIs(framework.label, _state.value.testApks[framework.key] ?: testApk(framework)))
         }
     }
 
@@ -468,7 +472,7 @@ object AndroidDevManager {
                 val dest = File(appContext.cacheDir, "chroot-apk/${File(path).name}")
                 val r = ChrootManager.copyOut(appContext, chroot, path, dest)
                 if (!r.ok || !dest.isFile) {
-                    report("Could not copy the APK out of the Ubuntu chroot: ${r.message()}", isError = true)
+                    report(L.androiddev.manager.couldNotCopyTheApkOut(r.message()), isError = true)
                     return@launch
                 }
                 withContext(Dispatchers.Main) { openInstaller(dest.absolutePath) }
@@ -486,7 +490,7 @@ object AndroidDevManager {
                     android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${ctx.packageName}"))
                         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
-                report("Allow AntiGem to install apps, then tap Install again.")
+                report(L.androiddev.manager.allowAntigemToInstallAppsThen)
                 return
             }
             val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", File(path))
@@ -495,7 +499,7 @@ object AndroidDevManager {
                     .setDataAndType(uri, "application/vnd.android.package-archive")
                     .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             )
-        }.onFailure { report("Could not open the installer: ${it.message}", isError = true) }
+        }.onFailure { report(L.androiddev.manager.couldNotOpenTheInstallerMessage(it.message), isError = true) }
     }
 
     fun stop() {
@@ -507,21 +511,21 @@ object AndroidDevManager {
             if (pid != null) scope.launch { killTree(pid) }
         }
         job?.cancel()
-        report("Stopped. Run the step again to finish it: it picks up where it left off.", isError = true)
+        report(L.androiddev.manager.stoppedRunTheStepAgainTo, isError = true)
     }
 
-    fun runDoctor() = runTask("doctor") { shellTask("Checking the tools…", "doctor", 300) }
+    fun runDoctor() = runTask("doctor") { shellTask(L.androiddev.manager.checkingTheTools, "doctor", 300) }
 
     fun cleanCache() = runTask("clean-cache") {
-        if (shellTask("Deleting Gradle's caches…", "clean-cache", 600)) report("Gradle's caches were deleted. The next build downloads what it needs again.")
+        if (shellTask(L.androiddev.manager.deletingGradlesCaches, "clean-cache", 600)) report(L.androiddev.manager.gradlesCachesWereDeletedTheNext)
     }
 
     fun uninstallFlutter() = runTask("uninstall-flutter") {
-        if (shellTask("Removing Flutter…", "uninstall-flutter", 600)) report("Flutter removed.")
+        if (shellTask(L.androiddev.manager.removingFlutter, "uninstall-flutter", 600)) report(L.androiddev.manager.flutterRemoved)
     }
 
     fun uninstall() = runTask("uninstall") {
-        if (shellTask("Removing the Android tools…", "uninstall", 900)) report("Removed the Android SDK, Flutter, Gradle's files and adev. The container, Java, Node.js and your projects stay.")
+        if (shellTask(L.androiddev.manager.removingTheAndroidTools, "uninstall", 900)) report(L.androiddev.manager.removedTheAndroidSdkFlutterGradles)
     }
 
     // ---------------- the skill plugin ----------------
@@ -530,37 +534,37 @@ object AndroidDevManager {
     fun installSkillPlugin() = runTask("plugin") {
         PluginRepositories.init(appContext)
         val wanted = PluginRepositories.parse(_state.value.source)
-        _state.update { it.copy(progress = "Adding ${wanted.label} to the plugin repositories…") }
+        _state.update { it.copy(progress = L.androiddev.manager.addingLabelToThePluginRepositories(wanted.label)) }
         val repo = PluginRepositories.repos.firstOrNull { it.slug.equals(wanted.slug, ignoreCase = true) }
             ?: withContext(Dispatchers.Main) {
                 val plain = if (wanted.ref == "main") wanted.copy(ref = "") else wanted
                 PluginRepositories.add(plain)
                 plain
             }
-        appendLog("Repository: ${repo.label}")
-        _state.update { it.copy(progress = "Reading ${repo.label}…") }
+        appendLog(L.androiddev.manager.repositoryLabel(repo.label))
+        _state.update { it.copy(progress = L.androiddev.manager.readingRepo(repo.label)) }
         PluginRepositories.refresh(repo)
         val listing = PluginRepositories.listings[repo.label]
-            ?: throw IllegalStateException(PluginRepositories.errors[repo.label] ?: "Could not read ${repo.label}")
+            ?: throw IllegalStateException(PluginRepositories.errors[repo.label] ?: L.androiddev.manager.couldNotReadRepo(repo.label))
         val plugin = listing.plugins.firstOrNull { it.id == PLUGIN_ID || it.path.substringAfterLast('/') == PLUGIN_ID }
-            ?: throw IllegalStateException("${repo.label} has no Android Development plugin")
+            ?: throw IllegalStateException(L.androiddev.manager.repoHasNoAndroidDevelopmentPlugin(repo.label))
         val existing = PluginRepositories.installedFor(repo, plugin)
-        _state.update { it.copy(progress = "Installing the Android Development skill ${plugin.version}…") }
+        _state.update { it.copy(progress = L.androiddev.manager.installingTheAndroidDevelopmentSkill(plugin.version)) }
         val result = PluginRepositories.install(repo, plugin, existing?.folderName ?: PLUGIN_ID, existing?.id)
         appendLog("✓ ${result.name} ${result.version} in ${result.dirPath}")
-        report("Android Development skill ${result.version} installed. Give it to an agent with /plu: in chat, or with the Custom Plugin MCP preset in the agent's MCP settings.")
+        report(L.androiddev.manager.androidDevelopmentSkillVersionInstalled(result.version))
     }
 
     // ---------------- helpers ----------------
 
     private fun runTask(task: String, block: suspend () -> Unit) {
         if (job?.isActive == true) {
-            report("Something is already running. Wait for it, or tap Stop.", isError = true)
+            report(L.androiddev.manager.somethingIsAlreadyRunningWaitFor, isError = true)
             return
         }
         // REA installs into the same container: two apt runs at once would wait on each other's lock
         if (ReaManager.state.value.busy) {
-            report("REA's setup is running in the same container. Wait for it to finish.", isError = true)
+            report(L.androiddev.manager.reasSetupIsRunningInThe, isError = true)
             return
         }
         job = scope.launch {
@@ -576,7 +580,7 @@ object AndroidDevManager {
             } catch (e: Exception) {
                 Log.e(TAG, "$task failed", e)
                 appendLog("✗ ${e.message ?: e.javaClass.simpleName}")
-                report(e.message ?: "Failed", isError = true)
+                report(e.message ?: L.androiddev.manager.failed, isError = true)
             } finally {
                 releaseWakeLock()
                 pidFile.delete()
@@ -600,7 +604,7 @@ object AndroidDevManager {
     /** Runs `android-setup.sh <step>`, streaming its output into the log; false (and an error message) on failure. */
     private suspend fun shellTask(progress: String, step: String, timeoutSeconds: Long): Boolean {
         val script = File(shareDir, "android-setup.sh")
-        if (!script.exists()) throw IllegalStateException("The setup files are missing. Tap Get setup files first.")
+        if (!script.exists()) throw IllegalStateException(L.androiddev.manager.theSetupFilesAreMissingTap)
         ChrootSetup.install()?.let { return chrootTask(it, progress, step, timeoutSeconds) }
         relocateSetupFiles()
         _state.update { it.copy(progress = progress) }
@@ -615,7 +619,7 @@ object AndroidDevManager {
         if (result.exitCode != 0) {
             val last = if (_state.value.log.takeLast(40).any(StorageSpace::isOutOfSpaceLine)) StorageSpace.outOfSpaceMessage()
                 else _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
-            report(last ?: "The $step step failed (exit ${result.exitCode}). Check the log, then run it again.", isError = true)
+            report(last ?: L.androiddev.manager.theStepStepFailedExitExitcode(step, result.exitCode), isError = true)
             return false
         }
         return true
@@ -624,7 +628,7 @@ object AndroidDevManager {
     /** [shellTask] in the Ubuntu chroot: the same `android-setup.sh <step>`, run inside the chroot as root. */
     private suspend fun chrootTask(install: ChrootInstall, progress: String, step: String, timeoutSeconds: Long): Boolean {
         if (!filesSupportChroot()) throw IllegalStateException(chrootFilesError())
-        if (!copyFilesToChroot(install)) throw IllegalStateException("Could not copy the setup files into the Ubuntu chroot (root access?)")
+        if (!copyFilesToChroot(install)) throw IllegalStateException(L.androiddev.manager.couldNotCopyTheSetupFiles2)
         _state.update { it.copy(progress = progress) }
         appendLog("$ bash android-setup.sh $step   (in the Ubuntu chroot, as root)")
         val r = ChrootSetup.runScript(appContext, install, CHROOT_SHARE, "android-setup.sh", step.split(' ').filter { it.isNotBlank() },
@@ -632,7 +636,7 @@ object AndroidDevManager {
         if (!r.ok) {
             val last = if (_state.value.log.takeLast(40).any(StorageSpace::isOutOfSpaceLine)) StorageSpace.outOfSpaceMessage()
                 else _state.value.log.lastOrNull { it.startsWith("✗") }?.removePrefix("✗ ")
-            report(last ?: "The $step step failed (exit ${r.exitCode}). Check the log, then run it again.", isError = true)
+            report(last ?: L.androiddev.manager.theStepStepFailedExitExitcode(step, r.exitCode), isError = true)
             return false
         }
         return true
@@ -679,9 +683,9 @@ object AndroidDevManager {
     private suspend fun httpGet(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).header("User-Agent", "AntiGem/${BuildConfig.VERSION_NAME}").build()
         http.newCall(request).execute().use { response ->
-            if (response.code == 404) throw IllegalStateException("Not found: $url (is the repository pushed and the source right?)")
-            if (!response.isSuccessful) throw IllegalStateException("Download failed (HTTP ${response.code}): $url")
-            response.body?.string() ?: throw IllegalStateException("Empty response: $url")
+            if (response.code == 404) throw IllegalStateException(L.androiddev.manager.notFoundUrlIsTheRepository(url))
+            if (!response.isSuccessful) throw IllegalStateException(L.androiddev.manager.downloadFailedHttpCodeUrl(response.code, url))
+            response.body?.string() ?: throw IllegalStateException(L.androiddev.manager.emptyResponseUrl(url))
         }
     }
 }

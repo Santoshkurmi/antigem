@@ -64,6 +64,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import ai.antigem.i18n.L
 
 enum class ModifierState {
     OFF,
@@ -186,7 +187,7 @@ fun LocalTerminalContent(
                     modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "Restoring active terminal sessions...",
+                    text = L.components.localTerminal.restoringActiveTerminalSessions,
                     color = Color.LightGray,
                     fontSize = 13.sp
                 )
@@ -481,7 +482,7 @@ fun LocalTerminalContent(
                                 ) {
                                     Icon(
                                         imageVector = if (isMaximized) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                        contentDescription = if (isMaximized) "Minimize / Restore" else "Maximize",
+                                        contentDescription = if (isMaximized) L.components.localTerminal.minimizeRestore else L.components.localTerminal.maximize,
                                         tint = Color.LightGray,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -496,7 +497,7 @@ fun LocalTerminalContent(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Retry",
+                                        contentDescription = L.common.retry,
                                         tint = ai.antigem.theme.AppColors.success,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -510,7 +511,7 @@ fun LocalTerminalContent(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Close",
+                                    contentDescription = L.common.close,
                                     tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -833,7 +834,7 @@ fun LocalTerminalContent(
                         ExtraKey(label = "END", modifier = Modifier.weight(1f)) {
                             sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u0005")
                         }
-                        ExtraKey(label = "PGUP", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                        ExtraKey(label = L.components.localTerminal.pgup, enableRepeat = true, modifier = Modifier.weight(1f)) {
                             sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_UP, "\u001B[5~")
                         }
                     }
@@ -847,7 +848,7 @@ fun LocalTerminalContent(
                             sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
                         }
                         ExtraKey(
-                            label = "CTRL",
+                            label = L.components.localTerminal.ctrl,
                             isActive = ctrlState != ModifierState.OFF,
                             isLocked = ctrlState == ModifierState.LOCKED,
                             modifier = Modifier.weight(1f),
@@ -859,7 +860,7 @@ fun LocalTerminalContent(
                             }
                         )
                         ExtraKey(
-                            label = "ALT",
+                            label = L.components.localTerminal.alt,
                             isActive = altState != ModifierState.OFF,
                             isLocked = altState == ModifierState.LOCKED,
                             modifier = Modifier.weight(1f),
@@ -879,7 +880,7 @@ fun LocalTerminalContent(
                         ExtraKey(label = "→", enableRepeat = true, modifier = Modifier.weight(1f)) {
                             sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_RIGHT, "\u001B[C")
                         }
-                        ExtraKey(label = "PGDN", enableRepeat = true, modifier = Modifier.weight(1f)) {
+                        ExtraKey(label = L.components.localTerminal.pgdn, enableRepeat = true, modifier = Modifier.weight(1f)) {
                             sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_DOWN, "\u001B[6~")
                         }
                     }
@@ -946,7 +947,7 @@ fun LocalTerminalContent(
                         )
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Switch Tab",
+                            contentDescription = L.components.localTerminal.switchTab,
                             tint = Color.LightGray,
                             modifier = Modifier.size(16.dp)
                         )
@@ -996,7 +997,7 @@ fun LocalTerminalContent(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Close,
-                                                contentDescription = "Close Tab",
+                                                contentDescription = L.common.closeTab,
                                                 tint = Color.Gray,
                                                 modifier = Modifier.size(12.dp)
                                             )
@@ -1024,7 +1025,7 @@ fun LocalTerminalContent(
                                     },
                                     onLongClick = {
                                         LocalTerminalManager.createNewSession(context, forceShell = "bash")
-                                        android.widget.Toast.makeText(context, "Created Bash session", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(context, L.components.localTerminal.createdBashSession, android.widget.Toast.LENGTH_SHORT).show()
                                         isTabsMenuExpanded = false
                                     }
                                 )
@@ -1033,20 +1034,20 @@ fun LocalTerminalContent(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Add,
-                                    contentDescription = "New Tab",
+                                    contentDescription = L.components.localTerminal.newTab,
                                     tint = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column {
                                     Text(
-                                        text = "New Session",
+                                        text = L.components.localTerminal.newSession,
                                         color = if (!isSyncingTmux) ClaudeTerracotta else Color.Gray,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "Long-press to force Bash shell",
+                                        text = L.components.localTerminal.longPressToForceBashShell,
                                         color = ai.antigem.theme.AppColors.editorText.copy(alpha = 0.53f),
                                         fontSize = 10.sp
                                     )
@@ -1075,7 +1076,7 @@ fun LocalTerminalContent(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = L.common.close,
                         tint = Color.White,
                         modifier = Modifier.size(14.dp)
                     )
@@ -1095,7 +1096,7 @@ fun LocalTerminalContent(
                 onNewSession = { LocalTerminalManager.createNewSession(context) },
                 onNewBashSession = {
                     LocalTerminalManager.createNewSession(context, forceShell = "bash")
-                    android.widget.Toast.makeText(context, "Created Bash session", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, L.components.localTerminal.createdBashSession, android.widget.Toast.LENGTH_SHORT).show()
                 },
                 onToggleKeyboard = toggleKeyboard,
                 onRenameSession = { sess, name -> LocalTerminalManager.renameSession(sess.id, name) },
@@ -1129,7 +1130,7 @@ fun LocalTerminalContent(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Close Tab?",
+                            text = L.components.localTerminal.closeTab,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White
@@ -1138,7 +1139,7 @@ fun LocalTerminalContent(
                 },
                 text = {
                     Text(
-                        text = "Are you sure you want to close \"$sessTitle\"?\nAny process running in this session will be terminated.",
+                        text = L.components.localTerminal.areYouSureYouWantTo(sessTitle),
                         fontSize = 13.sp,
                         color = ai.antigem.theme.AppColors.editorText,
                         lineHeight = 18.sp
@@ -1155,7 +1156,7 @@ fun LocalTerminalContent(
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Text("Close Tab", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.common.closeTab, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 dismissButton = {
@@ -1163,7 +1164,7 @@ fun LocalTerminalContent(
                         onClick = { sessionToClose = null },
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Cancel", color = Color.Gray, fontSize = 13.sp)
+                        Text(L.common.cancel, color = Color.Gray, fontSize = 13.sp)
                     }
                 }
             )
@@ -1313,7 +1314,7 @@ private fun TerminalTextInputBox(
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (value.text.isEmpty()) {
                 Text(
-                    text = "Type here · Enter puts it in the terminal",
+                    text = L.components.localTerminal.typeHereEnterPutsItIn,
                     color = ai.antigem.theme.AppColors.editorText.copy(alpha = 0.45f),
                     fontSize = 13.sp,
                     maxLines = 1
@@ -1342,7 +1343,7 @@ private fun TerminalTextInputBox(
         IconButton(onClick = onSend, modifier = Modifier.size(40.dp)) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardReturn,
-                contentDescription = "Put in the terminal (Enter)",
+                contentDescription = L.components.localTerminal.putInTheTerminalEnter,
                 tint = ClaudeTerracotta,
                 modifier = Modifier.size(20.dp)
             )

@@ -8,6 +8,7 @@ import ai.antigem.domain.model.ToolCall
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import ai.antigem.i18n.L
 
 /**
  * Universal domain parser for converting raw AGY/Cortex steps into UI ChatMessage,
@@ -840,11 +841,11 @@ object TrajectoryParser {
         val errorId = target.optString("errorId", "")
 
         val title = when {
-            shortError.contains("auth", ignoreCase = true) || userError.contains("auth", ignoreCase = true) -> "Authentication Required"
-            shortError.contains("quota", ignoreCase = true) || shortError.contains("credit", ignoreCase = true) || errorCode == 429 -> "Quota / Usage Limit Exceeded"
-            shortError.contains("model not found", ignoreCase = true) || shortError.contains("unknown model", ignoreCase = true) -> "Model Configuration Error"
-            shortError.contains("network", ignoreCase = true) || shortError.contains("connect", ignoreCase = true) -> "Network / Server Connection Error"
-            else -> "Agent Execution Error"
+            shortError.contains("auth", ignoreCase = true) || userError.contains("auth", ignoreCase = true) -> L.chat.trajectoryParser.authenticationRequired
+            shortError.contains("quota", ignoreCase = true) || shortError.contains("credit", ignoreCase = true) || errorCode == 429 -> L.chat.trajectoryParser.quotaUsageLimitExceeded
+            shortError.contains("model not found", ignoreCase = true) || shortError.contains("unknown model", ignoreCase = true) -> L.chat.trajectoryParser.modelConfigurationError
+            shortError.contains("network", ignoreCase = true) || shortError.contains("connect", ignoreCase = true) -> L.chat.trajectoryParser.networkServerConnectionError
+            else -> L.chat.trajectoryParser.agentExecutionError
         }
 
         return JSONObject().apply {
@@ -908,7 +909,7 @@ object TrajectoryParser {
         val stepType = step.optString("type", "")
         if (stepType.contains("ERROR", ignoreCase = true)) {
             val desc = step.optString("description", "").takeIf { it.isNotBlank() }
-            return desc ?: "Agent execution terminated due to error."
+            return desc ?: L.chat.trajectoryParser.agentExecutionTerminatedDueToError
         }
 
         val status = step.optString("status", "")

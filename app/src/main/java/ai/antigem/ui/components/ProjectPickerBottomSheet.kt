@@ -39,6 +39,7 @@ import androidx.compose.ui.window.DialogProperties
 import ai.antigem.data.daemon.ProjectItem
 import ai.antigem.theme.ClaudeTerracotta
 import java.io.File
+import ai.antigem.i18n.L
 
 @Composable
 fun ProjectPickerDialog(
@@ -121,13 +122,13 @@ fun ProjectPickerDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Select Workspace",
+                                text = L.components.projectPickerBottom.selectWorkspace,
                                 fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${projects.size} available workspace${if (projects.size == 1) "" else "s"}",
+                                text = L.components.projectPickerBottom.projectscountAvailableWorkspaceValue(projects.size, if (projects.size == 1) "" else "s"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                             )
@@ -142,7 +143,7 @@ fun ProjectPickerDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Refresh",
+                                    contentDescription = L.common.refresh,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -155,7 +156,7 @@ fun ProjectPickerDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Close,
-                                contentDescription = "Close",
+                                contentDescription = L.common.close,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -214,7 +215,7 @@ fun ProjectPickerDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "General (No Workspace)",
+                                            text = L.components.projectPickerBottom.generalNoWorkspace,
                                             fontSize = 13.5.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -226,7 +227,7 @@ fun ProjectPickerDialog(
                                                 color = ClaudeTerracotta.copy(alpha = 0.2f)
                                             ) {
                                                 Text(
-                                                    text = "Active",
+                                                    text = L.common.active,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = ClaudeTerracotta,
@@ -236,7 +237,7 @@ fun ProjectPickerDialog(
                                         }
                                     }
                                     Text(
-                                        text = "Chat without attaching to a directory",
+                                        text = L.components.projectPickerBottom.chatWithoutAttachingToADirectory,
                                         fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
                                     )
@@ -251,7 +252,7 @@ fun ProjectPickerDialog(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Check,
-                                            contentDescription = "Selected",
+                                            contentDescription = L.common.selected,
                                             tint = Color.White,
                                             modifier = Modifier.size(15.dp)
                                         )
@@ -264,7 +265,7 @@ fun ProjectPickerDialog(
                     // Existing Workspaces / Projects
                     itemsIndexed(projects, key = { _, it -> it.path }) { _, proj ->
                         val isSelected = activeProject?.path == proj.path
-                        val folderName = proj.name.ifBlank { File(proj.path).name.ifBlank { "Workspace" } }
+                        val folderName = proj.name.ifBlank { File(proj.path).name.ifBlank { L.common.workspace } }
 
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -317,7 +318,7 @@ fun ProjectPickerDialog(
                                                 color = ClaudeTerracotta.copy(alpha = 0.2f)
                                             ) {
                                                 Text(
-                                                    text = "Active",
+                                                    text = L.common.active,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = ClaudeTerracotta,
@@ -344,7 +345,7 @@ fun ProjectPickerDialog(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Check,
-                                            contentDescription = "Selected",
+                                            contentDescription = L.common.selected,
                                             tint = Color.White,
                                             modifier = Modifier.size(15.dp)
                                         )
@@ -378,7 +379,7 @@ fun ProjectPickerDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Use Git Repository...",
+                            text = L.components.projectPickerBottom.useGitRepository,
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = ClaudeTerracotta
@@ -407,7 +408,7 @@ fun ProjectPickerDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Browse or Open Other Folder...",
+                        text = L.components.projectPickerBottom.browseOrOpenOtherFolder,
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold
                     )

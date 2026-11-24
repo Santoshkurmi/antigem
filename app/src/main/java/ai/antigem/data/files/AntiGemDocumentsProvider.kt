@@ -53,6 +53,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 /**
  * Shows AntiGem's folders in Android's file picker and Files app (the Storage Access Framework), like Termux does:
@@ -183,7 +184,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
         /** A file or folder name the picker asked for, made safe; files get the extension of their type when missing. */
         private fun cleanName(displayName: String?, mime: String): String {
             var name = (displayName ?: "").replace('/', '_').replace('\u0000', '_').trim()
-            if (name.isEmpty() || name == "." || name == "..") name = if (mime == Document.MIME_TYPE_DIR) "New folder" else "Untitled"
+            if (name.isEmpty() || name == "." || name == "..") name = if (mime == Document.MIME_TYPE_DIR) L.files.antiGemDocumentsProvider.newFolder else L.files.antiGemDocumentsProvider.untitled
             if (mime != Document.MIME_TYPE_DIR && mime != "application/octet-stream") {
                 val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
                 if (!ext.isNullOrEmpty() && !name.endsWith(".$ext", ignoreCase = true) && mimeOf(name) != mime) name += ".$ext"
@@ -278,7 +279,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                     .add(Root.COLUMN_ROOT_ID, ROOT_HOME)
                     .add(Root.COLUMN_DOCUMENT_ID, "$ROOT_HOME:")
                     .add(Root.COLUMN_TITLE, "AntiGem")
-                    .add(Root.COLUMN_SUMMARY, "Home folder")
+                    .add(Root.COLUMN_SUMMARY, L.files.antiGemDocumentsProvider.homeFolder)
                     .add(Root.COLUMN_FLAGS, flags)
                     .add(Root.COLUMN_ICON, icon)
                     .add(Root.COLUMN_AVAILABLE_BYTES, free)
@@ -315,7 +316,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
             else -> {
                 val ch = chroot()
                 val path = chrootPath(id, ch)
-                if (path == ch.home) addRemoteRow(c, RemoteEntry("Ubuntu home", path, true, 0, 0), ch)
+                if (path == ch.home) addRemoteRow(c, RemoteEntry(L.files.antiGemDocumentsProvider.ubuntuHome, path, true, 0, 0), ch)
                 else {
                     val parent = parentOf(path)
                     val name = path.substringAfterLast('/')
@@ -694,7 +695,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
         }
         c.newRow()
             .add(Document.COLUMN_DOCUMENT_ID, "$ROOT_HOME:$rel")
-            .add(Document.COLUMN_DISPLAY_NAME, if (isRoot) "AntiGem home" else file.name)
+            .add(Document.COLUMN_DISPLAY_NAME, if (isRoot) L.files.antiGemDocumentsProvider.antigemHome else file.name)
             .add(Document.COLUMN_MIME_TYPE, mime)
             .add(Document.COLUMN_SIZE, if (isDir) null else file.length())
             .add(Document.COLUMN_LAST_MODIFIED, file.lastModified())
@@ -836,7 +837,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
     private fun bridgePost(ch: Chroot, path: String, body: JSONObject): JSONObject {
         val o = execute(ch, request(ch, path).post(body.toString().toRequestBody(JSON)).build())
         if (o.has("success") && !o.optBoolean("success") && !o.has("results")) {
-            throw IllegalStateException(o.optString("error").ifBlank { "Ubuntu's IDE bridge could not do it" })
+            throw IllegalStateException(o.optString("error").ifBlank { L.files.antiGemDocumentsProvider.ubuntusIdeBridgeCouldNotDo })
         }
         return o
     }
@@ -968,7 +969,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
             runCatching { context.contentResolver.notifyChange(DocumentsContract.buildDocumentUri(authority(context), documentId), null) }
         } catch (e: Throwable) {
             Log.w(TAG, "Saving $path into Ubuntu failed", e)
-            toast(context, "Could not save ${path.substringAfterLast('/')} into Ubuntu: ${e.message ?: "unknown error"}")
+            toast(context, L.files.antiGemDocumentsProvider.couldNotSaveNameIntoUbuntu(path.substringAfterLast('/'), e.message ?: L.files.antiGemDocumentsProvider.unknownError))
         } finally {
             tmp.delete()
         }

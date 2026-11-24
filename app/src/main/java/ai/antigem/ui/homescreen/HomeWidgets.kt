@@ -25,13 +25,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** AntiGem's four home-screen widgets. */
-enum class WidgetKind(val title: String, val description: String, val receiver: Class<out GlanceAppWidgetReceiver>) {
-    CHATS("Chats", "Your newest or pinned chats, live: what's working and what's done. Tap one to open it; + starts a new chat.", ChatsWidgetReceiver::class.java),
-    ACTIONS("Quick actions", "One-tap buttons you choose: new chats, Terminal, Browser, Code, Files, Notes, Run, Voice call, Jarvis…", ActionsWidgetReceiver::class.java),
-    CHAT("One chat", "A single chat: its status and latest reply, with Open and Reply.", ChatWidgetReceiver::class.java),
-    SCRIPTS("Scripts", "Your scripts from ~/.shortcuts, like Termux:Widget: in a terminal tab, or in the background from ~/.shortcuts/tasks.", ScriptsWidgetReceiver::class.java);
+enum class WidgetKind(private val titleText: () -> String, private val descriptionText: () -> String, val receiver: Class<out GlanceAppWidgetReceiver>) {
+    CHATS({ L.homescreen.homeWidgets.chats }, { L.homescreen.homeWidgets.yourNewestOrPinnedChatsLive }, ChatsWidgetReceiver::class.java),
+    ACTIONS({ L.homescreen.homeWidgets.quickActions }, { L.homescreen.homeWidgets.oneTapButtonsYouChooseNew }, ActionsWidgetReceiver::class.java),
+    CHAT({ L.homescreen.homeWidgets.oneChat }, { L.homescreen.homeWidgets.aSingleChatItsStatusAnd }, ChatWidgetReceiver::class.java),
+    SCRIPTS({ L.homescreen.homeWidgets.scripts }, { L.homescreen.homeWidgets.yourScriptsFromShortcutsLikeTermux }, ScriptsWidgetReceiver::class.java);
+    val title: String get() = titleText()
+    val description: String get() = descriptionText()
 
     fun widget(): GlanceAppWidget = when (this) {
         CHATS -> ChatsWidget()

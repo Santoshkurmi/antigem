@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import ai.antigem.i18n.L
 
 /**
  * Claude Code configuration through the bridge: `~/.claude/settings.json` (defaults, permission rules, everything
@@ -49,7 +50,7 @@ class ClaudeConfigManager(
         scope.launch {
             client.sandbox()
                 .onSuccess { _sandbox.value = it }
-                .onFailure { _sandbox.value = ClaudeSandboxInfo(reason = "Could not check: ${it.message}") }
+                .onFailure { _sandbox.value = ClaudeSandboxInfo(reason = L.agent.claudeConfigManager.couldNotCheckMessage(it.message)) }
         }
     }
 
@@ -79,7 +80,7 @@ class ClaudeConfigManager(
         }
     }
 
-    fun saveSettings(newSettings: JsonObject, feedback: String = "Saved") {
+    fun saveSettings(newSettings: JsonObject, feedback: String = L.agent.claudeConfigManager.saved) {
         scope.launch {
             client.saveSettings(newSettings)
                 .onSuccess {
@@ -88,9 +89,9 @@ class ClaudeConfigManager(
                         _settingsError.value = null
                         _messages.tryEmit(feedback)
                         onSettingsChanged()
-                    } else _messages.tryEmit("Save failed: ${it.error}")
+                    } else _messages.tryEmit(L.agent.claudeConfigManager.saveFailedError(it.error))
                 }
-                .onFailure { _messages.tryEmit("Save failed: ${it.message}") }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.saveFailedMessage(it.message)) }
         }
     }
 
@@ -153,7 +154,7 @@ class ClaudeConfigManager(
             _memory.value = null
             client.memory(scopeName, cwd)
                 .onSuccess { _memory.value = it }
-                .onFailure { _messages.tryEmit("Could not read CLAUDE.md: ${it.message}") }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.couldNotReadClaudeMdMessage(it.message)) }
         }
     }
 
@@ -162,11 +163,11 @@ class ClaudeConfigManager(
             client.saveMemory(scopeName, cwd, content)
                 .onSuccess {
                     if (it.success) {
-                        _messages.tryEmit("CLAUDE.md saved")
+                        _messages.tryEmit(L.agent.claudeConfigManager.claudeMdSaved)
                         _memory.value = _memory.value?.copy(content = content, exists = true)
-                    } else _messages.tryEmit("Save failed: ${it.error}")
+                    } else _messages.tryEmit(L.agent.claudeConfigManager.saveFailedError(it.error))
                 }
-                .onFailure { _messages.tryEmit("Save failed: ${it.message}") }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.saveFailedMessage(it.message)) }
         }
     }
 
@@ -179,7 +180,7 @@ class ClaudeConfigManager(
             _autoMemory.value = null
             client.autoMemory(cwd)
                 .onSuccess { _autoMemory.value = it }
-                .onFailure { _autoMemory.value = ClaudeAutoMemoryResponse(error = it.message ?: "Cannot reach the bridge") }
+                .onFailure { _autoMemory.value = ClaudeAutoMemoryResponse(error = it.message ?: L.agent.claudeConfigManager.cannotReachTheBridge) }
         }
     }
 
@@ -188,11 +189,11 @@ class ClaudeConfigManager(
             client.deleteAutoMemory(cwd, name)
                 .onSuccess {
                     if (it.success) {
-                        _messages.tryEmit("Deleted $name")
+                        _messages.tryEmit(L.agent.claudeConfigManager.deletedName(name))
                         _autoMemory.value = _autoMemory.value?.let { m -> m.copy(files = m.files.filter { f -> f.name != name }) }
-                    } else _messages.tryEmit("Delete failed: ${it.error}")
+                    } else _messages.tryEmit(L.agent.claudeConfigManager.deleteFailedError(it.error))
                 }
-                .onFailure { _messages.tryEmit("Delete failed: ${it.message}") }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.deleteFailedMessage(it.message)) }
         }
     }
 
@@ -223,15 +224,15 @@ class ClaudeConfigManager(
     fun addMcp(req: ClaudeMcpAddRequest, cwd: String?) {
         scope.launch {
             _mcpAddError.value = null
-            setMcpOp(req.name, "Adding…")
+            setMcpOp(req.name, L.agent.claudeConfigManager.adding)
             val error = client.addMcpServer(req).fold(
-                { if (it.success) null else it.error?.lines()?.lastOrNull { l -> l.isNotBlank() } ?: "Add failed" },
-                { it.message ?: "Add failed" }
+                { if (it.success) null else it.error?.lines()?.lastOrNull { l -> l.isNotBlank() } ?: L.agent.claudeConfigManager.addFailed },
+                { it.message ?: L.agent.claudeConfigManager.addFailed }
             )
             if (error != null) {
                 setMcpOp(req.name, null)
                 _mcpAddError.value = req.name to error
-                _messages.tryEmit("Could not add '${req.name}': $error")
+                _messages.tryEmit(L.agent.claudeConfigManager.couldNotAddNameError(req.name, error))
                 return@launch
             }
             // added: the status check connects to it (can take a few seconds)
@@ -241,9 +242,9 @@ class ClaudeConfigManager(
             val added = _mcpServers.value.find { it.name == req.name }
             _messages.tryEmit(
                 when (added?.status) {
-                    "connected" -> "'${req.name}' connected · ${added.tools.size} tools"
-                    "failed" -> "'${req.name}' was added but failed to connect"
-                    else -> "Added '${req.name}'"
+                    "connected" -> L.agent.claudeConfigManager.nameConnectedToolscountTools(req.name, added.tools.size)
+                    "failed" -> L.agent.claudeConfigManager.nameWasAddedButFailedTo(req.name)
+                    else -> L.agent.claudeConfigManager.addedName(req.name)
                 }
             )
         }
@@ -251,15 +252,15 @@ class ClaudeConfigManager(
 
     fun removeMcp(name: String, scopeName: String?, cwd: String?) {
         scope.launch {
-            setMcpOp(name, "Removing…")
+            setMcpOp(name, L.agent.claudeConfigManager.removing)
             client.removeMcpServer(name, scopeName, cwd)
                 .onSuccess {
                     if (it.success) {
-                        _messages.tryEmit("Removed '$name'")
+                        _messages.tryEmit(L.agent.claudeConfigManager.removedName(name))
                         _mcpServers.value = _mcpServers.value.filter { s -> s.name != name }
-                    } else _messages.tryEmit(it.error ?: "Remove failed")
+                    } else _messages.tryEmit(it.error ?: L.agent.claudeConfigManager.removeFailed)
                 }
-                .onFailure { _messages.tryEmit("Remove failed: ${it.message}") }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.removeFailedMessage(it.message)) }
             setMcpOp(name, null)
             loadMcpNow(cwd)
         }
@@ -268,8 +269,8 @@ class ClaudeConfigManager(
     private suspend fun loadMcpNow(cwd: String?) {
         _mcpLoading.value = true
         client.mcpServers(cwd)
-            .onSuccess { if (it.success) _mcpServers.value = it.servers else _messages.tryEmit("MCP status failed: ${it.error}") }
-            .onFailure { _messages.tryEmit("MCP status failed: ${it.message}") }
+            .onSuccess { if (it.success) _mcpServers.value = it.servers else _messages.tryEmit(L.agent.claudeConfigManager.mcpStatusFailedError(it.error)) }
+            .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.mcpStatusFailedMessage(it.message)) }
         _mcpLoading.value = false
     }
 
@@ -292,7 +293,7 @@ class ClaudeConfigManager(
         scope.launch {
             client.plugins()
                 .onSuccess { _plugins.value = it }
-                .onFailure { _messages.tryEmit("Plugin list failed: ${it.message}") }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.pluginListFailedMessage(it.message)) }
         }
     }
 
@@ -318,15 +319,15 @@ class ClaudeConfigManager(
     }
 
     private fun pluginActionDone(action: String) = when (action) {
-        "install" -> "Installed"
-        "uninstall" -> "Uninstalled"
-        "enable" -> "Enabled"
-        "disable" -> "Disabled"
-        "update" -> "Updated"
-        "marketplace-add" -> "Added marketplace"
-        "marketplace-remove" -> "Removed marketplace"
-        "marketplace-update" -> "Updated marketplace"
-        else -> "Done:"
+        "install" -> L.agent.claudeConfigManager.installed
+        "uninstall" -> L.agent.claudeConfigManager.uninstalled
+        "enable" -> L.agent.claudeConfigManager.enabled
+        "disable" -> L.agent.claudeConfigManager.disabled
+        "update" -> L.agent.claudeConfigManager.updated
+        "marketplace-add" -> L.agent.claudeConfigManager.addedMarketplace
+        "marketplace-remove" -> L.agent.claudeConfigManager.removedMarketplace
+        "marketplace-update" -> L.agent.claudeConfigManager.updatedMarketplace
+        else -> L.agent.claudeConfigManager.done
     }
 
     // ---------------------------------------------------------------- CLI install / update

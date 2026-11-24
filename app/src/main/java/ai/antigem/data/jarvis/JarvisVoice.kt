@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.math.abs
 import kotlin.math.sin
+import ai.antigem.i18n.L
 
 /**
  * Jarvis' voice: queues what is to be said and plays it with the device's text-to-speech or an online voice
@@ -212,7 +213,7 @@ object JarvisVoice {
         val ok = ready.await()
         val engine = tts
         if (!ok || engine == null) {
-            _lastError.value = "The device's text-to-speech is not available."
+            _lastError.value = L.jarvis.voice.theDevicesTextToSpeechIs
             ttsReady = null
             tts = null
             return null
@@ -291,7 +292,7 @@ object JarvisVoice {
     private suspend fun playOnline(engine: String, text: String): Boolean {
         val key = JarvisPreferences.ttsApiKey.value.trim()
         if (key.isBlank()) {
-            _lastError.value = "No API key set for the online voice; using the device voice."
+            _lastError.value = L.jarvis.voice.noApiKeySetForThe
             return false
         }
         return try {

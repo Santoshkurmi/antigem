@@ -57,6 +57,7 @@ import androidx.compose.ui.window.DialogProperties
 import ai.antigem.theme.*
 import kotlinx.coroutines.delay
 import java.util.regex.Pattern
+import ai.antigem.i18n.L
 
 // Syntax colors come from the app theme (syntax_* tokens; One Dark in the default themes)
 private val SynKeyword: Color get() = AppColors.syntaxKeyword
@@ -266,7 +267,7 @@ fun CodeBlock(
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "Code",
+                                text = L.common.code,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selectedTab == 0) Color.White else AppColors.codeText.copy(alpha = 0.6f)
@@ -291,7 +292,7 @@ fun CodeBlock(
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "Preview",
+                                text = L.common.preview,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selectedTab == 1) Color.White else AppColors.codeText.copy(alpha = 0.6f)
@@ -310,7 +311,7 @@ fun CodeBlock(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reload preview",
+                            contentDescription = L.components.codeBlock.reloadPreview,
                             tint = AppColors.codeText.copy(alpha = 0.7f),
                             modifier = Modifier.size(15.dp)
                         )
@@ -325,7 +326,7 @@ fun CodeBlock(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.OpenInFull,
-                    contentDescription = "Fullscreen",
+                    contentDescription = L.components.codeBlock.fullscreen,
                     tint = AppColors.codeText.copy(alpha = 0.7f),
                     modifier = Modifier.size(14.dp)
                 )
@@ -339,7 +340,7 @@ fun CodeBlock(
                 ) {
                     Icon(
                         imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) "Collapse code block" else "Expand full height",
+                        contentDescription = if (isExpanded) L.components.codeBlock.collapseCodeBlock else L.components.codeBlock.expandFullHeight,
                         tint = if (isExpanded) ClaudeTerracotta else AppColors.codeText.copy(alpha = 0.7f),
                         modifier = Modifier.size(17.dp)
                     )
@@ -353,21 +354,21 @@ fun CodeBlock(
                     val clip = ClipData.newPlainText("Copied Code", code)
                     clipboard.setPrimaryClip(clip)
                     isCopied = true
-                    Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, L.components.codeBlock.codeCopiedToClipboard, Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.size(28.dp)
             ) {
                 if (isCopied) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Copied",
+                        contentDescription = L.common.copied,
                         tint = QuotaGreen,
                         modifier = Modifier.size(16.dp)
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Outlined.ContentCopy,
-                        contentDescription = "Copy code",
+                        contentDescription = L.components.codeBlock.copyCode,
                         tint = AppColors.codeText.copy(alpha = 0.7f),
                         modifier = Modifier.size(15.dp)
                     )
@@ -382,7 +383,7 @@ fun CodeBlock(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = "Run in terminal",
+                        contentDescription = L.components.codeBlock.runInTerminal,
                         tint = ClaudeTerracotta,
                         modifier = Modifier.size(18.dp)
                     )
@@ -467,7 +468,7 @@ fun CodeBlock(
                     ) {
                         val hiddenLines = (lineCount - CODE_PREVIEW_LINES).coerceAtLeast(1)
                         Text(
-                            text = if (isExpanded) "Collapse code block ▲" else "Show all $lineCount lines ($hiddenLines more) ▼",
+                            text = if (isExpanded) L.components.codeBlock.collapseCodeBlock2 else L.components.codeBlock.showAllLinecountLinesHiddenlinesMore(lineCount, hiddenLines),
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = ClaudeTerracotta
@@ -510,14 +511,14 @@ fun CodeBlock(
                         title = {
                             Column {
                                 Text(
-                                    text = if (selectedTab == 1 && isPreviewable) "Preview: ${language.uppercase()}" else language.ifEmpty { "Code" }.uppercase(),
+                                    text = if (selectedTab == 1 && isPreviewable) L.components.codeBlock.previewLanguage(language.uppercase()) else language.ifEmpty { L.common.code }.uppercase(),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (selectedTab == 1 && isPreviewable) "Interactive Artifact" else "$lineCount lines",
+                                    text = if (selectedTab == 1 && isPreviewable) L.components.codeBlock.interactiveArtifact else "$lineCount lines",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -527,7 +528,7 @@ fun CodeBlock(
                         },
                         navigationIcon = {
                             IconButton(onClick = { isFullscreen = false }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
+                                Icon(Icons.Default.Close, contentDescription = L.common.close)
                             }
                         },
                         actions = {
@@ -547,7 +548,7 @@ fun CodeBlock(
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
-                                            text = "Code",
+                                            text = L.common.code,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (selectedTab == 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -561,7 +562,7 @@ fun CodeBlock(
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
-                                            text = "Preview",
+                                            text = L.common.preview,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (selectedTab == 1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -571,7 +572,7 @@ fun CodeBlock(
 
                                 if (selectedTab == 1) {
                                     IconButton(onClick = { reloadKey++ }) {
-                                        Icon(Icons.Default.Refresh, contentDescription = "Reload")
+                                        Icon(Icons.Default.Refresh, contentDescription = L.common.reload)
                                     }
                                 }
                             }
@@ -590,12 +591,12 @@ fun CodeBlock(
                                     val clip = ClipData.newPlainText("Copied Code", code)
                                     clipboard.setPrimaryClip(clip)
                                     modalCopied = true
-                                    Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, L.components.codeBlock.codeCopiedToClipboard, Toast.LENGTH_SHORT).show()
                                 }
                             ) {
                                 Icon(
                                     imageVector = if (modalCopied) Icons.Default.Check else Icons.Outlined.ContentCopy,
-                                    contentDescription = "Copy code",
+                                    contentDescription = L.components.codeBlock.copyCode,
                                     tint = if (modalCopied) QuotaGreen else MaterialTheme.colorScheme.onSurface
                                 )
                             }

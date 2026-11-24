@@ -53,6 +53,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+import ai.antigem.i18n.L
 
 /**
  * Antigravity voice mode: a live spoken call with the agent about one AGY chat (what the Antigravity desktop app calls
@@ -183,7 +184,7 @@ object AgyVoiceCall {
             voice = voice,
             language = language,
             speaker = AgyVoicePreferences.speaker.value && !AudioRoute.hasHeadset(app),
-            statusText = "Getting the chat ready…",
+            statusText = L.voice.agyVoiceCall.gettingTheChatReady,
             startedAtWall = System.currentTimeMillis(),
             log = carryLog
         )
@@ -197,13 +198,13 @@ object AgyVoiceCall {
                 return@launch
             } catch (e: Exception) {
                 s.lastFailure = e
-                fail(s, "Couldn't start the chat: ${e.message ?: e.javaClass.simpleName}")
+                fail(s, L.voice.agyVoiceCall.couldntStartTheChatValue(e.message ?: e.javaClass.simpleName))
                 return@launch
             }
             if (session !== s) return@launch
             s.conversationId = cid
             s.planModel = model
-            _state.update { it.copy(conversationId = cid, statusText = "Checking the hub…") }
+            _state.update { it.copy(conversationId = cid, statusText = L.voice.agyVoiceCall.checkingTheHub) }
 
             val base = AuthPreferences.currentHubUrl.trimEnd('/')
             // the Voice call tile and shortcut call the last chat that had a call
@@ -213,8 +214,8 @@ object AgyVoiceCall {
                     val remote = !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(base))
                     fail(
                         s,
-                        if (remote) "This hub has no voice calls. The server's agy must be 1.5 or newer, and a reverse proxy in front of the hub must pass /voice/ (WebSocket) to it."
-                        else "Voice calls need agy 1.5 or newer. Update agy in Settings → Antigravity → Account & CLI → Check for updates (the server restarts by itself).",
+                        if (remote) L.voice.agyVoiceCall.thisHubHasNoVoiceCalls
+                        else L.voice.agyVoiceCall.voiceCallsNeedAgy15,
                         Problem.UPDATE_AGY
                     )
                     return@launch
@@ -230,7 +231,7 @@ object AgyVoiceCall {
             s.route.begin(_state.value.speaker)
             s.player.start()
             s.startPulses()
-            _state.update { it.copy(statusText = "Connecting to the voice agent…") }
+            _state.update { it.copy(statusText = L.voice.agyVoiceCall.connectingToTheVoiceAgent) }
             openSocket(s)
         }
     }
@@ -238,7 +239,7 @@ object AgyVoiceCall {
     /** Starts the last call again (after it failed). */
     fun retry(context: Context) {
         val (title, prepare) = lastStart ?: return
-        carryLog = (_state.value.log + "──── Try again ────").takeLast(LOG_MAX)
+        carryLog = (_state.value.log + L.voice.agyVoiceCall.tryAgain).takeLast(LOG_MAX)
         _state.value = State()
         start(context, title, prepare)
     }
@@ -256,7 +257,7 @@ object AgyVoiceCall {
             return
         }
         s.endRequested = true
-        _state.update { it.copy(phase = Phase.ENDING, statusText = "Ending…", agentSpeaking = false, userSpeaking = false) }
+        _state.update { it.copy(phase = Phase.ENDING, statusText = L.voice.agyVoiceCall.ending, agentSpeaking = false, userSpeaking = false) }
         s.micRunning = false
         s.player.clear()
         s.player.enqueue(Chimes.end)
@@ -296,7 +297,7 @@ object AgyVoiceCall {
             _state.update { it.copy(voice = voice, language = language) }
             return
         }
-        note(s, "Switching to $what")
+        note(s, L.voice.agyVoiceCall.switchingToWhat(what))
         _state.update {
             it.copy(voice = voice, language = language, phase = Phase.RECONNECTING, statusText = "Switching to $what…", attempt = 0, maxAttempts = 0, agentSpeaking = false)
         }
@@ -382,7 +383,7 @@ object AgyVoiceCall {
             ?.addQueryParameter("voice", s.voice)
             ?.build()
         if (url == null) {
-            fail(s, "The hub address is not valid: $base")
+            fail(s, L.voice.agyVoiceCall.theHubAddressIsNotValid(base))
             return
         }
         val req = Request.Builder().url(url)
@@ -401,7 +402,7 @@ object AgyVoiceCall {
             s.linkRetries = 0
             s.socketOpen = true
             s.openedAt = SystemClock.elapsedRealtime()
-            note(s, "Connected to the hub (voice ${s.voice}, language ${AgyVoicePreferences.acceptLanguage(s.language)})")
+            note(s, L.voice.agyVoiceCall.connectedToTheHubVoiceVoice(s.voice, AgyVoicePreferences.acceptLanguage(s.language)))
             val speed = AgyVoicePreferences.speed.value
             if (speed != 1.0) s.send(VoiceClientMessage(settings_update = VoiceClientMessage.SettingsUpdate(playback_speed = speed)))
             if (!s.micStarted) s.startMic()
@@ -449,7 +450,7 @@ object AgyVoiceCall {
             // has no voice for, e.g. a cloud chat)
             when {
                 code != null && code in 400..599 && code != 101 ->
-                    fail(s, "The hub refused the call (HTTP $code${if (body.isNotBlank()) ": $body" else ""}).")
+                    fail(s, L.voice.agyVoiceCall.theHubRefusedTheCallHttp(code, if (body.isNotBlank()) ": $body" else ""))
                 else -> socketEnded(s, t.message ?: t.javaClass.simpleName, network = true)
             }
         }
@@ -476,7 +477,7 @@ object AgyVoiceCall {
         if (network && st.connectedAt > 0 && s.linkRetries < MAX_LINK_RETRIES) {
             s.linkRetries++
             val attempt = s.linkRetries
-            _state.update { it.copy(phase = Phase.RECONNECTING, attempt = attempt, maxAttempts = MAX_LINK_RETRIES, statusText = "Reconnecting…", agentSpeaking = false) }
+            _state.update { it.copy(phase = Phase.RECONNECTING, attempt = attempt, maxAttempts = MAX_LINK_RETRIES, statusText = L.voice.agyVoiceCall.reconnecting, agentSpeaking = false) }
             s.player.clear()
             s.startPulses()
             scope.launch {
@@ -485,7 +486,7 @@ object AgyVoiceCall {
             }
             return
         }
-        fail(s, if (st.connectedAt > 0) "Call disconnected${reason?.let { ": $it" } ?: ""}" else "Couldn't connect to the voice agent${reason?.let { ": $it" } ?: ""}")
+        fail(s, if (st.connectedAt > 0) L.voice.agyVoiceCall.callDisconnectedValue(reason?.let { ": $it" } ?: "") else L.voice.agyVoiceCall.couldntConnectToTheVoiceAgent(reason?.let { ": $it" } ?: ""))
     }
 
     // ------------------------------------------------------------------------------------------------ messages
@@ -497,15 +498,15 @@ object AgyVoiceCall {
                 s.player.enqueue(m.voice_audio.toByteArray())
             }
             m.clear_audio != null -> {
-                if (_state.value.agentSpeaking) note(s, "The voice stopped: you talked over it")
+                if (_state.value.agentSpeaking) note(s, L.voice.agyVoiceCall.theVoiceStoppedYouTalkedOver)
                 s.player.clear()
             }
             m.user_speech != null -> {
-                if (!m.user_speech.interim && m.user_speech.text.isNotBlank()) note(s, "Heard you: “${m.user_speech.text.trim().take(80)}”")
+                if (!m.user_speech.interim && m.user_speech.text.isNotBlank()) note(s, L.voice.agyVoiceCall.heardYouTrim(m.user_speech.text.trim().take(80)))
                 onUserSpeech(m.user_speech)
             }
             m.voice_transcript != null -> {
-                if (SystemClock.elapsedRealtime() - s.lastAgentChunkAt > 1500) note(s, "The voice answers")
+                if (SystemClock.elapsedRealtime() - s.lastAgentChunkAt > 1500) note(s, L.voice.agyVoiceCall.theVoiceAnswers)
                 onVoiceTranscript(s, m.voice_transcript)
             }
             m.status != null -> onStatus(s, m.status)
@@ -522,19 +523,19 @@ object AgyVoiceCall {
             _state.update { it.copy(conversationId = id) }
             _conversationMoved.tryEmit(id)
             AgyVoicePreferences.rememberCallChat(AuthPreferences.currentHubUrl, id)
-            note(s, "The voice agent moved the call to another chat")
+            note(s, L.voice.agyVoiceCall.theVoiceAgentMovedTheCall)
         }
-        note(s, "Voice agent: " + when (st.state) {
-            LinkState.STARTING -> "starting"
-            LinkState.LISTENING -> "listening"
-            LinkState.RETRYING -> "reconnecting to Google (${st.attempt}/${st.max_attempts})"
-            LinkState.STOPPING -> "ending the call"
-            LinkState.FAILED -> "failed (${st.failure_reason.name.lowercase()})"
+        note(s, L.voice.agyVoiceCall.voiceAgentState(when (st.state) {
+            LinkState.STARTING -> L.voice.agyVoiceCall.starting
+            LinkState.LISTENING -> L.voice.agyVoiceCall.listening
+            LinkState.RETRYING -> L.voice.agyVoiceCall.reconnectingToGoogleAttemptMax(st.attempt, st.max_attempts)
+            LinkState.STOPPING -> L.voice.agyVoiceCall.endingTheCall
+            LinkState.FAILED -> L.voice.agyVoiceCall.failedReason(st.failure_reason.name.lowercase())
             else -> st.state.name.lowercase()
-        } + (st.message.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""))
+        }) + (st.message.takeIf { it.isNotBlank() }?.let { ": $it" } ?: ""))
         when (st.state) {
             LinkState.STARTING -> _state.update {
-                if (it.connectedAt > 0) it else it.copy(phase = Phase.CONNECTING, statusText = "Starting the voice agent…")
+                if (it.connectedAt > 0) it else it.copy(phase = Phase.CONNECTING, statusText = L.voice.agyVoiceCall.startingTheVoiceAgent)
             }
             LinkState.LISTENING -> {
                 val first = _state.value.connectedAt == 0L
@@ -550,13 +551,13 @@ object AgyVoiceCall {
             }
             LinkState.RETRYING -> {
                 _state.update {
-                    it.copy(phase = Phase.RECONNECTING, attempt = st.attempt, maxAttempts = st.max_attempts, statusText = st.message.ifBlank { "Reconnecting…" })
+                    it.copy(phase = Phase.RECONNECTING, attempt = st.attempt, maxAttempts = st.max_attempts, statusText = st.message.ifBlank { L.voice.agyVoiceCall.reconnecting })
                 }
                 s.startPulses()
             }
             LinkState.STOPPING -> {
                 s.serverStopping = true
-                _state.update { it.copy(phase = Phase.ENDING, statusText = "Ending…") }
+                _state.update { it.copy(phase = Phase.ENDING, statusText = L.voice.agyVoiceCall.ending) }
             }
             LinkState.FAILED -> fail(s, failureText(st.failure_reason, st.message), if (st.failure_reason == FailureReason.ACCESS_DENIED) Problem.OTHER else Problem.NONE)
             else -> Unit
@@ -578,15 +579,15 @@ object AgyVoiceCall {
 
     private fun failureText(reason: FailureReason, message: String): String {
         val base = when (reason) {
-            FailureReason.SERVER_UNAVAILABLE -> "The voice service is unavailable right now."
-            FailureReason.THROTTLED -> "Too many voice calls right now. Try again in a little while."
-            FailureReason.SETUP_STALLED -> "The voice agent didn't start in time."
-            FailureReason.CONNECTION_FAILED -> "Lost the connection to the voice service."
-            FailureReason.ACCESS_DENIED -> "This account can't use voice calls."
-            FailureReason.TIMEOUT -> "The call timed out."
-            FailureReason.VOICE_STALLED -> "The voice stopped responding."
-            FailureReason.CONVERSATION_GONE -> "This chat no longer exists on the hub."
-            else -> if (_state.value.connectedAt > 0) "The call was disconnected." else "Couldn't connect to the voice agent."
+            FailureReason.SERVER_UNAVAILABLE -> L.voice.agyVoiceCall.theVoiceServiceIsUnavailableRight
+            FailureReason.THROTTLED -> L.voice.agyVoiceCall.tooManyVoiceCallsRightNow
+            FailureReason.SETUP_STALLED -> L.voice.agyVoiceCall.theVoiceAgentDidntStartIn
+            FailureReason.CONNECTION_FAILED -> L.voice.agyVoiceCall.lostTheConnectionToTheVoice
+            FailureReason.ACCESS_DENIED -> L.voice.agyVoiceCall.thisAccountCantUseVoiceCalls
+            FailureReason.TIMEOUT -> L.voice.agyVoiceCall.theCallTimedOut
+            FailureReason.VOICE_STALLED -> L.voice.agyVoiceCall.theVoiceStoppedResponding
+            FailureReason.CONVERSATION_GONE -> L.voice.agyVoiceCall.thisChatNoLongerExistsOn
+            else -> if (_state.value.connectedAt > 0) L.voice.agyVoiceCall.theCallWasDisconnected else L.voice.agyVoiceCall.couldntConnectToTheVoiceAgent2
         }
         return if (message.isNotBlank() && !base.contains(message, ignoreCase = true)) "$base ($message)" else base
     }
@@ -628,7 +629,7 @@ object AgyVoiceCall {
 
     private fun fail(s: Session, message: String, problem: Problem = Problem.NONE) {
         if (session !== s) return
-        note(s, "Call failed: $message")
+        note(s, L.voice.agyVoiceCall.callFailedMessage(message))
         val st = _state.value
         val now = SystemClock.elapsedRealtime()
         val details = AgyVoiceDiagnostics.immediate(
@@ -756,12 +757,12 @@ object AgyVoiceCall {
                 )
             } catch (e: Exception) {
                 lastFailure = e
-                fail(this, "The microphone is not available: ${e.message}", Problem.MIC)
+                fail(this, L.voice.agyVoiceCall.theMicrophoneIsNotAvailableMessage(e.message), Problem.MIC)
                 return
             }
             if (rec.state != AudioRecord.STATE_INITIALIZED) {
                 rec.release()
-                fail(this, "The microphone is not available (allow microphone access for the app).", Problem.MIC)
+                fail(this, L.voice.agyVoiceCall.theMicrophoneIsNotAvailableAllow, Problem.MIC)
                 return
             }
             // VOICE_COMMUNICATION usually brings these; asking again is harmless where it does
@@ -773,7 +774,7 @@ object AgyVoiceCall {
             try {
                 rec.startRecording()
                 if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                    fail(this, "Another app is using the microphone.", Problem.MIC)
+                    fail(this, L.voice.agyVoiceCall.anotherAppIsUsingTheMicrophone, Problem.MIC)
                     return
                 }
                 val buf = ShortArray(MIC_CHUNK_SAMPLES)
@@ -805,7 +806,7 @@ object AgyVoiceCall {
             } catch (e: Exception) {
                 if (micRunning && !endRequested) {
                     lastFailure = e
-                    fail(this, "The microphone stopped: ${e.message}", Problem.MIC)
+                    fail(this, L.voice.agyVoiceCall.theMicrophoneStoppedMessage(e.message), Problem.MIC)
                 }
             } finally {
                 runCatching { rec.stop() }

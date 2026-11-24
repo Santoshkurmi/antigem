@@ -45,6 +45,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import ai.antigem.i18n.L
 
 // ---------------- formatting ----------------
 
@@ -55,11 +56,13 @@ internal fun formatModified(millis: Long): String {
     val sameYear = now.get(Calendar.YEAR) == then.get(Calendar.YEAR)
     val sameDay = sameYear && now.get(Calendar.DAY_OF_YEAR) == then.get(Calendar.DAY_OF_YEAR)
     val pattern = when {
-        sameDay -> "'Today' HH:mm"
+        sameDay -> "HH:mm"
         sameYear -> "MMM d, HH:mm"
         else -> "MMM d, yyyy"
     }
-    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
+    // date patterns stay code; only "Today" is a text
+    val shown = SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
+    return if (sameDay) L.files.explorerComponents.todayTime(shown) else shown
 }
 
 internal fun entrySubtitle(e: ExplorerEntry): String = if (e.isDir) {
@@ -67,7 +70,7 @@ internal fun entrySubtitle(e: ExplorerEntry): String = if (e.isDir) {
         e.childCount > 1000 -> "1000+ items"
         e.childCount == 1 -> "1 item"
         e.childCount > 1 -> "${e.childCount} items"
-        else -> "Empty"
+        else -> L.files.explorerComponents.empty
     }
     listOf(count, formatModified(e.modTime)).filter { it.isNotBlank() }.joinToString("  ·  ")
 } else {
@@ -127,7 +130,7 @@ internal fun EntryIcon(entry: ExplorerEntry, size: Dp, thumbnails: Boolean, corn
                     .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Outlined.Link, contentDescription = "Link", tint = tint, modifier = Modifier.size(size * 0.26f))
+                Icon(Icons.Outlined.Link, contentDescription = L.files.explorerComponents.link, tint = tint, modifier = Modifier.size(size * 0.26f))
             }
         }
     }
@@ -197,7 +200,7 @@ internal fun EntryRow(
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { SelectionMark(selected) }
         } else {
             IconButton(onClick = onMore) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "More for ${entry.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Outlined.MoreVert, contentDescription = L.files.explorerComponents.moreForName(entry.name), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -269,9 +272,9 @@ internal fun crumbsFor(path: String, home: String): List<Crumb> {
     val clean = path.trimEnd('/').ifBlank { "/" }
     val storage = listOf("/storage/emulated/0", "/sdcard").firstOrNull { clean == it || clean.startsWith("$it/") }
     val (root, rootPath) = when {
-        home.isNotBlank() && (clean == home || clean.startsWith("$home/")) -> Crumb("Home", home, Icons.Outlined.Home) to home
-        storage != null -> Crumb("Internal storage", storage, Icons.Outlined.PhoneAndroid) to storage
-        else -> Crumb("Root", "/", Icons.Outlined.Storage) to "/"
+        home.isNotBlank() && (clean == home || clean.startsWith("$home/")) -> Crumb(L.common.home, home, Icons.Outlined.Home) to home
+        storage != null -> Crumb(L.files.explorerComponents.internalStorage, storage, Icons.Outlined.PhoneAndroid) to storage
+        else -> Crumb(L.common.root, "/", Icons.Outlined.Storage) to "/"
     }
     val rest = clean.removePrefix(rootPath).trim('/').split('/').filter { it.isNotBlank() }
     val crumbs = mutableListOf(root)
@@ -305,7 +308,7 @@ internal fun BreadcrumbBar(
             modifier = Modifier.size(36.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.SdStorage, contentDescription = "Places", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+                Icon(Icons.Outlined.SdStorage, contentDescription = L.files.explorerComponents.places, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
             }
         }
         Spacer(Modifier.width(8.dp))

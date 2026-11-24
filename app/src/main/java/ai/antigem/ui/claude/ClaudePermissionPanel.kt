@@ -21,6 +21,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import ai.antigem.i18n.L
 
 /**
  * Claude's permission prompts as approval-panel items: tool approvals (allow once / always allow from Claude's
@@ -34,13 +35,13 @@ fun claudeApprovalItems(pending: List<ClaudeTranscript.PendingPermission>, backe
                 key = p.toolUseId,
                 agent = AgentKind.CLAUDE,
                 icon = Icons.Outlined.Checklist,
-                title = "Review the plan",
-                subtitle = "Plan mode",
-                markdown = (p.input["plan"] as? JsonPrimitive)?.contentOrNull.orEmpty().ifBlank { "_(empty plan)_" },
-                primary = ApprovalChoice("Approve · auto-accept edits") { backend.approvePlan(p.toolUseId, "acceptEdits") },
-                secondary = listOf(ApprovalChoice("Approve · review each edit") { backend.approvePlan(p.toolUseId, "default") }),
-                denyLabel = "Keep planning",
-                denyPlaceholder = "What should change in the plan?",
+                title = L.claude.permission.reviewThePlan,
+                subtitle = L.claude.permission.planMode,
+                markdown = (p.input["plan"] as? JsonPrimitive)?.contentOrNull.orEmpty().ifBlank { L.claude.permission.emptyPlan },
+                primary = ApprovalChoice(L.claude.permission.approveAutoAcceptEdits) { backend.approvePlan(p.toolUseId, "acceptEdits") },
+                secondary = listOf(ApprovalChoice(L.claude.permission.approveReviewEachEdit) { backend.approvePlan(p.toolUseId, "default") }),
+                denyLabel = L.claude.permission.keepPlanning,
+                denyPlaceholder = L.claude.permission.whatShouldChangeInThePlan,
                 onDeny = { backend.keepPlanning(p.toolUseId, it.orEmpty()) }
             )
         } else {
@@ -54,26 +55,26 @@ fun claudeApprovalItems(pending: List<ClaudeTranscript.PendingPermission>, backe
                 target = toolTarget(p.toolName, p.input, p.blockedPath),
                 preview = toolPreview(p.toolName, p.input),
                 reason = p.reason,
-                primary = ApprovalChoice("Allow") { backend.approveToolAlways(p.toolUseId, -1) },
+                primary = ApprovalChoice(L.common.allow) { backend.approveToolAlways(p.toolUseId, -1) },
                 always = p.suggestions.orEmpty().mapIndexedNotNull { i, s ->
                     (s as? JsonObject)?.let { ApprovalChoice(describeSuggestion(it)) { backend.approveToolAlways(p.toolUseId, i) } }
                 },
-                denyPlaceholder = "Tell Claude what to do instead (optional)",
+                denyPlaceholder = L.claude.permission.tellClaudeWhatToDoInstead,
                 onDeny = { backend.rejectToolById(p.toolUseId, it) }
             )
         }
     }
 
 private fun toolTitle(name: String): Pair<ImageVector, String> = when {
-    name == "Bash" -> Icons.Outlined.Terminal to "Run a command?"
-    name == "Write" -> Icons.AutoMirrored.Outlined.NoteAdd to "Create a file?"
-    name == "Edit" || name == "MultiEdit" -> Icons.Outlined.EditNote to "Edit a file?"
-    name == "NotebookEdit" -> Icons.Outlined.EditNote to "Edit a notebook?"
-    name == "WebFetch" -> Icons.Outlined.Language to "Fetch a web page?"
-    name == "WebSearch" -> Icons.Outlined.TravelExplore to "Search the web?"
-    name == "Read" || name == "Glob" || name == "Grep" || name == "LS" -> Icons.Outlined.FolderOpen to "Read outside the project?"
-    name.startsWith("mcp__") -> Icons.Outlined.Extension to "Use ${name.substringAfterLast("__")}?"
-    else -> Icons.Outlined.Shield to "Allow $name?"
+    name == "Bash" -> Icons.Outlined.Terminal to L.common.runACommand
+    name == "Write" -> Icons.AutoMirrored.Outlined.NoteAdd to L.claude.permission.createAFile
+    name == "Edit" || name == "MultiEdit" -> Icons.Outlined.EditNote to L.claude.permission.editAFile
+    name == "NotebookEdit" -> Icons.Outlined.EditNote to L.claude.permission.editANotebook
+    name == "WebFetch" -> Icons.Outlined.Language to L.claude.permission.fetchAWebPage
+    name == "WebSearch" -> Icons.Outlined.TravelExplore to L.common.searchTheWeb
+    name == "Read" || name == "Glob" || name == "Grep" || name == "LS" -> Icons.Outlined.FolderOpen to L.claude.permission.readOutsideTheProject
+    name.startsWith("mcp__") -> Icons.Outlined.Extension to L.claude.permission.useName(name.substringAfterLast("__"))
+    else -> Icons.Outlined.Shield to L.claude.permission.allowName(name)
 }
 
 private fun toolTarget(name: String, input: JsonObject, blockedPath: String?): String? = when (name) {
@@ -104,8 +105,8 @@ private fun shortValue(v: JsonElement): String = when (v) {
 private fun describeSuggestion(s: JsonObject): String {
     val where = when (str(s, "destination")) {
         "session" -> "for this session"
-        "localSettings" -> "in this project (only me)"
-        "projectSettings" -> "in this project (shared)"
+        "localSettings" -> L.claude.permission.inThisProjectOnlyMe
+        "projectSettings" -> L.claude.permission.inThisProjectShared
         "userSettings" -> "everywhere"
         else -> ""
     }
@@ -115,10 +116,10 @@ private fun describeSuggestion(s: JsonObject): String {
                 val content = str(r, "ruleContent")
                 if (content.isBlank()) str(r, "toolName") else "${str(r, "toolName")}($content)"
             }
-            "Always allow $rules $where".trim()
+            L.claude.permission.alwaysAllowRulesWhere(rules, where).trim()
         }
-        "addDirectories" -> "Allow access to ${(s["directories"] as? JsonArray).orEmpty().joinToString(", ") { (it as? JsonPrimitive)?.contentOrNull.orEmpty() }} $where".trim()
-        "setMode" -> "Switch to ${permissionModeLabel(str(s, "mode"))} $where".trim()
+        "addDirectories" -> L.claude.permission.allowAccessToValueWhere((s["directories"] as? JsonArray).orEmpty().joinToString(", ") { (it as? JsonPrimitive)?.contentOrNull.orEmpty() }, where).trim()
+        "setMode" -> L.claude.permission.switchToPermissionmodelabelWhere(permissionModeLabel(str(s, "mode")), where).trim()
         else -> str(s, "type")
     }
 }

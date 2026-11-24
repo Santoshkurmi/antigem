@@ -75,6 +75,7 @@ import ai.antigem.ui.components.CodexAccent
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import ai.antigem.i18n.L
 
 /**
  * Codex's approval requests as approval-panel items: allow once, allow for the rest of the session (or always allow
@@ -98,16 +99,16 @@ fun codexApprovalItems(pending: List<CodexPending>, backend: CodexChatBackend, m
                     key = p.key,
                     agent = AgentKind.CODEX,
                     icon = if (network != null) Icons.Outlined.Language else Icons.Outlined.Terminal,
-                    title = if (network != null) "Allow network access?" else "Run a command?",
+                    title = if (network != null) L.codex.chatUi.allowNetworkAccess else L.common.runACommand,
                     subtitle = network?.let { "${it.str("protocol").orEmpty()} ${it.str("host").orEmpty()}".trim() } ?: prm.str("cwd"),
                     preview = command.takeIf { it.isNotBlank() }?.let { "$ $it" },
                     reason = reason,
-                    primary = ApprovalChoice("Allow") { backend.approve(p.key) },
+                    primary = ApprovalChoice(L.common.allow) { backend.approve(p.key) },
                     always = buildList {
-                        add(ApprovalChoice("Allow for this session", "Codex asks again after a restart") { backend.approve(p.key, always = true) })
-                        if (rule.isNotEmpty()) add(ApprovalChoice("Always allow `${rule.joinToString(" ")}`", "Codex saves this rule") { backend.approveRule(p.key) })
+                        add(ApprovalChoice(L.codex.chatUi.allowForThisSession, L.codex.chatUi.codexAsksAgainAfterARestart) { backend.approve(p.key, always = true) })
+                        if (rule.isNotEmpty()) add(ApprovalChoice(L.codex.chatUi.alwaysAllowRule(rule.joinToString(" ")), L.codex.chatUi.codexSavesThisRule) { backend.approveRule(p.key) })
                     },
-                    denyPlaceholder = "Tell Codex what to do instead (optional)",
+                    denyPlaceholder = L.codex.chatUi.tellCodexWhatToDoInstead,
                     onDeny = deny
                 )
             }
@@ -115,9 +116,9 @@ fun codexApprovalItems(pending: List<CodexPending>, backend: CodexChatBackend, m
                 key = p.key,
                 agent = AgentKind.CODEX,
                 icon = Icons.Outlined.EditNote,
-                title = "Change files?",
+                title = L.codex.chatUi.changeFiles,
                 subtitle = tool?.command,
-                target = prm.str("grantRoot")?.let { "Write access to $it" },
+                target = prm.str("grantRoot")?.let { L.codex.chatUi.writeAccessToValue(it) },
                 preview = tool?.output?.takeIf { it.isNotBlank() }?.lines()?.take(80)?.joinToString("\n") { line ->
                     // the panel colors "+ " / "- " lines
                     when {
@@ -127,59 +128,59 @@ fun codexApprovalItems(pending: List<CodexPending>, backend: CodexChatBackend, m
                     }
                 },
                 reason = reason,
-                primary = ApprovalChoice("Allow") { backend.approve(p.key) },
-                always = listOf(ApprovalChoice("Allow edits for this session", "Codex asks again after a restart") { backend.approve(p.key, always = true) }),
-                denyPlaceholder = "Tell Codex what to do instead (optional)",
+                primary = ApprovalChoice(L.common.allow) { backend.approve(p.key) },
+                always = listOf(ApprovalChoice(L.codex.chatUi.allowEditsForThisSession, L.codex.chatUi.codexAsksAgainAfterARestart) { backend.approve(p.key, always = true) }),
+                denyPlaceholder = L.codex.chatUi.tellCodexWhatToDoInstead,
                 onDeny = deny
             )
             "item/permissions/requestApproval" -> ApprovalItem(
                 key = p.key,
                 agent = AgentKind.CODEX,
                 icon = Icons.Outlined.Lock,
-                title = "Grant more access?",
+                title = L.codex.chatUi.grantMoreAccess,
                 subtitle = prm.str("cwd"),
                 preview = prm.o("permissions")?.toString(),
                 reason = reason,
-                primary = ApprovalChoice("Allow for this turn") { backend.approve(p.key) },
-                always = listOf(ApprovalChoice("Allow for this session") { backend.approve(p.key, always = true) }),
+                primary = ApprovalChoice(L.codex.chatUi.allowForThisTurn) { backend.approve(p.key) },
+                always = listOf(ApprovalChoice(L.codex.chatUi.allowForThisSession) { backend.approve(p.key, always = true) }),
                 onDeny = deny
             )
             "mcpServer/elicitation/request" -> ApprovalItem(
                 key = p.key,
                 agent = AgentKind.CODEX,
                 icon = Icons.Outlined.Extension,
-                title = prm.str("title") ?: "${prm.str("serverName") ?: "An MCP server"} asks",
+                title = prm.str("title") ?: L.codex.chatUi.nameAsks(prm.str("serverName") ?: L.codex.chatUi.anMcpServer),
                 subtitle = prm.str("serverName"),
                 target = prm.str("url"),
                 reason = prm.str("message") ?: prm.str("description"),
-                primary = ApprovalChoice("Continue") { backend.approve(p.key) },
+                primary = ApprovalChoice(L.common.continueText) { backend.approve(p.key) },
                 onDeny = deny
             )
             else -> ApprovalItem(
                 key = p.key,
                 agent = AgentKind.CODEX,
                 icon = Icons.Outlined.Shield,
-                title = "Allow this?",
+                title = L.codex.chatUi.allowThis,
                 subtitle = p.method,
                 reason = reason,
-                primary = ApprovalChoice("Allow") { backend.approve(p.key) },
+                primary = ApprovalChoice(L.common.allow) { backend.approve(p.key) },
                 onDeny = deny
             )
         }
     }
 
 fun codexModeLabel(mode: String): String = when (mode) {
-    CodexPreferences.MODE_READ_ONLY -> "Read only"
-    CodexPreferences.MODE_ASK -> "Ask first"
-    CodexPreferences.MODE_FULL -> "Full access"
-    else -> "Auto"
+    CodexPreferences.MODE_READ_ONLY -> L.codex.chatUi.readOnly
+    CodexPreferences.MODE_ASK -> L.common.askFirst
+    CodexPreferences.MODE_FULL -> L.codex.chatUi.fullAccess
+    else -> L.common.auto
 }
 
 fun codexModeDescription(mode: String): String = when (mode) {
-    CodexPreferences.MODE_READ_ONLY -> "Reads the project. Asks before changing files or running anything that needs more."
-    CodexPreferences.MODE_ASK -> "Edits files in the project; asks before running commands (except known safe ones)."
-    CodexPreferences.MODE_FULL -> "No sandbox and no questions: Codex can change anything and use the network."
-    else -> "Codex's default: edits and runs commands inside the project; asks before going outside it or online."
+    CodexPreferences.MODE_READ_ONLY -> L.codex.chatUi.readsTheProjectAsksBeforeChanging
+    CodexPreferences.MODE_ASK -> L.codex.chatUi.editsFilesInTheProjectAsks
+    CodexPreferences.MODE_FULL -> L.codex.chatUi.noSandboxAndNoQuestionsCodex
+    else -> L.codex.chatUi.codexsDefaultEditsAndRunsCommands
 }
 
 @Composable
@@ -197,8 +198,8 @@ fun codexModeIcon(mode: String): ImageVector = when (mode) {
 }
 
 fun codexEffortLabel(effort: String): String = when (effort) {
-    "" -> "Default"
-    "xhigh" -> "Extra high"
+    "" -> L.common.default
+    "xhigh" -> L.codex.chatUi.extraHigh
     else -> effort.replaceFirstChar { it.uppercase() }
 }
 
@@ -224,21 +225,21 @@ fun CodexControlsStrip(backend: CodexChatBackend) {
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (plan && lastPlan != null && !running) ControlChip(
-                text = "Implement plan",
+                text = L.codex.chatUi.implementPlan,
                 icon = Icons.Outlined.PlayArrow,
                 color = ai.antigem.theme.AppColors.success,
                 highlighted = true,
                 onClick = { backend.implementPlan() }
             )
             ControlChip(
-                text = if (plan) "Plan mode" else "Plan",
+                text = if (plan) L.codex.chatUi.planMode else L.codex.chatUi.plan,
                 icon = Icons.Outlined.Lightbulb,
                 color = ai.antigem.theme.AppColors.accentTeal,
                 highlighted = plan,
                 onClick = { backend.setPlanMode(!plan) }
             )
             if (efforts.isNotEmpty()) ControlChip(
-                text = "Reasoning: " + codexEffortLabel(effort),
+                text = L.codex.chatUi.reasoningCodexeffortlabel(codexEffortLabel(effort)),
                 icon = Icons.Outlined.Psychology,
                 color = CodexAccent,
                 highlighted = effort == "high" || effort == "xhigh" || effort == "max" || effort == "ultra",
@@ -254,15 +255,15 @@ fun CodexControlsStrip(backend: CodexChatBackend) {
         }
     }
     if (effortSheet) {
-        ai.antigem.ui.claude.ClaudePickerSheet("Reasoning", "how long Codex thinks before answering", { effortSheet = false }, agent = AgentKind.CODEX) {
+        ai.antigem.ui.claude.ClaudePickerSheet(L.common.reasoning, L.codex.chatUi.howLongCodexThinksBeforeAnswering, { effortSheet = false }, agent = AgentKind.CODEX) {
             efforts.forEach { e ->
                 ai.antigem.ui.claude.PickerOption(
                     title = codexEffortLabel(e),
                     description = when (e) {
-                        "low", "minimal", "none" -> "Fast answers for simple tasks."
-                        "medium" -> "Balanced: the usual choice."
-                        "high" -> "Thinks longer on hard problems (uses more of your limits)."
-                        else -> "Longest thinking (uses the most of your limits)."
+                        "low", "minimal", "none" -> L.codex.chatUi.fastAnswersForSimpleTasks
+                        "medium" -> L.codex.chatUi.balancedTheUsualChoice
+                        "high" -> L.codex.chatUi.thinksLongerOnHardProblemsUses
+                        else -> L.codex.chatUi.longestThinkingUsesTheMostOf
                     },
                     color = CodexAccent,
                     selected = e == effort,
@@ -270,11 +271,11 @@ fun CodexControlsStrip(backend: CodexChatBackend) {
                     onClick = { backend.selectEffort(e); effortSheet = false }
                 )
             }
-            SheetNote("Applies to the next message and to new chats.")
+            SheetNote(L.codex.chatUi.appliesToTheNextMessageAnd)
         }
     }
     if (modeSheet) {
-        ai.antigem.ui.claude.ClaudePickerSheet("Approvals", "what Codex asks before doing", { modeSheet = false }, agent = AgentKind.CODEX) {
+        ai.antigem.ui.claude.ClaudePickerSheet(L.common.approvals, L.codex.chatUi.whatCodexAsksBeforeDoing, { modeSheet = false }, agent = AgentKind.CODEX) {
             CodexPreferences.MODES.forEach { m ->
                 ai.antigem.ui.claude.PickerOption(
                     title = codexModeLabel(m),
@@ -285,7 +286,7 @@ fun CodexControlsStrip(backend: CodexChatBackend) {
                     onClick = { backend.setPermissionMode(m); modeSheet = false }
                 )
             }
-            SheetNote("Applies to the next message of this chat and to new chats. Requests show above the message box.")
+            SheetNote(L.codex.chatUi.appliesToTheNextMessageOf)
         }
     }
 }
@@ -308,7 +309,7 @@ fun codexQuotaWindows(limits: ai.antigem.data.agent.codex.CodexRateLimits?): Lis
                 m >= 60 -> "${m / 60}h"
                 else -> "${m}m"
             }
-        } ?: "Limit"
+        } ?: L.codex.chatUi.limit
         ai.antigem.domain.model.QuotaWindowUi(
             label = label,
             remaining = (1f - (w.usedPercent / 100.0).toFloat()).coerceIn(0f, 1f),
@@ -346,7 +347,7 @@ fun CodexModelSheet(backend: CodexChatBackend, onOpenSettings: () -> Unit, onDis
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
             AgentSheetHeader(
                 AgentKind.CODEX,
-                title = "Select model",
+                title = L.common.selectModel,
                 detail = if (models.isNotEmpty()) "${models.size} models" else null,
                 refreshing = refreshing,
                 onRefresh = {
@@ -356,7 +357,7 @@ fun CodexModelSheet(backend: CodexChatBackend, onOpenSettings: () -> Unit, onDis
                 }
             )
             if (windows.isNotEmpty() && models.isNotEmpty()) {
-                ai.antigem.ui.models.QuotaGroupHeader(title = "All models", accent = CodexAccent, count = models.size, windows = windows)
+                ai.antigem.ui.models.QuotaGroupHeader(title = L.codex.chatUi.allModels, accent = CodexAccent, count = models.size, windows = windows)
             } else Spacer(Modifier.height(10.dp))
             error?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 6.dp)) }
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
@@ -387,7 +388,7 @@ fun CodexModelSheet(backend: CodexChatBackend, onOpenSettings: () -> Unit, onDis
             TextButton(onClick = { onDismiss(); onOpenSettings() }) {
                 Icon(Icons.Outlined.Settings, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Codex account and settings")
+                Text(L.codex.chatUi.codexAccountAndSettings)
             }
         }
     }

@@ -54,6 +54,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 /** A package being installed: the verified package and what installing it would do (or why it can't). */
 class PendingInstall(val file: File, val plan: MiniAppInstaller.Plan)
@@ -169,14 +170,14 @@ private sealed class InstallStage {
 @Composable
 fun PackageInstaller(source: InstallSource, onClose: () -> Unit) {
     val context = LocalContext.current
-    var stage by remember(source) { mutableStateOf<InstallStage>(InstallStage.Loading("Checking the package…")) }
+    var stage by remember(source) { mutableStateOf<InstallStage>(InstallStage.Loading(L.miniapps.miniAppInstallUi.checkingThePackage)) }
     androidx.compose.runtime.LaunchedEffect(source) {
         stage = runCatching {
             when (source) {
                 is InstallSource.FromUri -> MiniAppPackages.open(context, source.uri)
                 is InstallSource.FromLink -> {
-                    stage = InstallStage.Loading("Downloading…")
-                    MiniAppPackages.download(context, source.url) { pct -> stage = InstallStage.Loading("Downloading…", pct) }
+                    stage = InstallStage.Loading(L.miniapps.miniAppInstallUi.downloading)
+                    MiniAppPackages.download(context, source.url) { pct -> stage = InstallStage.Loading(L.miniapps.miniAppInstallUi.downloading, pct) }
                 }
                 is InstallSource.FromStore -> {
                     stage = InstallStage.Loading("Downloading ${source.entry.name}…")
@@ -188,7 +189,7 @@ fun PackageInstaller(source: InstallSource, onClose: () -> Unit) {
     when (val s = stage) {
         is InstallStage.Loading -> AlertDialog(
             onDismissRequest = {},
-            title = { Text("Mini app package") },
+            title = { Text(L.miniapps.miniAppInstallUi.miniAppPackage) },
             text = {
                 Column {
                     Text(s.text + if (s.progress >= 0) " ${s.progress}%" else "", style = MaterialTheme.typography.bodyMedium)
@@ -197,29 +198,29 @@ fun PackageInstaller(source: InstallSource, onClose: () -> Unit) {
                 }
             },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = onClose) { Text(L.common.cancel) } },
         )
         is InstallStage.Failed -> AlertDialog(
             onDismissRequest = onClose,
             icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("Can't install") },
+            title = { Text(L.miniapps.miniAppInstallUi.cantInstall) },
             text = { Text(s.message, style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = { TextButton(onClick = onClose) { Text("OK") } },
+            confirmButton = { TextButton(onClick = onClose) { Text(L.common.ok) } },
         )
         is InstallStage.Ready -> InstallDialog(s.p) { result ->
             stage = when {
                 result == null -> { onClose(); return@InstallDialog }
                 result.isSuccess -> InstallStage.Done(s.p.plan.pkg.id, s.p.plan.pkg.manifest.optString("name").ifBlank { s.p.plan.pkg.id }, s.p.plan.kind, packageIcon(s.p))
-                else -> InstallStage.Failed(result.exceptionOrNull()?.message ?: "Install failed")
+                else -> InstallStage.Failed(result.exceptionOrNull()?.message ?: L.miniapps.miniAppInstallUi.installFailed)
             }
         }
         is InstallStage.Done -> AlertDialog(
             onDismissRequest = onClose,
             icon = { s.icon?.let { Image(it, null, Modifier.size(56.dp).clip(RoundedCornerShape(14.dp))) } },
             title = { Text(s.name) },
-            text = { Text(if (s.kind == MiniAppInstaller.Kind.NEW) "App installed." else "App updated.", style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = { TextButton(onClick = { MiniAppActivity.launch(context, s.id); onClose() }) { Text("Open") } },
-            dismissButton = { TextButton(onClick = onClose) { Text("Done") } },
+            text = { Text(if (s.kind == MiniAppInstaller.Kind.NEW) L.miniapps.miniAppInstallUi.appInstalled else L.miniapps.miniAppInstallUi.appUpdated, style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = { TextButton(onClick = { MiniAppActivity.launch(context, s.id); onClose() }) { Text(L.common.open) } },
+            dismissButton = { TextButton(onClick = onClose) { Text(L.common.done) } },
         )
     }
 }
@@ -242,10 +243,10 @@ private fun InstallDialog(p: PendingInstall, onResult: (Result<Unit>?) -> Unit) 
     val icon = remember(pkg.id) { packageIcon(p) }
     val name = pkg.manifest.optString("name").ifBlank { pkg.id }
     val (verb, headline) = when (plan.kind) {
-        MiniAppInstaller.Kind.NEW -> "Install" to "Install $name?"
-        MiniAppInstaller.Kind.UPDATE -> "Update" to "Update $name?"
-        MiniAppInstaller.Kind.REINSTALL -> "Reinstall" to "Reinstall $name?"
-        MiniAppInstaller.Kind.DOWNGRADE -> "Downgrade" to "Go back to an older $name?"
+        MiniAppInstaller.Kind.NEW -> L.common.install to "Install $name?"
+        MiniAppInstaller.Kind.UPDATE -> L.common.update to "Update $name?"
+        MiniAppInstaller.Kind.REINSTALL -> L.common.reinstall to "Reinstall $name?"
+        MiniAppInstaller.Kind.DOWNGRADE -> L.miniapps.miniAppInstallUi.downgrade to L.miniapps.miniAppInstallUi.goBackToAnOlderName(name)
     }
     AlertDialog(
         onDismissRequest = { if (!busy) { p.file.delete(); onResult(null) } },
@@ -256,32 +257,32 @@ private fun InstallDialog(p: PendingInstall, onResult: (Result<Unit>?) -> Unit) 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (plan.blocked == null) Icons.Outlined.Verified else Icons.Outlined.WarningAmber, null,
                         tint = if (plan.blocked == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                    Text("  Signed by ${pkg.developer}", style = MaterialTheme.typography.titleSmall)
+                    Text(L.miniapps.miniAppInstallUi.signedByDeveloper(pkg.developer), style = MaterialTheme.typography.titleSmall)
                 }
-                Text("Key ${MiniAppSigning.shortFingerprint(pkg.fingerprint)}", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                Text(L.miniapps.miniAppInstallUi.keyShortfingerprint(MiniAppSigning.shortFingerprint(pkg.fingerprint)), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val version = when (plan.kind) {
-                    MiniAppInstaller.Kind.NEW -> "Version ${pkg.version}"
+                    MiniAppInstaller.Kind.NEW -> L.miniapps.miniAppInstallUi.versionVersion(pkg.version)
                     else -> "Version ${plan.previous?.version} → ${pkg.version}"
                 }
                 Text("$version · ${pkg.id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                 when {
                     plan.blocked != null -> Text(plan.blocked, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
-                    plan.kind == MiniAppInstaller.Kind.NEW -> Text("A new app from this developer. Only packages signed with the same key can update it.",
+                    plan.kind == MiniAppInstaller.Kind.NEW -> Text(L.miniapps.miniAppInstallUi.aNewAppFromThisDeveloper,
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
-                    plan.kind == MiniAppInstaller.Kind.DOWNGRADE -> Text("This is an older version than the one installed. Older versions can have bugs that were fixed. Its data is kept.",
+                    plan.kind == MiniAppInstaller.Kind.DOWNGRADE -> Text(L.miniapps.miniAppInstallUi.thisIsAnOlderVersionThan,
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
-                    else -> Text("Same developer as the installed version. Its data and permissions are kept.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+                    else -> Text(L.miniapps.miniAppInstallUi.sameDeveloperAsTheInstalledVersion, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
                 }
                 if (plan.sharesWith.isNotEmpty() && plan.blocked == null) Text(
-                    "Shares its data with ${plan.sharesWith.joinToString { it.name }} (same developer): each can read and change the other's files.",
+                    L.miniapps.miniAppInstallUi.sharesItsDataWithValueSame(plan.sharesWith.joinToString { it.name }),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-                if (plan.orphanData && plan.blocked == null) Text("Data left by an earlier app with this id will be deleted.",
+                if (plan.orphanData && plan.blocked == null) Text(L.miniapps.miniAppInstallUi.dataLeftByAnEarlierApp,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                 val parsed = remember(pkg.id) { runCatching { MiniApps.parse(File("/"), pkg.manifest) }.getOrNull() }
                 val perms = if (plan.kind == MiniAppInstaller.Kind.NEW) parsed?.permissions?.keys?.toList().orEmpty() else plan.newPermissions
                 if (perms.isNotEmpty() && parsed != null && plan.blocked == null) {
-                    Text(if (plan.kind == MiniAppInstaller.Kind.NEW) "It will ask for" else "New permissions it will ask for",
+                    Text(if (plan.kind == MiniAppInstaller.Kind.NEW) L.miniapps.miniAppInstallUi.itWillAskFor else L.miniapps.miniAppInstallUi.newPermissionsItWillAskFor,
                         style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                     perms.forEach { n ->
                         val info = MiniAppPermissions.describe(parsed, n)
@@ -299,9 +300,9 @@ private fun InstallDialog(p: PendingInstall, onResult: (Result<Unit>?) -> Unit) 
                     p.file.delete()
                     onResult(r)
                 }
-            }) { Text(if (busy) "Installing…" else verb, color = if (plan.kind == MiniAppInstaller.Kind.DOWNGRADE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
+            }) { Text(if (busy) L.common.installing else verb, color = if (plan.kind == MiniAppInstaller.Kind.DOWNGRADE) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
         },
-        dismissButton = { TextButton(enabled = !busy, onClick = { p.file.delete(); onResult(null) }) { Text(if (plan.blocked == null) "Cancel" else "Close") } },
+        dismissButton = { TextButton(enabled = !busy, onClick = { p.file.delete(); onResult(null) }) { Text(if (plan.blocked == null) L.common.cancel else L.common.close) } },
     )
 }
 
@@ -321,7 +322,7 @@ internal fun AskText(title: String, message: String, password: Boolean, confirm:
             }
         },
         confirmButton = { TextButton(enabled = value.isNotBlank(), onClick = { onResult(value) }) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = { onResult(null) }) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = { onResult(null) }) { Text(L.common.cancel) } },
     )
 }
 
@@ -333,23 +334,22 @@ private fun BackupKeyDialog(afterCreate: Boolean, onResult: (String?) -> Unit) {
     val ok = pw.length >= 8 && pw == again
     AlertDialog(
         onDismissRequest = { onResult(null) },
-        title = { Text(if (afterCreate) "Back up your new key" else "Back up the key") },
+        title = { Text(if (afterCreate) L.miniapps.miniAppInstallUi.backUpYourNewKey else L.miniapps.miniAppInstallUi.backUpTheKey) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("The key is saved, locked with this password, to Download/AntiGem on this phone: it stays there even if AntiGem is " +
-                    "uninstalled. Then you can also send it to Drive or email. If the key is lost, apps signed with it can never be updated.",
+                Text(L.miniapps.miniAppInstallUi.theKeyIsSavedLockedWith,
                     style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 12.dp))
-                OutlinedTextField(pw, { pw = it }, singleLine = true, label = { Text("Password (8+ characters)") }, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(pw, { pw = it }, singleLine = true, label = { Text(L.miniapps.miniAppInstallUi.password8Characters) }, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                OutlinedTextField(again, { again = it }, singleLine = true, label = { Text("Repeat the password") }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                OutlinedTextField(again, { again = it }, singleLine = true, label = { Text(L.miniapps.miniAppInstallUi.repeatThePassword) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     isError = again.isNotEmpty() && again != pw)
-                Text("You need this password to restore the key (Developer key → Import) or to sign on a PC. Nobody can recover it.",
+                Text(L.miniapps.miniAppInstallUi.youNeedThisPasswordToRestore,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         },
-        confirmButton = { TextButton(enabled = ok, onClick = { onResult(pw) }) { Text("Back up") } },
-        dismissButton = { TextButton(onClick = { onResult(null) }) { Text(if (afterCreate) "Later" else "Cancel") } },
+        confirmButton = { TextButton(enabled = ok, onClick = { onResult(pw) }) { Text(L.miniapps.miniAppInstallUi.backUp) } },
+        dismissButton = { TextButton(onClick = { onResult(null) }) { Text(if (afterCreate) L.common.later else L.common.cancel) } },
     )
 }
 
@@ -369,30 +369,29 @@ fun DeveloperKeyDialog(onDismiss: () -> Unit, pickKeyFile: (onPicked: (Uri?) -> 
     var importUri by remember { mutableStateOf<Uri?>(null) }
     val toast = { m: String -> Toast.makeText(context, m, Toast.LENGTH_LONG).show() }
     when (step) {
-        "create" -> AskText("Create developer key", "Your name or team, shown to people who install your apps.", false, "Create") { name ->
+        "create" -> AskText(L.miniapps.miniAppInstallUi.createDeveloperKey, L.miniapps.miniAppInstallUi.yourNameOrTeamShownTo, false, L.common.create) { name ->
             step = null
             if (name != null) scope.launch {
                 withContext(Dispatchers.IO) { runCatching { MiniAppSigning.createKey(context, name) } }
                     .onSuccess { info = MiniAppSigning.keyInfo(context); backup = null; step = "backup-new" }
-                    .onFailure { toast(it.message ?: "Failed") }
+                    .onFailure { toast(it.message ?: L.common.failed) }
             }
         }
         "backup", "backup-new" -> BackupKeyDialog(afterCreate = step == "backup-new") { pw ->
             step = null
-            if (pw == null) { if (backup == null) toast("Not backed up yet: Mini Apps keeps reminding you until it is"); return@BackupKeyDialog }
+            if (pw == null) { if (backup == null) toast(L.miniapps.miniAppInstallUi.notBackedUpYetMiniApps); return@BackupKeyDialog }
             scope.launch {
                 withContext(Dispatchers.IO) { runCatching { ai.antigem.data.miniapps.MiniAppKeyBackup.save(context, pw) } }
                     .onSuccess { (shown, copy) ->
                         backup = ai.antigem.data.miniapps.MiniAppKeyBackup.info(context)
-                        toast("Saved to $shown. Keep a second copy somewhere safe too.")
+                        toast(L.miniapps.miniAppInstallUi.savedToShownKeepASecond(shown))
                         MiniAppPackages.share(context, copy, "application/octet-stream")
                     }
-                    .onFailure { toast(it.message ?: "Backup failed") }
+                    .onFailure { toast(it.message ?: L.miniapps.miniAppInstallUi.backupFailed) }
             }
         }
-        "import" -> AskText("Import a key",
-            (info?.let { i -> "This replaces your current key (${i.first}). " + if (backup == null) "It is NOT backed up: back it up first, or it is lost for good. " else "" } ?: "") +
-                "The password of this .agkey file:", true, "Import") { pw ->
+        "import" -> AskText(L.miniapps.miniAppInstallUi.importAKey,
+            L.miniapps.miniAppInstallUi.valueThePasswordOfThisAgkey((info?.let { i -> "This replaces your current key (${i.first}). " + if (backup == null) L.miniapps.miniAppInstallUi.itIsNotBackedUpBack else "" } ?: "")), true, L.miniapps.miniAppInstallUi.import) { pw ->
             step = null
             val uri = importUri
             if (pw != null && uri != null) scope.launch {
@@ -401,39 +400,39 @@ fun DeveloperKeyDialog(onDismiss: () -> Unit, pickKeyFile: (onPicked: (Uri?) -> 
                         MiniAppSigning.importKey(context, JSONObject(context.contentResolver.openInputStream(uri)!!.bufferedReader().readText()), pw)
                         ai.antigem.data.miniapps.MiniAppKeyBackup.markImported(context)
                     }
-                }.onSuccess { info = MiniAppSigning.keyInfo(context); backup = ai.antigem.data.miniapps.MiniAppKeyBackup.info(context); toast("Key imported") }
-                    .onFailure { toast(it.message ?: "Failed") }
+                }.onSuccess { info = MiniAppSigning.keyInfo(context); backup = ai.antigem.data.miniapps.MiniAppKeyBackup.info(context); toast(L.miniapps.miniAppInstallUi.keyImported) }
+                    .onFailure { toast(it.message ?: L.common.failed) }
             }
         }
     }
     if (step == null) AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Developer key") },
+        title = { Text(L.miniapps.miniAppInstallUi.developerKey) },
         text = {
             Column {
                 val i = info
-                if (i == null) Text("Packages you export are signed with your key. Anyone who installs one can only update it with a package signed by the same key.",
+                if (i == null) Text(L.miniapps.miniAppInstallUi.packagesYouExportAreSignedWith,
                     style = MaterialTheme.typography.bodyMedium)
                 else {
                     Text(i.first, style = MaterialTheme.typography.titleMedium)
                     Text(MiniAppSigning.shortFingerprint(i.second), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     val b = backup
-                    if (b == null) Text("Not backed up. If this key is lost (AntiGem uninstalled, data cleared, phone lost), apps signed with it can never be updated.",
+                    if (b == null) Text(L.miniapps.miniAppInstallUi.notBackedUpIfThisKey,
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
-                    else Text("Backed up ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(b.at))}\n${b.path}",
+                    else Text(L.miniapps.miniAppInstallUi.backedUpGetdatetimeinstancePath(java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(b.at)), b.path),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         },
         confirmButton = {
-            if (info == null) TextButton(onClick = { step = "create" }) { Text("Create") }
-            else TextButton(onClick = { step = "backup" }) { Text(if (backup == null) "Back up now" else "Back up again") }
+            if (info == null) TextButton(onClick = { step = "create" }) { Text(L.common.create) }
+            else TextButton(onClick = { step = "backup" }) { Text(if (backup == null) L.miniapps.miniAppInstallUi.backUpNow else L.miniapps.miniAppInstallUi.backUpAgain) }
         },
         dismissButton = {
             Row {
-                TextButton(onClick = { pickKeyFile { uri -> if (uri != null) { importUri = uri; step = "import" } } }) { Text("Import") }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = { pickKeyFile { uri -> if (uri != null) { importUri = uri; step = "import" } } }) { Text(L.miniapps.miniAppInstallUi.import) }
+                TextButton(onClick = onDismiss) { Text(L.common.close) }
             }
         },
     )

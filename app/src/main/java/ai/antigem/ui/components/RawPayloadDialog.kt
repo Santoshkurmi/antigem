@@ -28,6 +28,7 @@ import androidx.compose.ui.window.Dialog
 import ai.antigem.theme.ClaudeTerracotta
 import org.json.JSONArray
 import org.json.JSONObject
+import ai.antigem.i18n.L
 
 @Composable
 fun RawPayloadDialog(
@@ -88,7 +89,7 @@ fun RawPayloadDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Raw Request Payload",
+                            text = L.components.rawPayload.rawRequestPayload,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -99,11 +100,11 @@ fun RawPayloadDialog(
                     FilterChip(
                         selected = wrapLines,
                         onClick = { wrapLines = !wrapLines },
-                        label = { Text(if (wrapLines) "Wrap: ON" else "Wrap: OFF", fontSize = 11.5.sp) },
+                        label = { Text(if (wrapLines) L.components.rawPayload.wrapOn else L.components.rawPayload.wrapOff, fontSize = 11.5.sp) },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.WrapText,
-                                contentDescription = "Toggle Wrap",
+                                contentDescription = L.components.rawPayload.toggleWrap,
                                 modifier = Modifier.size(14.dp)
                             )
                         },
@@ -120,7 +121,7 @@ fun RawPayloadDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Formatted JSON payload transmitted to Google CloudCode API:",
+                    text = L.components.rawPayload.formattedJsonPayloadTransmittedToGoogle,
                     fontSize = 11.5.sp,
                     color = Color.White.copy(alpha = 0.6f)
                 )
@@ -173,19 +174,19 @@ fun RawPayloadDialog(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Raw Payload JSON", prettyJson))
-                            Toast.makeText(context, "Formatted JSON copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, L.components.rawPayload.formattedJsonCopiedToClipboard, Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ai.antigem.theme.AppColors.editorPanel),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.ContentCopy,
-                            contentDescription = "Copy",
+                            contentDescription = L.common.copy,
                             tint = Color.White,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Copy JSON", fontSize = 12.5.sp, color = Color.White)
+                        Text(L.components.rawPayload.copyJson, fontSize = 12.5.sp, color = Color.White)
                     }
 
                     Button(
@@ -193,7 +194,7 @@ fun RawPayloadDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Close", fontSize = 13.sp, color = Color.White)
+                        Text(L.common.close, fontSize = 13.sp, color = Color.White)
                     }
                 }
             }

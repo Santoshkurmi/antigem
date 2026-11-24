@@ -36,6 +36,7 @@ import ai.antigem.data.local.LocalInstallerState
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.theme.*
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 @Composable
 fun LocalToolsInstallDialog(
@@ -157,10 +158,10 @@ fun LocalToolsInstallDialog(
 
                 Text(
                     text = when (installerState) {
-                        is LocalInstallerState.Success -> "Local Tools Ready!"
-                        is LocalInstallerState.Error -> "Installation Error"
-                        is LocalInstallerState.Idle -> "Install Local Linux Tools"
-                        else -> "Setting Up Local Tools"
+                        is LocalInstallerState.Success -> L.settings.localToolsInstall.localToolsReady
+                        is LocalInstallerState.Error -> L.settings.localToolsInstall.installationError
+                        is LocalInstallerState.Idle -> L.settings.localToolsInstall.installLocalLinuxTools
+                        else -> L.settings.localToolsInstall.settingUpLocalTools
                     },
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
@@ -169,10 +170,10 @@ fun LocalToolsInstallDialog(
 
                 Text(
                     text = when (installerState) {
-                        is LocalInstallerState.Success -> "Termux-compatible shell, coreutils & toolchain are now active."
-                        is LocalInstallerState.Error -> "Failed to configure local environment. You can retry below."
-                        is LocalInstallerState.Idle -> "Select how you would like to download and install the Termux rootfs:"
-                        else -> "Downloading and unpacking native Linux toolchain inside your app sandbox."
+                        is LocalInstallerState.Success -> L.settings.localToolsInstall.termuxCompatibleShellCoreutilsToolchain
+                        is LocalInstallerState.Error -> L.settings.localToolsInstall.failedToConfigureLocalEnvironmentYou
+                        is LocalInstallerState.Idle -> L.settings.localToolsInstall.selectHowYouWouldLikeTo
+                        else -> L.settings.localToolsInstall.downloadingAndUnpackingNativeLinux
                     },
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -205,7 +206,7 @@ fun LocalToolsInstallDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Device Hardware Capabilities",
+                                text = L.settings.localToolsInstall.deviceHardwareCapabilities,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -226,7 +227,7 @@ fun LocalToolsInstallDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Arch", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(L.settings.localToolsInstall.arch, fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(modifier = Modifier.height(1.dp))
                                     Text(
                                         hardwareInfo.arch,
@@ -254,7 +255,7 @@ fun LocalToolsInstallDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Address Space", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(L.settings.localToolsInstall.addressSpace, fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(modifier = Modifier.height(1.dp))
                                     Text(
                                         when (hardwareInfo.vaBits) {
@@ -289,12 +290,12 @@ fun LocalToolsInstallDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Atomics", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(L.settings.localToolsInstall.atomics, fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(modifier = Modifier.height(1.dp))
                                     Text(
                                         when (hardwareInfo.hasAtomics) {
-                                            true -> "Supported"
-                                            false -> "None"
+                                            true -> L.settings.localToolsInstall.supported
+                                            false -> L.settings.localToolsInstall.none
                                             else -> "N/A"
                                         },
                                         fontSize = 11.sp,
@@ -343,7 +344,7 @@ fun LocalToolsInstallDialog(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Auto Download (GitHub)",
+                                                text = L.settings.localToolsInstall.autoDownloadGithub,
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface,
@@ -356,7 +357,7 @@ fun LocalToolsInstallDialog(
                                                     .background(QuotaGreen.copy(alpha = 0.15f))
                                                     .padding(horizontal = 5.dp, vertical = 1.dp)
                                             ) {
-                                                Text("Recommended", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = QuotaGreen)
+                                                Text(L.common.recommended, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = QuotaGreen)
                                             }
                                         }
                                         Text(
@@ -384,13 +385,13 @@ fun LocalToolsInstallDialog(
                                     Icon(Icons.Outlined.Storage, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.padding(horizontal = 12.dp).size(20.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "Ubuntu chroot (root)",
+                                            text = L.common.ubuntuChrootRoot,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "A real Ubuntu for rooted phones (Magisk / KernelSU / APatch): opens its own setup page",
+                                            text = L.settings.localToolsInstall.aRealUbuntuForRootedPhones,
                                             fontSize = 11.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -421,13 +422,13 @@ fun LocalToolsInstallDialog(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "Local ZIP Archive",
+                                                text = L.settings.localToolsInstall.localZipArchive,
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "Pick an existing bootstrap .zip file from device (Offline)",
+                                                text = L.settings.localToolsInstall.pickAnExistingBootstrapZipFile,
                                                 fontSize = 11.5.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -443,13 +444,13 @@ fun LocalToolsInstallDialog(
                                             Icon(imageVector = Icons.Outlined.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = if (selectedFileUri != null) "Change Selected ZIP" else "Browse & Select ZIP File",
+                                                text = if (selectedFileUri != null) L.settings.localToolsInstall.changeSelectedZip else L.settings.localToolsInstall.browseSelectZipFile,
                                                 fontSize = 12.sp
                                             )
                                         }
                                         if (selectedFileUri != null) {
                                             Text(
-                                                text = "Selected: ${selectedFileUri.toString().substringAfterLast("/")}",
+                                                text = L.settings.localToolsInstall.selectedValue(selectedFileUri.toString().substringAfterLast("/")),
                                                 fontSize = 10.5.sp,
                                                 fontFamily = FontFamily.Monospace,
                                                 color = QuotaGreen,
@@ -485,7 +486,7 @@ fun LocalToolsInstallDialog(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Base Minimum Termux",
+                                                text = L.settings.localToolsInstall.baseMinimumTermux,
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface,
@@ -498,7 +499,7 @@ fun LocalToolsInstallDialog(
                                                     .background(ai.antigem.theme.AppColors.accentIndigo.copy(alpha = 0.15f))
                                                     .padding(horizontal = 5.dp, vertical = 1.dp)
                                             ) {
-                                                Text("Minimal (~33MB)", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = ai.antigem.theme.AppColors.accentIndigo)
+                                                Text(L.settings.localToolsInstall.minimal33mb, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = ai.antigem.theme.AppColors.accentIndigo)
                                             }
                                         }
                                         Text(
@@ -539,7 +540,7 @@ fun LocalToolsInstallDialog(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "Found Termux Bootstrap Package",
+                                text = L.settings.localToolsInstall.foundTermuxBootstrapPackage,
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -559,28 +560,28 @@ fun LocalToolsInstallDialog(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("Release Tag:", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(L.settings.localToolsInstall.releaseTag, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.releaseTag, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("Architecture:", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(L.settings.localToolsInstall.architecture, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.arch, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = ClaudeTerracotta)
                                     }
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("Package Size:", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(L.settings.localToolsInstall.packageSize, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.sizeFormatted, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = QuotaGreen)
                                     }
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("Target Sandbox:", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(L.settings.localToolsInstall.targetSandbox, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.packageName, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                     HorizontalDivider(
@@ -610,7 +611,7 @@ fun LocalToolsInstallDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Step 1: Downloading / Importing",
+                                    text = L.settings.localToolsInstall.step1DownloadingImporting,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -671,7 +672,7 @@ fun LocalToolsInstallDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Step 2: Unzipping & Extracting",
+                                    text = L.settings.localToolsInstall.step2UnzippingExtracting,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -721,7 +722,7 @@ fun LocalToolsInstallDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Step 3: Configuring Shell & Permissions",
+                                    text = L.settings.localToolsInstall.step3ConfiguringShellPermissions,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -753,7 +754,7 @@ fun LocalToolsInstallDialog(
                     is LocalInstallerState.Verifying -> {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "Step 4: Verifying Local Environment...",
+                                text = L.settings.localToolsInstall.step4VerifyingLocalEnvironment,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -794,13 +795,13 @@ fun LocalToolsInstallDialog(
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Installed at: ${state.prefixPath}",
+                                    text = L.settings.localToolsInstall.installedAtPrefixpath(state.prefixPath),
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
                                 Text(
-                                    text = "Disk space: ${state.totalDiskUsageFormatted}",
+                                    text = L.settings.localToolsInstall.diskSpaceTotaldiskusageformatted(state.totalDiskUsageFormatted),
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
@@ -890,7 +891,7 @@ fun LocalToolsInstallDialog(
                                     if (installerLogs.isEmpty()) {
                                         item {
                                             Text(
-                                                text = "Logs will appear here once installation begins...",
+                                                text = L.settings.localToolsInstall.logsWillAppearHereOnceInstallation,
                                                 fontSize = 10.sp,
                                                 fontFamily = FontFamily.Monospace,
                                                 color = Color.Gray
@@ -959,9 +960,9 @@ fun LocalToolsInstallDialog(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = when (selectedSourceType) {
-                                        0 -> "Download & Install AntiGem (~350MB)"
-                                        1 -> "Download Base Termux (~33MB)"
-                                        else -> if (selectedFileUri != null) "Install Local ZIP" else "Choose ZIP"
+                                        0 -> L.settings.localToolsInstall.downloadInstallAntigem350mb
+                                        1 -> L.settings.localToolsInstall.downloadBaseTermux33mb
+                                        else -> if (selectedFileUri != null) L.settings.localToolsInstall.installLocalZip else L.settings.localToolsInstall.chooseZip
                                     },
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
@@ -972,7 +973,7 @@ fun LocalToolsInstallDialog(
                                 onClick = onDismiss,
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Cancel")
+                                Text(L.common.cancel)
                             }
                         }
                     }
@@ -996,7 +997,7 @@ fun LocalToolsInstallDialog(
                             ) {
                                 Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Confirm & Download", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(L.settings.localToolsInstall.confirmDownload, color = Color.White, fontWeight = FontWeight.Bold)
                             }
 
                             OutlinedButton(
@@ -1006,7 +1007,7 @@ fun LocalToolsInstallDialog(
                                 modifier = Modifier.weight(0.6f),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Change")
+                                Text(L.common.change)
                             }
                         }
                     }
@@ -1017,7 +1018,7 @@ fun LocalToolsInstallDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("Cancel Search")
+                            Text(L.settings.localToolsInstall.cancelSearch)
                         }
                     }
 
@@ -1030,7 +1031,7 @@ fun LocalToolsInstallDialog(
                         ) {
                             Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(L.common.done, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -1057,7 +1058,7 @@ fun LocalToolsInstallDialog(
                                 ) {
                                     Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Retry", color = Color.White, fontSize = 12.5.sp)
+                                    Text(L.common.retry, color = Color.White, fontSize = 12.5.sp)
                                 }
 
                                 OutlinedButton(
@@ -1067,7 +1068,7 @@ fun LocalToolsInstallDialog(
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("Change Source", fontSize = 12.sp)
+                                    Text(L.settings.localToolsInstall.changeSource, fontSize = 12.sp)
                                 }
                             }
 
@@ -1091,7 +1092,7 @@ fun LocalToolsInstallDialog(
                                 ) {
                                     Icon(imageVector = Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.Red)
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Clear All", fontSize = 12.sp, color = Color.Red)
+                                    Text(L.settings.localToolsInstall.clearAll, fontSize = 12.sp, color = Color.Red)
                                 }
 
                                 OutlinedButton(
@@ -1099,7 +1100,7 @@ fun LocalToolsInstallDialog(
                                     modifier = Modifier.weight(0.7f),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("Close")
+                                    Text(L.common.close)
                                 }
                             }
                         }
@@ -1111,7 +1112,7 @@ fun LocalToolsInstallDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("Run in Background", color = MaterialTheme.colorScheme.onSurface)
+                            Text(L.settings.localToolsInstall.runInBackground, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }

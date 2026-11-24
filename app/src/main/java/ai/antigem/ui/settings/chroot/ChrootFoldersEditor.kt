@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.antigem.i18n.L
 
 /**
  * The folders of the phone shared into the chroot: as many as the user likes, each with the path it gets inside
@@ -78,15 +79,13 @@ internal fun ChrootFoldersEditor(user: String, binds: List<ChrootBind>, onChange
         if (uri == null) return@rememberLauncherForActivityResult
         val path = treeUriToPath(uri)
         if (path != null) choose(path)
-        else pickError = "That folder is not on the phone's storage: type its path instead (root can share any folder)."
+        else pickError = L.settings.chrootFoldersEditor.thatFolderIsNotOnThe
     }
 
-    Text("Shared folders", fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
-    ChrootNote("Folders of the phone (yours, or Android's own like /system) shown inside Ubuntu, with any drives mounted inside " +
-        "them. Inside Ubuntu they are the real folders: what is deleted there is deleted on the phone (choose read-only to prevent " +
-        "it). Deleting the Ubuntu install never touches them.")
+    Text(L.settings.chrootFoldersEditor.sharedFolders, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
+    ChrootNote(L.settings.chrootFoldersEditor.foldersOfThePhoneYoursOr)
     Spacer(Modifier.height(4.dp))
-    if (binds.isEmpty()) Text("None yet", fontSize = 12.sp, color = AppColors.textSecondary)
+    if (binds.isEmpty()) Text(L.settings.chrootFoldersEditor.noneYet, fontSize = 12.sp, color = AppColors.textSecondary)
     binds.forEach { b ->
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -96,7 +95,7 @@ internal fun ChrootFoldersEditor(user: String, binds: List<ChrootBind>, onChange
                 }
                 Text("← ${b.source}", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = AppColors.textSecondary)
             }
-            TextButton(onClick = { onChange(binds - b) }) { Text("Remove", color = AppColors.danger, fontSize = 12.sp) }
+            TextButton(onClick = { onChange(binds - b) }) { Text(L.common.remove, color = AppColors.danger, fontSize = 12.sp) }
         }
     }
 
@@ -107,7 +106,7 @@ internal fun ChrootFoldersEditor(user: String, binds: List<ChrootBind>, onChange
         ) {
             Icon(Icons.Outlined.Add, null, Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
-            Text("Add a folder")
+            Text(L.settings.chrootFoldersEditor.addAFolder)
         }
         return
     }
@@ -116,44 +115,44 @@ internal fun ChrootFoldersEditor(user: String, binds: List<ChrootBind>, onChange
     Surface(shape = RoundedCornerShape(12.dp), color = AppColors.surface, border = BorderStroke(1.dp, AppColors.border.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         Column(Modifier.padding(12.dp)) {
-            Text("1. The folder on the phone", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
+            Text(L.settings.chrootFoldersEditor.n1TheFolderOnThePhone, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AssistChip(onClick = { choose(home, "/home/$user/antigem_home") }, label = { Text("AntiGem home") })
-                AssistChip(onClick = { choose("/storage/emulated/0/Download") }, label = { Text("Download") })
-                AssistChip(onClick = { choose("/storage/emulated/0/Documents") }, label = { Text("Documents") })
-                AssistChip(onClick = { choose("/storage/emulated/0/DCIM") }, label = { Text("DCIM") })
-                AssistChip(onClick = { choose("/storage/emulated/0/Pictures") }, label = { Text("Pictures") })
-                AssistChip(onClick = { picker.launch(null) }, label = { Text("Browse…") },
+                AssistChip(onClick = { choose(home, "/home/$user/antigem_home") }, label = { Text(L.settings.chrootFoldersEditor.antigemHome) })
+                AssistChip(onClick = { choose("/storage/emulated/0/Download") }, label = { Text(L.common.download) })
+                AssistChip(onClick = { choose("/storage/emulated/0/Documents") }, label = { Text(L.settings.chrootFoldersEditor.documents) })
+                AssistChip(onClick = { choose("/storage/emulated/0/DCIM") }, label = { Text(L.settings.chrootFoldersEditor.dcim) })
+                AssistChip(onClick = { choose("/storage/emulated/0/Pictures") }, label = { Text(L.settings.chrootFoldersEditor.pictures) })
+                AssistChip(onClick = { picker.launch(null) }, label = { Text(L.settings.chrootFoldersEditor.browse) },
                     leadingIcon = { Icon(Icons.Outlined.FolderOpen, null, Modifier.size(16.dp)) })
             }
             // Android's own folders, at the same place inside Ubuntu (the system ones read-only)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Android:", fontSize = 11.5.sp, color = AppColors.textSecondary, modifier = Modifier.padding(end = 6.dp))
+                Text(L.settings.chrootFoldersEditor.android, fontSize = 11.5.sp, color = AppColors.textSecondary, modifier = Modifier.padding(end = 6.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("/system" to true, "/vendor" to true, "/apex" to true, "/product" to true, "/data/local/tmp" to false).forEach { (p, ro) ->
                         AssistChip(onClick = { choose(p, readOnlyDefault = ro) }, label = { Text(p, fontFamily = FontFamily.Monospace, fontSize = 12.sp) })
                     }
                 }
             }
-            OutlinedTextField(source, { choose(it) }, label = { Text("Phone folder (any path)") }, singleLine = true,
+            OutlinedTextField(source, { choose(it) }, label = { Text(L.settings.chrootFoldersEditor.phoneFolderAnyPath) }, singleLine = true,
                 modifier = Modifier.fillMaxWidth())
             pickError?.let { ChrootNote(it, AppColors.warning) }
             Spacer(Modifier.height(8.dp))
-            Text("2. Where it shows up inside Ubuntu", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
-            OutlinedTextField(target, { target = it.trim(); targetEdited = true }, label = { Text("Path inside Ubuntu") }, singleLine = true,
+            Text(L.settings.chrootFoldersEditor.n2WhereItShowsUpInside, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
+            OutlinedTextField(target, { target = it.trim(); targetEdited = true }, label = { Text(L.settings.chrootFoldersEditor.pathInsideUbuntu) }, singleLine = true,
                 placeholder = { Text("/home/$user/photos or /mnt/photos") }, modifier = Modifier.fillMaxWidth())
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(readOnly, { readOnly = it }, colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta))
-                Text("Read-only (Ubuntu can read but never change or delete; drives mounted inside it keep their own setting)", fontSize = 12.sp, color = AppColors.onBackground)
+                Text(L.settings.chrootFoldersEditor.readOnlyUbuntuCanReadBut, fontSize = 12.sp, color = AppColors.onBackground)
             }
             val src = source.trim().trimEnd('/')
             val dst = target.trim().trimEnd('/')
             val problem = when {
-                src.isEmpty() -> "Pick or type the phone folder."
-                !ChrootManager.isBindSource(src) -> "Use the folder's full path (starting with /), without | or ;."
-                dst.isEmpty() -> "Type where it shows up inside Ubuntu."
+                src.isEmpty() -> L.settings.chrootFoldersEditor.pickOrTypeThePhoneFolder
+                !ChrootManager.isBindSource(src) -> L.settings.chrootFoldersEditor.useTheFoldersFullPathStarting
+                dst.isEmpty() -> L.settings.chrootFoldersEditor.typeWhereItShowsUpInside
                 else -> ChrootManager.bindTargetProblem(dst, user)
-                    ?: if (binds.any { it.target.trimEnd('/') == dst }) "Something is already shared at $dst." else null
+                    ?: if (binds.any { it.target.trimEnd('/') == dst }) L.settings.chrootFoldersEditor.somethingIsAlreadySharedAtDst(dst) else null
             }
             if (problem != null) ChrootNote(problem, AppColors.warning)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
@@ -161,8 +160,8 @@ internal fun ChrootFoldersEditor(user: String, binds: List<ChrootBind>, onChange
                     onClick = { onChange(binds + ChrootBind(src, dst, readOnly)); adding = false },
                     enabled = problem == null,
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(10.dp)
-                ) { Text("Add") }
-                TextButton(onClick = { adding = false }) { Text("Cancel") }
+                ) { Text(L.common.add) }
+                TextButton(onClick = { adding = false }) { Text(L.common.cancel) }
             }
         }
     }

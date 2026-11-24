@@ -41,6 +41,7 @@ import ai.antigem.R
 import ai.antigem.data.homescreen.HomeLinks
 import ai.antigem.data.homescreen.HomeScripts
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * The Scripts widget, like Termux:Widget: the files in ~/.shortcuts (each opens a terminal tab running it) and in
@@ -86,7 +87,7 @@ private fun ScriptsContent(sample: List<HomeScripts.Script>?) {
             GlyphDisc(30.dp, fixed(0xFF334155), R.drawable.ic_home_terminal)
             Spacer(GlanceModifier.width(8.dp))
             Column(GlanceModifier.defaultWeight()) {
-                Label("Scripts", 15.sp, c.onSurface, bold = true)
+                Label(L.homescreen.scriptsWidget.scripts, 15.sp, c.onSurface, bold = true)
                 Label("~/.shortcuts", 11.sp, c.onSurfaceVariant)
             }
             Box(GlanceModifier.clickable(actionRunCallback<RefreshScriptsAction>())) {
@@ -99,10 +100,10 @@ private fun ScriptsContent(sample: List<HomeScripts.Script>?) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("No scripts yet", style = TextStyle(color = c.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), maxLines = 1)
+                Text(L.homescreen.scriptsWidget.noScriptsYet, style = TextStyle(color = c.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), maxLines = 1)
                 Spacer(GlanceModifier.height(4.dp))
                 Text(
-                    "Put scripts in ~/.shortcuts (a terminal tab) or ~/.shortcuts/tasks (in the background)",
+                    L.homescreen.scriptsWidget.putScriptsInShortcutsATerminal,
                     style = TextStyle(color = c.onSurfaceVariant, fontSize = 12.sp, textAlign = TextAlign.Center), maxLines = 3
                 )
             }
@@ -132,7 +133,7 @@ private fun ScriptRow(s: HomeScripts.Script) {
             Spacer(GlanceModifier.width(10.dp))
             Column(GlanceModifier.defaultWeight()) {
                 Label(s.label, 14.sp, c.onSurface, bold = true)
-                Label(if (s.background) "Runs in the background" else "Opens a terminal tab", 11.sp, c.onSurfaceVariant)
+                Label(if (s.background) L.homescreen.scriptsWidget.runsInTheBackground else L.homescreen.scriptsWidget.opensATerminalTab, 11.sp, c.onSurfaceVariant)
             }
         }
     }

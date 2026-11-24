@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import ai.antigem.i18n.L
 
 /**
  * What the connected IDE bridge (local or on a server) says about itself:
@@ -109,7 +110,7 @@ object BridgeInfo {
                     _agyError.value = null
                     parseJob(o.optJSONObject("job"))?.let { if (_job.value?.running != true) _job.value = it }
                 }.onFailure {
-                    _agyError.value = "Cannot reach the bridge: ${it.message ?: it.javaClass.simpleName}"
+                    _agyError.value = L.remote.bridgeInfo.cannotReachTheBridgeValue(it.message ?: it.javaClass.simpleName)
                 }
             } finally {
                 _checking.value = false
@@ -158,9 +159,9 @@ object BridgeInfo {
                     JSONObject(r.body?.string().orEmpty())
                 }
             }
-            val o = started.getOrElse { _agyError.value = "$label failed to start: ${it.message}"; return@launch }
+            val o = started.getOrElse { _agyError.value = L.remote.bridgeInfo.labelFailedToStartMessage(label, it.message); return@launch }
             if (!o.optBoolean("success")) {
-                _agyError.value = o.optString("error").ifBlank { "$label failed to start" }
+                _agyError.value = o.optString("error").ifBlank { L.remote.bridgeInfo.labelFailedToStart(label) }
                 return@launch
             }
             _agyError.value = null

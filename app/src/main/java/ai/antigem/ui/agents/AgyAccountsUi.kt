@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.antigem.i18n.L
 
 /** A question before an action: what is asked and what each answer does. */
 private class AccountsAsk(val title: String, val text: String, val confirm: String, val destructive: Boolean = false,
@@ -70,7 +71,7 @@ fun AgyAccountsCard(
         if (auth.isLoggedIn && AgyAccounts.saveNextSignIn) {
             AgyAccounts.saveNextSignIn = false
             AgyAccounts.saveCurrent { err ->
-                if (err == null) AppToastHelper.showToast("Saved ${auth.email.ifBlank { "this account" }}", ChatToastType.SUCCESS)
+                if (err == null) AppToastHelper.showToast(L.agents.agyAccountsUi.savedValue(auth.email.ifBlank { L.agents.agyAccountsUi.thisAccount }), ChatToastType.SUCCESS)
             }
         }
     }
@@ -81,7 +82,7 @@ fun AgyAccountsCard(
         }
     }
 
-    fun failed(err: Throwable) = AppToastHelper.showToast(err.message ?: "That didn't work", ChatToastType.ERROR)
+    fun failed(err: Throwable) = AppToastHelper.showToast(err.message ?: L.agents.agyAccountsUi.thatDidntWork, ChatToastType.ERROR)
 
     // The signed-in login would be replaced or removed while it has no saved copy: save it first, or lose it.
     fun withCurrentKept(action: String, op: (saveCurrent: Boolean, force: Boolean, done: (Throwable?) -> Unit) -> Unit, onOk: () -> Unit) {
@@ -89,10 +90,10 @@ fun AgyAccountsCard(
             when (err) {
                 null -> onOk()
                 is AgyAccounts.NotSavedException -> ask = AccountsAsk(
-                    title = "${err.email.ifBlank { "This account" }} isn't saved",
-                    text = "Save it first to switch back to it later. Without saving, you will have to sign in again to use it.",
-                    confirm = "Save and ${action.lowercase()}",
-                    other = "$action without saving",
+                    title = L.agents.agyAccountsUi.valueIsntSaved(err.email.ifBlank { L.agents.agyAccountsUi.thisAccount2 }),
+                    text = L.agents.agyAccountsUi.saveItFirstToSwitchBack,
+                    confirm = L.agents.agyAccountsUi.saveAndAction(action.lowercase()),
+                    other = L.agents.agyAccountsUi.actionWithoutSaving(action),
                     onOther = { op(false, true) { e -> if (e == null) onOk() else failed(e) } },
                     onConfirm = { op(true, false) { e -> if (e == null) onOk() else failed(e) } }
                 )
@@ -104,24 +105,24 @@ fun AgyAccountsCard(
     fun switchTo(acc: AgyAccounts.Account) {
         val go = {
             AgyAccounts.saveNextSignIn = false
-            withCurrentKept("Switch", { save, force, done -> AgyAccounts.switchTo(acc.email, save, force, done) }) {
-                AppToastHelper.showToast("Switched to ${acc.name}", ChatToastType.SUCCESS)
+            withCurrentKept(L.agents.agyAccountsUi.switch, { save, force, done -> AgyAccounts.switchTo(acc.email, save, force, done) }) {
+                AppToastHelper.showToast(L.agents.agyAccountsUi.switchedToName(acc.name), ChatToastType.SUCCESS)
             }
         }
         if (AgyAccounts.replyRunning()) {
-            ask = AccountsAsk("A reply is running", "Switching the account now may stop it.", "Switch anyway", onConfirm = go)
+            ask = AccountsAsk(L.agents.agyAccountsUi.aReplyIsRunning, L.agents.agyAccountsUi.switchingTheAccountNowMayStop, L.agents.agyAccountsUi.switchAnyway, onConfirm = go)
         } else go()
     }
 
     fun addAccount() {
         val go = {
-            withCurrentKept("Sign out", { save, force, done -> AgyAccounts.clearForNewSignIn(save, force, done) }) {
+            withCurrentKept(L.common.signOut, { save, force, done -> AgyAccounts.clearForNewSignIn(save, force, done) }) {
                 signInWhenSignedOut = true
-                AppToastHelper.showToast("Sign in with the other Google account", ChatToastType.INFO)
+                AppToastHelper.showToast(L.agents.agyAccountsUi.signInWithTheOtherGoogle, ChatToastType.INFO)
             }
         }
         if (AgyAccounts.replyRunning()) {
-            ask = AccountsAsk("A reply is running", "Signing out to add an account now may stop it.", "Go on", onConfirm = go)
+            ask = AccountsAsk(L.agents.agyAccountsUi.aReplyIsRunning, L.agents.agyAccountsUi.signingOutToAddAnAccount, L.agents.agyAccountsUi.goOn, onConfirm = go)
         } else go()
     }
 
@@ -132,7 +133,7 @@ fun AgyAccountsCard(
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Saved accounts", fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text(L.agents.agyAccountsUi.savedAccounts, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
             Spacer(Modifier.height(6.dp))
@@ -140,16 +141,16 @@ fun AgyAccountsCard(
             when {
                 st == null && error != null -> {
                     Text(error.orEmpty(), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { AgyAccounts.refresh() }) { Text("Retry") }
+                    TextButton(onClick = { AgyAccounts.refresh() }) { Text(L.common.retry) }
                 }
-                st == null -> Text("Loading…", fontSize = 12.5.sp, color = subtle)
+                st == null -> Text(L.common.loading, fontSize = 12.5.sp, color = subtle)
                 !st.supported -> Text(
-                    "Agy on this computer keeps its login in the system keychain, so accounts can't be switched here.",
+                    L.agents.agyAccountsUi.agyOnThisComputerKeepsIts,
                     fontSize = 12.5.sp, color = subtle
                 )
                 else -> {
                     Text(
-                        "Keep several Google accounts and switch between them. Antigravity uses the new one right away.",
+                        L.agents.agyAccountsUi.keepSeveralGoogleAccountsAndSwitch,
                         fontSize = 12.sp, color = subtle
                     )
                     // signed in with a login that has no saved copy
@@ -157,14 +158,14 @@ fun AgyAccountsCard(
                         Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(st.current.email.ifBlank { "Signed-in account" }, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("Signed in now, not saved", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.tertiary)
+                                Text(st.current.email.ifBlank { L.agents.agyAccountsUi.signedInAccount }, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(L.agents.agyAccountsUi.signedInNowNotSaved, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.tertiary)
                             }
                             TextButton(enabled = !busy, onClick = {
                                 AgyAccounts.saveCurrent { err ->
-                                    if (err == null) AppToastHelper.showToast("Saved ${st.current.email}", ChatToastType.SUCCESS) else failed(err)
+                                    if (err == null) AppToastHelper.showToast(L.agents.agyAccountsUi.savedEmail(st.current.email), ChatToastType.SUCCESS) else failed(err)
                                 }
-                            }) { Text("Save") }
+                            }) { Text(L.common.save) }
                         }
                     }
                     st.accounts.forEach { acc ->
@@ -179,35 +180,35 @@ fun AgyAccountsCard(
                             Column(Modifier.weight(1f)) {
                                 Text(acc.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(
-                                    if (acc.active) "Signed in now" else "Last used ${formatAccountTime(acc.usedAt.takeIf { it > 0 } ?: acc.savedAt)}",
+                                    if (acc.active) L.agents.agyAccountsUi.signedInNow else L.agents.agyAccountsUi.lastUsedFormataccounttime(formatAccountTime(acc.usedAt.takeIf { it > 0 } ?: acc.savedAt)),
                                     fontSize = 11.5.sp, color = if (acc.active) MaterialTheme.colorScheme.primary else subtle
                                 )
                             }
                             if (acc.active) {
-                                Text("Active", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 8.dp))
+                                Text(L.common.active, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 8.dp))
                             } else {
-                                TextButton(enabled = !busy, onClick = { switchTo(acc) }) { Text("Switch") }
+                                TextButton(enabled = !busy, onClick = { switchTo(acc) }) { Text(L.agents.agyAccountsUi.switch) }
                             }
                             IconButton(enabled = !busy, onClick = {
                                 ask = AccountsAsk(
-                                    title = "Delete the saved copy of ${acc.name}?",
-                                    text = if (acc.active) "It stays signed in; only the saved copy is deleted."
-                                    else "To use this account again you will have to sign in again.",
-                                    confirm = "Delete", destructive = true,
+                                    title = L.agents.agyAccountsUi.deleteTheSavedCopyOfName(acc.name),
+                                    text = if (acc.active) L.agents.agyAccountsUi.itStaysSignedInOnlyThe
+                                    else L.agents.agyAccountsUi.toUseThisAccountAgainYou,
+                                    confirm = L.common.delete, destructive = true,
                                     onConfirm = { AgyAccounts.delete(acc.email) { err -> if (err != null) failed(err) } }
                                 )
                             }, modifier = Modifier.size(34.dp)) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Delete saved copy", tint = subtle, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Outlined.Delete, contentDescription = L.agents.agyAccountsUi.deleteSavedCopy, tint = subtle, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
                     if (st.accounts.isEmpty() && !(st.current.signedIn && !st.current.saved)) {
                         Spacer(Modifier.height(8.dp))
-                        Text("No saved accounts yet.", fontSize = 12.5.sp, color = subtle)
+                        Text(L.agents.agyAccountsUi.noSavedAccountsYet, fontSize = 12.5.sp, color = subtle)
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(enabled = !busy, onClick = { addAccount() }) { Text("Add account") }
+                        OutlinedButton(enabled = !busy, onClick = { addAccount() }) { Text(L.agents.agyAccountsUi.addAccount) }
                         if (error != null) Text(error.orEmpty(), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 2)
                     }
                 }
@@ -230,7 +231,7 @@ fun AgyAccountsCard(
                     a.other?.let { label ->
                         TextButton(onClick = { ask = null; a.onOther() }) { Text(label, color = MaterialTheme.colorScheme.error) }
                     }
-                    TextButton(onClick = { ask = null }) { Text("Cancel") }
+                    TextButton(onClick = { ask = null }) { Text(L.common.cancel) }
                 }
             }
         )

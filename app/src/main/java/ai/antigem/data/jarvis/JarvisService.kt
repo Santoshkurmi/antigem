@@ -26,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * Keeps Jarvis reachable while hands-free mode is on (the screen can be off and another app in front): the microphone
@@ -51,7 +52,7 @@ class JarvisService : Service() {
                 synchronized(lock) { pending = false; stopWhenStarted = false }
                 if (JarvisController.isAttached) {
                     JarvisController.setHandsFree(false)
-                    JarvisController.showProblem("Hands-free couldn't start: Android doesn't let AntiGem open the microphone from the background. Open AntiGem and turn it on again.")
+                    JarvisController.showProblem(L.jarvis.service.handsFreeCouldntStartAndroidDoesnt)
                 }
             }
             stopSelf()
@@ -86,17 +87,17 @@ class JarvisService : Service() {
                 val active = tasks.count { it.active }
                 val needs = tasks.count { it.state.needsUser }
                 val taskLine = when {
-                    needs > 0 -> " · $needs task${if (needs == 1) "" else "s"} need${if (needs == 1) "s" else ""} you"
-                    active > 0 -> " · $active task${if (active == 1) "" else "s"} running"
+                    needs > 0 -> L.jarvis.service.countTasksNeedYou(needs)
+                    active > 0 -> L.jarvis.service.countTasksRunning(active)
                     else -> ""
                 }
                 val text = when (p) {
-                    JarvisController.Phase.LISTENING -> if (h.isNotBlank()) "Listening: $h" else "Listening…"
-                    JarvisController.Phase.THINKING -> "Working on it…$taskLine"
-                    JarvisController.Phase.SPEAKING -> "Speaking…"
-                    JarvisController.Phase.OFF -> "Jarvis is off"
+                    JarvisController.Phase.LISTENING -> if (h.isNotBlank()) L.jarvis.service.listeningH(h) else L.jarvis.service.listening
+                    JarvisController.Phase.THINKING -> L.jarvis.service.workingOnItTaskline(taskLine)
+                    JarvisController.Phase.SPEAKING -> L.jarvis.service.speaking
+                    JarvisController.Phase.OFF -> L.jarvis.service.jarvisIsOff
                     JarvisController.Phase.IDLE ->
-                        (if (JarvisPreferences.hotword.value == "phrase") "Say “${JarvisPreferences.wakePhrase.value.substringBefore(',').trim()}”" else "Tap Talk to speak") + taskLine
+                        (if (JarvisPreferences.hotword.value == "phrase") L.jarvis.service.sayPhrase(JarvisPreferences.wakePhrase.value.substringBefore(',').trim()) else L.jarvis.service.tapTalkToSpeak) + taskLine
                 }
                 runCatching { getSystemService(NotificationManager::class.java).notify(NOTIF_ID, notification(text, p)) }
             }
@@ -112,7 +113,7 @@ class JarvisService : Service() {
     private fun enterForeground(): Boolean {
         ensureChannel()
         // started by the floating orb (Settings → Jarvis → Screen & look) when hands-free is off: it only listens now
-        val n = notification(if (JarvisPreferences.handsFree.value) "Hands-free is on" else "Jarvis is listening", JarvisController.Phase.IDLE)
+        val n = notification(if (JarvisPreferences.handsFree.value) L.jarvis.service.handsFreeIsOn else L.jarvis.service.jarvisIsListening, JarvisController.Phase.IDLE)
         return try {
             if (Build.VERSION.SDK_INT >= 30) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else startForeground(NOTIF_ID, n)
@@ -179,8 +180,8 @@ class JarvisService : Service() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Jarvis hands-free", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shown while Jarvis listens for your voice"
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, L.jarvis.service.jarvisHandsFree, NotificationManager.IMPORTANCE_LOW).apply {
+                description = L.jarvis.service.shownWhileJarvisListensForYour
                 setShowBadge(false)
             })
         }
@@ -193,14 +194,14 @@ class JarvisService : Service() {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), flags)
         val b = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_jarvis_mic)
-            .setContentTitle("Jarvis")
+            .setContentTitle(L.common.jarvis)
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-        if (phase == JarvisController.Phase.LISTENING) b.addAction(0, "Send", action(ACTION_SEND, 3))
-        else b.addAction(0, "Talk", action(ACTION_TALK, 1))
-        b.addAction(0, "Stop", action(ACTION_STOP, 2))
+        if (phase == JarvisController.Phase.LISTENING) b.addAction(0, L.common.send, action(ACTION_SEND, 3))
+        else b.addAction(0, L.jarvis.service.talk, action(ACTION_TALK, 1))
+        b.addAction(0, L.common.stop, action(ACTION_STOP, 2))
         return b.build()
     }
 

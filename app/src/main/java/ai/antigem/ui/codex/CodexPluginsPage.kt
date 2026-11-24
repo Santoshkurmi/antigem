@@ -62,6 +62,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import ai.antigem.i18n.L
 
 private fun toast(msg: String, ok: Boolean = true) =
     AppToastHelper.showToast(msg, if (ok) ChatToastType.SUCCESS else ChatToastType.ERROR)
@@ -117,9 +118,9 @@ private fun parsePluginList(result: JsonElement): CxPluginData {
 
 /** "method not found" from an older Codex: the plugin commands came with newer versions. */
 private fun friendly(e: Throwable): String {
-    val msg = e.message ?: "Codex did not answer"
+    val msg = e.message ?: L.codex.plugins.codexDidNotAnswer
     return if (msg.contains("method not found", ignoreCase = true) || msg.contains("unknown variant", ignoreCase = true))
-        "This Codex is too old to manage plugins. Update it in Settings → Codex → Account & CLI." else msg
+        L.codex.plugins.thisCodexIsTooOldTo else msg
 }
 
 /**
@@ -175,12 +176,12 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
         if (p.marketplacePath != null) put("marketplacePath", p.marketplacePath) else put("remoteMarketplaceName", p.marketplace)
     }) { res ->
         val apps = (res as? JsonObject)?.a("appsNeedingAuth").orEmpty().mapNotNull { (it as? JsonObject)?.str("name") }
-        "${p.title} installed. Start a new chat to use it." + if (apps.isNotEmpty()) " Sign in to ${apps.joinToString()} when Codex asks." else ""
+        if (apps.isNotEmpty()) L.codex.plugins.titleInstalledStartANewChat2(p.title, apps.joinToString()) else L.codex.plugins.titleInstalledStartANewChat(p.title)
     }
 
     Column(Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = tab, containerColor = Color.Transparent) {
-            listOf("Installed", "Discover", "Marketplaces").forEachIndexed { i, t ->
+            listOf(L.common.installed, L.codex.plugins.discover, L.codex.plugins.marketplaces).forEachIndexed { i, t ->
                 Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t, fontSize = 13.sp) })
             }
         }
@@ -190,11 +191,11 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                 if (error != null) {
                     Text(error!!, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { scope.launch { reload() } }, enabled = !loading) { Text("Try again") }
+                    OutlinedButton(onClick = { scope.launch { reload() } }, enabled = !loading) { Text(L.common.tryAgain) }
                 } else Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = CodexAccent)
                     Spacer(Modifier.width(8.dp))
-                    Text("Loading plugins…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(L.codex.plugins.loadingPlugins, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
             return@Column
@@ -219,38 +220,38 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
             d.loadErrors.forEachIndexed { i, e -> item(key = "le$i") { Text(e, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error) } }
             when (tab) {
                 0 -> {
-                    if (installed.isEmpty()) item(key = "none") { Hint("No plugins installed. Find some in Discover, or add a marketplace from GitHub.") }
+                    if (installed.isEmpty()) item(key = "none") { Hint(L.codex.plugins.noPluginsInstalledFindSomeIn) }
                     items(installed.size, key = { "i_${installed[it].id}_$it" }) { i ->
                         val p = installed[i]
                         PluginCard(p, ops[p.id]) {
                             OutlinedButton(onClick = {
                                 run(p.id, "uninstall", "plugin/uninstall", buildJsonObject { put("pluginId", p.id) }) { "${p.title} uninstalled" }
-                            }, enabled = ops[p.id] == null) { Text("Uninstall", fontSize = 12.sp, color = QuotaRed) }
+                            }, enabled = ops[p.id] == null) { Text(L.common.uninstall, fontSize = 12.sp, color = QuotaRed) }
                         }
                     }
                 }
                 1 -> {
                     item(key = "search") {
-                        OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text("Search ${available.size} plugins") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text(L.codex.plugins.searchAvailablecountPlugins(available.size)) }, modifier = Modifier.fillMaxWidth())
                     }
                     item(key = "count") { Hint("${results.size} plugin(s)") }
                     items(results.size, key = { "a_" + results[it].id }) { i ->
                         val p = results[i]
                         PluginCard(p, ops[p.id]) {
                             Button(onClick = { install(p) }, enabled = ops[p.id] == null, colors = ButtonDefaults.buttonColors(containerColor = CodexAccent)) {
-                                Text("Install", fontSize = 12.sp)
+                                Text(L.common.install, fontSize = 12.sp)
                             }
                         }
                     }
                 }
                 else -> {
                     item(key = "about") {
-                        Hint("A marketplace is a git repository with a plugin catalog. Codex reads its own catalogs and Claude Code's (.claude-plugin/marketplace.json). Tap one to see its plugins and install them here; Discover lists the plugins of every marketplace.")
+                        Hint(L.codex.plugins.aMarketplaceIsAGitRepository)
                     }
                     item(key = "add") {
                         ClaudeCard {
-                            Text("Add a marketplace", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Hint("GitHub owner/repo, owner/repo@branch, or a git URL")
+                            Text(L.codex.plugins.addAMarketplace, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Hint(L.codex.plugins.githubOwnerRepoOwnerRepoBranch)
                             lastFailed?.let { failed ->
                                 ai.antigem.ui.settings.SetupWithAiLink(CodexAccent) { aiSetup = failed }
                             }
@@ -265,7 +266,7 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                                             .onSuccess { res ->
                                                 val o = res as? JsonObject
                                                 val name = o.str("marketplaceName") ?: marketSource
-                                                toast(if (o.bool("alreadyAdded") == true) "$name was already added" else "Added $name: pick its plugins below.")
+                                                toast(if (o.bool("alreadyAdded") == true) L.codex.plugins.nameWasAlreadyAdded(name) else L.codex.plugins.addedNamePickItsPluginsBelow(name))
                                                 marketSource = ""
                                                 reload()
                                                 // open it with its plugins, so they can be installed right here
@@ -282,7 +283,7 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                                         addingMarket = false
                                     }
                                 }, enabled = marketSource.isNotBlank() && !addingMarket, colors = ButtonDefaults.buttonColors(containerColor = CodexAccent)) {
-                                    if (addingMarket) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) else Text("Add")
+                                    if (addingMarket) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White) else Text(L.common.add)
                                 }
                             }
                         }
@@ -301,21 +302,21 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                                     ) {
                                         Column(Modifier.weight(1f)) {
                                             Text(m.title, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                                            Hint("${m.plugins.size} plugin(s)" + (if (builtIn) " · built into Codex" else "") + (if (m.title != m.name) " · ${m.name}" else ""))
+                                            Hint("${m.plugins.size} plugin(s)" + (if (builtIn) L.codex.plugins.builtIntoCodex else "") + (if (m.title != m.name) " · ${m.name}" else ""))
                                         }
-                                        Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (open) "Hide plugins" else "Show plugins")
+                                        Icon(if (open) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (open) L.codex.plugins.hidePlugins else L.codex.plugins.showPlugins)
                                     }
                                     if (op != null) Progress(op)
                                     else {
                                         IconButton(onClick = {
                                             run("m:" + m.name, "update", "marketplace/upgrade", buildJsonObject { put("marketplaceName", m.name) }) { res ->
                                                 val errs = (res as? JsonObject)?.a("errors").orEmpty().mapNotNull { (it as? JsonObject)?.str("message") }
-                                                if (errs.isEmpty()) "${m.title} is up to date" else "${m.title}: ${errs.first()}"
+                                                if (errs.isEmpty()) L.codex.plugins.titleIsUpToDate(m.title) else "${m.title}: ${errs.first()}"
                                             }
-                                        }) { Icon(Icons.Outlined.Refresh, "Update catalog") }
+                                        }) { Icon(Icons.Outlined.Refresh, L.codex.plugins.updateCatalog) }
                                         if (!builtIn) IconButton(onClick = {
                                             run("m:" + m.name, "remove", "marketplace/remove", buildJsonObject { put("marketplaceName", m.name) }) { "${m.title} removed" }
-                                        }) { Icon(Icons.Outlined.Delete, "Remove", tint = QuotaRed.copy(alpha = 0.8f)) }
+                                        }) { Icon(Icons.Outlined.Delete, L.common.remove, tint = QuotaRed.copy(alpha = 0.8f)) }
                                     }
                                 }
                             }
@@ -324,20 +325,20 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                             // its plugins, to install right here (the same as from Discover)
                             val plugins = m.plugins.sortedBy { it.title.lowercase() }
                             if (plugins.size > 8) item(key = "mq_" + m.name) {
-                                OutlinedTextField(marketQuery, { marketQuery = it }, singleLine = true, placeholder = { Text("Search ${plugins.size} plugins in ${m.title}") },
+                                OutlinedTextField(marketQuery, { marketQuery = it }, singleLine = true, placeholder = { Text(L.codex.plugins.searchPluginscountPluginsInTitle(plugins.size, m.title)) },
                                     modifier = Modifier.fillMaxWidth().padding(start = 12.dp))
                             }
                             val mq = marketQuery.trim().lowercase()
                             val shown = if (mq.isEmpty()) plugins else plugins.filter { "${it.title}\n${it.name}\n${it.description}\n${it.category.orEmpty()}".lowercase().contains(mq) }
                             if (plugins.isEmpty()) item(key = "me_" + m.name) {
-                                Column(Modifier.padding(start = 12.dp)) { Hint("No plugins in this marketplace yet. Update it if it was just added.") }
+                                Column(Modifier.padding(start = 12.dp)) { Hint(L.codex.plugins.noPluginsInThisMarketplaceYet) }
                             }
                             items(shown.size, key = { "mp_" + m.name + "_" + shown[it].id }) { j ->
                                 val p = shown[j]
                                 Column(Modifier.padding(start = 12.dp)) {
                                     PluginCard(p, ops[p.id]) {
                                         if (!p.installed) Button(onClick = { install(p) }, enabled = ops[p.id] == null, colors = ButtonDefaults.buttonColors(containerColor = CodexAccent)) {
-                                            Text("Install", fontSize = 12.sp)
+                                            Text(L.common.install, fontSize = 12.sp)
                                         }
                                     }
                                 }
@@ -346,7 +347,7 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                     }
                 }
             }
-            item(key = "foot") { Hint("Plugins are loaded when a chat starts: start a new chat after installing or removing one.") }
+            item(key = "foot") { Hint(L.codex.plugins.pluginsAreLoadedWhenAChat) }
         }
     }
     aiSetup?.let { (src, why) ->
@@ -366,10 +367,10 @@ private fun Progress(action: String) {
         Spacer(Modifier.width(6.dp))
         Text(
             when (action) {
-                "install" -> "Installing…"
-                "uninstall", "remove" -> "Removing…"
-                "update" -> "Updating…"
-                else -> "Working…"
+                "install" -> L.common.installing
+                "uninstall", "remove" -> L.common.removing
+                "update" -> L.common.updating
+                else -> L.common.working
             },
             fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = CodexAccent
         )
@@ -385,7 +386,7 @@ private fun PluginCard(p: CxPlugin, op: String?, action: @Composable () -> Unit)
                 Hint(listOfNotNull(p.version?.let { "v$it" }, p.category, p.marketplace, if (p.installed && !p.enabled) "disabled" else null).joinToString(" · "))
             }
             if (op != null) Progress(op)
-            else if (p.installed) Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
+            else if (p.installed) Text(L.common.installed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
         }
         if (p.description.isNotBlank()) Text(p.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))

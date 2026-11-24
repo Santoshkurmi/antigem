@@ -103,6 +103,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import java.util.regex.Pattern
+import ai.antigem.i18n.L
 
 enum class TableAlignment { LEFT, CENTER, RIGHT }
 
@@ -120,7 +121,7 @@ sealed class MarkdownBlock {
     data class AgentTool(val toolCall: ai.antigem.domain.model.ToolCall) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
     data class AgentError(
-        val title: String = "Error",
+        val title: String = L.components.markdown.error,
         val userMessage: String = "",
         val shortError: String = "",
         val fullError: String = "",
@@ -150,7 +151,7 @@ sealed class MarkdownBlock {
     @androidx.compose.runtime.Immutable
     data class Stem(val kind: StemKind, val code: String) : MarkdownBlock()
     @androidx.compose.runtime.Immutable
-    data class InteractiveUi(val htmlCode: String, val title: String = "Interactive App") : MarkdownBlock()
+    data class InteractiveUi(val htmlCode: String, val title: String = L.components.markdown.interactiveApp) : MarkdownBlock()
     /** An ```antigem-memory block (Agent memory): shown as a chip; [complete] once its closing fence arrived. */
     @androidx.compose.runtime.Immutable
     data class MemoryChip(val body: String, val complete: Boolean) : MarkdownBlock()
@@ -322,7 +323,7 @@ fun MarkdownBlockView(
             ) {
                 Icon(
                     imageVector = if (block.isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                    contentDescription = if (block.isChecked) "Completed" else "Incomplete",
+                    contentDescription = if (block.isChecked) L.components.markdown.completed else L.components.markdown.incomplete,
                     tint = if (block.isChecked) QuotaGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     modifier = Modifier
                         .padding(top = 1.5.dp, end = 6.dp)
@@ -400,35 +401,35 @@ fun MarkdownAlertView(
             accentColor = ai.antigem.theme.AppColors.info,
             lightBg = ai.antigem.theme.AppColors.infoContainer,
             darkBg = ai.antigem.theme.AppColors.info.copy(alpha = 0.13f),
-            defaultTitle = "Note",
+            defaultTitle = L.components.markdown.note,
             icon = Icons.Outlined.Info
         )
         AlertType.TIP -> AlertStyle(
             accentColor = ai.antigem.theme.AppColors.success,
             lightBg = ai.antigem.theme.AppColors.successContainer,
             darkBg = ai.antigem.theme.AppColors.success.copy(alpha = 0.13f),
-            defaultTitle = "Tip",
+            defaultTitle = L.components.markdown.tip,
             icon = Icons.Outlined.Lightbulb
         )
         AlertType.IMPORTANT -> AlertStyle(
             accentColor = ai.antigem.theme.AppColors.accentAlt,
             lightBg = ai.antigem.theme.AppColors.fill,
             darkBg = ai.antigem.theme.AppColors.accentAlt.copy(alpha = 0.13f),
-            defaultTitle = "Important",
+            defaultTitle = L.components.markdown.important,
             icon = Icons.Outlined.PriorityHigh
         )
         AlertType.WARNING -> AlertStyle(
             accentColor = ai.antigem.theme.AppColors.warning,
             lightBg = ai.antigem.theme.AppColors.warningContainer,
             darkBg = ai.antigem.theme.AppColors.warning.copy(alpha = 0.13f),
-            defaultTitle = "Warning",
+            defaultTitle = L.components.markdown.warning,
             icon = Icons.Outlined.Warning
         )
         AlertType.CAUTION -> AlertStyle(
             accentColor = ai.antigem.theme.AppColors.danger,
             lightBg = ai.antigem.theme.AppColors.dangerContainer,
             darkBg = ai.antigem.theme.AppColors.danger.copy(alpha = 0.13f),
-            defaultTitle = "Caution",
+            defaultTitle = L.components.markdown.caution,
             icon = Icons.Outlined.Report
         )
     }
@@ -771,7 +772,7 @@ fun MermaidDiagramView(
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = "Diagram",
+                            text = L.components.markdown.diagram,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (selectedTab == 0) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -786,7 +787,7 @@ fun MermaidDiagramView(
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = "Code",
+                            text = L.common.code,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (selectedTab == 1) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -802,21 +803,21 @@ fun MermaidDiagramView(
                         val clip = ClipData.newPlainText("Mermaid Diagram", code)
                         clipboard.setPrimaryClip(clip)
                         isCopied = true
-                        Toast.makeText(context, "Diagram code copied", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, L.components.markdown.diagramCodeCopied, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.size(28.dp)
                 ) {
                     if (isCopied) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Copied",
+                            contentDescription = L.common.copied,
                             tint = QuotaGreen,
                             modifier = Modifier.size(15.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Outlined.ContentCopy,
-                            contentDescription = "Copy",
+                            contentDescription = L.common.copy,
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.size(15.dp)
                         )
@@ -831,7 +832,7 @@ fun MermaidDiagramView(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.OpenInFull,
-                        contentDescription = "Expand",
+                        contentDescription = L.common.expand,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.size(15.dp)
                     )
@@ -946,7 +947,7 @@ fun MermaidFullscreenDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = L.common.close,
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -954,7 +955,7 @@ fun MermaidFullscreenDialog(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     Text(
-                        text = "Mermaid Diagram",
+                        text = L.components.markdown.mermaidDiagram,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -977,7 +978,7 @@ fun MermaidFullscreenDialog(
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "Diagram",
+                                text = L.components.markdown.diagram,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selectedTab == 0) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -992,7 +993,7 @@ fun MermaidFullscreenDialog(
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "Code",
+                                text = L.common.code,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selectedTab == 1) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -1010,7 +1011,7 @@ fun MermaidFullscreenDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ZoomOut,
-                                contentDescription = "Zoom Out",
+                                contentDescription = L.components.markdown.zoomOut,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1022,7 +1023,7 @@ fun MermaidFullscreenDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ZoomIn,
-                                contentDescription = "Zoom In",
+                                contentDescription = L.components.markdown.zoomIn,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1036,7 +1037,7 @@ fun MermaidFullscreenDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.RestartAlt,
-                                contentDescription = "Reset Zoom",
+                                contentDescription = L.components.markdown.resetZoom,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1052,21 +1053,21 @@ fun MermaidFullscreenDialog(
                             val clip = ClipData.newPlainText("Mermaid Diagram", code)
                             clipboard.setPrimaryClip(clip)
                             isCopied = true
-                            Toast.makeText(context, "Diagram code copied", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, L.components.markdown.diagramCodeCopied, Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
                         if (isCopied) {
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Copied",
+                                contentDescription = L.common.copied,
                                 tint = QuotaGreen,
                                 modifier = Modifier.size(18.dp)
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Outlined.ContentCopy,
-                                contentDescription = "Copy",
+                                contentDescription = L.common.copy,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1320,7 +1321,7 @@ fun MarkdownDetailsView(
             ) {
                 Icon(
                     imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
                     tint = ClaudeTerracotta,
                     modifier = Modifier
                         .size(20.dp)
@@ -1356,6 +1357,18 @@ fun MarkdownDetailsView(
             }
         }
     }
+}
+
+// An error can carry a whole log or page (megabytes); shown in full, its Text grows taller than the 16,777,215 px a
+// layout may be and the chat crashes. The card shows the start of it; Copy still copies everything.
+private const val ERROR_TEXT_MAX_CHARS = 4_000
+private const val ERROR_DETAILS_MAX_CHARS = 20_000
+
+private fun capErrorText(text: String, max: Int): String {
+    if (text.length <= max) return text
+    // never split an emoji (surrogate pair) in two
+    val cut = if (Character.isHighSurrogate(text[max - 1])) max - 1 else max
+    return text.substring(0, cut).trimEnd() + "\n" + L.components.markdown.moreCharsHidden(text.length - cut)
 }
 
 /**
@@ -1395,13 +1408,13 @@ fun AgentErrorCard(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.ErrorOutline,
-                    contentDescription = "Error",
+                    contentDescription = L.components.markdown.error,
                     tint = errorColor,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = error.title.ifBlank { "Agent Execution Error" },
+                    text = error.title.ifBlank { L.components.markdown.agentExecutionError },
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = errorColor
@@ -1413,7 +1426,7 @@ fun AgentErrorCard(
                         color = errorColor.copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = "Code: ${error.errorCode}",
+                            text = L.components.markdown.codeErrorcode(error.errorCode),
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = errorColor,
@@ -1427,23 +1440,23 @@ fun AgentErrorCard(
                     onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val copyText = buildString {
-                            appendLine("Error: ${error.title}")
-                            if (error.userMessage.isNotBlank()) appendLine("Message: ${error.userMessage}")
-                            if (error.shortError.isNotBlank()) appendLine("Detail: ${error.shortError}")
-                            if (error.errorCode != null) appendLine("Code: ${error.errorCode}")
+                            appendLine(L.components.markdown.errorTitle(error.title))
+                            if (error.userMessage.isNotBlank()) appendLine(L.components.markdown.messageUsermessage(error.userMessage))
+                            if (error.shortError.isNotBlank()) appendLine(L.components.markdown.detailShorterror(error.shortError))
+                            if (error.errorCode != null) appendLine(L.components.markdown.codeErrorcode(error.errorCode))
                             if (error.errorId.isNotBlank()) appendLine("ID: ${error.errorId}")
-                            if (error.fullError.isNotBlank()) appendLine("\nFull Trace:\n${error.fullError}")
-                            if (error.rawJson.isNotBlank()) appendLine("\nRaw JSON:\n${error.rawJson}")
+                            if (error.fullError.isNotBlank()) appendLine(L.components.markdown.fullTraceFullerror(error.fullError))
+                            if (error.rawJson.isNotBlank()) appendLine(L.components.markdown.rawJsonRawjson(error.rawJson))
                         }.trim()
                         val clip = ClipData.newPlainText("Error Details", copyText)
                         clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, "Error details copied to clipboard", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, L.components.markdown.errorDetailsCopiedToClipboard, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.ContentCopy,
-                        contentDescription = "Copy Error Details",
+                        contentDescription = L.components.markdown.copyErrorDetails,
                         tint = errorColor.copy(alpha = 0.7f),
                         modifier = Modifier.size(14.dp)
                     )
@@ -1454,7 +1467,7 @@ fun AgentErrorCard(
             if (error.userMessage.isNotBlank() && error.userMessage != error.title) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = error.userMessage,
+                    text = capErrorText(error.userMessage, ERROR_TEXT_MAX_CHARS),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                     lineHeight = 18.sp
@@ -1464,7 +1477,7 @@ fun AgentErrorCard(
             if (error.shortError.isNotBlank() && error.shortError != error.userMessage) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = error.shortError,
+                    text = capErrorText(error.shortError, ERROR_TEXT_MAX_CHARS),
                     fontSize = 12.5.sp,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
@@ -1479,7 +1492,7 @@ fun AgentErrorCard(
                     onClick = { ai.antigem.ui.opencode.OpenCodeUiEvents.requestProviders() },
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                ) { Text("Reconnect in Settings", fontSize = 12.5.sp) }
+                ) { Text(L.components.markdown.reconnectInSettings, fontSize = 12.5.sp) }
             }
 
             // Full Error / Stack Trace / JSON Accordion if present
@@ -1496,7 +1509,7 @@ fun AgentErrorCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier
                             .size(16.dp)
@@ -1504,7 +1517,7 @@ fun AgentErrorCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (isExpanded) "Hide Error Details & Stack Trace" else "View Error Details & Stack Trace",
+                        text = if (isExpanded) L.components.markdown.hideErrorDetailsStackTrace else L.components.markdown.viewErrorDetailsStackTrace,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -1526,14 +1539,14 @@ fun AgentErrorCard(
                     ) {
                         if (error.errorId.isNotBlank()) {
                             Text(
-                                text = "Error ID: ${error.errorId}",
+                                text = L.components.markdown.errorIdErrorid(error.errorId),
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                         }
-                        val verboseText = error.fullError.ifBlank { error.rawJson }
+                        val verboseText = capErrorText(error.fullError.ifBlank { error.rawJson }, ERROR_DETAILS_MAX_CHARS)
                         SelectionContainer {
                             Text(
                                 text = verboseText,
@@ -1635,13 +1648,13 @@ fun MarkdownImageView(
                     ) {
                         Icon(
                             imageVector = Icons.Default.BrokenImage,
-                            contentDescription = "Failed to load image",
+                            contentDescription = L.components.markdown.failedToLoadImage,
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(32.dp)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = image.alt.ifBlank { "Image could not be loaded" },
+                            text = image.alt.ifBlank { L.components.markdown.imageCouldNotBeLoaded },
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1831,7 +1844,7 @@ fun YouTubeVideoView(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = video.title?.takeIf { it.isNotBlank() } ?: "YouTube Video",
+                        text = video.title?.takeIf { it.isNotBlank() } ?: L.components.markdown.youtubeVideo,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -1850,7 +1863,7 @@ fun YouTubeVideoView(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = "Close Player",
+                                contentDescription = L.components.markdown.closePlayer,
                                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1869,7 +1882,7 @@ fun YouTubeVideoView(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.OpenInNew,
-                            contentDescription = "Open in YouTube",
+                            contentDescription = L.components.markdown.openInYoutube,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                             modifier = Modifier.size(16.dp)
                         )
@@ -1890,7 +1903,7 @@ fun YouTubeVideoView(
                     // Thumbnail Preview
                     AsyncImage(
                         model = thumbnailRequest,
-                        contentDescription = video.title ?: "YouTube Video Thumbnail",
+                        contentDescription = video.title ?: L.components.markdown.youtubeVideoThumbnail,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
@@ -1923,7 +1936,7 @@ fun YouTubeVideoView(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = "Play Video",
+                                contentDescription = L.components.markdown.playVideo,
                                 tint = Color.White,
                                 modifier = Modifier.size(26.dp)
                             )
@@ -2839,7 +2852,7 @@ private fun parseErrorPayloadToBlock(raw: String): MarkdownBlock.AgentError {
         val trimmed = raw.trim()
         if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             val json = Json.parseToJsonElement(trimmed).jsonObject
-            val title = json["title"]?.jsonPrimitive?.content ?: "Agent Execution Error"
+            val title = json["title"]?.jsonPrimitive?.content ?: L.components.markdown.agentExecutionError
             val userMessage = json["userMessage"]?.jsonPrimitive?.content ?: ""
             val shortError = json["shortError"]?.jsonPrimitive?.content ?: ""
             val fullError = json["fullError"]?.jsonPrimitive?.content ?: ""
@@ -2862,11 +2875,11 @@ private fun parseErrorPayloadToBlock(raw: String): MarkdownBlock.AgentError {
 
     val clean = raw.removePrefix("⚠️").trim()
     val lines = clean.lines()
-    val firstLine = lines.firstOrNull() ?: "Agent Execution Error"
+    val firstLine = lines.firstOrNull() ?: L.components.markdown.agentExecutionError
     val rest = if (lines.size > 1) lines.drop(1).joinToString("\n").trim() else ""
     val isStackOrTrace = rest.contains("stack trace", ignoreCase = true) || rest.contains("Wraps:", ignoreCase = true)
     return MarkdownBlock.AgentError(
-        title = if (firstLine.length < 50 && !firstLine.contains('\n')) firstLine else "Execution Notice",
+        title = if (firstLine.length < 50 && !firstLine.contains('\n')) firstLine else L.components.markdown.executionNotice,
         userMessage = if (firstLine.length >= 50) firstLine else (if (rest.isNotBlank() && !isStackOrTrace) rest else firstLine),
         shortError = if (rest.isNotBlank() && !isStackOrTrace) rest else (if (firstLine.length >= 50) firstLine else ""),
         fullError = if (isStackOrTrace) rest else (if (clean.contains("stack trace", ignoreCase = true)) clean else "")
@@ -2968,7 +2981,7 @@ fun parseMarkdownBlocks(
                 if (finalThought.isNotBlank()) {
                     result.add(MarkdownBlock.AgentThought(finalThought, durationMs, isStreaming = isStreamingThought))
                 } else if (!closed || isExplicitStreaming) {
-                    result.add(MarkdownBlock.AgentThought("Thinking...", durationMs, isStreaming = true))
+                    result.add(MarkdownBlock.AgentThought(L.components.markdown.thinking, durationMs, isStreaming = true))
                 }
                 continue
             }
@@ -3148,7 +3161,7 @@ fun parseMarkdownBlocks(
         // 4. <details> and <summary> Collapsible Sections
         if (line.trimStart().startsWith("<details", ignoreCase = true)) {
             val isOpen = line.contains("open", ignoreCase = true)
-            var summary = "Details"
+            var summary = L.common.details
             val bodyLines = mutableListOf<String>()
             i++
 
@@ -3196,7 +3209,7 @@ fun parseMarkdownBlocks(
                     MarkdownBlock.YouTubeVideo(
                         videoId = ytId,
                         originalUrl = if (linkUrl.isNotBlank()) linkUrl else "https://www.youtube.com/watch?v=$ytId",
-                        title = alt.ifBlank { "YouTube Video" },
+                        title = alt.ifBlank { L.components.markdown.youtubeVideo },
                         customThumbnailUrl = imgUrl.takeIf { it.isNotBlank() }
                     )
                 )
@@ -3227,7 +3240,7 @@ fun parseMarkdownBlocks(
                     MarkdownBlock.YouTubeVideo(
                         videoId = ytId,
                         originalUrl = if (url.contains("youtube.com/watch") || url.contains("youtu.be")) url else "https://www.youtube.com/watch?v=$ytId",
-                        title = alt.ifBlank { "YouTube Video" },
+                        title = alt.ifBlank { L.components.markdown.youtubeVideo },
                         customThumbnailUrl = if (url.contains("img.youtube.com")) url else null
                     )
                 )
@@ -3431,7 +3444,7 @@ private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock
         if (rawHeaders.size < numCols) rawHeaders + List(numCols - rawHeaders.size) { "" }
         else rawHeaders.take(numCols)
     } else {
-        (1..numCols).map { "Column $it" }
+        (1..numCols).map { L.components.markdown.columnValue(it) }
     }
 
     val normalizedAlignments = if (alignments.size < numCols) {

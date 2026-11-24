@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * Fullscreen modal image viewer with smooth pinch-to-zoom, panning, double-tap zoom reset,
@@ -174,7 +175,7 @@ fun FullScreenImageDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = L.common.close,
                         tint = Color.White
                     )
                 }
@@ -182,7 +183,7 @@ fun FullScreenImageDialog(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Text(
-                    text = title.ifBlank { "Image Viewer" },
+                    text = title.ifBlank { L.components.fullScreenImage.imageViewer },
                     color = Color.White,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
@@ -204,7 +205,7 @@ fun FullScreenImageDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Reset Zoom",
+                            contentDescription = L.components.fullScreenImage.resetZoom,
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
@@ -229,7 +230,7 @@ fun FullScreenImageDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
-                        contentDescription = "Download",
+                        contentDescription = L.common.download,
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )

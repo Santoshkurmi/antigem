@@ -45,19 +45,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.data.jarvis.JarvisController
 import ai.antigem.data.jarvis.JarvisPreferences
+import ai.antigem.i18n.L
 
 /** The switches that can sit in the Jarvis panel's quick row (pinned in the quick settings sheet). */
-enum class QuickSwitch(val id: String, val title: String) {
-    HANDS_FREE("handsfree", "Hands-free"),
-    VOICE("voice", "Voice"),
-    SEND("send", "Send"),
-    PAUSE("pause", "Pause to send"),
-    ANSWERS("answers", "Answers"),
-    LISTEN("listen", "Listen after"),
-    WAKE("wake", "Wake"),
-    SCREEN("screen", "Screen"),
-    SPEED("speed", "Speed"),
-    BUSY("busy", "While it works");
+enum class QuickSwitch(val id: String, private val titleText: () -> String) {
+    HANDS_FREE("handsfree", { L.jarvis.quickSettings.handsFree }),
+    VOICE("voice", { L.common.voice }),
+    SEND("send", { L.common.send }),
+    PAUSE("pause", { L.jarvis.quickSettings.pauseToSend }),
+    ANSWERS("answers", { L.jarvis.quickSettings.answers }),
+    LISTEN("listen", { L.jarvis.quickSettings.listenAfter }),
+    WAKE("wake", { L.jarvis.quickSettings.wake }),
+    SCREEN("screen", { L.jarvis.quickSettings.screen }),
+    SPEED("speed", { L.common.speed }),
+    BUSY("busy", { L.jarvis.quickSettings.whileItWorks });
+    val title: String get() = titleText()
 
     companion object {
         fun pinned(raw: String): List<QuickSwitch> = raw.split(',').mapNotNull { id -> entries.firstOrNull { it.id == id.trim() } }.distinct()
@@ -73,15 +75,15 @@ fun QuickSwitchChip(q: QuickSwitch) {
     when (q) {
         QuickSwitch.HANDS_FREE -> {
             val on by P.handsFree.state.collectAsState()
-            JarvisQuickChip(q.title, if (on) "On" else "Off", on) { JarvisController.setHandsFree(!on) }
+            JarvisQuickChip(q.title, if (on) L.common.on else L.common.off, on) { JarvisController.setHandsFree(!on) }
         }
         QuickSwitch.VOICE -> {
             val quiet by P.quietMode.state.collectAsState()
-            JarvisQuickChip(q.title, if (quiet) "Quiet" else "Speaking", !quiet) { P.quietMode.set(!quiet) }
+            JarvisQuickChip(q.title, if (quiet) L.jarvis.quickSettings.quiet else L.jarvis.quickSettings.speaking, !quiet) { P.quietMode.set(!quiet) }
         }
         QuickSwitch.SEND -> {
             val auto by P.autoSend.state.collectAsState()
-            JarvisQuickChip(q.title, if (auto) "Auto on pause" else "Manual", auto) { P.autoSend.set(!auto) }
+            JarvisQuickChip(q.title, if (auto) L.jarvis.quickSettings.autoOnPause else L.common.manual, auto) { P.autoSend.set(!auto) }
         }
         QuickSwitch.PAUSE -> {
             val ms by P.silenceMs.state.collectAsState()
@@ -90,23 +92,23 @@ fun QuickSwitchChip(q: QuickSwitch) {
         }
         QuickSwitch.ANSWERS -> {
             val a by P.answerSend.state.collectAsState()
-            JarvisQuickChip(q.title, if (a == "auto") "Send on pause" else "Like send", a == "auto") { P.answerSend.set(if (a == "auto") "same" else "auto") }
+            JarvisQuickChip(q.title, if (a == "auto") L.jarvis.quickSettings.sendOnPause else L.jarvis.quickSettings.likeSend, a == "auto") { P.answerSend.set(if (a == "auto") "same" else "auto") }
         }
         QuickSwitch.LISTEN -> {
             val l by P.listenAfter.state.collectAsState()
             val order = listOf("auto", "always", "never")
-            JarvisQuickChip(q.title, when (l) { "always" -> "Always"; "never" -> "Never"; else -> "When asked" }, l != "never") {
+            JarvisQuickChip(q.title, when (l) { "always" -> L.common.always; "never" -> L.common.never; else -> L.jarvis.quickSettings.whenAsked }, l != "never") {
                 P.listenAfter.set(order[(order.indexOf(l) + 1).mod(order.size)])
             }
         }
         QuickSwitch.WAKE -> {
             val h by P.hotword.state.collectAsState()
-            JarvisQuickChip(q.title, if (h == "phrase") "Phrase" else "Button", h == "phrase") { P.hotword.set(if (h == "phrase") "push" else "phrase") }
+            JarvisQuickChip(q.title, if (h == "phrase") L.jarvis.quickSettings.phrase else L.jarvis.quickSettings.button, h == "phrase") { P.hotword.set(if (h == "phrase") "push" else "phrase") }
         }
         QuickSwitch.SCREEN -> {
             val s by P.keepScreenOn.state.collectAsState()
             val order = listOf("always", "active", "off")
-            JarvisQuickChip(q.title, when (s) { "off" -> "Can sleep"; "active" -> "On while active"; else -> "Always on" }, s != "off") {
+            JarvisQuickChip(q.title, when (s) { "off" -> L.jarvis.quickSettings.canSleep; "active" -> L.jarvis.quickSettings.onWhileActive; else -> L.jarvis.quickSettings.alwaysOn }, s != "off") {
                 P.keepScreenOn.set(order[(order.indexOf(s) + 1).mod(order.size)])
             }
         }
@@ -118,7 +120,7 @@ fun QuickSwitchChip(q: QuickSwitch) {
         QuickSwitch.BUSY -> {
             val b by P.busyBehavior.state.collectAsState()
             val order = listOf("queue", "interrupt", "smart")
-            JarvisQuickChip(q.title, when (b) { "interrupt" -> "Interrupt"; "smart" -> "My phrases"; else -> "Wait" }, b != "queue") {
+            JarvisQuickChip(q.title, when (b) { "interrupt" -> L.jarvis.quickSettings.interrupt; "smart" -> L.jarvis.quickSettings.myPhrases; else -> L.jarvis.quickSettings.wait }, b != "queue") {
                 P.busyBehavior.set(order[(order.indexOf(b) + 1).mod(order.size)])
             }
         }
@@ -193,42 +195,42 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
                 JarvisBotIcon(28.dp, Cyan)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Quick settings", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Applies from the next time the microphone opens", color = Color.White.copy(alpha = 0.5f), fontSize = 11.5.sp)
+                    Text(L.common.quickSettings, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.jarvis.quickSettings.appliesFromTheNextTimeThe, color = Color.White.copy(alpha = 0.5f), fontSize = 11.5.sp)
                 }
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { onClose() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Close, "Close", tint = Color.White.copy(alpha = 0.7f))
+                    Icon(Icons.Filled.Close, L.common.close, tint = Color.White.copy(alpha = 0.7f))
                 }
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 6.dp)) {
-                QsTitle("Sending")
-                QsChoice(listOf("manual" to "Manual (Send / phrase)", "auto" to "Auto when I pause"), if (auto) "auto" else "manual") { P.autoSend.set(it == "auto") }
-                QsHint(if (auto) "What you say is sent after the pause below. Tap Wait on the card to keep talking."
-                else "Nothing is sent while you think. Tap Send, press the headset button, or say one of your send phrases.")
-                QsSlider("Pause before sending", silence / 1000f, 0.6f..4f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set((it * 1000).toInt()) }
-                QsChoice(listOf("smart" to "Smart pause", "pause" to "Exact pause"), if (sendMode == "pause") "pause" else "smart") { P.sendMode.set(it) }
-                QsHint(if (sendMode == "pause") "Always exactly this pause." else "Longer when you sound unfinished (“…and”), shorter for short answers.")
-                Text("Answers to Jarvis' questions", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
-                QsChoice(listOf("same" to "Like everything else", "auto" to "Send on pause"), answers) { P.answerSend.set(it) }
+                QsTitle(L.jarvis.quickSettings.sending)
+                QsChoice(listOf("manual" to L.jarvis.quickSettings.manualSendPhrase, "auto" to L.jarvis.quickSettings.autoWhenIPause), if (auto) "auto" else "manual") { P.autoSend.set(it == "auto") }
+                QsHint(if (auto) L.jarvis.quickSettings.whatYouSayIsSentAfter
+                else L.jarvis.quickSettings.nothingIsSentWhileYouThink)
+                QsSlider(L.jarvis.quickSettings.pauseBeforeSending, silence / 1000f, 0.6f..4f, "%.1f s".format(silence / 1000f)) { P.silenceMs.set((it * 1000).toInt()) }
+                QsChoice(listOf("smart" to L.jarvis.quickSettings.smartPause, "pause" to L.jarvis.quickSettings.exactPause), if (sendMode == "pause") "pause" else "smart") { P.sendMode.set(it) }
+                QsHint(if (sendMode == "pause") L.jarvis.quickSettings.alwaysExactlyThisPause else L.jarvis.quickSettings.longerWhenYouSoundUnfinishedAnd)
+                Text(L.jarvis.quickSettings.answersToJarvisQuestions, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+                QsChoice(listOf("same" to L.jarvis.quickSettings.likeEverythingElse, "auto" to L.jarvis.quickSettings.sendOnPause), answers) { P.answerSend.set(it) }
 
-                QsTitle("After Jarvis speaks")
-                QsChoice(listOf("auto" to "Listen when it asks", "always" to "Always listen", "never" to "Don't listen"), listenAfter) { P.listenAfter.set(it) }
-                if (listenAfter != "never") QsSlider("Wait for my reply", follow.toFloat(), 3f..20f, "$follow s") { P.followUpSeconds.set(it.toInt()) }
+                QsTitle(L.jarvis.quickSettings.afterJarvisSpeaks)
+                QsChoice(listOf("auto" to L.jarvis.quickSettings.listenWhenItAsks, "always" to L.jarvis.quickSettings.alwaysListen, "never" to L.jarvis.quickSettings.dontListen), listenAfter) { P.listenAfter.set(it) }
+                if (listenAfter != "never") QsSlider(L.jarvis.quickSettings.waitForMyReply, follow.toFloat(), 3f..20f, "$follow s") { P.followUpSeconds.set(it.toInt()) }
 
-                QsTitle("Voice")
-                QsChoice(listOf("speak" to "Speaking", "quiet" to "Quiet (show text)"), if (quiet) "quiet" else "speak") { P.quietMode.set(it == "quiet") }
-                QsSlider("Speed", rate, 0.5f..2f, "%.1f×".format(rate)) { P.ttsRate.set((Math.round(it * 20) / 20f)) }
+                QsTitle(L.common.voice)
+                QsChoice(listOf("speak" to L.jarvis.quickSettings.speaking, "quiet" to L.jarvis.quickSettings.quietShowText), if (quiet) "quiet" else "speak") { P.quietMode.set(it == "quiet") }
+                QsSlider(L.common.speed, rate, 0.5f..2f, "%.1f×".format(rate)) { P.ttsRate.set((Math.round(it * 20) / 20f)) }
 
-                QsTitle("Hands-free")
-                QsChoice(listOf("off" to "Off", "on" to "On (mic stays ready)"), if (handsFree) "on" else "off") { JarvisController.setHandsFree(it == "on") }
-                QsChoice(listOf("push" to "Wake with button", "phrase" to "Wake phrase"), if (hotword == "phrase") "phrase" else "push") { P.hotword.set(it) }
-                QsChoice(listOf("always" to "Screen always on", "active" to "On while active", "off" to "Can sleep"), screen) { P.keepScreenOn.set(it) }
+                QsTitle(L.jarvis.quickSettings.handsFree)
+                QsChoice(listOf("off" to L.common.off, "on" to L.jarvis.quickSettings.onMicStaysReady), if (handsFree) "on" else "off") { JarvisController.setHandsFree(it == "on") }
+                QsChoice(listOf("push" to L.jarvis.quickSettings.wakeWithButton, "phrase" to L.jarvis.quickSettings.wakePhrase), if (hotword == "phrase") "phrase" else "push") { P.hotword.set(it) }
+                QsChoice(listOf("always" to L.jarvis.quickSettings.screenAlwaysOn, "active" to L.jarvis.quickSettings.onWhileActive, "off" to L.jarvis.quickSettings.canSleep), screen) { P.keepScreenOn.set(it) }
 
-                QsTitle("When I talk while Jarvis works")
-                QsChoice(listOf("queue" to "Wait for it", "interrupt" to "Interrupt it", "smart" to "Only my interrupt phrases"), busy) { P.busyBehavior.set(it) }
+                QsTitle(L.jarvis.quickSettings.whenITalkWhileJarvisWorks)
+                QsChoice(listOf("queue" to L.jarvis.quickSettings.waitForIt, "interrupt" to L.jarvis.quickSettings.interruptIt, "smart" to L.jarvis.quickSettings.onlyMyInterruptPhrases), busy) { P.busyBehavior.set(it) }
 
-                QsTitle("Quick row in the panel")
-                QsHint("Tap to show or hide a switch in the Jarvis panel.")
+                QsTitle(L.jarvis.quickSettings.quickRowInThePanel)
+                QsHint(L.jarvis.quickSettings.tapToShowOrHideA)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     QuickSwitch.entries.forEach { q ->
                         val on = q in pins
@@ -249,8 +251,8 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QsLink("Phrases & shortcuts") { onClose(); JarvisController.requestSettings("JARVIS_LISTEN") }
-                    QsLink("All Jarvis settings") { onClose(); JarvisController.requestSettings("JARVIS") }
+                    QsLink(L.jarvis.quickSettings.phrasesShortcuts) { onClose(); JarvisController.requestSettings("JARVIS_LISTEN") }
+                    QsLink(L.jarvis.quickSettings.allJarvisSettings) { onClose(); JarvisController.requestSettings("JARVIS") }
                 }
                 Spacer(Modifier.height(8.dp))
             }

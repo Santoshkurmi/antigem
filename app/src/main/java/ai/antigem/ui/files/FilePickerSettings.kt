@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.antigem.i18n.L
 
 /**
  * Settings → Files in other apps: AntiGem's home and the Ubuntu chroot's home in Android's file picker
@@ -61,32 +62,31 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
         if (!AntiGemDocumentsProvider.openInFilesApp(context, rootId, documentId)) {
             Toast.makeText(
                 context,
-                "This phone has no Files app that shows other apps' folders. Use the picker in any app (Open, Attach, Save as).",
+                L.files.filePickerSettings.thisPhoneHasNoFilesApp,
                 Toast.LENGTH_LONG
             ).show()
         }
     }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Section(Icons.Outlined.FolderShared, "System file picker") {
+        Section(Icons.Outlined.FolderShared, L.files.filePickerSettings.systemFilePicker) {
             Hint(
-                "Other apps can open and save files in AntiGem's folders through Android's file picker (Open, Attach, " +
-                    "Save as, Choose folder) and the Files app. An app only gets the files or the folder you pick."
+                L.files.filePickerSettings.otherAppsCanOpenAndSave
             )
             Spacer(Modifier.height(4.dp))
-            SwitchLine("Show AntiGem in the file picker", null, enabled) {
+            SwitchLine(L.files.filePickerSettings.showAntigemInTheFilePicker, null, enabled) {
                 enabled = it
                 AntiGemDocumentsProvider.setEnabled(context, it)
             }
         }
 
-        Section(Icons.Outlined.Home, "AntiGem home") {
-            Hint("The home folder of AntiGem's own environment: projects, configs and everything the agents keep there.")
+        Section(Icons.Outlined.Home, L.files.filePickerSettings.antigemHome) {
+            Hint(L.files.filePickerSettings.theHomeFolderOfAntigemsOwn)
             Spacer(Modifier.height(6.dp))
             PathText(homeDir.absolutePath)
             if (!homeReady) {
                 Spacer(Modifier.height(6.dp))
-                Text("Not set up yet: it shows once AntiGem's environment is installed.", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
+                Text(L.files.filePickerSettings.notSetUpYetItShows, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
             } else {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -95,14 +95,14 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Open in Files")
+                    Text(L.files.filePickerSettings.openInFiles)
                 }
             }
         }
 
         if (chroot != null) {
             val home = AntiGemDocumentsProvider.chrootHome(chroot.user.ifBlank { "ubuntu" })
-            Section(Icons.Outlined.Terminal, "Ubuntu chroot") {
+            Section(Icons.Outlined.Terminal, L.common.ubuntuChroot) {
                 Hint(
                     "Ubuntu's home folder, read and written through the chroot's IDE bridge as your Ubuntu user. " +
                         "It works while the chroot runs (with \"Keep running\", also when AntiGem is closed); otherwise the " +
@@ -111,7 +111,7 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(6.dp))
                 PathText(home)
                 Spacer(Modifier.height(4.dp))
-                SwitchLine("Show Ubuntu's home", "As \"AntiGem Ubuntu\" in the picker", chrootShown && enabled, enabled = enabled) {
+                SwitchLine(L.files.filePickerSettings.showUbuntusHome, L.files.filePickerSettings.asAntigemUbuntuInThePicker, chrootShown && enabled, enabled = enabled) {
                     chrootShown = it
                     AntiGemDocumentsProvider.setChrootShown(context, it)
                 }
@@ -122,16 +122,14 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Open in Files")
+                    Text(L.files.filePickerSettings.openInFiles)
                 }
             }
         }
 
-        Section(Icons.Outlined.Info, "Where to find it") {
+        Section(Icons.Outlined.Info, L.files.filePickerSettings.whereToFindIt) {
             Hint(
-                "In any app, tap Open, Attach or Save as, then open the ☰ menu of the picker: AntiGem is in the list. " +
-                    "Some phone makers' file managers (like Samsung My Files) only show their own places; Android's picker " +
-                    "always lists AntiGem."
+                L.files.filePickerSettings.inAnyAppTapOpenAttach
             )
         }
     }

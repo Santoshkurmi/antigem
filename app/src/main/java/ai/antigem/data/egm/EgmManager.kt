@@ -24,6 +24,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
+import ai.antigem.i18n.L
 
 /**
  * Settings → Agents → EGM: Google's Elephant-Goldfish Model (github.com/google/elephant-goldfish-model, Apache-2.0).
@@ -69,42 +70,51 @@ object EgmManager {
     private val RUNTIME = setOf("skills", "agents", "resources", "docs", "assets", "plugin.json", "LICENSE", "README.md")
 
     /** EGM's eight Goldfish reviewer personas (agents/[file]); the synthesizer and the bootstrap orchestrator are left out. */
-    enum class Persona(val file: String, val label: String, val description: String) {
-        ZOOM_OUT("zoom_out.md", "Zoom out", "Skeptical architect: a simpler design, no extras, reuse of existing code"),
-        INVENTIVE("inventive_catalyst.md", "Inventive catalyst", "Looks for a different approach that removes the core trade-off"),
-        COMPREHENSION("comprehension.md", "Comprehension", "Naive reader: explains the design back, flags undefined terms and gaps"),
-        DESIGN("design_critic.md", "Design critic", "Hostile critic: architecture, failure cases, scaling and cost"),
-        STRUCTURAL("structural.md", "Structure", "The document's layout: sections, headings, missing parts"),
-        STYLE("style.md", "Style", "Copy editor: clear, precise, no filler"),
-        READINESS("implementation_readiness.md", "Implementation readiness", "Tech lead: can the plan be built step by step without guessing"),
-        CODEBASE("codebase_details.md", "Codebase details", "Checks the plan against the real code: files, APIs, names");
+    enum class Persona(val file: String, private val labelText: () -> String, private val descriptionText: () -> String) {
+        ZOOM_OUT("zoom_out.md", { L.egm.manager.zoomOut }, { L.egm.manager.skepticalArchitectASimplerDesignNo }),
+        INVENTIVE("inventive_catalyst.md", { L.egm.manager.inventiveCatalyst }, { L.egm.manager.looksForADifferentApproachThat }),
+        COMPREHENSION("comprehension.md", { L.egm.manager.comprehension }, { L.egm.manager.naiveReaderExplainsTheDesignBack }),
+        DESIGN("design_critic.md", { L.egm.manager.designCritic }, { L.egm.manager.hostileCriticArchitectureFailureCases }),
+        STRUCTURAL("structural.md", { L.egm.manager.structure }, { L.egm.manager.theDocumentsLayoutSectionsHeadings }),
+        STYLE("style.md", { L.egm.manager.style }, { L.egm.manager.copyEditorClearPreciseNoFiller }),
+        READINESS("implementation_readiness.md", { L.egm.manager.implementationReadiness }, { L.egm.manager.techLeadCanThePlanBe }),
+        CODEBASE("codebase_details.md", { L.egm.manager.codebaseDetails }, { L.egm.manager.checksThePlanAgainstTheReal });
+        val label: String get() = labelText()
+        val description: String get() = descriptionText()
 
         /** The persona's name in EGM's skills (egm-design, egm-zoom-out, …). */
         val egmName: String get() = "egm-" + if (this == DESIGN) "design" else file.removeSuffix(".md").replace('_', '-')
     }
 
-    enum class Preset(val label: String, val reviewers: Set<Persona>) {
-        QUICK("Quick · 2", setOf(Persona.COMPREHENSION, Persona.DESIGN)),
-        STANDARD("Standard · 3", setOf(Persona.COMPREHENSION, Persona.DESIGN, Persona.READINESS)),
-        FULL("Full · 8", Persona.entries.toSet())
+    enum class Preset(private val labelText: () -> String, val reviewers: Set<Persona>) {
+        QUICK({ L.egm.manager.quick2 }, setOf(Persona.COMPREHENSION, Persona.DESIGN)),
+        STANDARD({ L.egm.manager.standard3 }, setOf(Persona.COMPREHENSION, Persona.DESIGN, Persona.READINESS)),
+        FULL({ L.egm.manager.full8 }, Persona.entries.toSet());
+        val label: String get() = labelText()
     }
 
     /** Who is the Elephant when /egm runs in a Jarvis chat. */
-    enum class Elephant(val label: String, val description: String) {
-        PLANNER_CHAT("A separate planner chat", "Jarvis starts a planner chat that brainstorms, writes and fixes the design; Jarvis relays and runs the reviewers. Keeps Jarvis' own chat light."),
-        JARVIS("Jarvis itself", "Jarvis brainstorms and writes the design in its own chat and runs the reviewers. One chat less, but Jarvis' context fills up.")
+    enum class Elephant(private val labelText: () -> String, private val descriptionText: () -> String) {
+        PLANNER_CHAT({ L.egm.manager.aSeparatePlannerChat }, { L.egm.manager.jarvisStartsAPlannerChatThat }),
+        JARVIS({ L.egm.manager.jarvisItself }, { L.egm.manager.jarvisBrainstormsAndWritesTheDesign });
+        val label: String get() = labelText()
+        val description: String get() = descriptionText()
     }
 
     /** Where Install gets EGM from. */
-    enum class Source(val label: String, val description: String) {
-        RELEASE("Newest release", "EGM's published release, checked against its checksum. The stable choice."),
-        MAIN("Development version (main)", "EGM's main branch as it is now, with skills not released yet (egm-lite, as of release 0.1.1). It changes almost daily and has no checksum to check it against.")
+    enum class Source(private val labelText: () -> String, private val descriptionText: () -> String) {
+        RELEASE({ L.egm.manager.newestRelease }, { L.egm.manager.egmsPublishedReleaseCheckedAgainstIts }),
+        MAIN({ L.egm.manager.developmentVersionMain }, { L.egm.manager.egmsMainBranchAsItIs });
+        val label: String get() = labelText()
+        val description: String get() = descriptionText()
     }
 
-    enum class Command(val token: String, val description: String, val argumentHint: String) {
-        FULL("egm", "EGM: brainstorm → design doc → Goldfish review → your approval → code", "task"),
-        LITE("egm-lite", "EGM lite: checklist → one Goldfish review → code → diff review", "task"),
-        REVIEW("egm-review", "EGM: Goldfish review of an existing design document", "design doc path")
+    enum class Command(val token: String, private val descriptionText: () -> String, private val argumentHintText: () -> String) {
+        FULL("egm", { L.egm.manager.egmBrainstormDesignDocGoldfishReview }, { L.egm.manager.task }),
+        LITE("egm-lite", { L.egm.manager.egmLiteChecklistOneGoldfishReview }, { L.egm.manager.task }),
+        REVIEW("egm-review", { L.egm.manager.egmGoldfishReviewOfAnExisting }, { L.egm.manager.designDocPath });
+        val description: String get() = descriptionText()
+        val argumentHint: String get() = argumentHintText()
     }
 
     data class Settings(
@@ -245,48 +255,48 @@ object EgmManager {
             // (release version, main commit): one of them
             val got: Pair<String?, String?> = when (source) {
                 Source.RELEASE -> {
-                    progress("Looking up the newest EGM release…")
+                    progress(L.egm.manager.lookingUpTheNewestEgmRelease)
                     val release = latestRelease()
-                    appendLog("Release ${release.tag}: ${release.zipName.ifBlank { "source archive" }}")
-                    progress("Downloading EGM ${release.version}…")
+                    appendLog(L.egm.manager.releaseTagZipname(release.tag, release.zipName.ifBlank { L.egm.manager.sourceArchive }))
+                    progress(L.egm.manager.downloadingEgmVersion(release.version))
                     download(release.zipUrl, zip)
-                    appendLog("✓ Downloaded ${zip.length() / 1024} KB")
+                    appendLog(L.egm.manager.downloadedValueKb(zip.length() / 1024))
                     release.sumsUrl?.let { url ->
                         val expected = httpGet(url).lineSequence()
                             .map { it.trim().split(Regex("\\s+")) }
                             .firstOrNull { it.size >= 2 && it.last().removePrefix("*") == release.zipName }
                             ?.first()
                         if (expected == null) {
-                            appendLog("! The release lists no checksum for ${release.zipName}; not checked")
+                            appendLog(L.egm.manager.theReleaseListsNoChecksumFor(release.zipName))
                         } else {
                             if (!sha256(zip).equals(expected, ignoreCase = true)) {
-                                throw IllegalStateException("The download does not match the release checksum. Try again.")
+                                throw IllegalStateException(L.egm.manager.theDownloadDoesNotMatchThe)
                             }
-                            appendLog("✓ Checksum matches")
+                            appendLog(L.egm.manager.checksumMatches)
                         }
                     }
                     release.version to null
                 }
                 Source.MAIN -> {
-                    progress("Looking up EGM's main branch…")
+                    progress(L.egm.manager.lookingUpEgmsMainBranch)
                     val sha = latestMainCommit()
-                    appendLog("Main branch at ${sha.take(7)} (development version: unreleased, no checksum)")
-                    progress("Downloading EGM main ${sha.take(7)}…")
+                    appendLog(L.egm.manager.mainBranchAtValueDevelopmentVersion(sha.take(7)))
+                    progress(L.egm.manager.downloadingEgmMainValue(sha.take(7)))
                     // That exact commit, so what is installed is what was looked up
                     download("https://codeload.github.com/$REPO/zip/$sha", zip)
-                    appendLog("✓ Downloaded ${zip.length() / 1024} KB")
+                    appendLog(L.egm.manager.downloadedValueKb(zip.length() / 1024))
                     null to sha.take(7)
                 }
             }
             val released = got.first
             val commit = got.second
-            progress("Unpacking…")
+            progress(L.egm.manager.unpacking)
             val staging = File(work, "unpacked")
             staging.mkdirs()
             unzip(zip, staging)
-            val bundle = bundleRoot(staging) ?: throw IllegalStateException("The download has no EGM skills folder.")
+            val bundle = bundleRoot(staging) ?: throw IllegalStateException(L.egm.manager.theDownloadHasNoEgmSkills)
             val missing = REQUIRED.filterNot { File(bundle, it).exists() }
-            if (missing.isNotEmpty()) throw IllegalStateException("The download is missing ${missing.joinToString()}.")
+            if (missing.isNotEmpty()) throw IllegalStateException(L.egm.manager.theDownloadIsMissingFiles(missing.joinToString()))
             // The main branch comes as the whole repository (tests, site, CI…): keep what a release ZIP holds
             if (source == Source.MAIN) bundle.listFiles()?.filter { it.name !in RUNTIME }?.forEach { it.deleteRecursively() }
             // The old copy goes as a whole: files a release dropped must not stay behind (EGM's own advice)
@@ -305,10 +315,10 @@ object EgmManager {
             }
             writeAdapterFiles()
             val label = _state.value.label ?: version
-            appendLog("✓ EGM $label in ${rootDir.absolutePath}")
-            if (!_state.value.hasLite) appendLog("! EGM $label has no egm-lite: /egm-lite stays off (the development version has it)")
+            appendLog(L.egm.manager.egmLabelInAbsolutepath(label, rootDir.absolutePath))
+            if (!_state.value.hasLite) appendLog(L.egm.manager.egmLabelHasNoEgmLite(label))
             val commands = Command.entries.filter { available(it) }.joinToString { "/${it.token}" }
-            report("EGM $label installed. Type $commands in any chat.")
+            report(L.egm.manager.egmLabelInstalledTypeCommandsIn(label, commands))
         } finally {
             work.deleteRecursively()
         }
@@ -316,18 +326,18 @@ object EgmManager {
 
     /** Removes EGM and the rule files; design documents in projects stay. */
     fun uninstall() = runTask("remove") {
-        progress("Removing EGM…")
+        progress(L.egm.manager.removingEgm)
         rootDir.deleteRecursively()
         adapterDir.deleteRecursively()
         prefs.edit().remove(KEY_VERSION).remove(KEY_SOURCE).remove(KEY_COMMIT).apply()
         _state.update { it.copy(version = null, installedSource = null, installedCommit = null, hasLite = false) }
-        appendLog("✓ Removed ${rootDir.absolutePath}")
-        report("EGM removed. Its slash commands are gone; design documents in your projects stay.")
+        appendLog(L.egm.manager.removedPath(rootDir.absolutePath))
+        report(L.egm.manager.egmRemovedItsSlashCommandsAre)
     }
 
     private fun runTask(task: String, block: suspend () -> Unit) {
         if (job?.isActive == true) {
-            report("Something is already running. Wait for it to finish.", isError = true)
+            report(L.egm.manager.somethingIsAlreadyRunningWaitFor, isError = true)
             return
         }
         job = scope.launch {
@@ -339,7 +349,7 @@ object EgmManager {
             } catch (e: Exception) {
                 Log.e(TAG, "$task failed", e)
                 appendLog("✗ ${e.message ?: e.javaClass.simpleName}")
-                report(e.message ?: "Failed", isError = true)
+                report(e.message ?: L.egm.manager.failed, isError = true)
             } finally {
                 _state.update { it.copy(task = null, progress = null) }
             }

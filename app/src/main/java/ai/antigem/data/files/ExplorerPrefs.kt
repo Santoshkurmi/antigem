@@ -6,11 +6,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
+import ai.antigem.i18n.L
 
-enum class SortBy(val label: String) { NAME("Name"), DATE("Date modified"), SIZE("Size"), TYPE("Type") }
+enum class SortBy(private val labelText: () -> String) { NAME({ L.files.explorerPrefs.name }), DATE({ L.files.explorerPrefs.dateModified }), SIZE({ L.files.explorerPrefs.size }), TYPE({ L.files.explorerPrefs.type });
+    val label: String get() = labelText()
+}
 
 /** [SHARE] is never remembered as a file type's default: it sends the file, it does not open it. */
-enum class OpenChoice(val label: String) { IDE("Code editor"), EXTERNAL("Other app"), PREVIEW("Preview"), SHARE("Share") }
+enum class OpenChoice(private val labelText: () -> String) { IDE({ L.files.explorerPrefs.codeEditor }), EXTERNAL({ L.files.explorerPrefs.otherApp }), PREVIEW({ L.files.explorerPrefs.preview }), SHARE({ L.files.explorerPrefs.share });
+    val label: String get() = labelText()
+}
 
 data class ExplorerSettings(
     val sortBy: SortBy = SortBy.NAME,

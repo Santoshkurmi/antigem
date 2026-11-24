@@ -33,6 +33,7 @@ import org.json.JSONObject
 import java.util.UUID
 import ai.antigem.data.agent.ChatSessionStore
 import kotlinx.coroutines.CoroutineScope
+import ai.antigem.i18n.L
 
 /** Antigravity MCP servers and the Cascade MCP plugin marketplace. Moved out of ChatViewModel unchanged. */
 class AgyMcpManager(
@@ -83,7 +84,7 @@ class AgyMcpManager(
                 val liveResult = agyHubClient.getMcpServerStates(hubUrl)
                 var fetchError: String? = null
                 if (liveResult.isFailure) {
-                    val err = liveResult.exceptionOrNull()?.message ?: "Failed to connect to Antigravity Hub"
+                    val err = liveResult.exceptionOrNull()?.message ?: L.agent.agyMcpManager.failedToConnectToAntigravityHub
                     Log.w("ChatViewModel", "loadMcpServers liveResult failed: $err")
                     fetchError = err
                 }
@@ -192,7 +193,7 @@ class AgyMcpManager(
                 val hubUrl = AuthPreferences.currentHubUrl
                 val res = agyHubClient.refreshMcpServers(hubUrl)
                 if (res.isFailure) {
-                    val err = res.exceptionOrNull()?.message ?: "Refresh failed"
+                    val err = res.exceptionOrNull()?.message ?: L.agent.agyMcpManager.refreshFailed
                     _mcpErrorMessage.value = "Daemon refresh error ($hubUrl): $err"
                 }
                 delay(600)
@@ -314,12 +315,12 @@ class AgyMcpManager(
 
                 val success = ai.antigem.data.daemon.IdeApiClient.saveMcpConfig(json.toString(2))
                 if (!success) {
-                    _mcpErrorMessage.value = "Failed to save configuration to mcp_config.json"
+                    _mcpErrorMessage.value = L.agent.agyMcpManager.failedToSaveConfigurationToMcp
                 } else {
                     val hubUrl = AuthPreferences.currentHubUrl
                     agyHubClient.refreshMcpServers(hubUrl)
                     loadMcpServers()
-                    _mcpStatusMessage.value = "Saved '${spec.serverName}'. Tap Refresh on the server to connect."
+                    _mcpStatusMessage.value = L.agent.agyMcpManager.savedServernameTapRefreshOnThe(spec.serverName)
                 }
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "saveMcpServer error: ${e.message}", e)
@@ -386,15 +387,15 @@ class AgyMcpManager(
             try {
                 val res = agyHubClient.installCascadePlugin(plugin)
                 if (res.isSuccess) {
-                    _mcpStatusMessage.value = "Installed and activated '${plugin.title}' MCP server"
+                    _mcpStatusMessage.value = L.agent.agyMcpManager.installedAndActivatedTitleMcpServer(plugin.title)
                     delay(500)
                     loadMcpServers()
                 } else {
-                    val err = res.exceptionOrNull()?.message ?: "Installation failed"
-                    _mcpErrorMessage.value = "Failed to install ${plugin.title}: $err"
+                    val err = res.exceptionOrNull()?.message ?: L.agent.agyMcpManager.installationFailed
+                    _mcpErrorMessage.value = L.agent.agyMcpManager.failedToInstallTitleErr(plugin.title, err)
                 }
             } catch (e: Exception) {
-                _mcpErrorMessage.value = "Error installing ${plugin.title}: ${e.message}"
+                _mcpErrorMessage.value = L.agent.agyMcpManager.errorInstallingTitleMessage(plugin.title, e.message)
             } finally {
                 _installingCascadePluginId.value = null
             }

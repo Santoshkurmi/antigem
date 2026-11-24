@@ -5,6 +5,7 @@ import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.data.remote.services.AgyProjectService
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import ai.antigem.i18n.L
 
 data class SlashCommandItem(
     val name: String,
@@ -23,17 +24,17 @@ object SlashCommandsCache {
     private var inMemoryCache: List<SlashCommandItem>? = null
 
     // Standard built-in Antigravity slash commands
-    val BUILTIN_COMMANDS = listOf(
-        SlashCommandItem("goal", "/goal", "Run a long-running task overnight and be extra thorough until the goal is achieved", "command"),
-        SlashCommandItem("schedule", "/schedule", "Schedule a one-shot timer or recurring cron job", "command"),
-        SlashCommandItem("browser", "/browser", "Interact with web applications or search and browse the web", "command"),
-        SlashCommandItem("plan", "/plan", "Create an implementation plan before taking action", "command"),
-        SlashCommandItem("grill-me", "/grill-me", "Interactive interview to resolve design decisions and align on approach", "command"),
-        SlashCommandItem("teamwork-preview", "/teamwork-preview", "Coordinate a team of autonomous agents working together", "command"),
-        SlashCommandItem("learn", "/learn", "Persist custom setup and learned behaviors for future tasks", "command"),
-        SlashCommandItem("boost", "/boost", "Deep thinking, strategic planning, and verification for complex tasks", "command"),
-        SlashCommandItem("terminal", "/terminal", "Open terminal session or execute local shell commands", "command"),
-        SlashCommandItem("ide", "/ide", "Open the code editor IDE", "command")
+    val BUILTIN_COMMANDS get() = listOf(
+        SlashCommandItem("goal", "/goal", L.remote.slashCommandsCache.runALongRunningTaskOvernight, "command"),
+        SlashCommandItem("schedule", "/schedule", L.remote.slashCommandsCache.scheduleAOneShotTimerOr, "command"),
+        SlashCommandItem("browser", "/browser", L.remote.slashCommandsCache.interactWithWebApplicationsOrSearch, "command"),
+        SlashCommandItem("plan", "/plan", L.remote.slashCommandsCache.createAnImplementationPlanBeforeTaking, "command"),
+        SlashCommandItem("grill-me", "/grill-me", L.remote.slashCommandsCache.interactiveInterviewToResolveDesign, "command"),
+        SlashCommandItem("teamwork-preview", "/teamwork-preview", L.remote.slashCommandsCache.coordinateATeamOfAutonomousAgents, "command"),
+        SlashCommandItem("learn", "/learn", L.remote.slashCommandsCache.persistCustomSetupAndLearnedBehaviors, "command"),
+        SlashCommandItem("boost", "/boost", L.remote.slashCommandsCache.deepThinkingStrategicPlanningAnd, "command"),
+        SlashCommandItem("terminal", "/terminal", L.remote.slashCommandsCache.openTerminalSessionOrExecuteLocal, "command"),
+        SlashCommandItem("ide", "/ide", L.remote.slashCommandsCache.openTheCodeEditorIde, "command")
     )
     private val BUILTIN_COMMANDS_SORTED get() = BUILTIN_COMMANDS.sortedBy { it.name.lowercase() }
 

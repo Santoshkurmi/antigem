@@ -36,6 +36,7 @@ import ai.antigem.theme.*
 import ai.antigem.ui.components.MarkdownContent
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.AgyAccent
+import ai.antigem.i18n.L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +98,7 @@ fun SkillsAndPluginsSubScreen(
                         Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                         Text(text = errorMessage, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
                         IconButton(onClick = onClearStatus, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = L.common.dismiss, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -120,7 +121,7 @@ fun SkillsAndPluginsSubScreen(
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(18.dp))
                         Text(text = statusMessage, fontSize = 12.5.sp, color = QuotaGreen, modifier = Modifier.weight(1f))
                         IconButton(onClick = onClearStatus, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Close, contentDescription = L.common.dismiss, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -159,7 +160,7 @@ fun SkillsAndPluginsSubScreen(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Outlined.Storefront, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Text("Store", fontSize = 13.sp, fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal)
+                            Text(L.settings.skillsAndPlugins.store, fontSize = 13.sp, fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
                 )
@@ -169,8 +170,8 @@ fun SkillsAndPluginsSubScreen(
             when (selectedTab) {
                 0 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GitHubActionRow(
-                        "Add skills from GitHub", "Pick skills from any repository; update or remove the ones you added",
-                        "From GitHub", AgyAccent
+                        L.settings.skillsAndPlugins.addSkillsFromGithub, L.settings.skillsAndPlugins.pickSkillsFromAnyRepositoryUpdate,
+                        L.settings.skillsAndPlugins.fromGithub, AgyAccent
                     ) { showSkillsFromGitHub = true }
                     SkillsTabView(
                         skills = skills,
@@ -183,8 +184,8 @@ fun SkillsAndPluginsSubScreen(
                 }
                 1 -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GitHubActionRow(
-                        "Install a plugin from GitHub", "Antigravity or Claude Code plugins, with agy's own installer",
-                        "From GitHub", AgyAccent
+                        L.settings.skillsAndPlugins.installAPluginFromGithub, L.settings.skillsAndPlugins.antigravityOrClaudeCodePluginsWith,
+                        L.settings.skillsAndPlugins.fromGithub, AgyAccent
                     ) { showPluginFromGitHub = true }
                     InstalledPluginsTabView(
                         plugins = installedPlugins,
@@ -213,7 +214,7 @@ fun SkillsAndPluginsSubScreen(
     }
 
     if (showSkillsFromGitHub) {
-        AgentSkillsDialog(AgentKind.AGY, AgyAccent, "Antigravity skills") {
+        AgentSkillsDialog(AgentKind.AGY, AgyAccent, L.settings.skillsAndPlugins.antigravitySkills) {
             showSkillsFromGitHub = false
             onRefreshSkills()
         }
@@ -261,7 +262,7 @@ private fun SkillsTabView(
                 FilterChip(
                     selected = filterScope == "GLOBAL",
                     onClick = { onSetScope("GLOBAL") },
-                    label = { Text("Global (Default)", fontSize = 11.5.sp) },
+                    label = { Text(L.settings.skillsAndPlugins.globalDefault, fontSize = 11.5.sp) },
                     leadingIcon = if (filterScope == "GLOBAL") {
                         { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
                     } else null,
@@ -270,7 +271,7 @@ private fun SkillsTabView(
                 FilterChip(
                     selected = filterScope == "WORKSPACE",
                     onClick = { onSetScope("WORKSPACE") },
-                    label = { Text("Project / Workspace", fontSize = 11.5.sp) },
+                    label = { Text(L.settings.skillsAndPlugins.projectWorkspace, fontSize = 11.5.sp) },
                     leadingIcon = if (filterScope == "WORKSPACE") {
                         { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
                     } else null,
@@ -279,7 +280,7 @@ private fun SkillsTabView(
                 FilterChip(
                     selected = filterScope == "ALL",
                     onClick = { onSetScope("ALL") },
-                    label = { Text("All", fontSize = 11.5.sp) },
+                    label = { Text(L.settings.skillsAndPlugins.all, fontSize = 11.5.sp) },
                     shape = RoundedCornerShape(8.dp)
                 )
             }
@@ -288,7 +289,7 @@ private fun SkillsTabView(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = GeminiBlue)
                 } else {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = L.common.refresh, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -300,7 +301,7 @@ private fun SkillsTabView(
         } else if (skills.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (filterScope == "WORKSPACE") "No workspace-scoped skills (.agents/skills/) found for active project." else "No skills discovered.",
+                    text = if (filterScope == "WORKSPACE") L.settings.skillsAndPlugins.noWorkspaceScopedSkillsAgentsSkills else L.settings.skillsAndPlugins.noSkillsDiscovered,
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -336,10 +337,10 @@ private fun SkillItemCard(
     }
 
     val categoryBadgeText = when (skill.discoveryCategory) {
-        "DISCOVERY_CATEGORY_BUILTIN" -> "Built-in"
-        "DISCOVERY_CATEGORY_INSTALLED" -> "Installed Plugin"
-        "DISCOVERY_CATEGORY_WORKSPACE" -> "Workspace"
-        else -> "Global"
+        "DISCOVERY_CATEGORY_BUILTIN" -> L.common.builtIn
+        "DISCOVERY_CATEGORY_INSTALLED" -> L.settings.skillsAndPlugins.installedPlugin
+        "DISCOVERY_CATEGORY_WORKSPACE" -> L.common.workspace
+        else -> L.common.global
     }
 
     Card(
@@ -429,7 +430,7 @@ private fun SkillItemCard(
             }
 
             Text(
-                text = skill.description.ifBlank { "Agent capability instructions and workflows" },
+                text = skill.description.ifBlank { L.settings.skillsAndPlugins.agentCapabilityInstructionsAndWorkflows },
                 fontSize = 12.5.sp,
                 lineHeight = 17.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
@@ -452,7 +453,7 @@ private fun SkillItemCard(
                     modifier = Modifier.weight(1f)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("View SKILL.md", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                    Text(L.settings.skillsAndPlugins.viewSkillMd, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 }
             }
@@ -481,7 +482,7 @@ private fun InstalledPluginsTabView(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Installed Bundles & Extensions",
+                text = L.settings.skillsAndPlugins.installedBundlesExtensions,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -490,7 +491,7 @@ private fun InstalledPluginsTabView(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = GeminiBlue)
                 } else {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = L.common.refresh, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -501,7 +502,7 @@ private fun InstalledPluginsTabView(
             }
         } else if (plugins.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("No plugin bundles installed in ~/.gemini/config/plugins/.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(L.settings.skillsAndPlugins.noPluginBundlesInstalledInGemini, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         } else {
             val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -538,7 +539,7 @@ private fun InstalledPluginCard(
     if (showDeleteConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { Text("Delete Plugin?") },
+            title = { Text(L.settings.skillsAndPlugins.deletePlugin) },
             text = {
                 Text("Are you sure you want to delete '${plugin.displayName.ifBlank { plugin.name }}' (${plugin.name})? This will remove its bundled skills from ~/.gemini/config/plugins/.")
             },
@@ -550,12 +551,12 @@ private fun InstalledPluginCard(
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete", fontWeight = FontWeight.Bold)
+                    Text(L.common.delete, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
+                    Text(L.common.cancel)
                 }
             }
         )
@@ -641,7 +642,7 @@ private fun InstalledPluginCard(
                         color = GeminiBlue.copy(alpha = 0.12f)
                     ) {
                         Text(
-                            text = "Global",
+                            text = L.common.global,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = GeminiBlue,
@@ -664,7 +665,7 @@ private fun InstalledPluginCard(
                     } else {
                         Icon(
                             Icons.Outlined.Delete,
-                            contentDescription = "Delete Plugin",
+                            contentDescription = L.settings.skillsAndPlugins.deletePlugin2,
                             tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                             modifier = Modifier.size(18.dp)
                         )
@@ -725,7 +726,7 @@ private fun GooglePluginsStoreTabView(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Official 'Build with Google' Plugins",
+                text = L.settings.skillsAndPlugins.officialBuildWithGooglePlugins,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -734,7 +735,7 @@ private fun GooglePluginsStoreTabView(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = GeminiBlue)
                 } else {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = L.common.refresh, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -745,7 +746,7 @@ private fun GooglePluginsStoreTabView(
             }
         } else if (catalog.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("No official Google plugins catalog available.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(L.settings.skillsAndPlugins.noOfficialGooglePluginsCatalogAvailable, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         } else {
             val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -851,7 +852,7 @@ private fun GoogleCatalogPluginCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(14.dp))
-                            Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
+                            Text(L.common.installed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
                         }
                     }
                 } else {
@@ -868,7 +869,7 @@ private fun GoogleCatalogPluginCard(
                         } else {
                             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Install", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(L.common.install, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -888,7 +889,7 @@ private fun GoogleCatalogPluginCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Versions:",
+                        text = L.settings.skillsAndPlugins.versions,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
@@ -961,7 +962,7 @@ fun SkillDetailMarkdownDialog(
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = L.common.close)
                     }
                 }
 
@@ -983,7 +984,7 @@ fun SkillDetailMarkdownDialog(
                         }
                     } else {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No markdown content found in SKILL.md", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Text(L.settings.skillsAndPlugins.noMarkdownContentFoundInSkill, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
                     }
                 }

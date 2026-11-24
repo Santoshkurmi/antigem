@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import ai.antigem.i18n.L
 
 /** The row on Settings → Agents that opens [AgentMemoryScreen]. */
 @Composable
@@ -54,9 +55,9 @@ fun AgentMemoryEntryRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
             ) { Icon(Icons.Outlined.Memory, null, tint = MaterialTheme.colorScheme.primary) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Agent memory & history", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.settings.agentMemory.agentMemoryHistory, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "${if (enabled) "On" else "Off"}  ·  Memories and past chats every agent can use",
+                    L.settings.agentMemory.valueMemoriesAndPastChatsEvery(if (enabled) L.settings.agentMemory.on else L.settings.agentMemory.off),
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -99,7 +100,7 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
         val r = MemoryBridgeClient.list()
         ensureActive()
         r.onSuccess { (folder, list) -> root = folder; memories = list; loadError = null }
-            .onFailure { loadError = it.message ?: "Could not reach the bridge." }
+            .onFailure { loadError = it.message ?: L.settings.agentMemory.couldNotReachTheBridge }
         loading = false
     }
 
@@ -114,7 +115,7 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
         val r = MemoryBridgeClient.search(q)
         ensureActive()
         r.onSuccess { results = it; searchError = null }
-            .onFailure { searchError = it.message ?: "Search failed." }
+            .onFailure { searchError = it.message ?: L.settings.agentMemory.searchFailed }
         searching = false
     }
 
@@ -129,20 +130,19 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Agent memory", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Shared by every agent", fontSize = 12.sp, color = muted)
+                        Text(L.settings.agentMemory.agentMemory, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.settings.agentMemory.sharedByEveryAgent, fontSize = 12.sp, color = muted)
                     }
                     Switch(checked = enabled, onCheckedChange = { AgentMemory.setEnabled(it) })
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Agents save short memories in their replies; the chat shows a chip you can undo. A new chat is told the " +
-                        "Always memories and the most relevant others, and the agents can look up past chats.",
+                    L.settings.agentMemory.agentsSaveShortMemoriesInTheir,
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Stored by the bridge next to the agents, so it works in local and server mode.",
+                    L.settings.agentMemory.storedByTheBridgeNextTo,
                     fontSize = 11.5.sp, lineHeight = 15.sp, color = muted
                 )
             }
@@ -151,9 +151,9 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
         if (enabled) {
             // ----- per agent -----
             Spacer(Modifier.height(22.dp))
-            Text("Use with", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(L.settings.agentMemory.useWith, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "A weak model may not follow the memory rules. Turn it off for that agent.",
+                L.settings.agentMemory.aWeakModelMayNotFollow,
                 fontSize = 12.sp, lineHeight = 16.sp, color = muted
             )
             Spacer(Modifier.height(10.dp))
@@ -177,21 +177,21 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Memories listed per chat", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.settings.agentMemory.memoriesListedPerChat, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Memories set to Always are always included in full and do not count.",
+                            L.settings.agentMemory.memoriesSetToAlwaysAreAlways,
                             fontSize = 12.sp, lineHeight = 16.sp, color = muted
                         )
                     }
                     IconButton(onClick = { AgentMemory.setListLimit(listLimit - 1) }, enabled = listLimit > 0) {
-                        Icon(Icons.Outlined.Remove, "Fewer")
+                        Icon(Icons.Outlined.Remove, L.settings.agentMemory.fewer)
                     }
                     Text(
                         "$listLimit", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                         modifier = Modifier.widthIn(min = 26.dp)
                     )
                     IconButton(onClick = { AgentMemory.setListLimit(listLimit + 1) }, enabled = listLimit < AgentMemory.MAX_LIST_LIMIT) {
-                        Icon(Icons.Outlined.Add, "More")
+                        Icon(Icons.Outlined.Add, L.common.more)
                     }
                 }
             }
@@ -201,10 +201,9 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Save chat history", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.settings.agentMemory.saveChatHistory, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "A cleaned copy of every chat (your messages and the replies, no tool output) the agents can read " +
-                                "when you refer to earlier work.",
+                            L.settings.agentMemory.aCleanedCopyOfEveryChat,
                             fontSize = 12.sp, lineHeight = 16.sp, color = muted
                         )
                     }
@@ -222,8 +221,8 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Saved chats", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Read, edit or remove the chat history the agents can look up", fontSize = 12.sp, lineHeight = 16.sp, color = muted)
+                            Text(L.settings.agentMemory.savedChats, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(L.settings.agentMemory.readEditOrRemoveTheChat, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = muted)
                     }
@@ -235,9 +234,9 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
         Spacer(Modifier.height(22.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Memories", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(L.settings.agentMemory.memories, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (enabled) "Tap one to edit it" else "Kept while memory is off; agents do not get them",
+                    if (enabled) L.settings.agentMemory.tapOneToEditIt else L.settings.agentMemory.keptWhileMemoryIsOffAgents,
                     fontSize = 12.sp, color = muted
                 )
             }
@@ -245,15 +244,15 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
             FilledTonalButton(onClick = { editing = MemoryBridgeClient.Memory() }) {
                 Icon(Icons.Outlined.Add, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Add")
+                Text(L.common.add)
             }
         }
         Spacer(Modifier.height(10.dp))
         OutlinedTextField(
             value = query, onValueChange = { query = it }, singleLine = true,
-            placeholder = { Text("Search memories and past chats") },
+            placeholder = { Text(L.settings.agentMemory.searchMemoriesAndPastChats) },
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, "Clear") } }) else null,
+            trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, L.common.clear) } }) else null,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(4.dp))
@@ -264,17 +263,17 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
                 // no memory, no history: past chats only show while memory is on
                 val chats = if (enabled) r.history else emptyList()
                 if (r.memories.isEmpty() && chats.isEmpty() && !searching) {
-                    Text("Nothing found.", fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp))
+                    Text(L.settings.agentMemory.nothingFound, fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp))
                 }
                 if (r.memories.isNotEmpty()) {
-                    GroupHeader("Memories", null)
+                    GroupHeader(L.settings.agentMemory.memories, null)
                     r.memories.forEach { m ->
                         MemoryCard(m, onClick = { editing = m })
                         Spacer(Modifier.height(8.dp))
                     }
                 }
                 if (chats.isNotEmpty()) {
-                    GroupHeader("Past chats", "Open Saved chats to edit or remove them")
+                    GroupHeader(L.settings.agentMemory.pastChats, L.settings.agentMemory.openSavedChatsToEditOr)
                     chats.forEach { h ->
                         HistoryCard(h)
                         Spacer(Modifier.height(8.dp))
@@ -284,11 +283,11 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
         } else {
             loadError?.let { err ->
                 ErrorText(err)
-                TextButton(onClick = { reload++ }, contentPadding = PaddingValues(horizontal = 0.dp)) { Text("Try again") }
+                TextButton(onClick = { reload++ }, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(L.common.tryAgain) }
             }
             if (memories.isEmpty() && !loading && loadError == null) {
                 Text(
-                    "No memories yet. Agents save them as you chat, or add one.",
+                    L.settings.agentMemory.noMemoriesYetAgentsSaveThem,
                     fontSize = 12.5.sp, color = muted, modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
@@ -302,14 +301,14 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
                 .sortedBy { it.first().projectName.lowercase() }
 
             if (always.isNotEmpty()) {
-                GroupHeader("Always", "Every chat gets these in full")
+                GroupHeader(L.common.always, L.settings.agentMemory.everyChatGetsTheseInFull)
                 always.forEach { m ->
                     MemoryCard(m, onClick = { editing = m })
                     Spacer(Modifier.height(8.dp))
                 }
             }
             if (global.isNotEmpty()) {
-                GroupHeader("Global", "Listed in any project when relevant")
+                GroupHeader(L.common.global, L.settings.agentMemory.listedInAnyProjectWhenRelevant)
                 global.forEach { m ->
                     MemoryCard(m, onClick = { editing = m })
                     Spacer(Modifier.height(8.dp))
@@ -317,7 +316,7 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
             }
             projects.forEach { group ->
                 val first = group.first()
-                GroupHeader("Project: ${first.projectName.ifBlank { "unknown" }}", first.project.ifBlank { null })
+                GroupHeader(L.settings.agentMemory.projectValue(first.projectName.ifBlank { "unknown" }), first.project.ifBlank { null })
                 group.forEach { m ->
                     MemoryCard(m, onClick = { editing = m })
                     Spacer(Modifier.height(8.dp))
@@ -326,7 +325,7 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
 
             if (root.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
-                Text("Stored by the bridge in $root", fontSize = 11.5.sp, lineHeight = 15.sp, color = muted)
+                Text(L.settings.agentMemory.storedByTheBridgeInRoot(root), fontSize = 11.5.sp, lineHeight = 15.sp, color = muted)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -373,7 +372,7 @@ private fun MemoryCard(m: MemoryBridgeClient.Memory, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(m.name.ifBlank { "Untitled" }, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(m.name.ifBlank { L.common.untitled }, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (m.description.isNotBlank()) {
                 Text(
                     m.description.trim(), fontSize = 12.5.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -382,8 +381,8 @@ private fun MemoryCard(m: MemoryBridgeClient.Memory, onClick: () -> Unit) {
             }
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                MemoryChip(if (m.isAlways) "Always" else "Passive", highlight = m.isAlways)
-                MemoryChip(if (m.isProject) m.projectName.ifBlank { "One project" } else "All projects", highlight = false)
+                MemoryChip(if (m.isAlways) L.common.always else L.settings.agentMemory.passive, highlight = m.isAlways)
+                MemoryChip(if (m.isProject) m.projectName.ifBlank { L.settings.agentMemory.oneProject } else L.common.allProjects, highlight = false)
             }
             val meta = listOfNotNull(formatDay(m.updated), savedBy(m.agent)).joinToString("  ·  ")
             if (meta.isNotEmpty()) {
@@ -403,7 +402,7 @@ private fun HistoryCard(h: MemoryBridgeClient.HistoryHit) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(h.title.ifBlank { "Untitled chat" }, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(h.title.ifBlank { L.settings.agentMemory.untitledChat }, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val meta = listOfNotNull(
                 h.agent.takeIf { it.isNotBlank() }?.let { agentLabel(it) },
                 h.project.trimEnd('/').substringAfterLast('/').takeIf { it.isNotBlank() },
@@ -451,40 +450,40 @@ private fun MemoryEditor(
         onDismissRequest = { if (!saving) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
         modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 560.dp),
-        title = { Text(if (isNew) "New memory" else "Edit memory", fontWeight = FontWeight.SemiBold) },
+        title = { Text(if (isNew) L.settings.agentMemory.newMemory else L.settings.agentMemory.editMemory, fontWeight = FontWeight.SemiBold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it }, singleLine = true,
-                    label = { Text("Name") }, placeholder = { Text("short-name") },
+                    label = { Text(L.common.name) }, placeholder = { Text(L.settings.agentMemory.shortName) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = description, onValueChange = { description = it }, singleLine = true,
-                    label = { Text("Description") }, placeholder = { Text("One line: what it is about") },
+                    label = { Text(L.settings.agentMemory.description) }, placeholder = { Text(L.settings.agentMemory.oneLineWhatItIsAbout) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = text, onValueChange = { text = it },
-                    label = { Text("What the agents should remember") },
+                    label = { Text(L.settings.agentMemory.whatTheAgentsShouldRemember) },
                     minLines = 6, maxLines = 14,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(14.dp))
-                Text("Mode", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                MemoryOption("Always", "Every chat gets it in full.", always) { always = true }
-                MemoryOption("Passive", "Listed when relevant; the agent reads it when it needs it.", !always) { always = false }
+                Text(L.settings.agentMemory.mode, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                MemoryOption(L.common.always, L.settings.agentMemory.everyChatGetsItInFull, always) { always = true }
+                MemoryOption(L.settings.agentMemory.passive, L.settings.agentMemory.listedWhenRelevantTheAgentReads, !always) { always = false }
                 Spacer(Modifier.height(10.dp))
-                Text("Scope", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                MemoryOption("All projects", "Any chat can get it.", !oneProject) { oneProject = false }
-                MemoryOption("One project", "Only chats in that project folder.", oneProject) { oneProject = true }
+                Text(L.settings.agentMemory.scope, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                MemoryOption(L.common.allProjects, L.settings.agentMemory.anyChatCanGetIt, !oneProject) { oneProject = false }
+                MemoryOption(L.settings.agentMemory.oneProject, L.settings.agentMemory.onlyChatsInThatProjectFolder, oneProject) { oneProject = true }
                 if (oneProject) {
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
                         value = project, onValueChange = { project = it }, singleLine = true,
-                        label = { Text("Project folder") }, placeholder = { Text("/path/to/project") },
+                        label = { Text(L.settings.agentMemory.projectFolder) }, placeholder = { Text("/path/to/project") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (knownProjects.isNotEmpty()) {
@@ -530,21 +529,21 @@ private fun MemoryEditor(
                             AgentMemory.changed()
                             onDone()
                         }.onFailure {
-                            error = it.message ?: "Could not save the memory."
+                            error = it.message ?: L.settings.agentMemory.couldNotSaveTheMemory
                             saving = false
                         }
                     }
                 }
-            ) { Text(if (saving) "Saving…" else "Save") }
+            ) { Text(if (saving) L.common.saving else L.common.save) }
         },
         dismissButton = {
             Row {
                 if (!isNew) {
                     TextButton(onClick = { confirmDelete = true }, enabled = !saving) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                        Text(L.common.delete, color = MaterialTheme.colorScheme.error)
                     }
                 }
-                TextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") }
+                TextButton(onClick = onDismiss, enabled = !saving) { Text(L.common.cancel) }
             }
         }
     )
@@ -553,7 +552,7 @@ private fun MemoryEditor(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete \"${memory.name.ifBlank { "Untitled" }}\"?") },
-            text = { Text("Agents will no longer get it. Chats that already got it keep what they were told.") },
+            text = { Text(L.settings.agentMemory.agentsWillNoLongerGetIt) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -564,13 +563,13 @@ private fun MemoryEditor(
                             AgentMemory.changed()
                             onDone()
                         }.onFailure {
-                            error = it.message ?: "Could not delete the memory."
+                            error = it.message ?: L.settings.agentMemory.couldNotDeleteTheMemory
                             saving = false
                         }
                     }
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -599,8 +598,8 @@ private fun agentLabel(agent: String): String =
 
 private fun savedBy(agent: String): String? = when {
     agent.isBlank() -> null
-    agent.equals("user", ignoreCase = true) -> "Added by you"
-    else -> "Saved by ${agentLabel(agent)}"
+    agent.equals("user", ignoreCase = true) -> L.settings.agentMemory.addedByYou
+    else -> L.settings.agentMemory.savedByAgentlabel(agentLabel(agent))
 }
 
 /** "18 Nov 2026", or null when the bridge sent no time. */

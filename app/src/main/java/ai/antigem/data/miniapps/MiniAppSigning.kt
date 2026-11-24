@@ -28,6 +28,7 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
+import ai.antigem.i18n.L
 
 /**
  * Signed mini app packages (.agapp), like signed APKs. Format v1 (the PC tool `agapp.mjs` writes the same):
@@ -266,7 +267,7 @@ object MiniAppSigning {
             val manifestCode = runCatching { versionCode(manifest) }.getOrElse { throw MiniAppError("DataError", it.message ?: "Invalid version_code") }
             if (digest.has("versionCode") && digest.optLong("versionCode", -1) != manifestCode) throw MiniAppError("SecurityError", "The signed versionCode doesn't match the manifest")
             return Verified(id, digest.optString("version"), manifestCode,
-                cert.optString("developer").ifBlank { "Unknown developer" }, cert.optString("publicKey"), fingerprint(spki), manifest, files)
+                cert.optString("developer").ifBlank { L.miniapps.miniAppSigning.unknownDeveloper }, cert.optString("publicKey"), fingerprint(spki), manifest, files)
         }
     }
 }

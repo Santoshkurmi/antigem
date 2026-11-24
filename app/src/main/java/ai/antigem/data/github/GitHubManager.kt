@@ -22,6 +22,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * GitHub through the GitHub CLI (`gh`) of the terminal, or of the server in server mode: installs it (with pkg),
@@ -280,7 +281,7 @@ object GitHubManager {
         if (out.lineSequence().none { it.startsWith("@@GIT") }) {
             // the shell itself didn't run (no SSH, no terminal environment…)
             _state.update { it.copy(ghInstalled = false, ghVersion = null, signedIn = false, account = null) }
-            report(out.ifBlank { "Couldn't run commands" }.take(400), true)
+            report(out.ifBlank { L.github.manager.couldntRunCommands }.take(400), true)
             return emptyList()
         }
         val ghInstalled = value("NOGH") == null && value("VER") != null
@@ -343,7 +344,7 @@ object GitHubManager {
             val email = s.gitUserEmail ?: account.email ?: account.noreplyEmail
             if (setGitIdentityNow(name, email)) {
                 _state.update { it.copy(gitUserName = name, gitUserEmail = email) }
-                done += "commits are signed as $name <$email>"
+                done += L.github.manager.commitsAreSignedAsNameEmail(name, email)
             }
         }
         return done
@@ -353,7 +354,7 @@ object GitHubManager {
         val r = shell("gh api user", 30)
         val account = runCatching { parseAccount(JSONObject(r.output.substring(r.output.indexOf('{')))) }.getOrNull()
         if (r.exitCode != 0 || account == null) {
-            _state.update { it.copy(accountError = r.output.lineSequence().lastOrNull { l -> l.isNotBlank() } ?: "Couldn't load the account (exit ${r.exitCode})") }
+            _state.update { it.copy(accountError = r.output.lineSequence().lastOrNull { l -> l.isNotBlank() } ?: L.github.manager.couldntLoadTheAccountExitExitcode(r.exitCode)) }
             return
         }
         _state.update { it.copy(account = account, accountError = null) }
@@ -394,7 +395,7 @@ object GitHubManager {
             refreshNow()
             val ok = _state.value.ghInstalled == true
             _state.update {
-                it.copy(installing = false, installError = if (ok) null else "Install failed (exit ${result.exitCode}). Check the log above, or run \"pkg install gh\" in the terminal.")
+                it.copy(installing = false, installError = if (ok) null else L.github.manager.installFailedExitExitcodeCheckThe(result.exitCode))
             }
             if (ok) appendInstallLog("✓ ${_state.value.ghVersion ?: "gh installed"}")
         }
@@ -435,7 +436,7 @@ object GitHubManager {
             if (r.exitCode != 0) {
                 val reason = lines.lastOrNull { it.isNotBlank() && !it.contains("clipboard") && !it.contains("one-time code") }
                     ?: "gh exited with code ${r.exitCode}"
-                _state.update { it.copy(login = Login.Failed(if (r.exitCode == 124) "The code expired. Try again." else reason)) }
+                _state.update { it.copy(login = Login.Failed(if (r.exitCode == 124) L.github.manager.theCodeExpiredTryAgain else reason)) }
                 return@launch
             }
             finishLogin()
@@ -473,8 +474,8 @@ object GitHubManager {
         val notes = refreshNow().filter { !it.startsWith("git now uses") }
         val account = _state.value.account
         _state.update { it.copy(login = Login.Idle) }
-        if (setup.exitCode != 0) report("Signed in, but git setup failed: ${setup.output.take(300)}", true)
-        else report("Signed in as ${account?.login ?: "GitHub user"}. git now uses this account" + notes.joinToString("") { "; $it" } + ".")
+        if (setup.exitCode != 0) report(L.github.manager.signedInButGitSetupFailed(setup.output.take(300)), true)
+        else report(L.github.manager.signedInAsLoginGitNow(account?.login ?: L.github.manager.githubUser, notes.joinToString("") { "; $it" }))
         loadRepos()
     }
 
@@ -483,12 +484,12 @@ object GitHubManager {
     fun logout() {
         val login = _state.value.account?.login
         scope.launch {
-            _state.update { it.copy(busy = "Signing out…") }
+            _state.update { it.copy(busy = L.github.manager.signingOut) }
             val r = shell("gh auth logout -h $HOST" + (login?.let { " -u ${q(it)}" } ?: ""), 30)
             _state.update { it.copy(busy = null, account = null, repos = emptyList(), reposLoaded = false) }
             refreshNow()
-            if (_state.value.signedIn) report(r.output.take(300).ifBlank { "Sign out failed" }, true)
-            else report("Signed out of GitHub.")
+            if (_state.value.signedIn) report(r.output.take(300).ifBlank { L.github.manager.signOutFailed }, true)
+            else report(L.github.manager.signedOutOfGithub)
         }
     }
 
@@ -496,19 +497,19 @@ object GitHubManager {
 
     /** Makes git use gh's GitHub login for https remotes (clone, pull, push). */
     fun setupGit() = scope.launch {
-        _state.update { it.copy(busy = "Setting up git…") }
+        _state.update { it.copy(busy = L.github.manager.settingUpGit) }
         val r = shell("gh auth setup-git -h $HOST", 30)
         _state.update { it.copy(busy = null) }
         refreshNow()
-        if (r.exitCode == 0) report("git now uses your GitHub login.") else report(r.output.take(300).ifBlank { "gh auth setup-git failed" }, true)
+        if (r.exitCode == 0) report(L.github.manager.gitNowUsesYourGithubLogin) else report(r.output.take(300).ifBlank { "gh auth setup-git failed" }, true)
     }
 
     fun setGitIdentity(name: String, email: String) = scope.launch {
-        _state.update { it.copy(busy = "Saving git identity…") }
+        _state.update { it.copy(busy = L.github.manager.savingGitIdentity) }
         val ok = setGitIdentityNow(name.trim(), email.trim())
         _state.update { it.copy(busy = null) }
         refreshNow()
-        if (ok) report("Saved. New commits use ${name.trim()} <${email.trim()}>.") else report("Couldn't save the git identity.", true)
+        if (ok) report(L.github.manager.savedNewCommitsUseNameEmail(name.trim(), email.trim())) else report(L.github.manager.couldntSaveTheGitIdentity, true)
     }
 
     private suspend fun setGitIdentityNow(name: String, email: String): Boolean {
@@ -526,12 +527,12 @@ object GitHubManager {
             val jq = ".[] | {full_name, name, owner: .owner.login, description, private, fork, archived, html_url, clone_url, pushed_at, stargazers_count, language}"
             val r = shell("gh api --paginate ${q("user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member")} --jq ${q(jq)}", 120)
             if (r.exitCode != 0) {
-                _state.update { it.copy(reposLoading = false, reposError = r.output.lineSequence().lastOrNull { l -> l.isNotBlank() } ?: "Couldn't load repositories (exit ${r.exitCode})") }
+                _state.update { it.copy(reposLoading = false, reposError = r.output.lineSequence().lastOrNull { l -> l.isNotBlank() } ?: L.github.manager.couldntLoadRepositoriesExitExitcode(r.exitCode)) }
                 return@launch
             }
             val repos = runCatching { parseRepos(r.output) }.getOrElse {
                 Log.w(TAG, "Bad repo list: ${it.message}")
-                _state.update { s -> s.copy(reposLoading = false, reposError = "Couldn't read the repository list") }
+                _state.update { s -> s.copy(reposLoading = false, reposError = L.github.manager.couldntReadTheRepositoryList) }
                 return@launch
             }
             _state.update { it.copy(repos = repos, reposLoading = false, reposLoaded = true) }

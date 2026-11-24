@@ -25,6 +25,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.SubcomposeAsyncImage
 import ai.antigem.data.files.*
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 private const val MAX_EDITOR_TEXT = 20L * 1024 * 1024
 private const val MAX_EDITOR_BINARY = 2L * 1024 * 1024
@@ -84,7 +85,7 @@ fun IncomingShareDialog(
             if (single != null) {
                 FileExplorerDialog(
                     stateKey = "import",
-                    title = "Save shared file",
+                    title = L.files.incomingShare.saveSharedFile,
                     saveFileName = single.name,
                     onSave = { folder, name -> save(folder, name) },
                     showClipboard = false,
@@ -93,8 +94,8 @@ fun IncomingShareDialog(
             } else {
                 FileExplorerDialog(
                     stateKey = "import",
-                    title = "Save ${items.size} shared files to",
-                    confirmLabel = "Save here",
+                    title = L.files.incomingShare.saveItemscountSharedFilesTo(items.size),
+                    confirmLabel = L.files.incomingShare.saveHere,
                     onConfirmFolder = { folder -> save(folder, null) },
                     showClipboard = false,
                     onDismiss = { step = ShareStep.Choose }
@@ -108,22 +109,22 @@ fun IncomingShareDialog(
             AlertDialog(
                 onDismissRequest = { step = ShareStep.Choose },
                 icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error) },
-                title = { Text(if (tooBig) "Too large for the editor" else "This may not work", fontWeight = FontWeight.SemiBold) },
+                title = { Text(if (tooBig) L.files.incomingShare.tooLargeForTheEditor else L.files.incomingShare.thisMayNotWork, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Text(
-                        if (tooBig) "\"${item.name}\" is not a text file and is ${FileKinds.formatSize(item.size)}. Save it to a folder instead, then open it with the right app from Files."
-                        else "\"${item.name}\" is ${item.kind.label.lowercase()}, not text. The code editor may show garbled characters, and saving it from there can damage the file.",
+                        if (tooBig) L.files.incomingShare.nameIsNotATextFile(item.name, FileKinds.formatSize(item.size))
+                        else L.files.incomingShare.nameIsLabelNotTextThe(item.name, item.kind.label.lowercase()),
                         fontSize = 14.sp
                     )
                 },
                 confirmButton = {
-                    if (tooBig) Button(onClick = { step = ShareStep.PickFolder }) { Text("Save to folder") }
-                    else TextButton(onClick = { onOpenInEditor(item); onDismiss() }) { Text("Open anyway", color = MaterialTheme.colorScheme.error) }
+                    if (tooBig) Button(onClick = { step = ShareStep.PickFolder }) { Text(L.files.incomingShare.saveToFolder) }
+                    else TextButton(onClick = { onOpenInEditor(item); onDismiss() }) { Text(L.files.incomingShare.openAnyway, color = MaterialTheme.colorScheme.error) }
                 },
                 dismissButton = {
                     Row {
-                        TextButton(onClick = { step = ShareStep.Choose }) { Text("Back") }
-                        if (!tooBig) Button(onClick = { step = ShareStep.PickFolder }) { Text("Save instead") }
+                        TextButton(onClick = { step = ShareStep.Choose }) { Text(L.common.back) }
+                        if (!tooBig) Button(onClick = { step = ShareStep.PickFolder }) { Text(L.files.incomingShare.saveInstead) }
                     }
                 }
             )
@@ -132,7 +133,7 @@ fun IncomingShareDialog(
         is ShareStep.Saving -> AlertDialog(
             onDismissRequest = {},
             icon = { Icon(Icons.Outlined.Download, null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text(if (s.total > 1) "Saving ${s.index + 1} of ${s.total}" else "Saving", fontWeight = FontWeight.SemiBold) },
+            title = { Text(if (s.total > 1) L.files.incomingShare.savingValueOfTotal(s.index + 1, s.total) else L.files.incomingShare.saving, fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(s.name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
@@ -157,9 +158,9 @@ fun IncomingShareDialog(
                 title = {
                     Text(
                         when {
-                            s.paths.isEmpty() -> "Nothing was saved"
-                            s.failed.isEmpty() -> if (s.paths.size == 1) "Saved" else "Saved ${s.paths.size} files"
-                            else -> "Saved ${s.paths.size}, ${s.failed.size} failed"
+                            s.paths.isEmpty() -> L.files.incomingShare.nothingWasSaved
+                            s.failed.isEmpty() -> if (s.paths.size == 1) L.files.incomingShare.saved else L.files.incomingShare.savedPathscountFiles(s.paths.size)
+                            else -> L.files.incomingShare.savedPathscountFailedcountFailed(s.paths.size, s.failed.size)
                         },
                         fontWeight = FontWeight.SemiBold
                     )
@@ -167,7 +168,7 @@ fun IncomingShareDialog(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (savedOne != null) Text(savedOne, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        else if (s.paths.isNotEmpty()) Text("In ${s.folder}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        else if (s.paths.isNotEmpty()) Text(L.files.incomingShare.inFolder(s.folder), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         s.failed.take(4).forEach { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error) }
                     }
                 },
@@ -176,17 +177,17 @@ fun IncomingShareDialog(
                         Button(onClick = {
                             onOpenSavedInIde(savedOne, savedOne.substringAfterLast('/'), single?.size ?: 0)
                             onDismiss()
-                        }) { Text("Open in IDE") }
+                        }) { Text(L.files.incomingShare.openInIde) }
                     } else if (s.paths.isNotEmpty()) {
-                        Button(onClick = { onShowInFiles(s.folder); onDismiss() }) { Text("Show in Files") }
+                        Button(onClick = { onShowInFiles(s.folder); onDismiss() }) { Text(L.files.incomingShare.showInFiles) }
                     } else {
-                        Button(onClick = { step = ShareStep.Choose }) { Text("Try again") }
+                        Button(onClick = { step = ShareStep.Choose }) { Text(L.common.tryAgain) }
                     }
                 },
                 dismissButton = {
                     Row {
-                        if (textual) TextButton(onClick = { onShowInFiles(s.folder); onDismiss() }) { Text("Show in Files") }
-                        TextButton(onClick = onDismiss) { Text("Done") }
+                        if (textual) TextButton(onClick = { onShowInFiles(s.folder); onDismiss() }) { Text(L.files.incomingShare.showInFiles) }
+                        TextButton(onClick = onDismiss) { Text(L.common.done) }
                     }
                 }
             )
@@ -200,11 +201,11 @@ fun IncomingShareDialog(
             ) {
                 Column(Modifier.padding(20.dp)) {
                     Text(
-                        if (single != null) "File received" else "${items.size} files received",
+                        if (single != null) L.files.incomingShare.fileReceived else L.files.incomingShare.itemscountFilesReceived(items.size),
                         fontSize = 21.sp, fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        if (single != null) "What would you like to do with it?" else "${FileKinds.formatSize(totalSize)} in total. What would you like to do?",
+                        if (single != null) L.files.incomingShare.whatWouldYouLikeToDo else L.files.incomingShare.formatsizeInTotalWhatWouldYou(FileKinds.formatSize(totalSize)),
                         fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(14.dp))
@@ -217,28 +218,28 @@ fun IncomingShareDialog(
                         when {
                             k.isTextual -> {
                                 if (single.size > MAX_EDITOR_TEXT) {
-                                    ShareOption(Icons.Outlined.Code, "Open in code editor", "Too large for the editor (${FileKinds.formatSize(single.size)})", enabled = false) {}
+                                    ShareOption(Icons.Outlined.Code, L.files.incomingShare.openInCodeEditor, "Too large for the editor (${FileKinds.formatSize(single.size)})", enabled = false) {}
                                 } else {
-                                    ShareOption(Icons.Outlined.Code, "Open in code editor", "Edit now, save it anywhere later", recommended = true) { onOpenInEditor(single); onDismiss() }
+                                    ShareOption(Icons.Outlined.Code, L.files.incomingShare.openInCodeEditor, L.files.incomingShare.editNowSaveItAnywhereLater, recommended = true) { onOpenInEditor(single); onDismiss() }
                                 }
                                 if (k == FileKind.MARKDOWN && single.uri != null) {
-                                    ShareOption(Icons.Outlined.Visibility, "Preview", "Rendered Markdown") { onPreviewMarkdown(single); onDismiss() }
+                                    ShareOption(Icons.Outlined.Visibility, L.common.preview, L.files.incomingShare.renderedMarkdown) { onPreviewMarkdown(single); onDismiss() }
                                 }
                             }
-                            k == FileKind.IMAGE -> ShareOption(Icons.Outlined.Image, "View in IDE", "Image viewer with zoom") {
+                            k == FileKind.IMAGE -> ShareOption(Icons.Outlined.Image, L.files.incomingShare.viewInIde, L.files.incomingShare.imageViewerWithZoom) {
                                 if (single.size > MAX_EDITOR_TEXT) step = ShareStep.ConfirmBinary else { onOpenInEditor(single); onDismiss() }
                             }
-                            else -> ShareOption(Icons.Outlined.Code, "Open in code editor", "Not a text file: may not work", warn = true) { step = ShareStep.ConfirmBinary }
+                            else -> ShareOption(Icons.Outlined.Code, L.files.incomingShare.openInCodeEditor, L.files.incomingShare.notATextFileMayNot, warn = true) { step = ShareStep.ConfirmBinary }
                         }
                     }
                     ShareOption(
                         Icons.Outlined.DriveFolderUpload,
-                        if (single != null) "Save to a folder…" else "Save all to a folder…",
-                        "Pick any folder, like a project or Downloads",
+                        if (single != null) L.files.incomingShare.saveToAFolder else L.files.incomingShare.saveAllToAFolder,
+                        L.files.incomingShare.pickAnyFolderLikeAProject,
                         recommended = single == null || !single.kind.isTextual
                     ) { step = ShareStep.PickFolder }
                     Spacer(Modifier.height(4.dp))
-                    TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Cancel") }
+                    TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text(L.common.cancel) }
                 }
             }
         }

@@ -21,7 +21,7 @@ class TerminalActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         showTermuxIconInRecents()
-        ai.antigem.data.service.AntiGemService.start(this)
+        ai.antigem.data.service.AntiGemService.start(this, fromForeground = true)
 
         setContent {
             val initialThemeMode = remember { authPreferences.getThemeModeSync() }

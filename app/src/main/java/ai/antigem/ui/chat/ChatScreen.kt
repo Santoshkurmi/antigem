@@ -127,6 +127,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import ai.antigem.ui.cloud.cloudProjectsSection
+import ai.antigem.i18n.L
 
 enum class ScrollDirection { UP, DOWN }
 
@@ -442,13 +443,13 @@ fun ChatScreen(
     val voiceCall by ai.antigem.data.voice.AgyVoiceCall.state.collectAsState()
     val agyPickedModel by viewModel.agyBackend.selectedModelId.collectAsState()
     val beginVoiceCall: () -> Unit = {
-        val title = currentConv?.title?.takeIf { it.isNotBlank() && it != "New Chat" } ?: "Voice chat"
+        val title = currentConv?.title?.takeIf { it.isNotBlank() && it != "New Chat" } ?: L.chat.screen.voiceChat
         ai.antigem.data.voice.AgyVoiceCall.start(context, title) { viewModel.agyBackend.prepareVoiceCall() }
     }
     val voiceCallPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) beginVoiceCall()
         else ai.antigem.ui.components.AppToastHelper.showToast(
-            "Voice calls need microphone access.", ai.antigem.ui.components.ChatToastType.ERROR
+            L.chat.screen.voiceCallsNeedMicrophoneAccess, ai.antigem.ui.components.ChatToastType.ERROR
         )
     }
     val callWithMicPermission: () -> Unit = {
@@ -464,7 +465,7 @@ fun ChatScreen(
         when {
             voiceCall.active -> ai.antigem.data.voice.AgyVoiceCall.setMinimized(false)
             !systemConnectionState.canSend -> ai.antigem.ui.components.AppToastHelper.showToast(
-                "Start the server to call Antigravity.", ai.antigem.ui.components.ChatToastType.ERROR
+                L.chat.screen.startTheServerToCallAntigravity, ai.antigem.ui.components.ChatToastType.ERROR
             )
             // agy refuses voice calls for cloud chats (its /voice/ws answers 404 for them)
             currentConv?.cloudProjectId != null -> ai.antigem.ui.components.AppToastHelper.showToast(
@@ -477,7 +478,7 @@ fun ChatScreen(
     if (showVoicePicker) {
         ai.antigem.ui.voice.AgyVoicePickerDialog(
             initialVoice = ai.antigem.data.voice.AgyVoicePreferences.voice.value,
-            actionLabel = { "Call with $it" },
+            actionLabel = { L.chat.screen.callWithValue(it) },
             onChoose = { name ->
                 ai.antigem.data.voice.AgyVoicePreferences.setVoice(name)
                 ai.antigem.data.voice.AgyVoicePreferences.setPicked()
@@ -504,7 +505,7 @@ fun ChatScreen(
             when {
                 ai.antigem.data.voice.AgyVoiceCall.state.value.active -> ai.antigem.data.voice.AgyVoiceCall.setMinimized(false)
                 !serverUp -> ai.antigem.ui.components.AppToastHelper.showToast(
-                    "Start the server to call Antigravity.", ai.antigem.ui.components.ChatToastType.ERROR
+                    L.chat.screen.startTheServerToCallAntigravity, ai.antigem.ui.components.ChatToastType.ERROR
                 )
                 else -> {
                     viewModel.openLastCallChat()
@@ -582,11 +583,11 @@ fun ChatScreen(
     val serverRestarting = serverStatus is ai.antigem.data.local.LocalServerStatus.Starting ||
         serverStatus is ai.antigem.data.local.LocalServerStatus.Stopping
     val restartLocalServer = {
-        ai.antigem.ui.components.AppToastHelper.showToast(if (AuthPreferences.currentRemoteMode) "Restarting the server over SSH…" else "Restarting the local server…", ai.antigem.ui.components.ChatToastType.INFO)
+        ai.antigem.ui.components.AppToastHelper.showToast(if (AuthPreferences.currentRemoteMode) L.chat.screen.restartingTheServerOverSsh else L.chat.screen.restartingTheLocalServer, ai.antigem.ui.components.ChatToastType.INFO)
         ai.antigem.data.local.LocalServerManager.restartServer(context)
     }
     val recheckClaude = {
-        ai.antigem.ui.components.AppToastHelper.showToast("Checking Claude Code…", ai.antigem.ui.components.ChatToastType.INFO)
+        ai.antigem.ui.components.AppToastHelper.showToast(L.chat.screen.checkingClaudeCode, ai.antigem.ui.components.ChatToastType.INFO)
         viewModel.claudeAccount.refreshStatus()
     }
     val agyCliInfo by ai.antigem.data.remote.BridgeInfo.agyCli.collectAsState()
@@ -608,7 +609,7 @@ fun ChatScreen(
             onSignIn = { viewModel.loginToAgyHub(force = true) },
             onCheckAuth = { viewModel.checkAgyAuthStatus(userInitiated = true) },
             onRetry = {
-                ai.antigem.ui.components.AppToastHelper.showToast("Reconnecting to Antigravity…", ai.antigem.ui.components.ChatToastType.INFO)
+                ai.antigem.ui.components.AppToastHelper.showToast(L.chat.screen.reconnectingToAntigravity, ai.antigem.ui.components.ChatToastType.INFO)
                 viewModel.retryConnections()
             },
             onRestartServer = restartLocalServer,
@@ -1200,9 +1201,9 @@ fun ChatScreen(
         claudeModelList.find { it.id == selectedModelId } ?: AiModel(
             id = selectedModelId.ifBlank { "default" },
             displayName = when {
-                claudeModelsRefreshing -> "Loading models…"
-                claudeModelsError != null -> "Models unavailable"
-                else -> "Choose model"
+                claudeModelsRefreshing -> L.chat.screen.loadingModels
+                claudeModelsError != null -> L.chat.screen.modelsUnavailable
+                else -> L.chat.screen.chooseModel
             },
             family = ai.antigem.domain.model.ModelFamily.CLAUDE
         )
@@ -1210,20 +1211,20 @@ fun ChatScreen(
         enabledModels.find { it.id == selectedModelId } ?: AiModel(
             id = selectedModelId.ifBlank { "default" },
             displayName = when {
-                isRefreshingModels -> "Loading models…"
-                openCodeModelsError != null -> "No models"
+                isRefreshingModels -> L.chat.screen.loadingModels
+                openCodeModelsError != null -> L.chat.screen.noModels
                 selectedModelId.isNotBlank() -> selectedModelId.substringAfter('/')
-                else -> "Choose model"
+                else -> L.chat.screen.chooseModel
             }
         )
     } else if (isCodexChat) {
         enabledModels.find { it.id == selectedModelId } ?: AiModel(
             id = selectedModelId.ifBlank { "default" },
             displayName = when {
-                isRefreshingModels -> "Loading models…"
-                codexModelsError != null -> "No models"
+                isRefreshingModels -> L.chat.screen.loadingModels
+                codexModelsError != null -> L.chat.screen.noModels
                 selectedModelId.isNotBlank() -> selectedModelId
-                else -> "Choose model"
+                else -> L.chat.screen.chooseModel
             },
             family = ai.antigem.domain.model.ModelFamily.OTHER
         )
@@ -1360,7 +1361,7 @@ fun ChatScreen(
                         scope.launch { drawerState.close() }
                     }
                 } else {
-                    android.widget.Toast.makeText(context, "This conversation doesn't exist", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, L.chat.screen.thisConversationDoesntExist, android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         )
@@ -1523,7 +1524,7 @@ fun ChatScreen(
                 onDismissRequest = { viewModel.clearPendingLoginUrl() },
                 title = {
                     Text(
-                        text = "Sign In with Browser",
+                        text = L.chat.screen.signInWithBrowser,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp
                     )
@@ -1531,24 +1532,21 @@ fun ChatScreen(
                 text = {
                     Column {
                         Text(
-                            text = "Antigravity requires Google authentication to access Gemini models.",
+                            text = L.chat.screen.antigravityRequiresGoogleAuthentication,
                             fontSize = 13.5.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         if (!remoteSignIn) {
                             Text(
-                                text = "Do you want to open your browser to log in now?",
+                                text = L.chat.screen.doYouWantToOpenYour,
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         } else {
                             Text(
-                                text = "1. Open the browser and sign in.\n" +
-                                    "2. Your browser then shows an error page for localhost. That is expected: the sign-in " +
-                                    "finishes on the server, not on this phone.\n" +
-                                    "3. Copy that page's address from the address bar and paste it below.",
+                                text = L.chat.screen.n1OpenTheBrowserAndSign,
                                 fontSize = 13.sp,
                                 lineHeight = 18.sp,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -1578,12 +1576,12 @@ fun ChatScreen(
                             Button(
                                 onClick = {
                                     callbackBusy = true
-                                    callbackStatus = "Sending to the server…"
+                                    callbackStatus = L.chat.screen.sendingToTheServer
                                     viewModel.forwardLoginCallback(pastedCallback) { result ->
                                         callbackBusy = false
                                         result.fold(
                                             {
-                                                callbackStatus = "✓ Sent. Finishing sign-in…"
+                                                callbackStatus = L.chat.screen.sentFinishingSignIn
                                                 viewModel.clearPendingLoginUrl()
                                             },
                                             { callbackStatus = "✗ ${it.message}" }
@@ -1593,7 +1591,7 @@ fun ChatScreen(
                                 enabled = pastedCallback.isNotBlank() && !callbackBusy,
                                 colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                             ) {
-                                Text("Finish", fontWeight = FontWeight.SemiBold)
+                                Text(L.chat.screen.finish, fontWeight = FontWeight.SemiBold)
                             }
                         }
                         Button(
@@ -1611,13 +1609,13 @@ fun ChatScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                         ) {
-                            Text("Open Browser", fontWeight = FontWeight.SemiBold)
+                            Text(L.chat.screen.openBrowser, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { viewModel.clearPendingLoginUrl() }) {
-                        Text("Cancel")
+                        Text(L.common.cancel)
                     }
                 }
             )
@@ -1628,7 +1626,7 @@ fun ChatScreen(
                 onDismissRequest = { viewModel.clearAgyLoginIssue() },
                 title = {
                     Text(
-                        text = if (verifyUrl != null) "Account Verification Required" else "Can't sign in to Antigravity",
+                        text = if (verifyUrl != null) L.chat.screen.accountVerificationRequired else L.chat.screen.cantSignInToAntigravity,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp
                     )
@@ -1656,21 +1654,21 @@ fun ChatScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                         ) {
-                            Text("Verify Account", fontWeight = FontWeight.SemiBold)
+                            Text(L.chat.screen.verifyAccount, fontWeight = FontWeight.SemiBold)
                         }
                     } else {
                         Button(
                             onClick = { viewModel.clearAgyLoginIssue() },
                             colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                         ) {
-                            Text("OK", fontWeight = FontWeight.SemiBold)
+                            Text(L.common.ok, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 },
                 dismissButton = if (verifyUrl != null) {
                     {
                         TextButton(onClick = { viewModel.clearAgyLoginIssue() }) {
-                            Text("Cancel")
+                            Text(L.common.cancel)
                         }
                     }
                 } else null
@@ -1711,7 +1709,7 @@ fun ChatScreen(
                             val activeTitle = currentConv?.title?.takeIf {
                                 it.isNotBlank() && it != "New Chat" && it != "Conversation"
                             }
-                            listTitle ?: activeTitle ?: currentConv?.title?.takeIf { it.isNotBlank() } ?: "Antigravity Chat"
+                            listTitle ?: activeTitle ?: currentConv?.title?.takeIf { it.isNotBlank() } ?: L.chat.screen.antigravityChat
                         }
 
                         val isChatStarted = messages.isNotEmpty()
@@ -1719,12 +1717,12 @@ fun ChatScreen(
                             val convUri = currentConv?.workspaceUri
                             if (currentConv?.isCloud == true) {
                                 // an Antigravity cloud chat: its cloud project
-                                "☁ " + (ai.antigem.data.agent.agy.AgyCloud.projectName(currentConv?.cloudProjectId) ?: "Cloud")
+                                "☁ " + (ai.antigem.data.agent.agy.AgyCloud.projectName(currentConv?.cloudProjectId) ?: L.chat.screen.cloud)
                             } else if (!convUri.isNullOrBlank()) {
                                 val clean = convUri.removePrefix("file://").trimEnd('/')
-                                File(clean).name.ifBlank { "Workspace" }
+                                File(clean).name.ifBlank { L.common.workspace }
                             } else {
-                                if (isChatStarted) "Outside" else "Select Project"
+                                if (isChatStarted) L.chat.screen.outside else L.chat.screen.selectProject
                             }
                         }
                         val showStatusDot = isLocalToolsInstalled || AuthPreferences.currentRemoteMode ||
@@ -1764,7 +1762,7 @@ fun ChatScreen(
                             }
                             DropdownMenu(expanded = titleMenuOpen, onDismissRequest = { titleMenuOpen = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Add to home screen") },
+                                    text = { Text(L.common.addToHomeScreen) },
                                     leadingIcon = { Icon(Icons.Outlined.AppShortcut, null, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         titleMenuOpen = false
@@ -1772,7 +1770,7 @@ fun ChatScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Add as a widget") },
+                                    text = { Text(L.chat.screen.addAsAWidget) },
                                     leadingIcon = { Icon(Icons.Outlined.Widgets, null, modifier = Modifier.size(18.dp)) },
                                     onClick = {
                                         titleMenuOpen = false
@@ -1784,7 +1782,7 @@ fun ChatScreen(
                                                 )
                                             } else {
                                                 ai.antigem.ui.components.AppToastHelper.showToast(
-                                                    "Long-press your home screen → Widgets → AntiGem → One chat",
+                                                    L.chat.screen.longPressYourHomeScreenWidgets,
                                                     ai.antigem.ui.components.ChatToastType.INFO
                                                 )
                                             }
@@ -1838,7 +1836,7 @@ fun ChatScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Rounded.LightMode,
-                                                contentDescription = "Screen stays on",
+                                                contentDescription = L.chat.screen.screenStaysOn,
                                                 tint = ai.antigem.theme.AppColors.warning,
                                                 modifier = Modifier.size(13.dp)
                                             )
@@ -1860,7 +1858,7 @@ fun ChatScreen(
                                                         )
                                                         Spacer(modifier = Modifier.width(6.dp))
                                                         Text(
-                                                            text = "Screen stays on",
+                                                            text = L.chat.screen.screenStaysOn,
                                                             fontSize = 14.sp,
                                                             fontWeight = FontWeight.SemiBold,
                                                             color = MaterialTheme.colorScheme.onSurface
@@ -1868,7 +1866,7 @@ fun ChatScreen(
                                                     }
                                                     Spacer(modifier = Modifier.height(6.dp))
                                                     Text(
-                                                        text = "The screen won't turn off by itself while:",
+                                                        text = L.chat.screen.theScreenWontTurnOffBy,
                                                         fontSize = 12.5.sp,
                                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                                     )
@@ -1882,7 +1880,7 @@ fun ChatScreen(
                                                     }
                                                     Spacer(modifier = Modifier.height(6.dp))
                                                     Text(
-                                                        text = "It turns off normally again once this is done.",
+                                                        text = L.chat.screen.itTurnsOffNormallyAgainOnce,
                                                         fontSize = 12.sp,
                                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                                                     )
@@ -1903,7 +1901,7 @@ fun ChatScreen(
                                     if (!isChatStarted) {
                                         Icon(
                                             imageVector = Icons.Default.ArrowDropDown,
-                                            contentDescription = "Choose project",
+                                            contentDescription = L.chat.screen.chooseProject,
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
@@ -1988,13 +1986,13 @@ fun ChatScreen(
                                             else -> Icons.Outlined.AddComment
                                         },
                                         contentDescription = when (id) {
-                                            "ide" -> "Open IDE"
-                                            "terminal" -> "Open Terminal"
-                                            "browser" -> "Open Browser"
-                                            "notes" -> "Open Notes"
-                                            "files" -> "Open Files"
-                                            "run" -> if (anyRunGoing) "Run (a command is running)" else "Open Run panel"
-                                            else -> "New chat"
+                                            "ide" -> L.chat.screen.openIde
+                                            "terminal" -> L.chat.screen.openTerminal
+                                            "browser" -> L.chat.screen.openBrowser
+                                            "notes" -> L.chat.screen.openNotes
+                                            "files" -> L.chat.screen.openFiles
+                                            "run" -> if (anyRunGoing) L.chat.screen.runACommandIsRunning else L.chat.screen.openRunPanel
+                                            else -> L.chat.screen.newChat
                                         },
                                         tint = if (id == "run" && anyRunGoing) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                         modifier = Modifier.size(19.dp)
@@ -2008,7 +2006,7 @@ fun ChatScreen(
                             IconButton(onClick = navigateBackConversation) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
+                                    contentDescription = L.common.back,
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -2016,7 +2014,7 @@ fun ChatScreen(
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(
                                     imageVector = Icons.Default.Menu,
-                                    contentDescription = "Open Drawer",
+                                    contentDescription = L.chat.screen.openDrawer,
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -2028,14 +2026,14 @@ fun ChatScreen(
                             IconButton(onClick = onMinimizeWindow) {
                                 Icon(
                                     imageVector = Icons.Default.Remove,
-                                    contentDescription = "Minimize to Bubble",
+                                    contentDescription = L.chat.screen.minimizeToBubble,
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                                 )
                             }
                             IconButton(onClick = onOpenFullScreen) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                    contentDescription = "Open Full Screen",
+                                    contentDescription = L.chat.screen.openFullScreen,
                                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                 )
                             }
@@ -2044,7 +2042,7 @@ fun ChatScreen(
                             IconButton(onClick = { showChatTelemetryDialog = true }) {
                                 Icon(
                                     imageVector = Icons.Outlined.Analytics,
-                                    contentDescription = "Chat Telemetry & Tokens",
+                                    contentDescription = L.chat.screen.chatTelemetryTokens,
                                     tint = ClaudeTerracotta
                                 )
                             }
@@ -2162,7 +2160,7 @@ fun ChatScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Unable to Load Chat",
+                                text = L.chat.screen.unableToLoadChat,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -2170,7 +2168,7 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             SelectionContainer {
                                 Text(
-                                    text = conversationError ?: "Failed to load conversation messages.",
+                                    text = conversationError ?: L.chat.screen.failedToLoadConversationMessages,
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
                                     textAlign = TextAlign.Center,
@@ -2195,7 +2193,7 @@ fun ChatScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Retry", fontSize = 13.5.sp)
+                                Text(L.common.retry, fontSize = 13.5.sp)
                             }
                         }
                     } else if (isExistingChat) {
@@ -2245,46 +2243,46 @@ fun ChatScreen(
                                     ai.antigem.ui.agents.AgentSetupPrompt(
                                         agent = ai.antigem.domain.model.AgentKind.OPENCODE,
                                         title = when (openCodeState) {
-                                            ai.antigem.data.agent.opencode.OpenCodeState.CHECKING -> "Starting OpenCode…"
-                                            ai.antigem.data.agent.opencode.OpenCodeState.NOT_INSTALLED -> "OpenCode is not installed"
-                                            else -> "OpenCode is unavailable"
+                                            ai.antigem.data.agent.opencode.OpenCodeState.CHECKING -> L.chat.screen.startingOpencode
+                                            ai.antigem.data.agent.opencode.OpenCodeState.NOT_INSTALLED -> L.chat.screen.opencodeIsNotInstalled
+                                            else -> L.chat.screen.opencodeIsUnavailable
                                         },
                                         message = if (openCodeState == ai.antigem.data.agent.opencode.OpenCodeState.CHECKING)
-                                            "Waiting for the server to come up. This takes a few seconds after the app opens."
+                                            L.chat.screen.waitingForTheServerToCome
                                         else openCodeEntry?.detail ?: openCodeState.label,
                                         statusColor = openCodeEntry?.color,
                                         actionLabel = openCodeEntry?.action?.label,
                                         onAction = { openCodeEntry?.action?.onClick?.invoke() },
-                                        secondaryLabel = if (openCodeState == ai.antigem.data.agent.opencode.OpenCodeState.CHECKING) null else "Server logs",
+                                        secondaryLabel = if (openCodeState == ai.antigem.data.agent.opencode.OpenCodeState.CHECKING) null else L.common.serverLogs,
                                         onSecondary = { showLocalServerOutputDialog = true }
                                     )
                                 } else if (isCodexChat && codexState != ai.antigem.data.agent.codex.CodexState.READY) {
                                     ai.antigem.ui.agents.AgentSetupPrompt(
                                         agent = ai.antigem.domain.model.AgentKind.CODEX,
                                         title = when (codexState) {
-                                            ai.antigem.data.agent.codex.CodexState.CHECKING -> "Starting Codex…"
-                                            ai.antigem.data.agent.codex.CodexState.NOT_INSTALLED -> "Codex is not installed"
-                                            ai.antigem.data.agent.codex.CodexState.SIGNED_OUT -> "Sign in to Codex"
-                                            else -> "Codex is unavailable"
+                                            ai.antigem.data.agent.codex.CodexState.CHECKING -> L.chat.screen.startingCodex
+                                            ai.antigem.data.agent.codex.CodexState.NOT_INSTALLED -> L.chat.screen.codexIsNotInstalled
+                                            ai.antigem.data.agent.codex.CodexState.SIGNED_OUT -> L.chat.screen.signInToCodex
+                                            else -> L.chat.screen.codexIsUnavailable
                                         },
                                         message = if (codexState == ai.antigem.data.agent.codex.CodexState.CHECKING)
-                                            "Waiting for the server to come up. This takes a few seconds after the app opens."
+                                            L.chat.screen.waitingForTheServerToCome
                                         else codexEntry?.detail ?: codexState.label,
                                         statusColor = codexEntry?.color,
                                         actionLabel = codexEntry?.action?.label,
                                         onAction = { codexEntry?.action?.onClick?.invoke() },
-                                        secondaryLabel = if (codexState == ai.antigem.data.agent.codex.CodexState.CHECKING) null else "Server logs",
+                                        secondaryLabel = if (codexState == ai.antigem.data.agent.codex.CodexState.CHECKING) null else L.common.serverLogs,
                                         onSecondary = { showLocalServerOutputDialog = true }
                                     )
                                 } else if (isAgyChat && agyNotInstalled) {
                                     ai.antigem.ui.agents.AgentSetupPrompt(
                                         agent = ai.antigem.domain.model.AgentKind.AGY,
-                                        title = "Antigravity is not installed",
-                                        message = agyEntry?.detail ?: "Antigravity (agy) is not installed yet.",
+                                        title = L.chat.screen.antigravityIsNotInstalled,
+                                        message = agyEntry?.detail ?: L.chat.screen.antigravityAgyIsNotInstalledYet,
                                         statusColor = agyEntry?.color,
                                         actionLabel = agyEntry?.action?.label,
                                         onAction = { agyEntry?.action?.onClick?.invoke() },
-                                        secondaryLabel = "Server logs",
+                                        secondaryLabel = L.common.serverLogs,
                                         onSecondary = { showLocalServerOutputDialog = true }
                                     )
                                 } else when (if (isClaudeChat || isOpenCodeChat || isCodexChat) null else systemConnectionState.status) {
@@ -2304,7 +2302,7 @@ fun ChatScreen(
                                         }
                                     } else {
                                         Text(
-                                            text = "How can I help you today?",
+                                            text = L.chat.screen.howCanIHelpYouToday,
                                             fontSize = 22.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface,
@@ -2312,7 +2310,7 @@ fun ChatScreen(
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            text = "Ask a question, brainstorm ideas, or start coding",
+                                            text = L.chat.screen.askAQuestionBrainstormIdeasOr,
                                             fontSize = 14.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                                             textAlign = TextAlign.Center
@@ -2573,7 +2571,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     imageVector = if (showUpArrow) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = if (showUpArrow) "Jump to Top" else "Jump to Bottom",
+                                    contentDescription = if (showUpArrow) L.chat.screen.jumpToTop else L.chat.screen.jumpToBottom,
                                     tint = ClaudeTerracotta,
                                     modifier = Modifier.size(22.dp)
                                 )
@@ -2827,7 +2825,7 @@ fun ChatScreen(
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (isReconnecting) "Connecting to Antigravity..." else "Antigravity Disconnected",
+                                    text = if (isReconnecting) L.chat.screen.connectingToAntigravity else L.chat.screen.antigravityDisconnected,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isReconnecting) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onErrorContainer,
@@ -2848,7 +2846,7 @@ fun ChatScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Reconnect",
+                                        text = L.common.reconnect,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.error
@@ -2980,7 +2978,7 @@ fun ChatScreen(
                         onProject = { showCloudProjects = true },
                         onPreview = {
                             if (messages.isEmpty()) ai.antigem.ui.components.AppToastHelper.showToast(
-                                "Send the cloud agent a message first: its VM starts with the chat.", ai.antigem.ui.components.ChatToastType.INFO
+                                L.chat.screen.sendTheCloudAgentAMessage, ai.antigem.ui.components.ChatToastType.INFO
                             ) else showCloudPreview = true
                         },
                         onRunCommand = { showCloudRunCommand = true }
@@ -2998,19 +2996,19 @@ fun ChatScreen(
                         else if (isOpenCodeChat) !openCodeState.isBlocking else if (isClaudeChat) !claudeState.isBlocking else systemConnectionState.canSend,
                     isAuth = if (isCodexChat) codexState != ai.antigem.data.agent.codex.CodexState.SIGNED_OUT else if (isOpenCodeChat) true else if (isClaudeChat) claudeChatState != ai.antigem.data.agent.claude.ClaudeStatus.SIGNED_OUT && claudeChatState != ai.antigem.data.agent.claude.ClaudeStatus.SIGNING_IN else systemConnectionState.isAuth,
                     offlineMessage = if (isCodexChat) when (codexState) {
-                        ai.antigem.data.agent.codex.CodexState.NOT_INSTALLED -> "Codex is not installed on the server. See Settings → Codex."
-                        ai.antigem.data.agent.codex.CodexState.DISABLED, ai.antigem.data.agent.codex.CodexState.OUTDATED -> "Restart the server to use Codex."
-                        else -> "The server is offline. Start it to send messages."
+                        ai.antigem.data.agent.codex.CodexState.NOT_INSTALLED -> L.chat.screen.codexIsNotInstalledOnThe
+                        ai.antigem.data.agent.codex.CodexState.DISABLED, ai.antigem.data.agent.codex.CodexState.OUTDATED -> L.chat.screen.restartTheServerToUseCodex
+                        else -> L.chat.screen.theServerIsOfflineStartIt
                     } else if (isOpenCodeChat) when (openCodeState) {
-                        ai.antigem.data.agent.opencode.OpenCodeState.NOT_INSTALLED -> "OpenCode is not installed on the server. See Settings → OpenCode."
-                        ai.antigem.data.agent.opencode.OpenCodeState.DISABLED, ai.antigem.data.agent.opencode.OpenCodeState.OUTDATED -> "Restart the server to use OpenCode."
-                        else -> "The server is offline. Start it to send messages."
+                        ai.antigem.data.agent.opencode.OpenCodeState.NOT_INSTALLED -> L.chat.screen.opencodeIsNotInstalledOnThe
+                        ai.antigem.data.agent.opencode.OpenCodeState.DISABLED, ai.antigem.data.agent.opencode.OpenCodeState.OUTDATED -> L.chat.screen.restartTheServerToUseOpencode
+                        else -> L.chat.screen.theServerIsOfflineStartIt
                     } else if (isClaudeChat) when (claudeState) {
-                        ai.antigem.data.agent.claude.ClaudeStatus.NOT_INSTALLED -> "Claude Code is not installed. Set it up in Settings."
-                        ai.antigem.data.agent.claude.ClaudeStatus.BRIDGE_OUTDATED -> "Restart the local server to use Claude Code."
-                        else -> "The local server is offline. Start it to send messages."
-                    } else if (agyNotInstalled) "Antigravity (agy) is not installed. Install it in Settings → Antigravity → Account & CLI."
-                    else "Server is offline. Start the server to send messages.",
+                        ai.antigem.data.agent.claude.ClaudeStatus.NOT_INSTALLED -> L.chat.screen.claudeCodeIsNotInstalledSet
+                        ai.antigem.data.agent.claude.ClaudeStatus.BRIDGE_OUTDATED -> L.chat.screen.restartTheLocalServerToUse
+                        else -> L.chat.screen.theLocalServerIsOfflineStart
+                    } else if (agyNotInstalled) L.chat.screen.antigravityAgyIsNotInstalledInstall
+                    else L.chat.screen.serverIsOfflineStartTheServer,
                     selectedModel = currentModel,
                     quota = currentQuota,
                     thinkingPreference = thinkingPref,
@@ -3042,7 +3040,7 @@ fun ChatScreen(
                         if (unreadable.isNotEmpty()) {
                             // Claude models cannot read audio or video: say so instead of sending a file it would reject
                             ai.antigem.ui.components.AppToastHelper.showToast(
-                                "Claude can't read audio or video files. Remove them, or tap the mic to dictate instead.",
+                                L.chat.screen.claudeCantReadAudioOrVideo,
                                 ai.antigem.ui.components.ChatToastType.ERROR
                             )
                             return@ChatInputBar
@@ -3111,7 +3109,7 @@ fun ChatScreen(
                     val url = ai.antigem.data.agent.agy.CloudPreviewServer.urlFor(previewConvId, port)
                     context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                 }.onFailure {
-                    ai.antigem.ui.components.AppToastHelper.showToast("Couldn't open the browser: ${it.message}", ai.antigem.ui.components.ChatToastType.ERROR)
+                    ai.antigem.ui.components.AppToastHelper.showToast(L.chat.screen.couldntOpenTheBrowserMessage(it.message), ai.antigem.ui.components.ChatToastType.ERROR)
                 }
             },
             onDismiss = { showCloudPreview = false }
@@ -3476,7 +3474,7 @@ fun ChatScreen(
             containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Text(
-                    text = if (action.type == MessageActionType.EDIT) "Edit Message?" else "Regenerate Response?",
+                    text = if (action.type == MessageActionType.EDIT) L.chat.screen.editMessage else L.chat.screen.regenerateResponse,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -3486,13 +3484,13 @@ fun ChatScreen(
                     Text(
                         text = when {
                             (isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT ->
-                                "This chat goes back to right before this message, so you can change it and send again. Everything after it is removed from the chat. Files stay as they are."
+                                L.chat.screen.thisChatGoesBackToRight
                             isClaudeChat || isOpenCodeChat || isCodexChat ->
-                                "This chat goes back to right before this reply and ${if (isOpenCodeChat) "OpenCode" else if (isCodexChat) "Codex" else "Claude"} answers the same message again. The current reply is removed from the chat."
+                                L.chat.screen.thisChatGoesBackToRight2(if (isOpenCodeChat) "OpenCode" else if (isCodexChat) L.chat.screen.codex else L.chat.screen.claude)
                             action.type == MessageActionType.EDIT ->
-                                "Editing this message will delete the subsequent response so you can edit and send a fresh query. Do you want to continue?"
+                                L.chat.screen.editingThisMessageWillDeleteThe
                             else ->
-                                "Retrying will delete the current response and regenerate a fresh answer. Do you want to continue?"
+                                L.chat.screen.retryingWillDeleteTheCurrentResponse
                         },
                         fontSize = 14.5.sp,
                         lineHeight = 21.sp,
@@ -3514,7 +3512,7 @@ fun ChatScreen(
                         ) {
                             Icon(androidx.compose.material.icons.Icons.Outlined.History, null, tint = ai.antigem.theme.AppColors.info, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Put files back too? Use this message's restore point", fontSize = 13.5.sp, color = ai.antigem.theme.AppColors.info)
+                            Text(L.chat.screen.putFilesBackTooUseThis, fontSize = 13.5.sp, color = ai.antigem.theme.AppColors.info)
                         }
                     }
                 }
@@ -3540,9 +3538,9 @@ fun ChatScreen(
                 ) {
                     Text(
                         text = when {
-                            (isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT -> "Edit"
-                            action.type == MessageActionType.EDIT -> "Edit & Delete"
-                            else -> "Regenerate"
+                            (isClaudeChat || isOpenCodeChat || isCodexChat) && action.type == MessageActionType.EDIT -> L.common.edit
+                            action.type == MessageActionType.EDIT -> L.chat.screen.editDelete
+                            else -> L.chat.screen.regenerate
                         },
                         color = ClaudeTerracotta,
                         fontWeight = FontWeight.Bold
@@ -3551,7 +3549,7 @@ fun ChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingMessageAction = null }) {
-                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(text = L.common.cancel, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
         )
@@ -3573,7 +3571,7 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Stop Generation?",
+                        text = L.chat.screen.stopGeneration,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.5.sp
                     )
@@ -3581,7 +3579,7 @@ fun ChatScreen(
             },
             text = {
                 Text(
-                    text = "Do you want to stop the model from outputting? The current generation will be stopped immediately.",
+                    text = L.chat.screen.doYouWantToStopThe,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -3597,7 +3595,7 @@ fun ChatScreen(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "Stop Output",
+                        text = L.chat.screen.stopOutput,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onError
                     )
@@ -3605,7 +3603,7 @@ fun ChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showStopConfirmDialog = false }) {
-                    Text(text = "Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(text = L.common.cancel, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
             }
         )
@@ -3629,7 +3627,7 @@ fun ChatScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Command Terminated",
+                        text = L.chat.screen.commandTerminated,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp
                     )
@@ -3638,7 +3636,7 @@ fun ChatScreen(
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "You stopped the running command:",
+                        text = L.chat.screen.youStoppedTheRunningCommand,
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -3659,7 +3657,7 @@ fun ChatScreen(
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Explain why or give new instructions to AI (optional):",
+                        text = L.chat.screen.explainWhyOrGiveNewInstructions,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -3667,7 +3665,7 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = userFeedback,
                         onValueChange = { userFeedback = it },
-                        placeholder = { Text("e.g. It was taking too long, please use grep or find a faster way...", fontSize = 12.5.sp) },
+                        placeholder = { Text(L.chat.screen.eGItWasTakingToo, fontSize = 12.5.sp) },
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 3,
@@ -3683,14 +3681,14 @@ fun ChatScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(text = "Send to AI & Proceed", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                    Text(text = L.chat.screen.sendToAiProceed, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { viewModel.dismissTerminatedToolDialog() }
                 ) {
-                    Text(text = "Stop Turn Here", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.5.sp)
+                    Text(text = L.chat.screen.stopTurnHere, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), fontSize = 12.5.sp)
                 }
             }
         )
@@ -3825,12 +3823,12 @@ fun ChatScreen(
     if (showAttachFromFiles) {
         ai.antigem.ui.files.FileExplorerDialog(
             stateKey = "chat_attach",
-            title = "Attach files",
+            title = L.chat.screen.attachFiles,
             onPickFiles = { picked ->
                 showAttachFromFiles = false
                 viewModel.addExplorerFiles(picked)
             },
-            pickFilesLabel = "Attach",
+            pickFilesLabel = L.chat.screen.attach,
             showClipboard = false,
             onDismiss = { showAttachFromFiles = false }
         )
@@ -3984,8 +3982,8 @@ fun ChatScreen(
     if (showWorkspaceFolderBrowserDialog) {
         ai.antigem.ui.files.FileExplorerDialog(
             stateKey = "chat_workspace",
-            title = "Choose the chat's project folder",
-            confirmLabel = "Use this folder",
+            title = L.chat.screen.chooseTheChatsProjectFolder,
+            confirmLabel = L.chat.screen.useThisFolder,
             onConfirmFolder = { folder ->
                 showWorkspaceFolderBrowserDialog = false
                 val selectedProj = ProjectItem(File(folder).name.ifBlank { folder }, folder)
@@ -4200,7 +4198,7 @@ fun ChatToastBanner(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
-                    contentDescription = "Dismiss",
+                    contentDescription = L.common.dismiss,
                     tint = textColor.copy(alpha = 0.6f),
                     modifier = Modifier.size(16.dp)
                 )

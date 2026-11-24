@@ -75,6 +75,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
+import ai.antigem.i18n.L
 
 /*
  * "Gemmy": a small cartoon buddy that floats over every screen of the app.
@@ -109,19 +110,19 @@ private const val SLEEP_AFTER_S = 50f // falls asleep after this long untouched
 private val MascotInk = Color(0xFF2E2A6B)
 private val MascotText = Color(0xFF1B1840)
 
-private val HELLO_LINES = listOf("Hi! 👋", "Hey there! 😊", "Hello, friend! ✨")
-private val TAP_LINES = listOf(
-    "Hehe, that tickles! 😆", "Need a hand? ✨", "I'm Gemmy! 💜", "Let's build something cool 🚀",
-    "Bugs? Where?! 🐛", "You're doing great! 🌟", "Coffee break? ☕", "Boop! 👉"
+private val HELLO_LINES get() = listOf("Hi! 👋", L.components.floatingMascot.heyThere, L.components.floatingMascot.helloFriend)
+private val TAP_LINES get() = listOf(
+    L.components.floatingMascot.heheThatTickles, L.components.floatingMascot.needAHand, L.components.floatingMascot.imGemmy, L.components.floatingMascot.letsBuildSomethingCool,
+    L.components.floatingMascot.bugsWhere, L.components.floatingMascot.youreDoingGreat, L.components.floatingMascot.coffeeBreak, "Boop! 👉"
 )
-private val GRAB_LINES = listOf("Woah! 😲", "Where are we going?", "Up we go! 🎈", "Careful with me!")
-private val FLING_LINES = listOf("Wheeee! 🚀", "Yaaay! 🎢", "Woohoo!")
-private val OUCH_LINES = listOf("Ouch! 💫", "Oof!", "Bonk! 🤕")
-private val DIZZY_LINES = listOf("Woah… dizzy… 😵‍💫", "The room is spinning… 💫")
-private val ANGRY_LINES = listOf("Hey! Stop poking! 😤", "Grr… that's enough! 😠")
-private val WAKE_LINES = listOf("Huh?! I'm awake! 😳", "Five more minutes… 😪", "Wha— oh, hi! 👀")
-private val WORK_LINES = listOf("On it! 🛠️", "Thinking… 🤔", "Agent is cooking 🍳")
-private val DONE_LINES = listOf("Done! ✨", "Ta-da! 🎉", "All finished! 🙌")
+private val GRAB_LINES get() = listOf("Woah! 😲", L.components.floatingMascot.whereAreWeGoing, L.components.floatingMascot.upWeGo, L.components.floatingMascot.carefulWithMe)
+private val FLING_LINES get() = listOf("Wheeee! 🚀", "Yaaay! 🎢", L.components.floatingMascot.woohoo)
+private val OUCH_LINES get() = listOf("Ouch! 💫", L.components.floatingMascot.oof, "Bonk! 🤕")
+private val DIZZY_LINES get() = listOf(L.components.floatingMascot.woahDizzy, L.components.floatingMascot.theRoomIsSpinning)
+private val ANGRY_LINES get() = listOf(L.components.floatingMascot.heyStopPoking, L.components.floatingMascot.grrThatsEnough)
+private val WAKE_LINES get() = listOf(L.components.floatingMascot.huhImAwake, L.components.floatingMascot.fiveMoreMinutes, L.components.floatingMascot.whaOhHi)
+private val WORK_LINES get() = listOf(L.components.floatingMascot.onIt, "Thinking… 🤔", L.components.floatingMascot.agentIsCooking)
+private val DONE_LINES get() = listOf("Done! ✨", L.components.floatingMascot.taDa, L.components.floatingMascot.allFinished)
 
 private enum class Mood { NORMAL, HAPPY, LOVE, SURPRISED, DIZZY, SLEEP, ANGRY, THINKING }
 
@@ -369,9 +370,9 @@ private fun MascotMenu(onDance: () -> Unit, onNap: () -> Unit, onHide: () -> Uni
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        MascotMenuChip("💃", "Dance", onDance)
-        MascotMenuChip("😴", "Nap", onNap)
-        MascotMenuChip("👋", "Hide", onHide)
+        MascotMenuChip("💃", L.components.floatingMascot.dance, onDance)
+        MascotMenuChip("😴", L.components.floatingMascot.nap, onNap)
+        MascotMenuChip("👋", L.common.hide, onHide)
     }
 }
 
@@ -1128,7 +1129,7 @@ private class MascotSim(private val d: Float) {
         poke()
         touched()
         startTrick(Trick.DANCE)
-        say("Let's dance! 💃", 1.8f)
+        say(L.components.floatingMascot.letsDance, 1.8f)
     }
 
     fun nap() {
@@ -1138,14 +1139,14 @@ private class MascotSim(private val d: Float) {
         sleeping = true
         nextFx = time + 0.4f
         lastInteraction = time
-        say("Nap time… 😴", 1.6f)
+        say(L.components.floatingMascot.napTime, 1.6f)
     }
 
     fun hide() {
         poke()
         touched()
         startTrick(Trick.WAVE)
-        say("Bye bye! 👋", 1.2f)
+        say(L.components.floatingMascot.byeBye, 1.2f)
         hideRequested = true
     }
 }

@@ -95,17 +95,18 @@ import ai.antigem.ui.components.ChatToastType
 import ai.antigem.ui.components.OpenCodeAccent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /** Subscriptions people sign in with most, shown as quick tiles (id → tile title and hint). */
-private val QUICK = listOf(
-    Triple("openai", "ChatGPT / OpenAI", "ChatGPT Plus / Pro, or an API key"),
-    Triple("github-copilot", "GitHub Copilot", "Your Copilot subscription"),
-    Triple("claude-agent", "Claude subscription", "Uses Claude Code's login"),
-    Triple("xai", "SuperGrok / xAI", "Grok subscription or API key"),
-    Triple("opencode", "OpenCode Zen", "OpenCode Console account"),
-    Triple("opencode-go", "OpenCode Go", "OpenCode's plan · key"),
-    Triple("openrouter", "OpenRouter", "Hundreds of models · key"),
-    Triple("anthropic", "Anthropic API", "Claude models · key")
+private val QUICK get() = listOf(
+    Triple("openai", "ChatGPT / OpenAI", L.opencode.providers.chatgptPlusProOrAnApi),
+    Triple("github-copilot", L.opencode.providers.githubCopilot, L.opencode.providers.yourCopilotSubscription),
+    Triple("claude-agent", L.opencode.providers.claudeSubscription, L.opencode.providers.usesClaudeCodesLogin),
+    Triple("xai", "SuperGrok / xAI", L.opencode.providers.grokSubscriptionOrApiKey),
+    Triple("opencode", L.opencode.providers.opencodeZen, L.opencode.providers.opencodeConsoleAccount),
+    Triple("opencode-go", L.opencode.providers.opencodeGo, L.opencode.providers.opencodesPlanKey),
+    Triple("openrouter", "OpenRouter", L.opencode.providers.hundredsOfModelsKey),
+    Triple("anthropic", L.opencode.providers.anthropicApi, L.opencode.providers.claudeModelsKey)
 )
 
 private fun toast(msg: String, ok: Boolean = true) = AppToastHelper.showToast(msg, if (ok) ChatToastType.SUCCESS else ChatToastType.ERROR)
@@ -118,11 +119,11 @@ private fun methodIcon(m: OpenCodeAuth.Method): ImageVector = when {
 }
 
 private fun methodHint(m: OpenCodeAuth.Method, remote: Boolean): String = when {
-    m.isKey -> "Paste the provider's API key" + (m.envNames.firstOrNull()?.let { " (or set $it on the server)" } ?: "")
-    m.isExternal -> "Uses credentials already set up on the server"
-    m.looksLikeDeviceCode -> "Enter a short code on the provider's site · works from any device"
-    remote -> "Sign in in your browser, then paste its address back here"
-    else -> "Sign in in your browser on this phone"
+    m.isKey -> L.opencode.providers.pasteTheProvidersApiKeyValue((m.envNames.firstOrNull()?.let { L.opencode.providers.orSetValueOnTheServer(it) } ?: ""))
+    m.isExternal -> L.opencode.providers.usesCredentialsAlreadySetUpOn
+    m.looksLikeDeviceCode -> L.opencode.providers.enterAShortCodeOnThe
+    remote -> L.opencode.providers.signInInYourBrowserThen
+    else -> L.opencode.providers.signInInYourBrowserOn
 }
 
 /** Settings → OpenCode → Providers: connected accounts, quick tiles, every provider, and signing in. */
@@ -150,28 +151,27 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
     ClaudeCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Your providers", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(L.opencode.providers.yourProviders, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    "Sign in with a subscription (ChatGPT, GitHub Copilot, SuperGrok, Claude…) or an API key. " +
-                        "Their models then show in the model picker; ${models.size} are available now.",
+                    L.opencode.providers.signInWithASubscriptionChatgpt(models.size),
                     fontSize = 11.5.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
             if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = OpenCodeAccent)
-            else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+            else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
         }
         error?.let { Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp)) }
 
         val connected = integrations.filter { it.connected }
         if (connected.isEmpty() && error == null && !loading) {
-            Text("Nothing connected yet: OpenCode's free models work without an account.", fontSize = 12.sp,
+            Text(L.opencode.providers.nothingConnectedYetOpencodesFreeModels, fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 8.dp))
         }
         connected.forEach { integ ->
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(integ.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, modifier = Modifier.weight(1f))
-                TextButton(onClick = { signingIn = integ }) { Text("Add account", fontSize = 12.sp) }
+                TextButton(onClick = { signingIn = integ }) { Text(L.opencode.providers.addAccount, fontSize = 12.sp) }
             }
             val creds = credentials.filter { it.integrationId == integ.id }
             integ.connections.forEach { conn ->
@@ -185,8 +185,8 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
                         Text(conn.label, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             listOfNotNull(
-                                when (cred?.type ?: conn.method) { "key" -> "API key"; "oauth" -> "Signed in"; else -> cred?.type ?: conn.method },
-                                if (active && integ.connections.size > 1) "in use" else null
+                                when (cred?.type ?: conn.method) { "key" -> L.common.apiKey; "oauth" -> L.common.signedIn; else -> cred?.type ?: conn.method },
+                                if (active && integ.connections.size > 1) L.opencode.providers.inUse else null
                             ).joinToString(" · "),
                             fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -195,21 +195,21 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
                         TextButton(onClick = {
                             scope.launch {
                                 backend.client.activateCredential(conn.id)
-                                    .onSuccess { toast("Now using ${conn.label}"); backend.refreshModels() }
-                                    .onFailure { toast("Could not switch: ${it.message}", ok = false) }
+                                    .onSuccess { toast(L.opencode.providers.nowUsingLabel(conn.label)); backend.refreshModels() }
+                                    .onFailure { toast(L.opencode.providers.couldNotSwitchMessage(it.message), ok = false) }
                                 reload()
                             }
-                        }) { Text("Use this", fontSize = 12.sp) }
+                        }) { Text(L.opencode.providers.useThis, fontSize = 12.sp) }
                     }
                     if (conn.id.startsWith("cred")) {
                         TextButton(onClick = {
                             scope.launch {
                                 backend.client.removeCredential(conn.id)
                                     .onSuccess { toast("${integ.name} disconnected"); backend.refreshModels() }
-                                    .onFailure { toast("Could not disconnect: ${it.message}", ok = false) }
+                                    .onFailure { toast(L.opencode.providers.couldNotDisconnectMessage(it.message), ok = false) }
                                 reload()
                             }
-                        }) { Text("Disconnect", fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+                        }) { Text(L.common.disconnect, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
                     }
                 }
             }
@@ -219,7 +219,7 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
     ModelsCard(backend)
 
     ClaudeCard {
-        Text("Connect", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text(L.common.connect, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Spacer(Modifier.height(8.dp))
         val tiles = QUICK.filter { byId.containsKey(it.first) }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -229,7 +229,7 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
                         val integ = byId.getValue(id)
                         ai.antigem.ui.settings.McpPresetTile(
                             name = title, subtitle = hint, icon = Icons.AutoMirrored.Outlined.Login, accent = OpenCodeAccent,
-                            added = integ.connected, addedLabel = "Connected · tap to add another",
+                            added = integ.connected, addedLabel = L.opencode.providers.connectedTapToAddAnother,
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         ) { signingIn = integ }
                     }
@@ -246,7 +246,7 @@ fun OpenCodeProvidersPage(backend: OpenCodeChatBackend) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Outlined.Search, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
-            Text("All ${integrations.size.takeIf { it > 0 } ?: ""} providers")
+            Text(L.opencode.providers.allValueProviders(integrations.size.takeIf { it > 0 } ?: ""))
         }
     }
 
@@ -282,9 +282,9 @@ private fun ModelsCard(backend: OpenCodeChatBackend) {
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
 
     ClaudeCard {
-        Text("Models", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text(L.common.models, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Text(
-            "Turn providers or single models off to keep them out of the model picker. Tap a provider to see its models.",
+            L.opencode.providers.turnProvidersOrSingleModelsOff,
             fontSize = 11.5.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
         groups.forEach { (providerId, models) ->
@@ -304,7 +304,7 @@ private fun ModelsCard(backend: OpenCodeChatBackend) {
                 Column(Modifier.weight(1f)) {
                     Text(models.first().baseName, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        if (providerOn) "$onCount of ${models.size} models on" else "Off · ${models.size} models",
+                        if (providerOn) L.opencode.providers.oncountOfModelscountModelsOn(onCount, models.size) else L.opencode.providers.offModelscountModels(models.size),
                         fontSize = 10.5.sp, color = dim
                     )
                 }
@@ -314,14 +314,14 @@ private fun ModelsCard(backend: OpenCodeChatBackend) {
                 var query by remember(providerId) { mutableStateOf("") }
                 Column(Modifier.padding(start = 24.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { backend.setProviderModelsEnabled(providerId, true) }, enabled = providerOn) { Text("All on", fontSize = 12.sp) }
-                        TextButton(onClick = { backend.setProviderModelsEnabled(providerId, false) }, enabled = providerOn) { Text("All off", fontSize = 12.sp) }
+                        TextButton(onClick = { backend.setProviderModelsEnabled(providerId, true) }, enabled = providerOn) { Text(L.opencode.providers.allOn, fontSize = 12.sp) }
+                        TextButton(onClick = { backend.setProviderModelsEnabled(providerId, false) }, enabled = providerOn) { Text(L.opencode.providers.allOff, fontSize = 12.sp) }
                     }
                     if (models.size > 12) {
                         OutlinedTextField(
                             value = query, onValueChange = { query = it }, singleLine = true, shape = RoundedCornerShape(12.dp),
                             leadingIcon = { Icon(Icons.Outlined.Search, null, Modifier.size(18.dp)) },
-                            placeholder = { Text("Search ${models.size} models", fontSize = 13.sp) },
+                            placeholder = { Text(L.opencode.providers.searchModelscountModels(models.size), fontSize = 13.sp) },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                         )
                     }
@@ -361,11 +361,11 @@ private fun AllProvidersSheet(list: List<OpenCodeAuth.Integration>, onDismiss: (
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
-            Text("Connect a provider", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(L.opencode.providers.connectAProvider, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true, shape = RoundedCornerShape(14.dp),
-                leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Search ${list.size} providers") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text(L.opencode.providers.searchListcountProviders(list.size)) },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
@@ -380,12 +380,12 @@ private fun AllProvidersSheet(list: List<OpenCodeAuth.Integration>, onDismiss: (
                             Text(integ.name, fontSize = 14.sp)
                             Text(
                                 integ.signInMethods.joinToString(" · ") { m ->
-                                    when { m.isKey -> "key"; m.isExternal -> "server login"; else -> "sign in" }
+                                    when { m.isKey -> "key"; m.isExternal -> L.opencode.providers.serverLogin; else -> L.opencode.providers.signIn }
                                 }.let { s -> s.split(" · ").distinct().joinToString(" · ") },
                                 fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                         }
-                        if (integ.connected) Text("connected", fontSize = 11.sp, color = OpenCodeAccent)
+                        if (integ.connected) Text(L.opencode.providers.connected, fontSize = 11.sp, color = OpenCodeAccent)
                     }
                 }
             }
@@ -439,7 +439,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                 else -> Unit
             }
             if (a.expiresAt != null && System.currentTimeMillis() > a.expiresAt) {
-                failed = "The sign-in expired. Start it again."
+                failed = L.opencode.providers.theSignInExpiredStartIt
                 attempt = null
             }
         }
@@ -457,7 +457,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(integ.name, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text(if (integ.connected) "Add another account" else "Connect your account", fontSize = 12.sp, color = OpenCodeAccent)
+                    Text(if (integ.connected) L.opencode.providers.addAnotherAccount else L.opencode.providers.connectYourAccount, fontSize = 12.sp, color = OpenCodeAccent)
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -466,7 +466,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
             when {
                 // ---- pick a method
                 m == null -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (methods.isEmpty()) Text("This provider has no way to sign in from the app.", fontSize = 13.sp)
+                    if (methods.isEmpty()) Text(L.opencode.providers.thisProviderHasNoWayTo, fontSize = 13.sp)
                     methods.forEach { opt ->
                         Surface(
                             onClick = { method = opt; failed = null },
@@ -496,7 +496,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                     Text(OpenCodeAuth.methodTitle(m), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Spacer(Modifier.height(10.dp))
                     if (code != null) {
-                        Text("Enter this code on the sign-in page:", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        Text(L.opencode.providers.enterThisCodeOnTheSign, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                         Spacer(Modifier.height(6.dp))
                         Surface(
                             shape = RoundedCornerShape(14.dp), color = OpenCodeAccent.copy(alpha = 0.1f),
@@ -507,8 +507,8 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                                     modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
                                 IconButton(onClick = {
                                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Code", code))
-                                    toast("Code copied")
-                                }) { Icon(Icons.Outlined.ContentCopy, "Copy code", tint = OpenCodeAccent) }
+                                    toast(L.opencode.providers.codeCopied)
+                                }) { Icon(Icons.Outlined.ContentCopy, L.opencode.providers.copyCode, tint = OpenCodeAccent) }
                             }
                         }
                         Spacer(Modifier.height(10.dp))
@@ -520,14 +520,14 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                         onClick = {
                             if (code != null) (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Code", code))
                             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(a.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                                .onFailure { toast("No browser to open the page", ok = false) }
+                                .onFailure { toast(L.opencode.providers.noBrowserToOpenThePage, ok = false) }
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = OpenCodeAccent, contentColor = Color.White),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(17.dp)); Spacer(Modifier.width(6.dp))
-                        Text(if (code != null) "Copy code & open sign-in page" else "Open sign-in page")
+                        Text(if (code != null) L.opencode.providers.copyCodeOpenSignInPage else L.opencode.providers.openSignInPage)
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -535,14 +535,14 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                         Spacer(Modifier.width(8.dp))
                         val left = a.expiresAt?.let { ((it - now) / 1000).coerceAtLeast(0) }
                         Text(
-                            "Waiting for you to finish signing in" + (left?.let { " · ${it / 60}:${String.format("%02d", it % 60)} left" } ?: ""),
+                            L.opencode.providers.waitingForYouToFinishSigning((left?.let { " · ${it / 60}:${String.format("%02d", it % 60)} left" } ?: "")),
                             fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
                     }
                     // the provider shows a code to paste back
                     if (a.mode == "code" || a.paste) {
                         Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(pasted, { pasted = it }, label = { Text("Code from the provider") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(pasted, { pasted = it }, label = { Text(L.opencode.providers.codeFromTheProvider) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         Spacer(Modifier.height(6.dp))
                         OutlinedButton(onClick = {
                             busy = true
@@ -550,13 +550,13 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                                 backend.client.completeOAuth(integ.id, a.id, pasted.trim()).onFailure { failed = it.message }
                                 busy = false
                             }
-                        }, enabled = pasted.isNotBlank() && !busy, shape = RoundedCornerShape(12.dp)) { Text("Submit code") }
+                        }, enabled = pasted.isNotBlank() && !busy, shape = RoundedCornerShape(12.dp)) { Text(L.opencode.providers.submitCode) }
                     } else if (a.returnsToLoopback && remote) {
                         // server mode: the browser lands on this phone's 127.0.0.1; its address goes to the server
                         Spacer(Modifier.height(12.dp))
                         Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f), modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
-                                Text("After you sign in", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text(L.opencode.providers.afterYouSignIn, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                 Text(
                                     "The browser ends on a page that can't load (an address starting with http://127.0.0.1 or http://localhost). " +
                                         "That's expected with a server: copy that whole address from the address bar and paste it here.",
@@ -570,11 +570,11 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                                     busy = true
                                     scope.launch {
                                         backend.client.forwardOAuthCallback(pasted.trim())
-                                            .onSuccess { toast("Sent to the server, finishing…") }
+                                            .onSuccess { toast(L.opencode.providers.sentToTheServerFinishing) }
                                             .onFailure { failed = it.message }
                                         busy = false
                                     }
-                                }, enabled = pasted.isNotBlank() && !busy, shape = RoundedCornerShape(12.dp)) { Text("Finish sign-in") }
+                                }, enabled = pasted.isNotBlank() && !busy, shape = RoundedCornerShape(12.dp)) { Text(L.opencode.providers.finishSignIn) }
                             }
                         }
                     }
@@ -582,7 +582,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                     TextButton(onClick = {
                         scope.launch { backend.client.cancelOAuth(integ.id, a.id) }
                         attempt = null
-                    }) { Text("Cancel") }
+                    }) { Text(L.common.cancel) }
                 }
 
                 // ---- the chosen method: its form, then the action
@@ -591,20 +591,20 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                         Icon(methodIcon(m), null, tint = OpenCodeAccent, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(OpenCodeAuth.methodTitle(m), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                        if (methods.size > 1) TextButton(onClick = { method = null; failed = null }) { Text("Other ways") }
+                        if (methods.size > 1) TextButton(onClick = { method = null; failed = null }) { Text(L.opencode.providers.otherWays) }
                     }
                     Text(methodHint(m, remote), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     Spacer(Modifier.height(10.dp))
                     AuthForm(m.form, answers)
                     if (m.isKey) {
                         OutlinedTextField(
-                            key, { key = it }, label = { Text("API key") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            key, { key = it }, label = { Text(L.common.apiKey) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                             visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            if (integ.connections.any { it.method == "key" }) "Saved by OpenCode on the server. It replaces the key saved for ${integ.name} now (one key per provider)."
-                            else "Saved by OpenCode on the server.",
+                            if (integ.connections.any { it.method == "key" }) L.opencode.providers.savedByOpencodeOnTheServer(integ.name)
+                            else L.opencode.providers.savedByOpencodeOnTheServer2,
                             fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     }
@@ -643,9 +643,9 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
-                        else Text(when { m.isKey -> "Connect"; m.isExternal -> "Use the server's login"; else -> "Start sign-in" })
+                        else Text(when { m.isKey -> L.common.connect; m.isExternal -> L.opencode.providers.useTheServersLogin; else -> L.opencode.providers.startSignIn })
                     }
-                    if (missing != null) Text("Fill in: $missing", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp))
+                    if (missing != null) Text(L.opencode.providers.fillInMissing(missing), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp))
                 }
             }
         }
@@ -669,12 +669,12 @@ private fun AuthForm(form: List<OpenCodeAuth.Field>, answers: MutableMap<String,
                 }
             }
             if (f.custom) {
-                OutlinedTextField(value, { answers[f.key] = it }, placeholder = { Text(f.placeholder ?: "Or type it") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value, { answers[f.key] = it }, placeholder = { Text(f.placeholder ?: L.opencode.providers.orTypeIt) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             }
         } else if (f.type == "boolean") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(selected = value == "true", onClick = { answers[f.key] = "true" }, label = { Text("Yes") })
-                FilterChip(selected = value == "false", onClick = { answers[f.key] = "false" }, label = { Text("No") })
+                FilterChip(selected = value == "true", onClick = { answers[f.key] = "true" }, label = { Text(L.opencode.providers.yes) })
+                FilterChip(selected = value == "false", onClick = { answers[f.key] = "false" }, label = { Text(L.opencode.providers.no) })
             }
         } else {
             OutlinedTextField(

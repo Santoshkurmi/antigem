@@ -54,6 +54,7 @@ import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import ai.antigem.data.miniapps.MiniAppNet
 import java.io.File
+import ai.antigem.i18n.L
 
 /** One thing to show in the native viewer: a local file (already permission-checked) or an https URL. */
 class MediaItem(val file: File?, val url: String?, val video: Boolean, val title: String)
@@ -83,13 +84,13 @@ fun MediaViewerDialog(d: NativeDialog.MediaViewer) {
                         .statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { close() }) { Icon(Icons.Filled.Close, "Close", tint = Color.White) }
+                    IconButton(onClick = { close() }) { Icon(Icons.Filled.Close, L.common.close, tint = Color.White) }
                     val item = d.items.getOrNull(pager.currentPage)
                     Text(
                         (item?.title ?: "") + if (d.items.size > 1) "   ${pager.currentPage + 1} / ${d.items.size}" else "",
                         color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                     )
-                    if (item != null) IconButton(onClick = { share(context, item) }) { Icon(Icons.Filled.Share, "Share", tint = Color.White) }
+                    if (item != null) IconButton(onClick = { share(context, item) }) { Icon(Icons.Filled.Share, L.common.share, tint = Color.White) }
                 }
             }
         }

@@ -6,6 +6,7 @@ import android.webkit.WebSettings
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import ai.antigem.i18n.L
 
 /**
  * How the in-app browser presents itself to websites.
@@ -86,7 +87,7 @@ object BrowserIdentity {
         }
         val builder = UserAgentMetadata.Builder(base).setBrandVersionList(brands)
         if (desktop) {
-            builder.setPlatform("Linux").setPlatformVersion("").setArchitecture("x86").setBitness(64)
+            builder.setPlatform(L.browser.identity.linux).setPlatformVersion("").setArchitecture("x86").setBitness(64)
                 .setModel("").setMobile(false).setWow64(false)
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.USER_AGENT_METADATA_FORM_FACTORS)) {

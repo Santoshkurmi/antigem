@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import ai.antigem.domain.model.AgentKind
+import ai.antigem.i18n.L
 
 /**
  * Home-screen shortcuts: one chat, an action (a page, a new chat, …), a script or a web page, each asked from the
@@ -66,7 +67,7 @@ object HomeShortcuts {
 
     private fun pin(context: Context, info: ShortcutInfoCompat): Boolean {
         if (!canPin(context)) {
-            Toast.makeText(context, "This home screen app can't add shortcuts", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, L.homescreen.homeShortcuts.thisHomeScreenAppCantAdd, Toast.LENGTH_LONG).show()
             return false
         }
         return runCatching { ShortcutManagerCompat.requestPinShortcut(context, info, null) }
@@ -91,7 +92,7 @@ object HomeShortcuts {
         val sid = chatShortcutId(id)
         runCatching {
             ShortcutManagerCompat.removeDynamicShortcuts(context, listOf(sid))
-            ShortcutManagerCompat.disableShortcuts(context, listOf(sid), "This chat was deleted")
+            ShortcutManagerCompat.disableShortcuts(context, listOf(sid), L.homescreen.homeShortcuts.thisChatWasDeleted)
         }.onFailure { Log.w(TAG, "delete: ${it.message}") }
         lastRecent = null
     }

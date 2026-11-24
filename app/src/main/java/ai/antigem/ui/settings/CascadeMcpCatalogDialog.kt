@@ -34,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URL
+import ai.antigem.i18n.L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,20 +97,20 @@ fun CascadeMcpCatalogDialog(
                         }
                         Column {
                             Text(
-                                text = "Cascade MCP Catalog",
+                                text = L.settings.cascadeMcpCatalog.cascadeMcpCatalog,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "1-Click Model Context Protocol integrations",
+                                text = L.settings.cascadeMcpCatalog.n1ClickModelContextProtocolIntegrations,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                         }
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = L.common.close)
                     }
                 }
 
@@ -123,7 +124,7 @@ fun CascadeMcpCatalogDialog(
                         onSearch(it)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search MCP packages (e.g. Firebase, BigQuery, Firestore)...", fontSize = 13.sp) },
+                    placeholder = { Text(L.settings.cascadeMcpCatalog.searchMcpPackagesEGFirebase, fontSize = 13.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                     },
@@ -133,7 +134,7 @@ fun CascadeMcpCatalogDialog(
                                 searchQuery = ""
                                 onSearch("")
                             }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Clear, contentDescription = L.common.clear, modifier = Modifier.size(16.dp))
                             }
                         }
                     },
@@ -148,12 +149,12 @@ fun CascadeMcpCatalogDialog(
                     Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             CircularProgressIndicator(color = ClaudeTerracotta, modifier = Modifier.size(32.dp))
-                            Text("Loading available MCP catalog...", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text(L.settings.cascadeMcpCatalog.loadingAvailableMcpCatalog, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         }
                     }
                 } else if (availablePlugins.isEmpty()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("No MCP packages found matching '$searchQuery'", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        Text(L.settings.cascadeMcpCatalog.noMcpPackagesFoundMatchingSearchquery(searchQuery), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 } else {
                     LazyColumn(
@@ -188,7 +189,7 @@ fun CascadeMcpCatalogDialog(
     // Readme viewer dialog
     selectedReadmeUrl?.let { (title, url) ->
         ReadmePreviewDialog(
-            title = "$title Documentation",
+            title = L.settings.cascadeMcpCatalog.titleDocumentation(title),
             readmeUrl = url,
             onDismiss = { selectedReadmeUrl = null }
         )
@@ -252,7 +253,7 @@ private fun CascadePluginCard(
                         }
                     }
                     Text(
-                        text = "ID: ${plugin.id}",
+                        text = L.settings.cascadeMcpCatalog.idId(plugin.id),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
@@ -274,7 +275,7 @@ private fun CascadePluginCard(
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(14.dp))
-                            Text("Installed", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
+                            Text(L.common.installed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
                         }
                     }
                 } else {
@@ -291,7 +292,7 @@ private fun CascadePluginCard(
                         } else {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Install", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(L.common.install, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -340,7 +341,7 @@ private fun CascadePluginCard(
                     ) {
                         Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("README", fontSize = 11.5.sp)
+                        Text(L.settings.cascadeMcpCatalog.readme, fontSize = 11.5.sp)
                     }
                 }
             }
@@ -373,7 +374,7 @@ fun ReadmePreviewDialog(
                 }
                 content = text
             } catch (e: Exception) {
-                error = "Failed to load README: ${e.message}"
+                error = L.settings.cascadeMcpCatalog.failedToLoadReadmeMessage(e.message)
             } finally {
                 isLoading = false
             }
@@ -412,7 +413,7 @@ fun ReadmePreviewDialog(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = L.common.close)
                     }
                 }
 
@@ -429,7 +430,7 @@ fun ReadmePreviewDialog(
                         }
                     } else if (error != null) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(text = error ?: "Error", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                            Text(text = error ?: L.settings.cascadeMcpCatalog.error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                         }
                     } else if (!content.isNullOrBlank()) {
                         Column(

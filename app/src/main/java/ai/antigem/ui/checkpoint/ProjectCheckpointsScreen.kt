@@ -41,6 +41,7 @@ import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.label
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * Settings → Project checkpoints: on / off / per project, how long checkpoints are kept, and every project's
@@ -59,7 +60,7 @@ fun ProjectCheckpointsScreen() {
     var refresh by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(changes, refresh) {
-        ProjectCheckpoints.projects().fold({ projects = it; loadError = null }, { loadError = it.message ?: "The bridge did not answer" })
+        ProjectCheckpoints.projects().fold({ projects = it; loadError = null }, { loadError = it.message ?: L.checkpoint.projectCheckpoints.theBridgeDidNotAnswer })
     }
 
     val openHistory = historyFor
@@ -71,24 +72,22 @@ fun ProjectCheckpointsScreen() {
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(
-                "Before every message you send (Claude Code, Codex, OpenCode or Antigravity), AntiGem saves a hidden copy of " +
-                    "the project's files. Each message then gets a restore point: go back to before it, with a preview of every " +
-                    "file that changes. Your own git history, branches, staging and stashes are never touched.",
+                L.checkpoint.projectCheckpoints.beforeEveryMessageYouSendClaude,
                 fontSize = 12.5.sp, lineHeight = 17.sp, color = muted
             )
             loadError?.let {
                 Spacer(Modifier.height(12.dp))
                 Notice(Icons.Outlined.WarningAmber, AppColors.danger, it)
-                TextButton(onClick = { refresh++ }) { Text("Try again") }
+                TextButton(onClick = { refresh++ }) { Text(L.common.tryAgain) }
             }
 
-            SectionLabel("Checkpoints")
+            SectionLabel(L.checkpoint.projectCheckpoints.checkpoints)
             val mode = s?.mode ?: CheckpointSettings.MODE_OFF
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
-                    Triple(CheckpointSettings.MODE_OFF, "Off", "No checkpoints are made (the default)"),
-                    Triple(CheckpointSettings.MODE_SELECTED, "Projects I choose", "A new chat in a project asks once whether to keep checkpoints for it"),
-                    Triple(CheckpointSettings.MODE_ALL, "All git projects", "Every git project gets checkpoints (turn single projects off below)")
+                    Triple(CheckpointSettings.MODE_OFF, L.common.off, L.checkpoint.projectCheckpoints.noCheckpointsAreMadeTheDefault),
+                    Triple(CheckpointSettings.MODE_SELECTED, L.checkpoint.projectCheckpoints.projectsIChoose, L.checkpoint.projectCheckpoints.aNewChatInAProject),
+                    Triple(CheckpointSettings.MODE_ALL, L.checkpoint.projectCheckpoints.allGitProjects, L.checkpoint.projectCheckpoints.everyGitProjectGetsCheckpointsTurn)
                 ).forEach { (value, title, desc) ->
                     ai.antigem.ui.claude.PickerOption(
                         title = title,
@@ -109,45 +108,44 @@ fun ProjectCheckpointsScreen() {
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Text("Checkpoints work in git projects only (a folder with git init done). Nested repositories inside a project are saved too.",
+            Text(L.checkpoint.projectCheckpoints.checkpointsWorkInGitProjectsOnly,
                 fontSize = 11.5.sp, lineHeight = 15.sp, color = muted)
 
             if (s != null) {
-                SectionLabel("Keep")
+                SectionLabel(L.checkpoint.projectCheckpoints.keep)
                 Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        ChoiceRow("Delete checkpoints older than", s.retentionDays, listOf(7 to "7 days", 30 to "30 days", 90 to "90 days", 0 to "Never")) {
+                        ChoiceRow(L.checkpoint.projectCheckpoints.deleteCheckpointsOlderThan, s.retentionDays, listOf(7 to "7 days", 30 to "30 days", 90 to "90 days", 0 to L.common.never)) {
                             scope.launch { ProjectCheckpoints.updateSettings(retentionDays = it).onFailure(::toastError) }
                         }
-                        ChoiceRow("At most per chat", s.maxPerChat, listOf(50 to "50", 100 to "100", 200 to "200", 0 to "No limit")) {
+                        ChoiceRow(L.checkpoint.projectCheckpoints.atMostPerChat, s.maxPerChat, listOf(50 to "50", 100 to "100", 200 to "200", 0 to L.checkpoint.projectCheckpoints.noLimit)) {
                             scope.launch { ProjectCheckpoints.updateSettings(maxPerChat = it).onFailure(::toastError) }
                         }
-                        ChoiceRow("Space per project", s.maxProjectMb, listOf(200 to "200 MB", 500 to "500 MB", 1024 to "1 GB", 2048 to "2 GB", 0 to "No limit")) {
+                        ChoiceRow(L.checkpoint.projectCheckpoints.spacePerProject, s.maxProjectMb, listOf(200 to "200 MB", 500 to "500 MB", 1024 to "1 GB", 2048 to "2 GB", 0 to L.checkpoint.projectCheckpoints.noLimit)) {
                             scope.launch { ProjectCheckpoints.updateSettings(maxProjectMb = it).onFailure(::toastError) }
                         }
-                        ChoiceRow("Skip files larger than", s.maxFileMb, listOf(5 to "5 MB", 20 to "20 MB", 50 to "50 MB", 100 to "100 MB")) {
+                        ChoiceRow(L.checkpoint.projectCheckpoints.skipFilesLargerThan, s.maxFileMb, listOf(5 to "5 MB", 20 to "20 MB", 50 to "50 MB", 100 to "100 MB")) {
                             scope.launch { ProjectCheckpoints.updateSettings(maxFileMb = it).onFailure(::toastError) }
                         }
                         Text(
-                            "Old checkpoints are removed automatically (the oldest first when a project uses too much space). " +
-                                "Deleting old ones never breaks newer ones: each checkpoint is complete on its own.",
+                            L.checkpoint.projectCheckpoints.oldCheckpointsAreRemovedAutomaticallyThe,
                             fontSize = 11.5.sp, lineHeight = 15.sp, color = muted
                         )
                     }
                 }
             }
 
-            SectionLabel("Projects")
+            SectionLabel(L.common.projects)
             val list = projects
             when {
                 list == null && loadError == null -> Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text("Loading…", fontSize = 13.sp, color = muted)
+                    Text(L.common.loading, fontSize = 13.sp, color = muted)
                 }
                 list.isNullOrEmpty() -> Text(
-                    if (mode == CheckpointSettings.MODE_OFF) "Turn checkpoints on above, then start a chat in a project."
-                    else "No project has checkpoints yet. They appear here after the first message in a project.",
+                    if (mode == CheckpointSettings.MODE_OFF) L.checkpoint.projectCheckpoints.turnCheckpointsOnAboveThenStart
+                    else L.checkpoint.projectCheckpoints.noProjectHasCheckpointsYetThey,
                     fontSize = 12.5.sp, color = muted
                 )
                 else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -164,15 +162,15 @@ fun ProjectCheckpointsScreen() {
                 }
             }
 
-            SectionLabel("Good to know")
+            SectionLabel(L.checkpoint.projectCheckpoints.goodToKnow)
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        "Only files inside the project go back. Packages the agent installed, files outside the project, servers it started or things it sent are not undone.",
-                        "Files your .gitignore ignores (and node_modules, .gradle, caches) are not saved and never changed by a restore.",
-                        "A restore first saves the files as they are, so “Undo restore” always works.",
-                        "Going back in a chat (Edit) only changes the chat. Files go back only through a restore point.",
-                        "The copies live with the bridge (~/.antigem_bridge/checkpoints), on the machine where the project is."
+                        L.checkpoint.projectCheckpoints.onlyFilesInsideTheProjectGo,
+                        L.checkpoint.projectCheckpoints.filesYourGitignoreIgnoresAndNode,
+                        L.checkpoint.projectCheckpoints.aRestoreFirstSavesTheFiles,
+                        L.checkpoint.projectCheckpoints.goingBackInAChatEdit,
+                        L.checkpoint.projectCheckpoints.theCopiesLiveWithTheBridge
                     ).forEach { t ->
                         Row(verticalAlignment = Alignment.Top) {
                             Icon(Icons.Outlined.Info, null, tint = muted, modifier = Modifier.size(14.dp).padding(top = 2.dp))
@@ -191,7 +189,7 @@ fun ProjectCheckpointsScreen() {
             cleanFor = null
             scope.launch {
                 ProjectCheckpoints.delete(p.path, olderThanDays = days).fold(
-                    { r -> AppToastHelper.showToast("Deleted ${r.deleted} checkpoint${if (r.deleted == 1) "" else "s"} · ${formatBytes((r.sizeBefore - r.sizeAfter).coerceAtLeast(0))} freed", ChatToastType.SUCCESS) },
+                    { r -> AppToastHelper.showToast(L.checkpoint.projectCheckpoints.deletedDeletedCheckpointValueFormatbytes(r.deleted, if (r.deleted == 1) "" else "s", formatBytes((r.sizeBefore - r.sizeAfter).coerceAtLeast(0))), ChatToastType.SUCCESS) },
                     ::toastError
                 )
             }
@@ -203,14 +201,13 @@ fun ProjectCheckpointsScreen() {
             onDismissRequest = { deleteAllFor = null },
             shape = RoundedCornerShape(16.dp),
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Delete all checkpoints?", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            title = { Text(L.checkpoint.projectCheckpoints.deleteAllCheckpoints, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
             text = {
                 Column {
-                    Text("Every checkpoint of ${p.name} is deleted (${formatBytes(p.sizeBytes)} freed). The project's own files and git are not touched. " +
-                        "New checkpoints start again with the next message when the project is still on.", fontSize = 14.sp, lineHeight = 20.sp)
+                    Text(L.checkpoint.projectCheckpoints.everyCheckpointOfNameIsDeleted(p.name, formatBytes(p.sizeBytes)), fontSize = 14.sp, lineHeight = 20.sp)
                     Row(Modifier.padding(top = 10.dp).clickable { forget = !forget }, verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = forget, onCheckedChange = { forget = it })
-                        Text("Also forget my answer for this project", fontSize = 13.5.sp)
+                        Text(L.checkpoint.projectCheckpoints.alsoForgetMyAnswerForThis, fontSize = 13.5.sp)
                     }
                 }
             },
@@ -220,18 +217,18 @@ fun ProjectCheckpointsScreen() {
                     if (historyFor?.path == p.path) historyFor = null
                     scope.launch {
                         ProjectCheckpoints.delete(p.path, all = true, forget = forget).fold(
-                            { AppToastHelper.showToast("All checkpoints of ${p.name} deleted", ChatToastType.SUCCESS) }, ::toastError
+                            { AppToastHelper.showToast(L.checkpoint.projectCheckpoints.allCheckpointsOfNameDeleted(p.name), ChatToastType.SUCCESS) }, ::toastError
                         )
                     }
-                }) { Text("Delete all", color = AppColors.danger, fontWeight = FontWeight.Bold) }
+                }) { Text(L.checkpoint.projectCheckpoints.deleteAll, color = AppColors.danger, fontWeight = FontWeight.Bold) }
             },
-            dismissButton = { TextButton(onClick = { deleteAllFor = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { deleteAllFor = null }) { Text(L.common.cancel) } }
         )
     }
 }
 
 private fun toastError(e: Throwable) {
-    AppToastHelper.showToast(e.message ?: "Something went wrong", ChatToastType.ERROR)
+    AppToastHelper.showToast(e.message ?: L.checkpoint.projectCheckpoints.somethingWentWrong, ChatToastType.ERROR)
 }
 
 @Composable
@@ -262,11 +259,11 @@ private fun ProjectCard(
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val (status, color) = when {
-        p.tracked -> "Saving checkpoints" to AppColors.success
-        !p.exists -> "Folder not found" to AppColors.danger
-        mode == CheckpointSettings.MODE_OFF -> "Checkpoints are off" to muted
-        !p.isGit -> "Not a git repository" to AppColors.warning
-        else -> "Off for this project" to muted
+        p.tracked -> L.checkpoint.projectCheckpoints.savingCheckpoints to AppColors.success
+        !p.exists -> L.checkpoint.projectCheckpoints.folderNotFound to AppColors.danger
+        mode == CheckpointSettings.MODE_OFF -> L.checkpoint.projectCheckpoints.checkpointsAreOff to muted
+        !p.isGit -> L.checkpoint.projectCheckpoints.notAGitRepository to AppColors.warning
+        else -> L.checkpoint.projectCheckpoints.offForThisProject to muted
     }
     val switchOn = when (mode) {
         CheckpointSettings.MODE_ALL -> p.decision != "off"
@@ -300,19 +297,19 @@ private fun ProjectCard(
             }
             if (!p.isGit && p.exists && mode != CheckpointSettings.MODE_OFF) {
                 Spacer(Modifier.height(4.dp))
-                Text("Run git init in this folder to start checkpoints.", fontSize = 11.5.sp, color = muted)
+                Text(L.checkpoint.projectCheckpoints.runGitInitInThisFolder, fontSize = 11.5.sp, color = muted)
             }
             if (p.hasData) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onHistory) {
-                        Icon(Icons.Outlined.History, null, Modifier.size(16.dp)); Spacer(Modifier.width(5.dp)); Text("History")
+                        Icon(Icons.Outlined.History, null, Modifier.size(16.dp)); Spacer(Modifier.width(5.dp)); Text(L.checkpoint.projectCheckpoints.history)
                     }
                     TextButton(onClick = onClean) {
-                        Icon(Icons.Outlined.CleaningServices, null, Modifier.size(16.dp)); Spacer(Modifier.width(5.dp)); Text("Clean old")
+                        Icon(Icons.Outlined.CleaningServices, null, Modifier.size(16.dp)); Spacer(Modifier.width(5.dp)); Text(L.checkpoint.projectCheckpoints.cleanOld)
                     }
                     TextButton(onClick = onDeleteAll) {
                         Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(16.dp), tint = AppColors.danger); Spacer(Modifier.width(5.dp))
-                        Text("Delete all", color = AppColors.danger)
+                        Text(L.checkpoint.projectCheckpoints.deleteAll, color = AppColors.danger)
                     }
                 }
             } else Spacer(Modifier.height(6.dp))
@@ -327,10 +324,10 @@ private fun CleanOldDialog(p: CheckpointProjectInfo, onDismiss: () -> Unit, onPi
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("Clean old checkpoints", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        title = { Text(L.checkpoint.projectCheckpoints.cleanOldCheckpoints, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
         text = {
             Column {
-                Text("Delete the checkpoints of ${p.name} older than:", fontSize = 14.sp)
+                Text(L.checkpoint.projectCheckpoints.deleteTheCheckpointsOfNameOlder(p.name), fontSize = 14.sp)
                 Spacer(Modifier.height(6.dp))
                 listOf(1 to "1 day", 3 to "3 days", 7 to "7 days", 30 to "30 days").forEach { (d, label) ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { days = d }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -338,11 +335,11 @@ private fun CleanOldDialog(p: CheckpointProjectInfo, onDismiss: () -> Unit, onPi
                         Text(label, fontSize = 14.sp)
                     }
                 }
-                Text("Newer checkpoints stay and keep working.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(L.checkpoint.projectCheckpoints.newerCheckpointsStayAndKeepWorking, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        confirmButton = { TextButton(onClick = { onPick(days) }) { Text("Delete", color = AppColors.danger, fontWeight = FontWeight.Bold) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = { TextButton(onClick = { onPick(days) }) { Text(L.common.delete, color = AppColors.danger, fontWeight = FontWeight.Bold) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -360,20 +357,20 @@ private fun CheckpointHistory(project: CheckpointProjectInfo, onBack: () -> Unit
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") }
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, L.common.back) }
             Column(Modifier.weight(1f)) {
                 Text(project.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${items?.size ?: project.count} checkpoints · ${formatBytes(project.sizeBytes)}", fontSize = 12.sp, color = muted)
             }
-            IconButton(onClick = onClean) { Icon(Icons.Outlined.CleaningServices, "Clean old") }
-            IconButton(onClick = onDeleteAll) { Icon(Icons.Outlined.DeleteOutline, "Delete all", tint = AppColors.danger) }
+            IconButton(onClick = onClean) { Icon(Icons.Outlined.CleaningServices, L.checkpoint.projectCheckpoints.cleanOld) }
+            IconButton(onClick = onDeleteAll) { Icon(Icons.Outlined.DeleteOutline, L.checkpoint.projectCheckpoints.deleteAll, tint = AppColors.danger) }
         }
         error?.let { Box(Modifier.padding(16.dp)) { Notice(Icons.Outlined.WarningAmber, AppColors.danger, it) } }
         val list = items
         if (list == null && error == null) {
             Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
         } else if (list != null && list.isEmpty()) {
-            Text("No checkpoints left.", fontSize = 13.sp, color = muted, modifier = Modifier.padding(20.dp))
+            Text(L.checkpoint.projectCheckpoints.noCheckpointsLeft, fontSize = 13.sp, color = muted, modifier = Modifier.padding(20.dp))
         } else if (list != null) {
             LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(list, key = { it.id }) { cp -> HistoryRow(cp) { open = cp } }
@@ -405,13 +402,13 @@ private fun HistoryRow(cp: CheckpointSummary, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    cp.title?.takeIf { it.isNotBlank() } ?: if (cp.isPreRestore) "Before a restore" else "Message",
+                    cp.title?.takeIf { it.isNotBlank() } ?: if (cp.isPreRestore) L.checkpoint.projectCheckpoints.beforeARestore else L.checkpoint.projectCheckpoints.message,
                     fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis
                 )
                 val flags = listOfNotNull(
-                    if (cp.isPreRestore) "undo point" else agent?.label(),
+                    if (cp.isPreRestore) L.checkpoint.projectCheckpoints.undoPoint else agent?.label(),
                     formatCheckpointTime(cp.time),
-                    if (cp.midTurn) "sent while working" else null,
+                    if (cp.midTurn) L.checkpoint.projectCheckpoints.sentWhileWorking else null,
                     if (cp.late) "late" else null,
                     if (cp.repos > 1) "${cp.repos} repos" else null
                 )
@@ -433,24 +430,23 @@ fun TrackProjectDialog(state: CheckpointProjectState, onAnswer: (String?) -> Uni
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         icon = { Icon(Icons.Outlined.History, null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text("Keep checkpoints for $name?", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        title = { Text(L.checkpoint.projectCheckpoints.keepCheckpointsForName(name), fontWeight = FontWeight.Bold, fontSize = 18.sp) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Before each message, AntiGem saves a hidden copy of this project's files. Every message then gets a restore " +
-                        "point: go back to before it, with a preview of each file that changes. Your git history, branches and staging stay untouched.",
+                    L.checkpoint.projectCheckpoints.beforeEachMessageAntigemSavesA,
                     fontSize = 14.sp, lineHeight = 20.sp
                 )
                 if (!state.isGit) {
                     Notice(Icons.Outlined.WarningAmber, AppColors.warning,
-                        "This folder is not a git repository. Checkpoints only work in git projects: they start once you run git init here.")
+                        L.checkpoint.projectCheckpoints.thisFolderIsNotAGit)
                 }
-                Text("You can change this any time in Settings → Project checkpoints.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(L.checkpoint.projectCheckpoints.youCanChangeThisAnyTime, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
-            TextButton(onClick = { onAnswer("on") }) { Text("Keep checkpoints", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
+            TextButton(onClick = { onAnswer("on") }) { Text(L.checkpoint.projectCheckpoints.keepCheckpoints, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
         },
-        dismissButton = { TextButton(onClick = { onAnswer("off") }) { Text("Not for this project") } }
+        dismissButton = { TextButton(onClick = { onAnswer("off") }) { Text(L.checkpoint.projectCheckpoints.notForThisProject) } }
     )
 }

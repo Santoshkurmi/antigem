@@ -20,15 +20,14 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 140,
-    "version_name": "2.0.5-beta.3",
+    "version_code": 141,
+    "version_name": "2.0.5-beta.4",
     "changelog": [
-      "Added the Discord theme: Discord's dark look with deep greys and a blurple accent. It's now the default dark theme, followed by Obsidian and Midnight Aurora (a dark theme you already picked stays)",
-      "Each session in the terminal's sessions drawer now has Rename and Close buttons, no long press needed",
-      "With the Termux-style terminal icon, Recents now shows the terminal with the Termux icon and name",
-      "Loading spinners in the IDE's file tree and when opening the terminal now show only when loading is actually slow, instead of flashing every time",
-      "Fixed a strip of a different color next to the IDE's sidebar and behind the status bar",
-      "Settings: removed the On/Off badges next to switches (the switch already shows it), and long names no longer push the switch off the screen"
+      "Added Settings → Language: make your own language for the app, edit its texts, and import, export or share language files. Switching languages changes the app at once, no restart",
+      "AI agents can translate the app for you with the new Language MCP server (in each agent's MCP settings); you watch the app change while they work",
+      "Signing out of Antigravity, Claude Code or Codex now asks you to confirm first",
+      "Fixed a crash when the terminal starts on Android 8",
+      "fix: stop huge agent error messages from crashing the chat (cap error card text, escape AGY error JSON)"
     ]
   }
 }

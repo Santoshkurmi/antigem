@@ -66,6 +66,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import ai.antigem.i18n.L
 
 private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 private const val SKIP_MS = 10_000
@@ -219,7 +220,7 @@ fun ChatVideoPlayer(source: String, caption: String, modifier: Modifier = Modifi
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Fullscreen, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Playing full screen", color = Color.White, fontSize = 13.sp)
+                        Text(L.components.videoPlayerUi.playingFullScreen, color = Color.White, fontSize = 13.sp)
                     }
                 }
             } else {
@@ -387,11 +388,11 @@ private fun VideoOverlay(
             ) {
                 Icon(Icons.Outlined.ErrorOutline, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(30.dp))
                 Spacer(Modifier.height(6.dp))
-                Text(c.error ?: "Video could not be loaded", color = Color.White, fontSize = 12.5.sp, textAlign = TextAlign.Center)
+                Text(c.error ?: L.components.videoPlayerUi.videoCouldNotBeLoaded, color = Color.White, fontSize = 12.5.sp, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { c.retry() }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Retry", color = Color.White, fontSize = 12.5.sp) }
-                    Button(onClick = { c.openElsewhere() }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Open in another app", fontSize = 12.5.sp) }
+                    OutlinedButton(onClick = { c.retry() }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(L.common.retry, color = Color.White, fontSize = 12.5.sp) }
+                    Button(onClick = { c.openElsewhere() }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(L.components.videoPlayerUi.openInAnotherApp, fontSize = 12.5.sp) }
                 }
             }
             if (fullscreen) TopBar(title, onBack = onToggleFullscreen, pad = pad, menu = {})
@@ -413,7 +414,7 @@ private fun VideoOverlay(
                         color = Color.White, fontSize = 12.sp,
                         modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 8.dp, vertical = 3.dp)
                     )
-                    TextButton(onClick = { c.cancelTask() }) { Text("Cancel", color = Color.White, fontSize = 12.5.sp) }
+                    TextButton(onClick = { c.cancelTask() }) { Text(L.common.cancel, color = Color.White, fontSize = 12.5.sp) }
                 }
             }
         }
@@ -445,15 +446,15 @@ private fun VideoOverlay(
             ) {
                 val menu: @Composable () -> Unit = {
                     Box {
-                        ControlIcon(Icons.Filled.MoreVert, "More") { menuOpen = true; poke() }
+                        ControlIcon(Icons.Filled.MoreVert, L.common.more) { menuOpen = true; poke() }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
-                                text = { Text("Playback speed  ·  ${speedLabel(c.speed)}") },
+                                text = { Text(L.components.videoPlayerUi.playbackSpeedSpeedlabel(speedLabel(c.speed))) },
                                 leadingIcon = { Icon(Icons.Filled.Speed, null) },
                                 onClick = { menuOpen = false; speedMenuOpen = true }
                             )
                             DropdownMenuItem(
-                                text = { Text(if (c.muted) "Unmute" else "Mute") },
+                                text = { Text(if (c.muted) L.common.unmute else L.common.mute) },
                                 leadingIcon = { Icon(if (c.muted) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, null) },
                                 onClick = { menuOpen = false; c.toggleMute() }
                             )
@@ -462,18 +463,18 @@ private fun VideoOverlay(
                             // give the playlist text. Other players can still open it.
                             if (!c.isStream) {
                                 DropdownMenuItem(
-                                    text = { Text("Download") },
+                                    text = { Text(L.common.download) },
                                     leadingIcon = { Icon(Icons.Filled.Download, null) },
                                     onClick = { menuOpen = false; ImageDownloadHelper.downloadVideo(context, c.source, title, scope) }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share") },
+                                    text = { Text(L.common.share) },
                                     leadingIcon = { Icon(Icons.Filled.Share, null) },
                                     onClick = { menuOpen = false; c.share() }
                                 )
                             }
                             DropdownMenuItem(
-                                text = { Text("Open in another app") },
+                                text = { Text(L.components.videoPlayerUi.openInAnotherApp) },
                                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) },
                                 onClick = { menuOpen = false; c.openElsewhere() }
                             )
@@ -499,7 +500,7 @@ private fun VideoOverlay(
                 // center: back 10 s, play / pause, forward 10 s
                 if (!c.isBuffering) {
                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (fullscreen) 40.dp else 24.dp)) {
-                        ControlIcon(Icons.Filled.Replay10, "Back 10 seconds", size = big * 0.62f) { c.seekBy(-SKIP_MS); poke() }
+                        ControlIcon(Icons.Filled.Replay10, L.components.videoPlayerUi.back10Seconds, size = big * 0.62f) { c.seekBy(-SKIP_MS); poke() }
                         PlayDisc(
                             when {
                                 c.completed -> Icons.Filled.Replay
@@ -508,7 +509,7 @@ private fun VideoOverlay(
                             },
                             big
                         ) { c.toggle(); poke() }
-                        ControlIcon(Icons.Filled.Forward10, "Forward 10 seconds", size = big * 0.62f) { c.seekBy(SKIP_MS); poke() }
+                        ControlIcon(Icons.Filled.Forward10, L.components.videoPlayerUi.forward10Seconds, size = big * 0.62f) { c.seekBy(SKIP_MS); poke() }
                     }
                 }
 
@@ -534,8 +535,8 @@ private fun VideoOverlay(
                             Text(speedLabel(c.speed), color = Color.White, fontSize = 10.5.sp, modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.2f)).padding(horizontal = 4.dp, vertical = 1.dp))
                         }
                         Spacer(Modifier.weight(1f))
-                        if (onRotate != null) ControlIcon(Icons.Filled.ScreenRotation, "Rotate", size = 22.dp) { onRotate(); poke() }
-                        ControlIcon(if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (fullscreen) "Exit full screen" else "Full screen", size = if (fullscreen) 28.dp else 24.dp) { onToggleFullscreen() }
+                        if (onRotate != null) ControlIcon(Icons.Filled.ScreenRotation, L.components.videoPlayerUi.rotate, size = 22.dp) { onRotate(); poke() }
+                        ControlIcon(if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, if (fullscreen) L.components.videoPlayerUi.exitFullScreen else L.components.videoPlayerUi.fullScreen, size = if (fullscreen) 28.dp else 24.dp) { onToggleFullscreen() }
                     }
                     SeekBar(
                         c = c,
@@ -558,7 +559,7 @@ private fun BoxScope.TopBar(title: String, onBack: () -> Unit, pad: Dp, menu: @C
             .padding(horizontal = pad, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ControlIcon(Icons.AutoMirrored.Filled.ArrowBack, "Close") { onBack() }
+        ControlIcon(Icons.AutoMirrored.Filled.ArrowBack, L.common.close) { onBack() }
         Spacer(Modifier.width(8.dp))
         Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         menu()
@@ -569,7 +570,7 @@ private fun BoxScope.TopBar(title: String, onBack: () -> Unit, pad: Dp, menu: @C
 private fun PlayDisc(icon: ImageVector, size: Dp, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = CircleShape, color = Color.Black.copy(alpha = 0.5f), modifier = modifier.size(size)) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = "Play or pause", tint = Color.White, modifier = Modifier.size(size * 0.6f))
+            Icon(icon, contentDescription = L.components.videoPlayerUi.playOrPause, tint = Color.White, modifier = Modifier.size(size * 0.6f))
         }
     }
 }

@@ -77,6 +77,7 @@ import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import ai.antigem.i18n.L
 
 internal val Cyan = Color(0xFF22D3EE)
 internal val Blue = Color(0xFF3B82F6)
@@ -95,10 +96,10 @@ internal fun accentOf(p: Phase) = when (p) {
 }
 
 private fun defaultLabel(p: Phase, quiet: Boolean) = when (p) {
-    Phase.LISTENING -> "Listening…"
-    Phase.THINKING -> "Thinking…"
-    Phase.SPEAKING -> if (quiet) "Jarvis" else "Speaking…"
-    else -> "Ready"
+    Phase.LISTENING -> L.jarvis.overlay.listening
+    Phase.THINKING -> L.jarvis.overlay.thinking
+    Phase.SPEAKING -> if (quiet) L.common.jarvis else L.jarvis.overlay.speaking
+    else -> L.common.ready
 }
 
 /**
@@ -363,10 +364,10 @@ internal fun ActivityCard(
 private fun SendMeter(progress: Float, holding: Boolean, auto: Boolean) {
     val phrase = remember { ai.antigem.data.jarvis.JarvisPhrases.exampleSend() }
     val hint = when {
-        holding -> if (phrase != null) "Waiting · say “$phrase” or tap Send" else "Waiting for you · tap Send"
-        auto -> if (phrase != null) "Pause to send · or say “$phrase”" else "Pause to send"
-        phrase != null -> "Say “$phrase” or tap Send"
-        else -> "Tap Send when you're done"
+        holding -> if (phrase != null) L.jarvis.overlay.waitingSayPhraseOrTapSend(phrase) else L.jarvis.overlay.waitingForYouTapSend
+        auto -> if (phrase != null) L.jarvis.overlay.pauseToSendOrSayPhrase(phrase) else L.jarvis.overlay.pauseToSend
+        phrase != null -> L.jarvis.overlay.sayPhraseOrTapSend(phrase)
+        else -> L.jarvis.overlay.tapSendWhenYoureDone
     }
     Column {
         if (!holding && auto) {
@@ -419,7 +420,7 @@ internal fun StatusPill(phase: Phase, steps: List<JarvisController.Step>) {
             Box(
                 Modifier.size(24.dp).clip(CircleShape).background(Danger.copy(alpha = 0.16f)).clickable { JarvisController.stopEverything() },
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Filled.Stop, "Stop", tint = Danger, modifier = Modifier.size(14.dp)) }
+            ) { Icon(Icons.Filled.Stop, L.common.stop, tint = Danger, modifier = Modifier.size(14.dp)) }
         }
     }
 }
@@ -443,7 +444,7 @@ internal fun NoticeChip(n: JarvisController.Notice, onAction: (String) -> Unit, 
         n.action?.let { a ->
             Spacer(Modifier.width(8.dp))
             Text(
-                when { a == "mic" -> "Allow"; a.startsWith("chat:") -> "Open"; else -> "Set up" }, color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                when { a == "mic" -> L.common.allow; a.startsWith("chat:") -> L.common.open; else -> L.common.setUp }, color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(color).clickable { onAction(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
             )
         }
@@ -484,16 +485,16 @@ private fun ActionButtons(phase: Phase, holding: Boolean, auto: Boolean, quiet: 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         when (phase) {
             Phase.LISTENING -> {
-                PillButton("Cancel", Icons.Filled.Close, Danger, big) { JarvisController.cancelCapture() }
-                if (!holding && auto) PillButton("Wait", Icons.Filled.PauseCircle, Amber, big) { JarvisController.holdListening() }
-                PillButton("Send", Icons.Filled.Send, Cyan, big, filled = true) { JarvisController.finishListening() }
+                PillButton(L.common.cancel, Icons.Filled.Close, Danger, big) { JarvisController.cancelCapture() }
+                if (!holding && auto) PillButton(L.jarvis.overlay.wait, Icons.Filled.PauseCircle, Amber, big) { JarvisController.holdListening() }
+                PillButton(L.common.send, Icons.Filled.Send, Cyan, big, filled = true) { JarvisController.finishListening() }
             }
             Phase.SPEAKING -> {
                 if (quiet) PillButton("OK", Icons.Filled.Check, Green, big) { JarvisController.silence() }
-                else PillButton("Stop", Icons.Filled.Stop, Danger, big) { JarvisController.silence() }
-                PillButton("Reply", Icons.Filled.Mic, Cyan, big, filled = true) { onTap() }
+                else PillButton(L.common.stop, Icons.Filled.Stop, Danger, big) { JarvisController.silence() }
+                PillButton(L.jarvis.overlay.reply, Icons.Filled.Mic, Cyan, big, filled = true) { onTap() }
             }
-            Phase.THINKING -> PillButton("Stop", Icons.Filled.Stop, Danger, big) { JarvisController.stopEverything() }
+            Phase.THINKING -> PillButton(L.common.stop, Icons.Filled.Stop, Danger, big) { JarvisController.stopEverything() }
             else -> {}
         }
         if (phase == Phase.LISTENING || phase == Phase.SPEAKING) {
@@ -505,7 +506,7 @@ private fun ActionButtons(phase: Phase, holding: Boolean, auto: Boolean, quiet: 
                     .background(Color.White.copy(alpha = 0.06f))
                     .clickable { JarvisController.quickSettingsOpen.value = true },
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Filled.Tune, "Quick settings", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(if (big) 20.dp else 16.dp)) }
+            ) { Icon(Icons.Filled.Tune, L.common.quickSettings, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(if (big) 20.dp else 16.dp)) }
         }
     }
 }

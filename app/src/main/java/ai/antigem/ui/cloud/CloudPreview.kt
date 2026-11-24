@@ -57,6 +57,7 @@ import ai.antigem.data.agent.agy.AgyCloud
 import ai.antigem.domain.model.ChatMessage
 import ai.antigem.theme.GeminiBlue
 import kotlinx.coroutines.runBlocking
+import ai.antigem.i18n.L
 
 /** The address the preview page is served from; nothing goes to the internet for it (every request is intercepted). */
 private const val PREVIEW_HOST = "preview.cloud.antigem"
@@ -104,12 +105,12 @@ fun CloudPreviewChooser(
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue) },
-        title = { Text("Preview the cloud VM") },
+        title = { Text(L.cloud.preview.previewTheCloudVm) },
         text = {
             Column {
                 Text(
-                    if (suggestedPorts.isNotEmpty()) "Ports from the agent's commands are marked with a dot."
-                    else "Pick the port your server listens on (ask the agent to start it on 0.0.0.0).",
+                    if (suggestedPorts.isNotEmpty()) L.cloud.preview.portsFromTheAgentsCommandsAre
+                    else L.cloud.preview.pickThePortYourServerListens,
                     fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                 )
                 Spacer(Modifier.height(10.dp))
@@ -134,7 +135,7 @@ fun CloudPreviewChooser(
                 OutlinedTextField(
                     value = portText,
                     onValueChange = { v -> portText = v.filter { it.isDigit() }.take(5) },
-                    label = { Text("Port") },
+                    label = { Text(L.common.port) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
@@ -147,10 +148,10 @@ fun CloudPreviewChooser(
             }
         },
         confirmButton = {
-            androidx.compose.material3.TextButton(enabled = port != null, onClick = { port?.let(onOpenInApp) }) { Text("Open in app") }
+            androidx.compose.material3.TextButton(enabled = port != null, onClick = { port?.let(onOpenInApp) }) { Text(L.cloud.preview.openInApp) }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(enabled = port != null, onClick = { port?.let(onOpenInBrowser) }) { Text("Open in browser") }
+            androidx.compose.material3.TextButton(enabled = port != null, onClick = { port?.let(onOpenInBrowser) }) { Text(L.cloud.preview.openInBrowser) }
         }
     )
 }
@@ -178,22 +179,22 @@ fun CloudPreviewDialog(conversationId: String, suggestedPorts: List<Int>, initia
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.systemBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "Close") }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, L.common.close) }
                     Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Preview", fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    Text(L.common.preview, fontSize = 16.sp, modifier = Modifier.weight(1f))
                     // the same page in the system browser (served on this phone through the hub)
                     IconButton(onClick = {
                         val p = path.trim().ifBlank { "/" }.removePrefix("/")
                         uriHandler.openUri(ai.antigem.data.agent.agy.CloudPreviewServer.urlFor(conversationId, port) + p)
-                    }) { Icon(Icons.Outlined.OpenInBrowser, "Open in browser") }
-                    IconButton(onClick = { reloadKey++; open() }) { Icon(Icons.Outlined.Refresh, "Reload") }
+                    }) { Icon(Icons.Outlined.OpenInBrowser, L.cloud.preview.openInBrowser) }
+                    IconButton(onClick = { reloadKey++; open() }) { Icon(Icons.Outlined.Refresh, L.common.reload) }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = portText,
                         onValueChange = { v -> portText = v.filter { it.isDigit() }.take(5) },
-                        label = { Text("Port") },
+                        label = { Text(L.common.port) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(onGo = { portText.toIntOrNull()?.let { port = it; client.port = it; open() } }),
@@ -202,7 +203,7 @@ fun CloudPreviewDialog(conversationId: String, suggestedPorts: List<Int>, initia
                     OutlinedTextField(
                         value = path,
                         onValueChange = { path = it },
-                        label = { Text("Path") },
+                        label = { Text(L.cloud.preview.path) },
                         singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
@@ -272,7 +273,7 @@ private class SandboxClient(private val conversationId: String, private val onLo
         val result = runBlocking { AgyCloud.fetchPort(conversationId, targetPort, path, request.method ?: "GET", headers) }
         return result.fold(
             onSuccess = { r -> toResponse(r, request.isForMainFrame) },
-            onFailure = { e -> page(502, "Could not reach port $targetPort in the cloud VM", e.message ?: "", request.isForMainFrame) }
+            onFailure = { e -> page(502, L.cloud.preview.couldNotReachPortTargetportIn(targetPort), e.message ?: "", request.isForMainFrame) }
         )
     }
 
@@ -314,7 +315,7 @@ private class SandboxClient(private val conversationId: String, private val onLo
         WebResourceResponse("text/html", "utf-8", code, reason(code), emptyMap(), body.byteInputStream())
 
     private fun reason(code: Int) = when (code) {
-        200 -> "OK"; 201 -> "Created"; 204 -> "No Content"; 304 -> "Not Modified"; 400 -> "Bad Request"; 401 -> "Unauthorized"
-        403 -> "Forbidden"; 404 -> "Not Found"; 500 -> "Internal Server Error"; 502 -> "Bad Gateway"; else -> "Status"
+        200 -> "OK"; 201 -> L.cloud.preview.created; 204 -> L.cloud.preview.noContent; 304 -> L.cloud.preview.notModified; 400 -> L.cloud.preview.badRequest; 401 -> L.cloud.preview.unauthorized
+        403 -> L.cloud.preview.forbidden; 404 -> L.cloud.preview.notFound; 500 -> L.cloud.preview.internalServerError; 502 -> L.cloud.preview.badGateway; else -> L.cloud.preview.status
     }
 }

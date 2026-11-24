@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * Scripts on the home screen, the way Termux:Widget does it: every file in `~/.shortcuts` runs in a new terminal tab,
@@ -97,16 +98,16 @@ object HomeScripts {
     /** A new terminal tab running the script; the terminal page comes up. */
     fun runInTerminal(activity: ComponentActivity, vm: ChatViewModel, file: File) {
         if (!isAllowed(activity, file)) {
-            toast(activity, "Only scripts in ~/.shortcuts can run from the home screen")
+            toast(activity, L.homescreen.homeScripts.onlyScriptsInShortcutsCanRun)
             return
         }
         activity.lifecycleScope.launch {
             if (remoteTerminal() || vm.useSshTerminal.first()) {
-                toast(activity, "Scripts run in this phone's terminal: set the terminal to Local (Settings → Terminal)")
+                toast(activity, L.homescreen.homeScripts.scriptsRunInThisPhonesTerminal)
                 return@launch
             }
             if (!LocalEnvironmentManager.isInstalled(activity)) {
-                toast(activity, "Set up the terminal first (open Terminal in AntiGem)")
+                toast(activity, L.homescreen.homeScripts.setUpTheTerminalFirstOpen)
                 return@launch
             }
             if (!vm.isLocalToolsEnabled.first()) vm.setLocalToolsEnabled(true)
@@ -126,15 +127,15 @@ object HomeScripts {
     fun runInBackground(context: Context, file: File) {
         val app = context.applicationContext
         if (!isAllowed(app, file)) {
-            toast(app, "Only scripts in ~/.shortcuts can run from the home screen")
+            toast(app, L.homescreen.homeScripts.onlyScriptsInShortcutsCanRun)
             return
         }
         if (remoteTerminal()) {
-            toast(app, "Scripts run on this phone: turn server mode off to run them")
+            toast(app, L.homescreen.homeScripts.scriptsRunOnThisPhoneTurn)
             return
         }
         if (!LocalEnvironmentManager.isInstalled(app)) {
-            toast(app, "Set up the terminal first (open Terminal in AntiGem)")
+            toast(app, L.homescreen.homeScripts.setUpTheTerminalFirstOpen)
             return
         }
         // the app's service keeps the process (and the script) alive in the background
@@ -142,7 +143,7 @@ object HomeScripts {
         val run = runCatching {
             RunManager.start(app, name = file.name, command = command(file), folder = file.parent ?: dir(app).absolutePath, origin = "home")
         }.getOrElse {
-            toast(app, "Could not start ${file.name}: ${it.message}")
+            toast(app, L.homescreen.homeScripts.couldNotStartNameMessage(file.name, it.message))
             return
         }
         toast(app, "Running ${file.name}…")
@@ -159,14 +160,14 @@ object HomeScripts {
                 val nm = context.getSystemService(NotificationManager::class.java)
                 if (nm.getNotificationChannel(CHANNEL) == null) {
                     nm.createNotificationChannel(NotificationChannel(CHANNEL, "Home screen scripts", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                        description = "When a script started from the home screen (~/.shortcuts/tasks) ends"
+                        description = L.homescreen.homeScripts.whenAScriptStartedFromThe
                     })
                 }
             }
             val ok = status == RunStatus.SUCCEEDED
             val title = when (status) {
                 RunStatus.SUCCEEDED -> "✓ $name finished"
-                RunStatus.STOPPED -> "$name was stopped"
+                RunStatus.STOPPED -> L.homescreen.homeScripts.nameWasStopped(name)
                 else -> "✗ $name failed" + (exit?.let { " (exit $it)" } ?: "")
             }
             val tail = runCatching { RunManager.recentOutput(runId, 4) }.getOrDefault("").trim()
@@ -177,8 +178,8 @@ object HomeScripts {
             val n = NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(if (ok) R.drawable.ic_home_check else R.drawable.ic_home_task)
                 .setContentTitle(title)
-                .setContentText(tail.lineSequence().lastOrNull { it.isNotBlank() } ?: "Tap to see the output")
-                .setStyle(NotificationCompat.BigTextStyle().bigText(tail.ifBlank { "Tap to see the output" }))
+                .setContentText(tail.lineSequence().lastOrNull { it.isNotBlank() } ?: L.homescreen.homeScripts.tapToSeeTheOutput)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(tail.ifBlank { L.homescreen.homeScripts.tapToSeeTheOutput }))
                 .setContentIntent(open)
                 .setAutoCancel(true)
                 .build()

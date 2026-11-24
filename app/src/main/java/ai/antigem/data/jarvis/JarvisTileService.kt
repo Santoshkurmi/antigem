@@ -7,6 +7,7 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import ai.antigem.MainActivity
+import ai.antigem.i18n.L
 
 /**
  * The "Jarvis" Quick Settings tile: one tap talks to Jarvis from anywhere. While hands-free mode runs it starts
@@ -21,7 +22,7 @@ class JarvisTileService : TileService() {
         qsTile?.apply {
             state = if (JarvisPreferences.enabled.value) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
             label = "Jarvis"
-            if (Build.VERSION.SDK_INT >= 29) subtitle = if (JarvisPreferences.handsFree.value) "Hands-free" else if (JarvisPreferences.enabled.value) "Tap to talk" else "Off"
+            if (Build.VERSION.SDK_INT >= 29) subtitle = if (JarvisPreferences.handsFree.value) L.jarvis.tileService.handsFree else if (JarvisPreferences.enabled.value) L.jarvis.tileService.tapToTalk else L.jarvis.tileService.off
             updateTile()
         }
     }

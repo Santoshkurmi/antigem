@@ -33,6 +33,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * Opens file paths tapped outside the Files screen (chat messages, tool output, artifacts). Text opens straight in the
@@ -73,7 +74,7 @@ class FileLinkOpener internal constructor(private val context: Context, private 
             val r = try { FileProbe.probe(path) } finally { busy = null }
             when (r) {
                 is FileProbe.Result.Unavailable -> toast(r.message)
-                is FileProbe.Result.Folder -> onShowFolder?.invoke(r.path) ?: toast("$name is a folder")
+                is FileProbe.Result.Folder -> onShowFolder?.invoke(r.path) ?: toast(L.files.fileLinkOpener.nameIsAFolder(name))
                 is FileProbe.Result.Found -> {
                     val remembered = ExplorerPrefs.rememberedChoice(FileKinds.extOf(r.name))
                     when {
@@ -114,7 +115,7 @@ class FileLinkOpener internal constructor(private val context: Context, private 
         progress = null
         val uri = try { uriOf(f) } finally { busy = null }
         uri.onSuccess { FileOpener.share(context, listOf(it to f.name))?.let(::toast) }
-            .onFailure { toast(it.message ?: "Could not share ${f.name}") }
+            .onFailure { toast(it.message ?: L.files.fileLinkOpener.couldNotShareName(f.name)) }
     }
 
     /** A content uri other apps can read: a file on this phone directly, a bridge file copied here first. */
@@ -153,7 +154,7 @@ class FileLinkOpener internal constructor(private val context: Context, private 
         progress = null
         val uri = try { uriOf(f) } finally { busy = null }
         uri.onSuccess { FileOpener.view(context, it, f.name, contentMime = f.mime)?.let(::toast) }
-            .onFailure { toast(it.message ?: "Could not open ${f.name}") }
+            .onFailure { toast(it.message ?: L.files.fileLinkOpener.couldNotOpenName(f.name)) }
     }
 
     internal fun extract(f: FileProbe.Result.Found, targetDir: String?) = launchJob {
@@ -161,10 +162,10 @@ class FileLinkOpener internal constructor(private val context: Context, private 
         progress = null
         val r = try { FileExplorerApi.extract(f.path, targetDir) } finally { busy = null }
         if (r.ok) {
-            AppToastHelper.showToast("Extracted ${r.count} files", ChatToastType.SUCCESS)
+            AppToastHelper.showToast(L.files.fileLinkOpener.extractedRcountFiles(r.count), ChatToastType.SUCCESS)
             r.path?.let { dir -> onShowFolder?.invoke(dir) }
         } else {
-            toast(r.error ?: "Extract failed")
+            toast(r.error ?: L.files.fileLinkOpener.extractFailed)
         }
     }
 
@@ -237,8 +238,8 @@ fun FileLinkOpenerHost(opener: FileLinkOpener) {
         FileExplorerDialog(
             stateKey = "destination",
             initialPath = f.path.substringBeforeLast('/', "").ifBlank { null },
-            title = "Extract \"${f.name}\" to",
-            confirmLabel = "Extract here",
+            title = L.files.fileLinkOpener.extractNameTo(f.name),
+            confirmLabel = L.common.extractHere,
             showClipboard = false,
             onConfirmFolder = { dest -> opener.extractTo = null; opener.extract(f, dest) },
             onDismiss = { opener.extractTo = null }
@@ -271,7 +272,7 @@ private fun BusyDialog(label: String, progress: Float?, onCancel: () -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
                         if (progress != null) {
-                            Text("${(progress * 100).toInt()}%  ·  copying to this phone", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(L.files.fileLinkOpener.valueCopyingToThisPhone((progress * 100).toInt()), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -279,7 +280,7 @@ private fun BusyDialog(label: String, progress: Float?, onCancel: () -> Unit) {
                     Spacer(Modifier.height(14.dp))
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                 }
-                TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End).padding(top = 6.dp)) { Text("Cancel") }
+                TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End).padding(top = 6.dp)) { Text(L.common.cancel) }
             }
         }
     }

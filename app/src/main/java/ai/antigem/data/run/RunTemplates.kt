@@ -7,6 +7,7 @@ import ai.antigem.data.local.LocalEnvironmentManager
 import ai.antigem.data.preferences.AuthPreferences
 import org.json.JSONObject
 import java.io.File
+import ai.antigem.i18n.L
 
 /** A ready-made command the Run panel suggests for a folder ("Suggested"); saved to the project only when added. */
 data class RunTemplate(
@@ -58,9 +59,9 @@ object RunTemplates {
                         build = "${adev}flutter build apk --debug",
                         apk = apk, appId = appId, remote = remote
                     ) + listOf(
-                        RunTemplate("Flutter run (hot reload)", "${adev}flutter run", note = "Needs adb connected. Press r to hot reload, R to restart, q to quit."),
-                        RunTemplate("Get packages", "${adev}flutter pub get"),
-                        RunTemplate("Clean", "${adev}flutter clean")
+                        RunTemplate(L.run.templates.flutterRunHotReload, "${adev}flutter run", note = L.run.templates.needsAdbConnectedPressRTo),
+                        RunTemplate(L.run.templates.getPackages, "${adev}flutter pub get"),
+                        RunTemplate(L.run.templates.clean, "${adev}flutter clean")
                     ),
                     needsAndroidSetup = !adevReady
                 )
@@ -71,15 +72,15 @@ object RunTemplates {
                     "React Native",
                     listOf(
                         RunTemplate(
-                            "Start Metro", "${adev}npx react-native start --port 8081",
-                            note = "Debug builds load their JavaScript from Metro: keep it running in its own tab."
+                            L.run.templates.startMetro, "${adev}npx react-native start --port 8081",
+                            note = L.run.templates.debugBuildsLoadTheirJavascriptFrom
                         )
                     ) + androidApp(
                         build = "${adev}./gradlew assembleDebug --console=plain",
                         apk = "app/build/outputs/apk/debug/app-debug.apk", appId = appId, remote = remote, cwd = "android"
                     ) + listOf(
-                        RunTemplate("Install npm packages", "${adev}npm install"),
-                        RunTemplate("Clean", "${adev}./gradlew clean", cwd = "android")
+                        RunTemplate(L.run.templates.installNpmPackages, "${adev}npm install"),
+                        RunTemplate(L.run.templates.clean, "${adev}./gradlew clean", cwd = "android")
                     ),
                     needsAndroidSetup = !adevReady
                 )
@@ -93,16 +94,16 @@ object RunTemplates {
                         androidApp(
                             build = "${adev}./gradlew assembleDebug --console=plain",
                             apk = "app/build/outputs/apk/debug/app-debug.apk", appId = appIdOf(appGradle), remote = remote
-                        ) + listOf(RunTemplate("Clean", "${adev}./gradlew clean --console=plain")),
+                        ) + listOf(RunTemplate(L.run.templates.clean, "${adev}./gradlew clean --console=plain")),
                         needsAndroidSetup = !adevReady
                     )
                 } else {
                     groups += RunTemplateGroup(
                         "Gradle",
                         listOf(
-                            RunTemplate("Build", "./gradlew build --console=plain"),
-                            RunTemplate("Run", "./gradlew run --console=plain"),
-                            RunTemplate("Test", "./gradlew test --console=plain")
+                            RunTemplate(L.run.templates.build, "./gradlew build --console=plain"),
+                            RunTemplate(L.run.templates.run, "./gradlew run --console=plain"),
+                            RunTemplate(L.run.templates.test, "./gradlew test --console=plain")
                         )
                     )
                 }
@@ -113,25 +114,25 @@ object RunTemplates {
             val scripts = packageJson.optJSONObject("scripts")
             val list = mutableListOf<RunTemplate>()
             scripts?.let { s -> s.keys().forEach { key -> list += RunTemplate("npm run $key", "npm run $key", note = s.optString(key)) } }
-            list += RunTemplate("Install packages", "npm install")
+            list += RunTemplate(L.run.templates.installPackages, "npm install")
             groups += RunTemplateGroup("Node.js", list)
         }
         if (read("go.mod") != null) {
             groups += RunTemplateGroup(
                 "Go",
-                listOf(RunTemplate("Run", "go run ."), RunTemplate("Build", "go build ./..."), RunTemplate("Test", "go test ./..."))
+                listOf(RunTemplate(L.run.templates.run, "go run ."), RunTemplate(L.run.templates.build, "go build ./..."), RunTemplate(L.run.templates.test, "go test ./..."))
             )
         }
         if (read("Cargo.toml") != null) {
             groups += RunTemplateGroup(
                 "Rust",
-                listOf(RunTemplate("Run", "cargo run"), RunTemplate("Build", "cargo build"), RunTemplate("Test", "cargo test"))
+                listOf(RunTemplate(L.run.templates.run, "cargo run"), RunTemplate(L.run.templates.build, "cargo build"), RunTemplate(L.run.templates.test, "cargo test"))
             )
         }
         val python = mutableListOf<RunTemplate>()
-        if (read("manage.py") != null) python += RunTemplate("Django server", "python manage.py runserver")
-        listOf("main.py", "app.py").firstOrNull { read(it) != null }?.let { python += RunTemplate("Run $it", "python $it") }
-        if (read("requirements.txt") != null) python += RunTemplate("Install requirements", "pip install -r requirements.txt")
+        if (read("manage.py") != null) python += RunTemplate(L.run.templates.djangoServer, "python manage.py runserver")
+        listOf("main.py", "app.py").firstOrNull { read(it) != null }?.let { python += RunTemplate(L.run.templates.runValue(it), "python $it") }
+        if (read("requirements.txt") != null) python += RunTemplate(L.run.templates.installRequirements, "pip install -r requirements.txt")
         if (python.isNotEmpty()) groups += RunTemplateGroup("Python", python)
         if (read("Makefile") != null) groups += RunTemplateGroup("make", listOf(RunTemplate("make", "make")))
         return groups
@@ -144,19 +145,19 @@ object RunTemplates {
         val install = "adb install -r $apk"
         val open = appId?.let { "adb shell monkey -p $it -c android.intent.category.LAUNCHER 1 >/dev/null" }
         val installOpen = listOfNotNull(install, open).joinToString(" && ")
-        val adbNote = "Needs adb connected to this phone (Settings → ADB Connect)."
+        val adbNote = L.run.templates.needsAdbConnectedToThisPhone
         val list = mutableListOf(
-            RunTemplate("Build debug APK", build, cwd = cwd),
+            RunTemplate(L.run.templates.buildDebugApk, build, cwd = cwd),
             RunTemplate(
-                if (open != null) "Build, install & open" else "Build & install",
+                if (open != null) L.run.templates.buildInstallOpen else L.run.templates.buildInstall,
                 "$build && $installOpen", cwd = cwd, note = adbNote
             ),
-            RunTemplate(if (open != null) "Install & open" else "Install", installOpen, cwd = cwd, note = adbNote)
+            RunTemplate(if (open != null) L.run.templates.installOpen else L.run.templates.install, installOpen, cwd = cwd, note = adbNote)
         )
         // Without adb: Android's package installer opens and the user taps Install
-        if (!remote) list += RunTemplate("Install with Android's installer", "termux-open $apk", cwd = cwd, note = "No adb needed: tap Install on the screen that opens.")
+        if (!remote) list += RunTemplate(L.run.templates.installWithAndroidsInstaller, "termux-open $apk", cwd = cwd, note = L.run.templates.noAdbNeededTapInstallOn)
         if (appId != null) {
-            list += RunTemplate("App log (logcat)", "adb logcat --pid=\$(adb shell pidof -s $appId)", cwd = cwd, note = "Start the app first. Stop ends it.")
+            list += RunTemplate(L.run.templates.appLogLogcat, "adb logcat --pid=\$(adb shell pidof -s $appId)", cwd = cwd, note = L.run.templates.startTheAppFirstStopEnds)
         }
         return list
     }

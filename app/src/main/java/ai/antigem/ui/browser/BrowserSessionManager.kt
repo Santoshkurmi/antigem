@@ -47,6 +47,7 @@ import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import kotlin.coroutines.resume
+import ai.antigem.i18n.L
 
 /**
  * Diagnostic Console Log entry captured from a live WebView tab.
@@ -416,7 +417,7 @@ class BrowserSessionManager private constructor() {
     )
 
     private val defaultShortcuts = listOf(
-        SpeedDialShortcut(id = "google", title = "Google", url = "https://www.google.com"),
+        SpeedDialShortcut(id = "google", title = L.browser.sessionManager.google, url = "https://www.google.com"),
         SpeedDialShortcut(id = "youtube", title = "YouTube", url = "https://www.youtube.com")
     )
 
@@ -1057,7 +1058,7 @@ class BrowserSessionManager private constructor() {
                     val desc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         val descriptionStr = error?.description?.toString() ?: ""
                         if (descriptionStr.isNotBlank()) descriptionStr else "Network Error (${error?.errorCode})"
-                    } else "Network Connection Failure"
+                    } else L.browser.sessionManager.networkConnectionFailure
                     val reqUrl = request?.url?.toString() ?: tab.url
                     val isMain = request?.isForMainFrame ?: true
 
@@ -1079,7 +1080,7 @@ class BrowserSessionManager private constructor() {
                     super.onReceivedHttpError(view, request, errorResponse)
                     val reqUrl = request?.url?.toString() ?: tab.url
                     val status = errorResponse?.statusCode ?: 0
-                    val reason = errorResponse?.reasonPhrase ?: "HTTP Error"
+                    val reason = errorResponse?.reasonPhrase ?: L.browser.sessionManager.httpError
                     val isMain = request?.isForMainFrame ?: false
 
                     val err = BrowserNetworkError(
@@ -1107,11 +1108,11 @@ class BrowserSessionManager private constructor() {
                     }
 
                     val primaryMsg = when (error?.primaryError) {
-                        android.net.http.SslError.SSL_UNTRUSTED -> "Untrusted Certificate Authority (Self-signed or invalid CA)"
-                        android.net.http.SslError.SSL_EXPIRED -> "SSL Certificate Expired"
-                        android.net.http.SslError.SSL_IDMISMATCH -> "Hostname Mismatch"
-                        android.net.http.SslError.SSL_NOTYETVALID -> "Certificate Not Yet Valid"
-                        else -> "SSL Handshake / Security Failure"
+                        android.net.http.SslError.SSL_UNTRUSTED -> L.browser.sessionManager.untrustedCertificateAuthoritySelfSigned
+                        android.net.http.SslError.SSL_EXPIRED -> L.browser.sessionManager.sslCertificateExpired
+                        android.net.http.SslError.SSL_IDMISMATCH -> L.browser.sessionManager.hostnameMismatch
+                        android.net.http.SslError.SSL_NOTYETVALID -> L.browser.sessionManager.certificateNotYetValid
+                        else -> L.browser.sessionManager.sslHandshakeSecurityFailure
                     }
                     val err = BrowserNetworkError(
                         url = reqUrl,
@@ -1128,7 +1129,7 @@ class BrowserSessionManager private constructor() {
 
                 override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
                     val didCrash = detail?.didCrash() == true
-                    val msg = if (didCrash) "WebView render process crashed unexpectedly." else "WebView render process was terminated by OS (Memory Pressure)."
+                    val msg = if (didCrash) L.browser.sessionManager.webviewRenderProcessCrashedUnexpectedly else L.browser.sessionManager.webviewRenderProcessWasTerminatedBy
                     val err = BrowserNetworkError(
                         url = tab.url,
                         errorCode = -1,
@@ -1916,7 +1917,7 @@ class BrowserSessionManager private constructor() {
                 ?: error("Tab not found")
             val wv = tab.webView ?: error("WebView not initialized for tab")
             val located = JSONObject(evaluateJs(tab.id, uploadLocateScript(selector, x, y, fx, fy)).getOrThrow())
-            require(located.optBoolean("ok")) { located.optString("error").ifBlank { "Could not find the upload element" } }
+            require(located.optBoolean("ok")) { located.optString("error").ifBlank { L.browser.sessionManager.couldNotFindTheUploadElement } }
             val result = JSONObject().put("files", JSONArray(files.map { it.name })).put("target", located.optString("tag"))
                 .put("file_input", located.optBoolean("file_input"))
             try {
@@ -1948,7 +1949,7 @@ class BrowserSessionManager private constructor() {
                         .put("data", android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP))
                 })
                 val done = JSONObject(evaluateJs(tab.id, uploadInPageScript(payload)).getOrThrow())
-                require(done.optBoolean("ok")) { done.optString("error").ifBlank { "In-page upload failed" } }
+                require(done.optBoolean("ok")) { done.optString("error").ifBlank { L.browser.sessionManager.inPageUploadFailed } }
                 result.put("method", done.getString("method")).put("given", done.getInt("given"))
                     .put("note", "No file chooser opened; the files were built inside the page. Some sites ignore that, so check the page shows them.")
             } finally {

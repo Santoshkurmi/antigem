@@ -56,6 +56,7 @@ import ai.antigem.ui.claude.ControlChip
 import ai.antigem.ui.components.OpenCodeAccent
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import ai.antigem.i18n.L
 
 /**
  * OpenCode's permission requests as approval-panel items: allow once, always allow (OpenCode remembers the pattern
@@ -78,36 +79,36 @@ fun openCodeApprovalItems(pending: List<OpenCodeTranscript.Permission>, backend:
                 !diff.isNullOrBlank() -> diff.lines().take(60).joinToString("\n")
                 else -> null
             },
-            primary = ApprovalChoice("Allow") { backend.replyPermission(p.id, "once") },
-            always = if (p.save.isEmpty()) listOf(ApprovalChoice("Always allow ${p.action}") { backend.replyPermission(p.id, "always") })
-            else listOf(ApprovalChoice("Always allow " + p.save.joinToString(", "), "OpenCode remembers this for the project") { backend.replyPermission(p.id, "always") }),
-            denyPlaceholder = "Tell OpenCode what to do instead (optional)",
+            primary = ApprovalChoice(L.common.allow) { backend.replyPermission(p.id, "once") },
+            always = if (p.save.isEmpty()) listOf(ApprovalChoice(L.opencode.chatUi.alwaysAllowAction(p.action)) { backend.replyPermission(p.id, "always") })
+            else listOf(ApprovalChoice(L.opencode.chatUi.alwaysAllowValue(p.save.joinToString(", ")), L.opencode.chatUi.opencodeRemembersThisForTheProject) { backend.replyPermission(p.id, "always") }),
+            denyPlaceholder = L.opencode.chatUi.tellOpencodeWhatToDoInstead,
             onDeny = { backend.replyPermission(p.id, "reject", it) }
         )
     }
 
 private fun permissionTitle(action: String): Pair<ImageVector, String> = when (action) {
-    "shell", "bash" -> Icons.Outlined.Terminal to "Run a command?"
-    "edit" -> Icons.Outlined.EditNote to "Change a file?"
-    "write" -> Icons.AutoMirrored.Outlined.NoteAdd to "Create a file?"
-    "webfetch" -> Icons.Outlined.Language to "Fetch a web page?"
-    "websearch" -> Icons.Outlined.TravelExplore to "Search the web?"
-    "read", "list", "glob", "grep" -> Icons.Outlined.FolderOpen to "Read this?"
-    "external_directory" -> Icons.Outlined.FolderOpen to "Work outside the project?"
-    "skill" -> Icons.Outlined.Extension to "Use a skill?"
-    else -> Icons.Outlined.Shield to "Allow $action?"
+    "shell", "bash" -> Icons.Outlined.Terminal to L.common.runACommand
+    "edit" -> Icons.Outlined.EditNote to L.opencode.chatUi.changeAFile
+    "write" -> Icons.AutoMirrored.Outlined.NoteAdd to L.opencode.chatUi.createAFile
+    "webfetch" -> Icons.Outlined.Language to L.opencode.chatUi.fetchAWebPage
+    "websearch" -> Icons.Outlined.TravelExplore to L.common.searchTheWeb
+    "read", "list", "glob", "grep" -> Icons.Outlined.FolderOpen to L.opencode.chatUi.readThis
+    "external_directory" -> Icons.Outlined.FolderOpen to L.opencode.chatUi.workOutsideTheProject
+    "skill" -> Icons.Outlined.Extension to L.opencode.chatUi.useASkill
+    else -> Icons.Outlined.Shield to L.opencode.chatUi.allowAction(action)
 }
 
 fun openCodeModeLabel(mode: String): String = when (mode) {
-    OpenCodePreferences.MODE_AUTO -> "Allow all"
-    OpenCodePreferences.MODE_DEFAULT -> "OpenCode rules"
-    else -> "Ask first"
+    OpenCodePreferences.MODE_AUTO -> L.opencode.chatUi.allowAll
+    OpenCodePreferences.MODE_DEFAULT -> L.opencode.chatUi.opencodeRules
+    else -> L.common.askFirst
 }
 
 fun openCodeModeDescription(mode: String): String = when (mode) {
-    OpenCodePreferences.MODE_AUTO -> "Commands, edits and web access run without asking."
-    OpenCodePreferences.MODE_DEFAULT -> "OpenCode's own rules from its config (by default most tools run without asking)."
-    else -> "Ask before commands, file changes and web access. Reading the project is allowed."
+    OpenCodePreferences.MODE_AUTO -> L.opencode.chatUi.commandsEditsAndWebAccessRun
+    OpenCodePreferences.MODE_DEFAULT -> L.opencode.chatUi.opencodesOwnRulesFromItsConfig
+    else -> L.opencode.chatUi.askBeforeCommandsFileChangesAnd
 }
 
 /** Icon and color of an approval mode (chip and sheet). */
@@ -132,9 +133,9 @@ fun openCodeAgentIcon(id: String): ImageVector = when (id) {
 }
 
 private fun openCodeAgentDescription(a: ai.antigem.data.agent.opencode.OpenCodeAgent): String = when (a.id) {
-    "build" -> "Makes changes: edits files and runs commands to get the job done."
-    "plan" -> "Read-only: explores the code and plans the work, without changing files."
-    else -> a.description.ifBlank { "Your own agent from the OpenCode config." }
+    "build" -> L.opencode.chatUi.makesChangesEditsFilesAndRuns
+    "plan" -> L.opencode.chatUi.readOnlyExploresTheCodeAnd
+    else -> a.description.ifBlank { L.opencode.chatUi.yourOwnAgentFromTheOpencode }
 }
 
 /** OpenCode chat controls above the input: agent (Build / Plan), approval mode, effort and thinking, and the retry / compaction notice. */
@@ -194,7 +195,7 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
             }
             if (variants.isNotEmpty() || model?.supportsThinking == true) {
                 ControlChip(
-                    text = if (thinkingOff) "No thinking" else "Thinking",
+                    text = if (thinkingOff) L.opencode.chatUi.noThinking else L.common.thinking,
                     icon = Icons.Outlined.Lightbulb,
                     color = if (thinkingOff) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else OpenCodeAccent,
                     highlighted = !thinkingOff,
@@ -205,7 +206,7 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
                             canTurnOff -> backend.setVariant("none")
                             else -> android.widget.Toast.makeText(
                                 androidContext,
-                                "${model?.displayName ?: "This model"} always thinks; it can't be turned off.",
+                                L.opencode.chatUi.valueAlwaysThinksItCantBe(model?.displayName ?: L.opencode.chatUi.thisModel),
                                 android.widget.Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -222,7 +223,7 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
             onDismiss = { effortSheet = false },
             agent = AgentKind.OPENCODE,
             color = OpenCodeAccent,
-            detail = "how hard ${model?.displayName ?: "the model"} thinks on each reply"
+            detail = L.opencode.chatUi.howHardValueThinksOnEach(model?.displayName ?: L.opencode.chatUi.theModel)
         )
     }
     if (agentSheet) {
@@ -232,7 +233,7 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
                 ai.antigem.data.agent.opencode.OpenCodeAgent("plan", "plan", "")
             )
         }
-        ai.antigem.ui.claude.ClaudePickerSheet("Agent", "who works on this chat", { agentSheet = false }, agent = AgentKind.OPENCODE) {
+        ai.antigem.ui.claude.ClaudePickerSheet(L.opencode.chatUi.agent, L.opencode.chatUi.whoWorksOnThisChat, { agentSheet = false }, agent = AgentKind.OPENCODE) {
             list.forEach { a ->
                 ai.antigem.ui.claude.PickerOption(
                     title = a.name.replaceFirstChar { it.uppercase() },
@@ -243,11 +244,11 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
                     onClick = { backend.selectAgent(a.id); agentSheet = false }
                 )
             }
-            SheetNote("Switching applies to the next message of this chat. New chats use the agent from Settings → OpenCode → Permissions.")
+            SheetNote(L.opencode.chatUi.switchingAppliesToTheNextMessage)
         }
     }
     if (modeSheet) {
-        ai.antigem.ui.claude.ClaudePickerSheet("Approvals", "what OpenCode asks before doing", { modeSheet = false }, agent = AgentKind.OPENCODE) {
+        ai.antigem.ui.claude.ClaudePickerSheet(L.common.approvals, L.opencode.chatUi.whatOpencodeAsksBeforeDoing, { modeSheet = false }, agent = AgentKind.OPENCODE) {
             listOf(OpenCodePreferences.MODE_ASK, OpenCodePreferences.MODE_AUTO, OpenCodePreferences.MODE_DEFAULT).forEach { m ->
                 ai.antigem.ui.claude.PickerOption(
                     title = openCodeModeLabel(m),
@@ -258,7 +259,7 @@ fun OpenCodeControlsStrip(backend: OpenCodeChatBackend) {
                     onClick = { backend.setPermissionMode(m); modeSheet = false }
                 )
             }
-            SheetNote("Applies to this chat right away and to new chats. Requests show above the message box.")
+            SheetNote(L.opencode.chatUi.appliesToThisChatRightAway)
         }
     }
 }

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import ai.antigem.i18n.L
 
 /**
  * The "Voice call" Quick Settings tile: one tap calls Antigravity in the last chat that had a call (the app stays in
@@ -46,8 +47,8 @@ class VoiceCallTileService : TileService() {
         val inCall = AgyVoiceCall.state.value.inCall
         qsTile?.apply {
             state = if (inCall) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-            label = "Voice call"
-            if (Build.VERSION.SDK_INT >= 29) subtitle = if (inCall) "In call · tap to end" else "Tap to call"
+            label = L.voice.callTileService.voiceCall
+            if (Build.VERSION.SDK_INT >= 29) subtitle = if (inCall) L.voice.callTileService.inCallTapToEnd else L.voice.callTileService.tapToCall
             updateTile()
         }
     }

@@ -33,6 +33,7 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
+import ai.antigem.i18n.L
 
 /** One chat as the home screen shows it. */
 @Serializable
@@ -271,7 +272,7 @@ object HomeSnapshot {
     }
 
     private fun projectName(c: Conversation): String {
-        if (c.isCloud) return "Cloud"
+        if (c.isCloud) return L.homescreen.homeSnapshot.cloud
         val uri = c.workspaceUri.trim().trimEnd('/')
         if (uri.isEmpty()) return ""
         val path = runCatching { URLDecoder.decode(uri.removePrefix("file://"), "UTF-8") }.getOrDefault(uri)

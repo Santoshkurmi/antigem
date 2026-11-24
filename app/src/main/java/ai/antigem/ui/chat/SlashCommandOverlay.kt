@@ -44,15 +44,16 @@ import ai.antigem.data.remote.SlashCommandItem
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.AgyAccent
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 private data class SlashGroup(val title: String, val icon: ImageVector, val color: Color)
 
 private fun groupOf(type: String): SlashGroup = when (type) {
-    "app" -> SlashGroup("Opens in the app", Icons.AutoMirrored.Outlined.OpenInNew, AgyAccent)
-    "command" -> SlashGroup("Commands", Icons.Outlined.Terminal, ClaudeTerracotta)
-    "custom" -> SlashGroup("Custom commands", Icons.Outlined.AutoAwesome, ClaudeTerracotta)
-    "plugin" -> SlashGroup("Custom AntiGem plugins", Icons.Outlined.Extension, AgyAccent)
-    else -> SlashGroup("Skills & plugins", Icons.Outlined.Extension, QuotaGreen)
+    "app" -> SlashGroup(L.chat.slashCommandOverlay.opensInTheApp, Icons.AutoMirrored.Outlined.OpenInNew, AgyAccent)
+    "command" -> SlashGroup(L.chat.slashCommandOverlay.commands, Icons.Outlined.Terminal, ClaudeTerracotta)
+    "custom" -> SlashGroup(L.chat.slashCommandOverlay.customCommands, Icons.Outlined.AutoAwesome, ClaudeTerracotta)
+    "plugin" -> SlashGroup(L.chat.slashCommandOverlay.customAntigemPlugins, Icons.Outlined.Extension, AgyAccent)
+    else -> SlashGroup(L.chat.slashCommandOverlay.skillsPlugins, Icons.Outlined.Extension, QuotaGreen)
 }
 
 /**

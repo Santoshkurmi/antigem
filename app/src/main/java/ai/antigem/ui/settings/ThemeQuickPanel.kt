@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.theme.ThemeManager
+import ai.antigem.i18n.L
 
 /**
  * A floating theme picker (opened from the sidebar). It covers only the bottom of the screen and takes no touches
@@ -65,15 +66,15 @@ fun ThemeQuickPanel(themeMode: String, onSetThemeMode: (String) -> Unit, onClose
             Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Palette, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(7.dp))
-                Text("Themes", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = onSurface)
+                Text(L.common.themes, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = onSurface)
                 Spacer(Modifier.weight(1f))
                 ModeToggle(themeMode, onSetThemeMode)
                 IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Outlined.Close, "Close", tint = onSurface.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Close, L.common.close, tint = onSurface.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                 }
             }
             Text(
-                "Tap a theme to try it: the app changes behind this panel.",
+                L.settings.themeQuick.tapAThemeToTryIt,
                 fontSize = 11.sp, color = onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 8.dp)
             )
@@ -97,9 +98,9 @@ fun ThemeQuickPanel(themeMode: String, onSetThemeMode: (String) -> Unit, onClose
 @Composable
 private fun ModeToggle(themeMode: String, onSetThemeMode: (String) -> Unit) {
     val options = listOf(
-        Triple("LIGHT", "Light", Icons.Outlined.LightMode),
-        Triple("DARK", "Dark", Icons.Outlined.DarkMode),
-        Triple("SYSTEM", "Auto", Icons.Outlined.BrightnessAuto)
+        Triple("LIGHT", L.settings.themeQuick.light, Icons.Outlined.LightMode),
+        Triple("DARK", L.settings.themeQuick.dark, Icons.Outlined.DarkMode),
+        Triple("SYSTEM", L.common.auto, Icons.Outlined.BrightnessAuto)
     )
     Row(
         Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)).padding(2.dp),

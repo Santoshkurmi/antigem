@@ -116,9 +116,16 @@ fun GeminiTheme(
         }
     }
 
-    CompositionLocalProvider(
-        LocalIsDarkTheme provides darkTheme
-    ) {
+    // the app language (Settings → Language, or language_mcp): a new value redraws every screen once in the new
+    // language, keeping its state; a right-to-left language turns the layout around
+    val languageVersion = ai.antigem.i18n.LanguageManager.version
+    val rtl = ai.antigem.i18n.LanguageManager.isRtl
+    val provided = buildList {
+        add(LocalIsDarkTheme provides darkTheme)
+        add(ai.antigem.i18n.LocalLanguageVersion provides languageVersion)
+        if (rtl) add(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl)
+    }.toTypedArray()
+    CompositionLocalProvider(*provided) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

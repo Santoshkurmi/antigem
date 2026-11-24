@@ -14,6 +14,7 @@ import ai.antigem.domain.model.AgentKind
 import ai.antigem.domain.model.ToolCall
 import ai.antigem.domain.model.ToolType
 import ai.antigem.ui.chat.PendingToolApproval
+import ai.antigem.i18n.L
 
 /**
  * Antigravity's pending tool approvals as approval-panel items: allow once, always allow (conversation /
@@ -26,14 +27,14 @@ fun agyApprovalItems(
 ): List<ApprovalItem> = pending.map { approval ->
     val call = approval.toolCall
     val (icon, title) = when (call.toolType) {
-        ToolType.BASH -> Icons.Outlined.Terminal to "Run a command?"
-        ToolType.EDIT_FILE -> Icons.Outlined.EditNote to "Edit a file?"
-        ToolType.VIEW_FILE, ToolType.LIST_DIR, ToolType.FIND, ToolType.GREP_SEARCH -> Icons.Outlined.FolderOpen to "Read files?"
-        ToolType.SEARCH_WEB -> Icons.Outlined.TravelExplore to "Search the web?"
-        ToolType.READ_URL -> Icons.Outlined.Language to "Open a web page?"
-        ToolType.GENERATE_IMAGE -> Icons.Outlined.Image to "Generate an image?"
-        ToolType.MCP -> Icons.Outlined.Extension to "Use ${call.name.substringAfterLast("__")}?"
-        else -> Icons.Outlined.Shield to "Allow ${call.name}?"
+        ToolType.BASH -> Icons.Outlined.Terminal to L.common.runACommand
+        ToolType.EDIT_FILE -> Icons.Outlined.EditNote to L.agents.agyApprovals.editAFile
+        ToolType.VIEW_FILE, ToolType.LIST_DIR, ToolType.FIND, ToolType.GREP_SEARCH -> Icons.Outlined.FolderOpen to L.agents.agyApprovals.readFiles
+        ToolType.SEARCH_WEB -> Icons.Outlined.TravelExplore to L.common.searchTheWeb
+        ToolType.READ_URL -> Icons.Outlined.Language to L.agents.agyApprovals.openAWebPage
+        ToolType.GENERATE_IMAGE -> Icons.Outlined.Image to L.agents.agyApprovals.generateAnImage
+        ToolType.MCP -> Icons.Outlined.Extension to L.agents.agyApprovals.useName(call.name.substringAfterLast("__"))
+        else -> Icons.Outlined.Shield to L.agents.agyApprovals.allowName(call.name)
     }
     val body = call.command.ifBlank { call.output }
     fun scope(label: String, description: String, value: String) =
@@ -45,13 +46,13 @@ fun agyApprovalItems(
         title = title,
         subtitle = call.name,
         preview = if (call.toolType == ToolType.BASH) "$ $body" else body,
-        primary = ApprovalChoice("Allow") { onApprove(call, approval.messageId, PermissionScopes.ONCE) },
+        primary = ApprovalChoice(L.common.allow) { onApprove(call, approval.messageId, PermissionScopes.ONCE) },
         always = listOf(
-            scope("For this conversation", "Don't ask again in this chat", PermissionScopes.CONVERSATION),
-            scope("In this workspace", "Don't ask again in this project", PermissionScopes.PROJECT),
-            scope("Everywhere", "Don't ask again anywhere", PermissionScopes.GLOBAL)
+            scope(L.agents.agyApprovals.forThisConversation, L.agents.agyApprovals.dontAskAgainInThisChat, PermissionScopes.CONVERSATION),
+            scope(L.agents.agyApprovals.inThisWorkspace, L.agents.agyApprovals.dontAskAgainInThisProject, PermissionScopes.PROJECT),
+            scope(L.agents.agyApprovals.everywhere, L.agents.agyApprovals.dontAskAgainAnywhere, PermissionScopes.GLOBAL)
         ),
-        denyPlaceholder = "Tell Antigravity what to do instead (optional)",
+        denyPlaceholder = L.agents.agyApprovals.tellAntigravityWhatToDoInstead,
         onDeny = { onReject(call, approval.messageId, it) }
     )
 }

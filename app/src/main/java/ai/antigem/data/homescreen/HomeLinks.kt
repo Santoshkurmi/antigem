@@ -6,6 +6,7 @@ import android.net.Uri
 import ai.antigem.domain.model.AgentKind
 import java.security.MessageDigest
 import java.security.SecureRandom
+import ai.antigem.i18n.L
 
 /**
  * Everything the home screen can open in AntiGem (a chat, a new chat, a page, a web page, a script, a finished run, the
@@ -25,14 +26,15 @@ object HomeLinks {
     private const val SCHEME = "antigem"
 
     /** The app's pages a link can open (AppViewMode names). */
-    enum class Page(val viewMode: String, val label: String) {
-        CHAT("CHAT", "Chat"),
-        TERMINAL("TERMINAL", "Terminal"),
-        BROWSER("BROWSER", "Browser"),
-        IDE("IDE", "Code editor"),
-        FILES("FILES", "Files"),
-        NOTES("NOTES", "Notes"),
-        RUN("RUN", "Run")
+    enum class Page(val viewMode: String, private val labelText: () -> String) {
+        CHAT("CHAT", { L.homescreen.homeLinks.chat }),
+        TERMINAL("TERMINAL", { L.homescreen.homeLinks.terminal }),
+        BROWSER("BROWSER", { L.homescreen.homeLinks.browser }),
+        IDE("IDE", { L.homescreen.homeLinks.codeEditor }),
+        FILES("FILES", { L.homescreen.homeLinks.files }),
+        NOTES("NOTES", { L.homescreen.homeLinks.notes }),
+        RUN("RUN", { L.homescreen.homeLinks.run });
+        val label: String get() = labelText()
     }
 
     sealed interface Target {

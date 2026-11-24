@@ -56,6 +56,7 @@ import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.updater.AppUpdateDialog
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 /**
  * Settings > Updates: beta updates ([BetaUpdates]) and how often AntiGem checks for a new version in the background
@@ -86,13 +87,10 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
     if (showBetaConfirm) {
         AlertDialog(
             onDismissRequest = { showBetaConfirm = false },
-            title = { Text("Get beta updates?") },
+            title = { Text(L.settings.updateSettings.getBetaUpdates) },
             text = {
                 Text(
-                    "Betas are early versions for testing new features, and they can have bugs.\n\n" +
-                        "Once a beta is installed you can't go back to the stable version until the next stable release " +
-                        "(uninstalling would delete your data). Turning this off later stops new betas; you then get the " +
-                        "next stable release as a normal update."
+                    L.settings.updateSettings.betasAreEarlyVersionsForTesting
                 )
             },
             confirmButton = {
@@ -105,18 +103,18 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                         scope.launch {
                             AppUpdateManager(context).checkForUpdates(forceCheck = true).onSuccess { info ->
                                 if (info != null) updateInfo = info
-                                else Toast.makeText(context, "Beta updates on. Nothing newer right now.", Toast.LENGTH_SHORT).show()
+                                else Toast.makeText(context, L.settings.updateSettings.betaUpdatesOnNothingNewerRight, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
                 ) {
-                    Text("Turn on", fontWeight = FontWeight.Bold)
+                    Text(L.settings.updateSettings.turnOn, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showBetaConfirm = false }) {
-                    Text("Cancel")
+                    Text(L.common.cancel)
                 }
             }
         )
@@ -131,10 +129,10 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
     ) {
         // Beta updates
         UpdatesCard(cardBg, cardBorder) {
-            CardTitle(Icons.Outlined.NewReleases, "Beta updates")
+            CardTitle(Icons.Outlined.NewReleases, L.settings.updateSettings.betaUpdates)
             SwitchRow(
-                title = "Get beta updates",
-                subtitle = "Early versions with new features before everyone else. They can have bugs.",
+                title = L.settings.updateSettings.getBetaUpdates2,
+                subtitle = L.settings.updateSettings.earlyVersionsWithNewFeaturesBefore,
                 checked = betaUpdates,
                 onCheckedChange = { on ->
                     if (on) {
@@ -150,7 +148,7 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                         betaUpdates = false
                         if (BuildConfig.IS_BETA) Toast.makeText(
                             context,
-                            "No more betas. You stay on this one until the next stable release, which then comes as a normal update.",
+                            L.settings.updateSettings.noMoreBetasYouStayOn,
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -158,10 +156,10 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
             )
             Text(
                 text = when {
-                    BuildConfig.IS_BETA && betaUpdates -> "You're on a beta (v${BuildConfig.VERSION_NAME}). You get each new beta, and the stable releases."
-                    BuildConfig.IS_BETA -> "You're on a beta (v${BuildConfig.VERSION_NAME}). The next stable release comes as a normal update; no more betas until then."
-                    betaUpdates -> "You get each new beta as soon as it's out, and the stable releases."
-                    else -> "You get the stable releases only."
+                    BuildConfig.IS_BETA && betaUpdates -> L.settings.updateSettings.youreOnABetaVVersion(BuildConfig.VERSION_NAME)
+                    BuildConfig.IS_BETA -> L.settings.updateSettings.youreOnABetaVVersion2(BuildConfig.VERSION_NAME)
+                    betaUpdates -> L.settings.updateSettings.youGetEachNewBetaAs
+                    else -> L.settings.updateSettings.youGetTheStableReleasesOnly
                 },
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -171,10 +169,10 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
 
         // Background checks
         UpdatesCard(cardBg, cardBorder) {
-            CardTitle(Icons.Outlined.Schedule, "Background checks")
+            CardTitle(Icons.Outlined.Schedule, L.settings.updateSettings.backgroundChecks)
             SwitchRow(
-                title = "Check in the background",
-                subtitle = "Notifies you when a new version is out, even when AntiGem is closed.",
+                title = L.settings.updateSettings.checkInTheBackground,
+                subtitle = L.settings.updateSettings.notifiesYouWhenANewVersion,
                 checked = backgroundOn,
                 onCheckedChange = { on ->
                     backgroundOn = on
@@ -186,7 +184,7 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Every", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(L.settings.updateSettings.every, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                     OutlinedTextField(
                         value = everyText,
                         onValueChange = { text ->
@@ -215,14 +213,14 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                     }
                 }
                 if (!everyValid) Text(
-                    text = "Enter a number from 1 to ${BackgroundUpdateCheck.MAX_EVERY}.",
+                    text = L.settings.updateSettings.enterANumberFrom1To(BackgroundUpdateCheck.MAX_EVERY),
                     fontSize = 12.sp,
                     color = AppColors.danger
                 )
             }
             Text(
-                text = if (backgroundOn) "AntiGem checks ${describe(every, unit)} in the background, and every time you open it."
-                else "No background checks. AntiGem still checks every time you open it.",
+                text = if (backgroundOn) L.settings.updateSettings.antigemChecksDescribeInTheBackground(describe(every, unit))
+                else L.settings.updateSettings.noBackgroundChecksAntigemStillChecks,
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 16.sp

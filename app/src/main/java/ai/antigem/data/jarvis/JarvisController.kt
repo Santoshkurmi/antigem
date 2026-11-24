@@ -47,6 +47,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.util.UUID
+import ai.antigem.i18n.L
 
 /**
  * The brain of Jarvis inside the app.
@@ -263,7 +264,7 @@ object JarvisController {
     fun setEnabled(on: Boolean) {
         JarvisPreferences.enabled.set(on)
         if (on && JarvisPreferences.voiceAssistant.value && JarvisPreferences.agentKind == null) {
-            showNotice("Pick the agent Jarvis talks to (Claude Code, Antigravity, OpenCode or Codex): tap here.", "agent")
+            showNotice(L.jarvis.controller.pickTheAgentJarvisTalksTo, "agent")
         }
         if (!on) {
             setHandsFree(false)
@@ -280,7 +281,7 @@ object JarvisController {
         JarvisPreferences.voiceAssistant.set(on)
         if (on) {
             if (JarvisPreferences.enabled.value && JarvisPreferences.agentKind == null) {
-                showNotice("Pick the agent the voice Jarvis talks to (Claude Code, Antigravity, OpenCode or Codex): tap here.", "agent")
+                showNotice(L.jarvis.controller.pickTheAgentTheVoiceJarvis, "agent")
             }
             return
         }
@@ -297,7 +298,7 @@ object JarvisController {
         val target = on && JarvisPreferences.enabled.value && JarvisPreferences.voiceAssistant.value
         JarvisPreferences.handsFree.set(target)
         if (target) {
-            if (!hasMic()) { showNotice("Allow the microphone first.", "mic"); JarvisPreferences.handsFree.set(false); return }
+            if (!hasMic()) { showNotice(L.jarvis.controller.allowTheMicrophoneFirst, "mic"); JarvisPreferences.handsFree.set(false); return }
             JarvisService.start(app)
         } else {
             stopWake()
@@ -472,14 +473,14 @@ object JarvisController {
         val n = call.name.lowercase()
         return when {
             n.contains("jarvis") -> null
-            n == "toolsearch" -> "Loading my tools"
-            n.startsWith("mcp__") -> "Using ${n.removePrefix("mcp__").substringBefore("__").replace('_', ' ')}"
-            n == "bash" || n == "shell" || n.contains("terminal") || n.contains("command") -> "Running ${call.command.trim().take(32).ifBlank { "a command" }}"
-            n.contains("read") || n.contains("view") -> "Reading a file"
-            n.contains("write") || n.contains("edit") -> "Editing a file"
-            n.contains("grep") || n.contains("glob") || n.contains("find") || n.contains("search") && !n.contains("web") -> "Searching the code"
-            n.contains("web") -> "Looking it up online"
-            else -> "Working on it"
+            n == "toolsearch" -> L.jarvis.controller.loadingMyTools
+            n.startsWith("mcp__") -> L.jarvis.controller.usingRemoveprefix(n.removePrefix("mcp__").substringBefore("__").replace('_', ' '))
+            n == "bash" || n == "shell" || n.contains("terminal") || n.contains("command") -> L.jarvis.controller.runningValue(call.command.trim().take(32).ifBlank { L.jarvis.controller.aCommand })
+            n.contains("read") || n.contains("view") -> L.jarvis.controller.readingAFile
+            n.contains("write") || n.contains("edit") -> L.jarvis.controller.editingAFile
+            n.contains("grep") || n.contains("glob") || n.contains("find") || n.contains("search") && !n.contains("web") -> L.jarvis.controller.searchingTheCode
+            n.contains("web") -> L.jarvis.controller.lookingItUpOnline
+            else -> L.jarvis.controller.workingOnIt
         }
     }
 
@@ -531,15 +532,15 @@ object JarvisController {
             if (fresh) lastReplySeen = seenKey
             if (fresh && text.contains(JarvisSkill.MCP_MISSING)) { onMcpMissing(); return@launch }
             if (first && calls == 0 && !turnSpoke && reply.error == null) {
-                showNotice("Jarvis answered without its app tools. If it can't control the app, add the Jarvis MCP server to ${agentLabel()} (Settings → Jarvis → Setup).", "setup")
+                showNotice(L.jarvis.controller.jarvisAnsweredWithoutItsAppTools(agentLabel()), "setup")
             }
             if (!fresh || turnSpoke || isSpeaking() || pendingAsk != null || pendingQuestions().isNotEmpty() || listening.value) return@launch
             if (text.isBlank()) {
                 // the turn ended with an error and no words: one plain sentence, never the error card itself
                 val err = reply.error ?: return@launch
-                showNotice("Jarvis' agent stopped with an error: ${err.take(160)}")
-                addLog("Jarvis", "Error: ${err.take(160)}")
-                speakOut("Sorry, I ran into a problem. " + firstSentence(err, 120))
+                showNotice(L.jarvis.controller.jarvisAgentStoppedWithAnError(err.take(160)))
+                addLog("Jarvis", L.jarvis.controller.errorValue(err.take(160)))
+                speakOut(L.jarvis.controller.sorryIRanIntoAProblem(firstSentence(err, 120)))
                 return@launch
             }
             // only the words it wrote for the user: never its thinking, tool markers or markdown
@@ -558,14 +559,14 @@ object JarvisController {
         AgentKind.AGY -> "Antigravity"
         AgentKind.OPENCODE -> "OpenCode"
         AgentKind.CODEX -> "Codex"
-        null -> "the agent"
+        null -> L.jarvis.controller.theAgent
     }
 
     private suspend fun onMcpMissing() {
         _mcpProblem.value = true
-        showNotice("Jarvis' app tools (jarvis_mcp) are not connected to ${agentLabel()}. Tap to open the setup and add the Jarvis MCP server.", "setup")
-        addLog("Jarvis", "My app tools aren't connected.")
-        speakOut("My app tools aren't connected yet, so I can't do that. Open Settings, then Jarvis, and add the Jarvis MCP server.")
+        showNotice(L.jarvis.controller.jarvisAppToolsJarvisMcpAre(agentLabel()), "setup")
+        addLog("Jarvis", L.jarvis.controller.myAppToolsArentConnected)
+        speakOut(L.jarvis.controller.myAppToolsArentConnectedYet)
     }
 
     // ------------------------------------------------------------------ questions the agents ask (AskUserQuestion)
@@ -603,10 +604,10 @@ object JarvisController {
         q.description?.takeIf { it.isNotBlank() }?.let { append(' ').append(it.trim().take(120)) }
         val opts = q.options.filter { !it.isCustomInput }
         if (opts.isNotEmpty()) {
-            append(" Options: ")
+            append(L.jarvis.controller.options)
             opts.take(5).forEachIndexed { i, o -> append(i + 1).append(", ").append(o.label.trim()).append(". ") }
-            if (opts.size > 5) append("And ${opts.size - 5} more. ")
-            append(if (q.isMultiSelect) "You can pick several." else "Say a number or the name.")
+            if (opts.size > 5) append(L.jarvis.controller.andValueMore(opts.size - 5))
+            append(if (q.isMultiSelect) L.jarvis.controller.youCanPickSeveral else L.jarvis.controller.sayANumberOrTheName)
         }
     }
 
@@ -675,7 +676,7 @@ object JarvisController {
                 val responses = ArrayList<AskQuestionResponseItemDto>()
                 val summary = ArrayList<String>()
                 var skipped = false
-                val who = if (q.source == "task") JarvisTasks.find(q.chatId)?.title?.let { "The task $it asks: " }.orEmpty() else ""
+                val who = if (q.source == "task") JarvisTasks.find(q.chatId)?.title?.let { L.jarvis.controller.theTaskValueAsks(it) }.orEmpty() else ""
                 for ((i, question) in qn.questions.withIndex()) {
                     val answer = ask((if (i == 0) who else "") + describeQuestion(question), 60_000)
                     if (answer == null || skipWords.containsMatchIn(answer)) { skipped = true; break }
@@ -685,10 +686,10 @@ object JarvisController {
                 }
                 if (skipped) {
                     q.backend.skipChoices(q.call)
-                    speakOut("Okay, I told it to use its best judgement.")
+                    speakOut(L.jarvis.controller.okayIToldItToUse)
                 } else {
                     q.backend.submitChoices(q.call, responses, summary.joinToString(" · "))
-                    speakOut("Got it.")
+                    speakOut(L.jarvis.controller.gotIt)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "question: ${e.message}")
@@ -730,15 +731,15 @@ object JarvisController {
         if (JarvisTasks.isTask(c.id)) return
         if (!JarvisPreferences.announceDone.value) return
         if (JarvisPreferences.announceOffscreenOnly.value && vm.currentConversation.value?.id == c.id && screen.value == "chat") return
-        val title = c.title.trim().take(40).ifBlank { "A chat" }
-        var msg = "$title is done. Please check it."
+        val title = c.title.trim().take(40).ifBlank { L.jarvis.controller.aChat }
+        var msg = L.jarvis.controller.titleIsDonePleaseCheckIt(title)
         if (JarvisPreferences.announceSummary.value) {
             val last = runCatching {
                 readChat(c.id).lastOrNull { it.role == MessageRole.ASSISTANT && it.content.isNotBlank() }?.content
             }.getOrNull()?.let { JarvisText.reply(it).text }
-            if (!last.isNullOrBlank()) msg += " It says: " + firstSentence(last, 160)
+            if (!last.isNullOrBlank()) msg += L.jarvis.controller.itSaysFirstsentence(firstSentence(last, 160))
         }
-        postStatus("Done: $title", explicit = false)
+        postStatus(L.jarvis.controller.doneTitle(title), explicit = false)
         if (listening.value || pendingAsk != null) return // never talk over the user
         addLog("Jarvis", msg)
         speakOut(msg)
@@ -752,7 +753,7 @@ object JarvisController {
     fun onTaskEvent(t: JarvisTasks.Task, kind: String, detail: String) {
         if (!JarvisPreferences.enabled.value) return
         val owner = JarvisManagers.ownerOrVoice(t.owner)
-        val line = when (kind) { "done" -> "Done: ${t.title}"; "failed" -> "Failed: ${t.title}"; else -> "Stuck: ${t.title}" }.take(60)
+        val line = when (kind) { "done" -> L.jarvis.controller.doneTitle(t.title); "failed" -> L.jarvis.controller.failedTitle(t.title); else -> L.jarvis.controller.stuckTitle(t.title) }.take(60)
         if (owner == JarvisManagers.VOICE) postStatus(line, explicit = false) else JarvisManagers.setStatus(owner, line)
         if (owner != JarvisManagers.VOICE || JarvisPreferences.eventRouting.value == "model") {
             // the manager that started it gets the news, batched with whatever else came in meanwhile
@@ -764,9 +765,9 @@ object JarvisController {
         }
         // "Just tell me": announced without a model turn
         val msg = when (kind) {
-            "done" -> "${t.title} is done." + (if (JarvisPreferences.announceSummary.value && detail.isNotBlank()) " It says: " + firstSentence(detail.removePrefix("…"), 160) else "")
-            "failed" -> "${t.title} ran into a problem." + (if (detail.isNotBlank()) " " + firstSentence(detail, 140) else "")
-            else -> "${t.title} hasn't made progress for a while."
+            "done" -> L.jarvis.controller.titleIsDone(t.title) + (if (JarvisPreferences.announceSummary.value && detail.isNotBlank()) L.jarvis.controller.itSaysFirstsentence(firstSentence(detail.removePrefix("…"), 160)) else "")
+            "failed" -> L.jarvis.controller.titleRanIntoAProblem(t.title) + (if (detail.isNotBlank()) " " + firstSentence(detail, 140) else "")
+            else -> L.jarvis.controller.titleHasntMadeProgressForA(t.title)
         }
         scope.launch {
             var w = 0
@@ -809,7 +810,7 @@ object JarvisController {
         val window = w.resetsAt ?: 0L
         if (left <= 0.15 && window != usageWarnedFor && !listening.value) {
             usageWarnedFor = window
-            scope.launch { speakOut("Heads up, only about ${Math.round(left * 100).coerceAtLeast(0)} percent of your five hour usage is left.") }
+            scope.launch { speakOut(L.jarvis.controller.headsUpOnlyAboutRoundPercent(Math.round(left * 100).coerceAtLeast(0))) }
         }
     }
 
@@ -823,8 +824,8 @@ object JarvisController {
             if (_timers.value.any { it.id == item.id }) {
                 _timers.value = _timers.value.filter { it.id != item.id }
                 cue(1)
-                postStatus("Timer done${if (item.label.isNotBlank()) ": ${item.label}" else ""}", explicit = false)
-                speakOut("Your ${item.label.ifBlank { "timer" }} is done.")
+                postStatus(if (item.label.isNotBlank()) L.jarvis.controller.timerDoneLabel(item.label) else L.jarvis.controller.timerDone, explicit = false)
+                speakOut(if (item.label.isNotBlank()) L.jarvis.controller.yourLabelIsDone(item.label) else L.jarvis.controller.yourTimerIsDone)
             }
         }
         return item
@@ -852,7 +853,7 @@ object JarvisController {
     fun onHeadsetClicks(count: Int) {
         if (!JarvisPreferences.enabled.value || !JarvisPreferences.headsetButton.value) return
         if (count <= 1) onMicPressed(Origin.HEADSET)
-        else { stopEverything(); scope.launch { speakOut("Stopped.") } }
+        else { stopEverything(); scope.launch { speakOut(L.jarvis.controller.stopped) } }
     }
 
     /** Keeps listening until Send (the user needs more time for this sentence). */
@@ -865,11 +866,11 @@ object JarvisController {
     fun startListening(initial: String = "", origin: Origin = Origin.BUTTON): Boolean {
         if (!JarvisPreferences.enabled.value) return false
         if (!JarvisPreferences.voiceAssistant.value) {
-            showNotice("Jarvis is set to chat only, so voice is off. Turn it on in Settings → Jarvis.", "settings")
+            showNotice(L.jarvis.controller.jarvisIsSetToChatOnly, "settings")
             return false
         }
         if (listening.value) return true
-        if (!hasMic()) { showNotice("Allow the microphone first.", "mic"); return false }
+        if (!hasMic()) { showNotice(L.jarvis.controller.allowTheMicrophoneFirst, "mic"); return false }
         JarvisVoice.stop()
         quietUntil = 0L
         stopWake()
@@ -1064,8 +1065,8 @@ object JarvisController {
         inConversation = false
         expectingReply = false
         _heard.value = ""
-        postStatus("Cancelled", explicit = false)
-        if (asking != null) asking.complete("") else scope.launch { speakOut("Cancelled.") }
+        postStatus(L.jarvis.controller.cancelled, explicit = false)
+        if (asking != null) asking.complete("") else scope.launch { speakOut(L.jarvis.controller.cancelled2) }
     }
 
     private fun snapshotCommitted(): List<String> = synchronized(lock) { committed.toList() }
@@ -1173,9 +1174,9 @@ object JarvisController {
                 cue(2)
                 inConversation = false
                 expectingReply = false
-                postStatus("Cancelled", explicit = false)
+                postStatus(L.jarvis.controller.cancelled, explicit = false)
                 pendingAsk?.let { it.complete(""); return }
-                speakOut("Cancelled.")
+                speakOut(L.jarvis.controller.cancelled2)
                 return
             }
             pm != null && !pm.whole -> { said = pm.content; sendPhrase = pm.phrase }
@@ -1188,7 +1189,7 @@ object JarvisController {
         expectingReply = false
         if (origin == Origin.FOLLOWUP && JarvisPreferences.sideTalk.value != "off" && !wasExpecting) {
             if (fillerWords.matches(said)) { inConversation = false; _heard.value = ""; return }
-            if (JarvisPreferences.sideTalk.value == "strict" && !mentionsName(said)) { markIgnored("not addressed to me"); return }
+            if (JarvisPreferences.sideTalk.value == "strict" && !mentionsName(said)) { markIgnored(L.jarvis.controller.notAddressedToMe); return }
         }
         addLog("You", said)
         if (handleLocalCommand(said, origin)) return
@@ -1197,7 +1198,7 @@ object JarvisController {
 
     /** The model (jarvis_ignore) or the side-talk filter decided the words were not for Jarvis. */
     fun onIgnored(reason: String?) {
-        markIgnored(reason?.takeIf { it.isNotBlank() } ?: "not for me")
+        markIgnored(reason?.takeIf { it.isNotBlank() } ?: L.jarvis.controller.notForMe)
         // the turn produced no speech on purpose: nothing is read out at its end
         turnSpoke = true
     }
@@ -1205,7 +1206,7 @@ object JarvisController {
     private fun markIgnored(reason: String) {
         inConversation = false
         listenAfterRequested = false
-        postStatus("Ignored: ${reason.take(40)}", explicit = false)
+        postStatus(L.jarvis.controller.ignoredValue(reason.take(40)), explicit = false)
     }
 
     // ------------------------------------------------------------------ phrases handled without the model
@@ -1221,34 +1222,34 @@ object JarvisController {
         when {
             said(P.cmdStop) -> {
                 stopEverything()
-                speakOut("Stopped.")
+                speakOut(L.jarvis.controller.stopped)
             }
             said(P.cmdBye) -> {
                 inConversation = false
-                speakOut("Okay.")
+                speakOut(L.jarvis.controller.okay)
             }
             said(P.cmdRepeat) -> {
                 val last = _said.value.ifBlank { _log.value.lastOrNull { it.first == "Jarvis" }?.second.orEmpty() }
                 // repeating a question opens the microphone for its answer again
                 if (last.trimEnd().endsWith("?")) { listenAfterRequested = true; expectingReply = true }
-                speakOut(last.ifBlank { "I haven't said anything yet." })
+                speakOut(last.ifBlank { L.jarvis.controller.iHaventSaidAnythingYet })
             }
             said(P.cmdSlower) || said(P.cmdFaster) -> {
                 val faster = said(P.cmdFaster)
                 P.ttsRate.set((P.ttsRate.value + if (faster) 0.15f else -0.15f).coerceIn(0.5f, 2f))
-                speakOut(if (faster) "Faster now." else "Slower now.")
+                speakOut(if (faster) L.jarvis.controller.fasterNow else L.jarvis.controller.slowerNow)
             }
             said(P.cmdQuietOn) -> {
                 P.quietMode.set(true)
-                speakOut("Quiet mode on. I'll show my answers instead.")
+                speakOut(L.jarvis.controller.quietModeOnIllShowMy)
             }
             said(P.cmdQuietOff) -> {
                 P.quietMode.set(false)
-                speakOut("I'm back.")
+                speakOut(L.jarvis.controller.imBack)
             }
             said(P.cmdNewSession) -> {
                 newSession(carry = true)
-                speakOut("Fresh start. What's next?")
+                speakOut(L.jarvis.controller.freshStartWhatsNext)
             }
             else -> return false
         }
@@ -1308,17 +1309,17 @@ object JarvisController {
 
     /** Starts a new Jarvis text chat on screen with [agent] (default: Jarvis' own agent). Returns a problem to show, or null. */
     fun startTextChat(agent: AgentKind? = null): String? {
-        if (!attached) return "Jarvis is still starting."
-        if (!JarvisPreferences.enabled.value) return "Turn Jarvis on first (Settings → Jarvis)."
+        if (!attached) return L.jarvis.controller.jarvisIsStillStarting
+        if (!JarvisPreferences.enabled.value) return L.jarvis.controller.turnJarvisOnFirstSettingsJarvis
         val enabled = vm.enabledAgents.value
         // any agent works (unlike the voice chat, a text chat needs no Jarvis agent set): the last one used for a Jarvis chat first
         val remembered = JarvisPreferences.textChatAgent.value.takeIf { it.isNotBlank() }?.let { runCatching { AgentKind.valueOf(it) }.getOrNull() }
         val a = agent ?: listOfNotNull(remembered, JarvisPreferences.agentKind, vm.newChatAgent.value).firstOrNull { it in enabled }
-            ?: enabled.firstOrNull() ?: return "Turn on an agent first (Settings → Agents)."
-        if (a !in enabled) return "That agent is turned off (Settings → Agents)."
+            ?: enabled.firstOrNull() ?: return L.jarvis.controller.turnOnAnAgentFirstSettings
+        if (a !in enabled) return L.jarvis.controller.thatAgentIsTurnedOffSettings
         dropUnusedTextChats()
         vm.startNewChat(a)
-        val id = vm.currentConversation.value?.id ?: return "Could not start the chat."
+        val id = vm.currentConversation.value?.id ?: return L.jarvis.controller.couldNotStartTheChat
         JarvisManagers.registerTextChat(id, a)
         JarvisPreferences.textChatAgent.set(a.name)
         vm.requestViewMode("CHAT")
@@ -1416,7 +1417,7 @@ object JarvisController {
                         val wait = (15_000L shl (eventFailures - 1).coerceAtMost(5)).coerceAtMost(300_000L)
                         JarvisEvents.holdVoiceUntil = System.currentTimeMillis() + wait
                         Log.w(TAG, "news for the voice chat not sent (${e.message}); next try in ${wait / 1000}s")
-                        if (eventFailures == 1) showNotice("Jarvis could not take its task news: ${e.message?.take(120)}. It tries again in a moment.", if (e is JarvisSetupException) "agent" else null)
+                        if (eventFailures == 1) showNotice(L.jarvis.controller.jarvisCouldNotTakeItsTask(e.message?.take(120)), if (e is JarvisSetupException) "agent" else null)
                     }
                     continue
                 }
@@ -1426,14 +1427,14 @@ object JarvisController {
                     // "smart": only the user's own interrupt phrases ("wait…", "actually…") cut in
                     val interrupt = mode == "interrupt" || (mode == "smart" && JarvisPhrases.startsWithAny(m.text.trim(), JarvisPreferences.interruptPhrases.value))
                     if (interrupt) {
-                        postStatus("Switching to your new request", explicit = false)
+                        postStatus(L.jarvis.controller.switchingToYourNewRequest, explicit = false)
                         stopChat(JarvisPreferences.currentChatId.value)
                         var w = 0
                         while (computeBusy() && w < 20) { delay(400); w++ }
                         interrupted = true
                     } else {
                         // never talk over a running turn: wait for it (the user can say stop)
-                        speakOut("Noted. Right after this.")
+                        speakOut(L.jarvis.controller.notedRightAfterThis)
                         var waited = 0
                         while (computeBusy() && waited < 1200) { delay(500); waited++ }
                     }
@@ -1444,8 +1445,8 @@ object JarvisController {
                 speakOut(e.message.orEmpty())
             } catch (e: Exception) {
                 Log.w(TAG, "send failed: ${e.message}")
-                showNotice("Jarvis could not send: ${e.message}")
-                speakOut("Sorry, I couldn't reach the agent.")
+                showNotice(L.jarvis.controller.jarvisCouldNotSendMessage(e.message))
+                speakOut(L.jarvis.controller.sorryICouldntReachTheAgent)
             }
         }
     }
@@ -1472,7 +1473,7 @@ object JarvisController {
         lastReplySeen = ""
         // the history stays (the panel shows all of it); a divider marks where the new chat begins
         if (clearLog && _log.value.isNotEmpty() && _log.value.last().first != LOG_DIVIDER) {
-            addLog(LOG_DIVIDER, "New session · " + java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()).format(java.util.Date()))
+            addLog(LOG_DIVIDER, L.jarvis.controller.newSessionSimpledateformat(java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()).format(java.util.Date())))
         }
     }
 
@@ -1509,7 +1510,7 @@ object JarvisController {
         JarvisPreferences.removeChatId(id)
         newSession(carry = true, clearLog = false)
         if (resending != null && JarvisPreferences.carryOver.value) carryText = buildCarry(exclude = resending)
-        showNotice("The Jarvis chat was gone, so I started a new one.")
+        showNotice(L.jarvis.controller.theJarvisChatWasGoneSo)
     }
 
     private fun buildCarry(exclude: String? = null): String {
@@ -1531,9 +1532,9 @@ object JarvisController {
         val carry = carryText
         carryText = ""
         val agent = JarvisPreferences.agentKind
-            ?: throw JarvisSetupException("I don't have an agent yet. Pick one for me in Settings, Jarvis, Agent.")
+            ?: throw JarvisSetupException(L.jarvis.controller.iDontHaveAnAgentYet)
         if (agent !in vm.enabledAgents.value) {
-            throw JarvisSetupException("${agentLabel()} is turned off in the app. Turn it on in Settings, Agents, or pick another agent for me in Settings, Jarvis, Agent.")
+            throw JarvisSetupException(L.jarvis.controller.agentIsTurnedOffInThe(agentLabel()))
         }
         val chatId = JarvisPreferences.currentChatId.value
         val freshChat = chatId.isBlank() || JarvisPreferences.currentChatAgent.value != agent.name
@@ -1627,15 +1628,15 @@ object JarvisController {
     private suspend fun sendOpenCode(prompt: String) {
         val b = jarvisOpenCode
         if (b.state.value.isBlocking) b.refreshStatus()
-        if (b.state.value.isBlocking) throw JarvisSetupException("OpenCode is not available: ${b.state.value.label}. Check Settings, OpenCode.")
+        if (b.state.value.isBlocking) throw JarvisSetupException(L.jarvis.controller.opencodeIsNotAvailableStateCheck(b.state.value.label))
         // the model Jarvis uses must still exist (its provider may have been disconnected)
         if (b.availableModels.value.isEmpty()) { b.refreshModels(); var w = 0; while (b.availableModels.value.isEmpty() && w < 20) { delay(250); w++ } }
         val wanted = JarvisPreferences.modelId.value
         if (b.availableModels.value.isEmpty()) {
-            throw JarvisSetupException("OpenCode has no models. Connect a provider in Settings, OpenCode.")
+            throw JarvisSetupException(L.jarvis.controller.opencodeHasNoModelsConnectA)
         }
         if (wanted.isNotBlank() && b.availableModels.value.none { it.id == wanted }) {
-            throw JarvisSetupException("The model I'm set to, ${wanted.substringAfter('/')}, is not available in OpenCode anymore. Pick another one in Settings, Jarvis, Agent.")
+            throw JarvisSetupException(L.jarvis.controller.theModelImSetToModel(wanted.substringAfter('/')))
         }
         var id = JarvisPreferences.currentChatId.value
         // a Jarvis chat deleted on the server is replaced by a fresh one
@@ -1663,11 +1664,11 @@ object JarvisController {
     private suspend fun sendCodex(prompt: String) {
         val b = jarvisCodex
         if (b.state.value.isBlocking) b.refreshStatus()
-        if (b.state.value.isBlocking) throw JarvisSetupException("Codex is not available: ${b.state.value.label}. Check Settings, Codex.")
+        if (b.state.value.isBlocking) throw JarvisSetupException(L.jarvis.controller.codexIsNotAvailableStateCheck(b.state.value.label))
         if (b.availableModels.value.isEmpty()) { b.refreshModels(); var w = 0; while (b.availableModels.value.isEmpty() && w < 20) { delay(250); w++ } }
         val wanted = JarvisPreferences.modelId.value
         if (wanted.isNotBlank() && b.availableModels.value.isNotEmpty() && b.availableModels.value.none { it.id == wanted }) {
-            throw JarvisSetupException("The model I'm set to, $wanted, is not available in Codex anymore. Pick another one in Settings, Jarvis, Agent.")
+            throw JarvisSetupException(L.jarvis.controller.theModelImSetToModel2(wanted))
         }
         var id = JarvisPreferences.currentChatId.value
         // a Jarvis chat deleted on the server is replaced by a fresh one
@@ -2060,7 +2061,7 @@ object JarvisController {
             scope = scope, cascadeId = "", preCursorText = "", postCursorText = "",
             onPartialText = { onText(it) },
             onFinalText = { onText(it) },
-            onError = { err -> showNotice("Wake phrase: $err"); wakeRunning = false }
+            onError = { err -> showNotice(L.jarvis.controller.wakePhraseErr(err)); wakeRunning = false }
         )
     }
 
@@ -2285,9 +2286,9 @@ object JarvisController {
                     // a Jarvis text chat is a normal chat: Jarvis' own tools go through, everything else is the user's call
                     if (isJarvisTool(p.tool)) { p.approve(); continue }
                     if (vm.currentConversation.value?.id != p.chatId) {
-                        val title = vm.allConversations.value.find { it.id == p.chatId }?.title?.take(40)?.ifBlank { null } ?: "A Jarvis chat"
-                        showNotice("“$title” is waiting for your approval: ${p.summary.take(90)}", "chat:${p.chatId}")
-                        if (JarvisManagers.of(p.chatId).voiceOn) announce("$title needs your approval.")
+                        val title = vm.allConversations.value.find { it.id == p.chatId }?.title?.take(40)?.ifBlank { null } ?: L.jarvis.controller.aJarvisChat
+                        showNotice(L.jarvis.controller.titleIsWaitingForYourApproval(title, p.summary.take(90)), "chat:${p.chatId}")
+                        if (JarvisManagers.of(p.chatId).voiceOn) announce(L.jarvis.controller.titleNeedsYourApproval(title))
                     }
                     continue
                 }
@@ -2308,18 +2309,18 @@ object JarvisController {
                     ))
                     continue
                 }
-                val who = if (p.source == "task") JarvisTasks.find(p.chatId)?.title?.let { "The task $it" } ?: "It" else "It"
-                val prefix = if (p.risk == Risk.RISKY) "Careful, this looks risky. " else ""
-                val answer = ask("$prefix$who wants to ${p.summary}. Approve?")
+                val who = if (p.source == "task") JarvisTasks.find(p.chatId)?.title?.let { L.jarvis.controller.theTaskValue(it) } ?: L.jarvis.controller.it else L.jarvis.controller.it
+                val prefix = if (p.risk == Risk.RISKY) L.jarvis.controller.carefulThisLooksRisky else ""
+                val answer = ask(L.jarvis.controller.prefixWhoWantsToSummaryApprove(prefix, who, p.summary))
                 when (parseYesNo(answer)) {
                     Decision.YES_ALL -> {
                         p.approve()
                         allPending().filter { it.key != p.key && it.risk != Risk.RISKY }.forEach { it.approve() }
                     }
                     Decision.YES -> p.approve()
-                    Decision.NO -> { p.reject("The user said no by voice."); speakOut("Rejected.") }
+                    Decision.NO -> { p.reject("The user said no by voice."); speakOut(L.jarvis.controller.rejected) }
                     Decision.UNCLEAR -> {
-                        if (answer != null) { p.reject("The user's answer was unclear, so nothing was approved."); speakOut("I didn't get that, so I rejected it.") }
+                        if (answer != null) { p.reject("The user's answer was unclear, so nothing was approved."); speakOut(L.jarvis.controller.iDidntGetThatSoI) }
                         else { handledPermissions.remove(p.key) /* ask again on the next look */; delay(20_000) }
                     }
                 }

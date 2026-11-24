@@ -55,18 +55,19 @@ import ai.antigem.data.jarvis.JarvisEvents
 import ai.antigem.data.jarvis.JarvisManagers
 import ai.antigem.data.jarvis.JarvisTasks
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 private fun agentLabel(name: String) = when (name.uppercase()) {
-    "AGY" -> "Antigravity"
+    "AGY" -> L.common.antigravity
     "OPENCODE" -> "OpenCode"
-    "CODEX" -> "Codex"
-    "CLAUDE" -> "Claude"
+    "CODEX" -> L.common.codex
+    "CLAUDE" -> L.common.claude
     else -> name
 }
 
 private fun age(ms: Long): String {
     val m = (System.currentTimeMillis() - ms) / 60_000
-    return if (m < 1) "now" else if (m < 60) "${m}m" else "${m / 60}h ${m % 60}m"
+    return if (m < 1) "now" else if (m < 60) "${m}m" else L.jarvis.commandCenter.valueHValue2M(m / 60, m % 60)
 }
 
 /**
@@ -93,18 +94,18 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
 
     val title = when {
         !mission.isEmpty -> mission.goal
-        voice -> "Jarvis · voice chat"
-        else -> "Jarvis command center"
+        voice -> L.jarvis.commandCenter.jarvisVoiceChat
+        else -> L.jarvis.commandCenter.jarvisCommandCenter
     }
     val subtitle = when {
         status != null -> status
-        active.any { it.state.needsUser } -> "A task needs a decision"
-        active.isNotEmpty() -> "${active.size} task${if (active.size == 1) "" else "s"} working · news comes in by itself"
-        mission.status == "done" -> "Mission complete"
-        mission.status == "paused" -> "Mission paused"
-        mission.isEmpty -> "Give me a big job: I plan it, run it with teams and keep going."
-        mission.autopilot -> "Autopilot on · keeps going until done"
-        else -> "Waiting for you"
+        active.any { it.state.needsUser } -> L.jarvis.commandCenter.aTaskNeedsADecision
+        active.isNotEmpty() -> L.jarvis.commandCenter.activecountTaskValueWorkingNewsComes(active.size, if (active.size == 1) "" else "s")
+        mission.status == "done" -> L.jarvis.commandCenter.missionComplete
+        mission.status == "paused" -> L.jarvis.commandCenter.missionPaused
+        mission.isEmpty -> L.jarvis.commandCenter.giveMeABigJobI
+        mission.autopilot -> L.jarvis.commandCenter.autopilotOnKeepsGoingUntilDone
+        else -> L.jarvis.commandCenter.waitingForYou
     }
 
     Column(
@@ -130,7 +131,7 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
                 Text("${mission.doneCount}/${mission.steps.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = accent)
                 Spacer(Modifier.width(2.dp))
             }
-            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (expanded) "Hide the board" else "Show the board", tint = onSurface.copy(alpha = 0.6f))
+            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, if (expanded) L.jarvis.commandCenter.hideTheBoard else L.jarvis.commandCenter.showTheBoard, tint = onSurface.copy(alpha = 0.6f))
         }
         if (mission.steps.isNotEmpty()) {
             val p = mission.doneCount.toFloat() / mission.steps.size
@@ -146,18 +147,18 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
         ) {
             // "chat only" (Settings → Jarvis): nothing is ever said, so no Voice switch
             if (!voice && voiceSide) {
-                ToggleChip(if (m.speak) "Voice on" else "Voice off", if (m.speak) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, m.speak) {
+                ToggleChip(if (m.speak) L.jarvis.commandCenter.voiceOn else L.jarvis.commandCenter.voiceOff, if (m.speak) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff, m.speak) {
                     JarvisManagers.setSpeak(key, !m.speak)
                 }
             }
             if (!mission.isEmpty) {
-                ToggleChip(if (mission.autopilot) "Autopilot on" else "Autopilot", Icons.Filled.Autorenew, mission.autopilot) {
+                ToggleChip(if (mission.autopilot) L.jarvis.commandCenter.autopilotOn else L.jarvis.commandCenter.autopilot, Icons.Filled.Autorenew, mission.autopilot) {
                     JarvisManagers.setAutopilot(key, !mission.autopilot)
                 }
             }
             active.forEach { t -> TaskPill(t) { onOpenChat(t.id) } }
             if (active.isEmpty() && mine.isNotEmpty()) {
-                Text("${mine.size} finished task${if (mine.size == 1) "" else "s"}", fontSize = 11.sp, color = onSurface.copy(alpha = 0.5f))
+                Text(L.jarvis.commandCenter.minecountFinishedTaskValue(mine.size, if (mine.size == 1) "" else "s"), fontSize = 11.sp, color = onSurface.copy(alpha = 0.5f))
             }
         }
         if (toolsMissing) {
@@ -170,7 +171,7 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "This chat's agent has no Jarvis tools yet. Tap to add the Jarvis MCP server (Settings → Jarvis → Setup).",
+                    L.jarvis.commandCenter.thisChatsAgentHasNoJarvis,
                     fontSize = 11.5.sp, color = onSurface.copy(alpha = 0.85f), modifier = Modifier.weight(1f)
                 )
             }
@@ -227,14 +228,14 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
         Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
     ) {
         val mi = m.mission
-        BoardTitle("Mission")
+        BoardTitle(L.jarvis.commandCenter.mission)
         if (mi.isEmpty) {
             Text(
-                "No mission yet. Ask for something big (\"build the settings screen, test it and don't stop until it works\"): Jarvis writes the plan here and works through it.",
+                L.jarvis.commandCenter.noMissionYetAskForSomething,
                 fontSize = 12.sp, color = onSurface.copy(alpha = 0.6f), lineHeight = 17.sp
             )
         } else {
-            if (mi.doneWhen.isNotBlank()) Text("Done when: ${mi.doneWhen}", fontSize = 12.sp, color = onSurface.copy(alpha = 0.7f), lineHeight = 16.sp)
+            if (mi.doneWhen.isNotBlank()) Text(L.jarvis.commandCenter.doneWhenDonewhen(mi.doneWhen), fontSize = 12.sp, color = onSurface.copy(alpha = 0.7f), lineHeight = 16.sp)
             mi.steps.forEach { s ->
                 Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.Top) {
                     val (mark, c) = when (s.status) {
@@ -250,15 +251,15 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
                     }
                 }
             }
-            if (mi.notes.isNotBlank()) Text("Notes: ${mi.notes}", fontSize = 11.5.sp, color = onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 6.dp))
+            if (mi.notes.isNotBlank()) Text(L.jarvis.commandCenter.notesNotes(mi.notes), fontSize = 11.5.sp, color = onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 6.dp))
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SmallAction("Clear mission", Danger) { JarvisManagers.clearMission(key) }
-                if (mi.status != "active") SmallAction("Resume", Cyan) { JarvisManagers.updateMission(key, null, null, null, emptyList(), "active", null, null) }
-                else SmallAction("Pause", Amber) { JarvisManagers.updateMission(key, null, null, null, emptyList(), "paused", null, null) }
+                SmallAction(L.jarvis.commandCenter.clearMission, Danger) { JarvisManagers.clearMission(key) }
+                if (mi.status != "active") SmallAction(L.jarvis.commandCenter.resume, Cyan) { JarvisManagers.updateMission(key, null, null, null, emptyList(), "active", null, null) }
+                else SmallAction(L.common.pause, Amber) { JarvisManagers.updateMission(key, null, null, null, emptyList(), "paused", null, null) }
             }
         }
         if (m.teams.isNotEmpty()) {
-            BoardTitle("Teams")
+            BoardTitle(L.jarvis.commandCenter.teams)
             m.teams.forEach { t ->
                 val running = mine.count { it.active && it.team.equals(t.name, true) }
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -269,13 +270,13 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
                         )
                         if (t.role.isNotBlank()) Text(t.role, fontSize = 11.sp, color = onSurface.copy(alpha = 0.55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    if (running > 0) Text("$running working", fontSize = 11.sp, color = Violet)
-                    IconMini(Icons.Filled.Close, "Remove team", onSurface.copy(alpha = 0.45f)) { JarvisManagers.removeTeam(key, t.name) }
+                    if (running > 0) Text(L.jarvis.commandCenter.runningWorking(running), fontSize = 11.sp, color = Violet)
+                    IconMini(Icons.Filled.Close, L.jarvis.commandCenter.removeTeam, onSurface.copy(alpha = 0.45f)) { JarvisManagers.removeTeam(key, t.name) }
                 }
             }
         }
-        BoardTitle("Tasks")
-        if (mine.isEmpty()) Text("None yet.", fontSize = 12.sp, color = onSurface.copy(alpha = 0.5f))
+        BoardTitle(L.jarvis.commandCenter.tasks)
+        if (mine.isEmpty()) Text(L.jarvis.commandCenter.noneYet, fontSize = 12.sp, color = onSurface.copy(alpha = 0.5f))
         mine.take(20).forEach { t ->
             val c = taskColor(t.state)
             Row(
@@ -291,9 +292,9 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
                         fontSize = 10.5.sp, color = c.copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconMini(Icons.AutoMirrored.Filled.OpenInNew, "Open", onSurface.copy(alpha = 0.6f)) { onOpenChat(t.id) }
-                if (t.active) IconMini(Icons.Filled.Stop, "Stop", Danger) { scope.launch { JarvisTasks.stop(t.id) } }
-                else IconMini(Icons.Filled.Close, "Dismiss", onSurface.copy(alpha = 0.45f)) { JarvisTasks.close(t.id) }
+                IconMini(Icons.AutoMirrored.Filled.OpenInNew, L.common.open, onSurface.copy(alpha = 0.6f)) { onOpenChat(t.id) }
+                if (t.active) IconMini(Icons.Filled.Stop, L.common.stop, Danger) { scope.launch { JarvisTasks.stop(t.id) } }
+                else IconMini(Icons.Filled.Close, L.common.dismiss, onSurface.copy(alpha = 0.45f)) { JarvisTasks.close(t.id) }
             }
         }
     }
@@ -334,13 +335,13 @@ private fun eventColor(kind: String): Color = when (kind) {
 }
 
 private fun eventWord(kind: String): String = when (kind) {
-    "task_done" -> "Finished"
-    "task_failed" -> "Failed"
-    "task_stalled" -> "No progress"
-    "task_approval" -> "Needs approval"
-    "task_question" -> "Asks a question"
-    "nudge" -> "Autopilot: keep going"
-    "autopilot_paused" -> "Autopilot paused"
+    "task_done" -> L.jarvis.commandCenter.finished
+    "task_failed" -> L.common.failed
+    "task_stalled" -> L.jarvis.commandCenter.noProgress
+    "task_approval" -> L.jarvis.commandCenter.needsApproval
+    "task_question" -> L.jarvis.commandCenter.asksAQuestion
+    "nudge" -> L.jarvis.commandCenter.autopilotKeepGoing
+    "autopilot_paused" -> L.jarvis.commandCenter.autopilotPaused
     else -> kind
 }
 
@@ -370,10 +371,10 @@ fun JarvisEventCard(raw: String, onOpenChat: (String) -> Unit) {
             JarvisBotIcon(18.dp, Cyan)
             Spacer(Modifier.width(7.dp))
             Text(
-                if (events.size == 1) "Team update" else "${events.size} team updates",
+                if (events.size == 1) L.jarvis.commandCenter.teamUpdate else L.jarvis.commandCenter.eventscountTeamUpdates(events.size),
                 fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Cyan, modifier = Modifier.weight(1f)
             )
-            if (hasDetails) Text(if (open) "Hide reports" else "Show reports", fontSize = 11.sp, color = onSurface.copy(alpha = 0.5f))
+            if (hasDetails) Text(if (open) L.jarvis.commandCenter.hideReports else L.jarvis.commandCenter.showReports, fontSize = 11.sp, color = onSurface.copy(alpha = 0.5f))
         }
         events.forEach { e ->
             val c = eventColor(e.kind)
@@ -382,7 +383,7 @@ fun JarvisEventCard(raw: String, onOpenChat: (String) -> Unit) {
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        e.title.ifBlank { "Mission" } + listOfNotNull(e.team.takeIf { it.isNotBlank() }, e.agent.takeIf { it.isNotBlank() }?.let { agentLabel(it) })
+                        e.title.ifBlank { L.jarvis.commandCenter.mission } + listOfNotNull(e.team.takeIf { it.isNotBlank() }, e.agent.takeIf { it.isNotBlank() }?.let { agentLabel(it) })
                             .joinToString(" · ").let { if (it.isBlank()) "" else "  ·  $it" },
                         fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
@@ -397,7 +398,7 @@ fun JarvisEventCard(raw: String, onOpenChat: (String) -> Unit) {
                     }
                 }
                 if (e.taskId.isNotBlank() && JarvisTasks.find(e.taskId) != null) {
-                    IconMini(Icons.AutoMirrored.Filled.OpenInNew, "Open the task's chat", onSurface.copy(alpha = 0.55f)) { onOpenChat(e.taskId) }
+                    IconMini(Icons.AutoMirrored.Filled.OpenInNew, L.jarvis.commandCenter.openTheTasksChat, onSurface.copy(alpha = 0.55f)) { onOpenChat(e.taskId) }
                 }
             }
         }
@@ -413,18 +414,18 @@ fun JarvisChatWelcome(onExample: (String) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 520.dp)) {
         JarvisBotBadge(72.dp, Cyan, animated = true)
         Spacer(Modifier.height(14.dp))
-        Text("Jarvis command center", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = onSurface)
+        Text(L.jarvis.commandCenter.jarvisCommandCenter, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = onSurface)
         Spacer(Modifier.height(6.dp))
         Text(
-            "Give me a big job. I write the plan, put together teams of agents, hand out the work in parallel, check what comes back and keep going until it's done.",
+            L.jarvis.commandCenter.giveMeABigJobI2,
             fontSize = 13.5.sp, lineHeight = 19.sp, color = onSurface.copy(alpha = 0.6f),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         Spacer(Modifier.height(16.dp))
         listOf(
-            "Build a dark-mode toggle in the settings screen of my active project, have a reviewer team check it and run the tests. Don't stop until it works.",
-            "Create two teams: builders (Claude) to implement and reviewers (Antigravity) to review and test. Then fix all failing tests in this project.",
-            "Investigate why the app is slow to start, try the three most promising fixes in parallel and tell me which one wins."
+            L.jarvis.commandCenter.buildADarkModeToggleIn,
+            L.jarvis.commandCenter.createTwoTeamsBuildersClaudeTo,
+            L.jarvis.commandCenter.investigateWhyTheAppIsSlow
         ).forEach { ex ->
             Text(
                 ex, fontSize = 12.5.sp, lineHeight = 17.sp, color = onSurface.copy(alpha = 0.85f),

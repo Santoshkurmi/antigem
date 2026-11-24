@@ -32,6 +32,7 @@ import ai.antigem.data.x11.X11DesktopManager.Task
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
 import kotlinx.coroutines.delay
+import ai.antigem.i18n.L
 
 /** Settings → X11 Desktop: installs Termux:X11, its termux-x11 command and a desktop, then starts it. */
 @Composable
@@ -64,20 +65,20 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f))
-                    IconButton(onClick = X11DesktopManager::clearMessage) { Icon(Icons.Default.Close, "Dismiss", Modifier.size(18.dp)) }
+                    IconButton(onClick = X11DesktopManager::clearMessage) { Icon(Icons.Default.Close, L.common.dismiss, Modifier.size(18.dp)) }
                 }
             }
         }
 
         if (!state.ready) {
-            Hint("Checking…")
+            Hint(L.common.checking)
             return@Column
         }
         if (!state.bootstrapInstalled) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Install the Linux environment first", fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
-                    Hint("The desktop runs in AntiGem's terminal. Install it in Settings → Terminal & Shell, then come back here.")
+                    Text(L.settings.x11Desktop.installTheLinuxEnvironmentFirst, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+                    Hint(L.settings.x11Desktop.theDesktopRunsInAntigemsTerminal)
                 }
             }
             return@Column
@@ -86,47 +87,47 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         // Step 1: the Termux:X11 app (shows the desktop)
         val app = state.app
         StepCard(
-            1, "Termux:X11 app",
+            1, L.settings.x11Desktop.termuxX11App,
             when {
                 app == null -> null
-                state.appOk -> "Installed"
-                else -> "Wrong build"
+                state.appOk -> L.common.installed
+                else -> L.settings.x11Desktop.wrongBuild
             },
             cardBg, cardBorder,
             badgeColor = if (state.appOk) QuotaGreen else Amber
         ) {
             when {
                 app == null -> {
-                    Hint("AntiGem's own build of Termux:X11, the app that shows the desktop. It runs inside AntiGem, so Android keeps the desktop running at full speed while you use it.")
+                    Hint(L.settings.x11Desktop.antigemsOwnBuildOfTermuxX11)
                     Button(enabled = !busy, onClick = X11DesktopManager::installApp) {
-                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Download & install")
+                        Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.x11Desktop.downloadInstall)
                     }
                 }
                 state.appOk -> {
                     Mono(
                         "Termux:X11 ${app.versionName ?: ""}".trim() + "\n" + when {
-                            app.sameProcess -> "AntiGem's build, runs inside AntiGem"
-                            app.antigemBuild -> "AntiGem's build"
-                            else -> "Official build"
+                            app.sameProcess -> L.settings.x11Desktop.antigemsBuildRunsInsideAntigem
+                            app.antigemBuild -> L.settings.x11Desktop.antigemsBuild
+                            else -> L.settings.x11Desktop.officialBuild
                         }
                     )
-                    OutlinedButton(enabled = !busy, onClick = X11DesktopManager::installApp) { Text("Update") }
+                    OutlinedButton(enabled = !busy, onClick = X11DesktopManager::installApp) { Text(L.common.update) }
                 }
                 else -> {
                     Text(
-                        if (app.antigemBuild) "This Termux:X11 doesn't share AntiGem's UID, so it can't run inside AntiGem. Uninstall it, then install it again."
-                        else "The official Termux:X11 is installed. It can't run inside AntiGem, and Android won't install AntiGem's build over it (they are signed differently). Uninstall it first, then install AntiGem's build.",
+                        if (app.antigemBuild) L.settings.x11Desktop.thisTermuxX11DoesntShareAntigems
+                        else L.settings.x11Desktop.theOfficialTermuxX11IsInstalled,
                         fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error
                     )
                     Button(enabled = !busy, onClick = { X11DesktopManager.uninstallApp(context) }) {
-                        Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Uninstall Termux:X11")
+                        Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.x11Desktop.uninstallTermuxX11)
                     }
                 }
             }
             TextButton(
                 onClick = { openUrl(context, X11DesktopManager.FORK_RELEASES_PAGE) },
                 contentPadding = PaddingValues(0.dp)
-            ) { Text("Open the download page", fontSize = 12.5.sp) }
+            ) { Text(L.settings.x11Desktop.openTheDownloadPage, fontSize = 12.5.sp) }
             TaskOutput(state, Task.APP)
         }
 
@@ -134,9 +135,9 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         StepCard(
             2, "termux-x11 command",
             when {
-                state.chroot -> "Not needed"
-                state.companionOk -> "Installed"
-                state.companion != null -> "Wrong package"
+                state.chroot -> L.settings.x11Desktop.notNeeded
+                state.companionOk -> L.common.installed
+                state.companion != null -> L.settings.x11Desktop.wrongPackage
                 else -> null
             },
             cardBg, cardBorder,
@@ -144,28 +145,28 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         ) {
             if (state.chroot) {
                 // the app starts the X server itself and shares its display with the chroot
-                Hint("Not needed in the Ubuntu chroot: AntiGem starts the X server itself (from the Termux:X11 app) and shares its display with the chroot.")
+                Hint(L.settings.x11Desktop.notNeededInTheUbuntuChroot)
                 return@StepCard
             }
-            Hint("The terminal part: the termux-x11 command that starts the X server. ${state.neededCompanion} goes with ${if (app == null) "the Termux:X11 above" else "the installed Termux:X11"}.")
+            Hint(L.settings.x11Desktop.theTerminalPartTheTermuxX11(state.neededCompanion, if (app == null) L.settings.x11Desktop.theTermuxX11Above else L.settings.x11Desktop.theInstalledTermuxX11))
             if (state.companion != null && !state.companionOk) {
                 Text(
-                    "${state.companion} is installed, but this Termux:X11 needs ${state.neededCompanion}. Installing replaces it.",
+                    L.settings.x11Desktop.companionIsInstalledButThisTermux(state.companion, state.neededCompanion),
                     fontSize = 12.5.sp, color = Amber
                 )
             }
             if (!state.companionOk) {
                 Button(enabled = !busy, onClick = X11DesktopManager::installCompanion) {
-                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Install ${state.neededCompanion}")
+                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.x11Desktop.installNeededcompanion(state.neededCompanion))
                 }
             } else {
-                OutlinedButton(enabled = !busy, onClick = X11DesktopManager::installCompanion) { Text("Reinstall") }
+                OutlinedButton(enabled = !busy, onClick = X11DesktopManager::installCompanion) { Text(L.common.reinstall) }
             }
             TaskOutput(state, Task.COMPANION)
         }
 
         // Step 3: a desktop
-        StepCard(3, "Desktop", if (state.desktopOk) "Installed" else null, cardBg, cardBorder) {
+        StepCard(3, L.settings.x11Desktop.desktop, if (state.desktopOk) L.common.installed else null, cardBg, cardBorder) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Desktop.entries.forEach { d ->
                     FilterChip(
@@ -178,33 +179,33 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
             }
             Hint(
                 when (state.desktop) {
-                    Desktop.XFCE -> "XFCE is a full, light desktop and a good place to start."
-                    Desktop.LXQT -> "LXQt is a light Qt desktop."
-                } + if (state.chroot) " It comes from Ubuntu (apt) and runs in the Ubuntu chroot as your user. A large download." else " It comes from x11-repo and is a large download."
+                    Desktop.XFCE -> L.settings.x11Desktop.xfceIsAFullLightDesktop
+                    Desktop.LXQT -> L.settings.x11Desktop.lxqtIsALightQtDesktop
+                } + if (state.chroot) L.settings.x11Desktop.itComesFromUbuntuAptAnd else L.settings.x11Desktop.itComesFromX11RepoAnd
             )
             if (!state.desktopOk) {
                 Button(enabled = !busy, onClick = X11DesktopManager::installDesktop) {
-                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Install ${state.desktop.label}")
+                    Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.x11Desktop.installLabel(state.desktop.label))
                 }
             }
             TaskOutput(state, Task.DESKTOP)
         }
 
         // Step 4: start / open / stop
-        StepCard(4, "Start the desktop", if (state.running) "Running" else null, cardBg, cardBorder) {
+        StepCard(4, L.settings.x11Desktop.startTheDesktop, if (state.running) L.common.running else null, cardBg, cardBorder) {
             if (state.running) {
                 Hint(if (state.chroot) "The X server is running on display :0, shared with the Ubuntu chroot. Programs started in the chroot's terminal with DISPLAY=:0 show up on the desktop."
                     else "The X server is running on display :0. Programs started from the terminal with DISPLAY=:0 show up on the desktop.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(enabled = !busy, onClick = { X11DesktopManager.open(context) }) {
-                        Icon(Icons.Outlined.DesktopWindows, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Open desktop")
+                        Icon(Icons.Outlined.DesktopWindows, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.x11Desktop.openDesktop)
                     }
-                    OutlinedButton(enabled = !busy, onClick = { X11DesktopManager.stop(context) }) { Text("Stop") }
+                    OutlinedButton(enabled = !busy, onClick = { X11DesktopManager.stop(context) }) { Text(L.common.stop) }
                 }
             } else {
-                if (!state.canStart) Hint("Finish the steps above first.")
+                if (!state.canStart) Hint(L.settings.x11Desktop.finishTheStepsAboveFirst)
                 Button(enabled = !busy && state.canStart, onClick = { X11DesktopManager.start(context) }) {
-                    Icon(Icons.Outlined.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Start ${state.desktop.label}")
+                    Icon(Icons.Outlined.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.x11Desktop.startLabel(state.desktop.label))
                 }
             }
             TaskOutput(state, Task.START)
@@ -215,11 +216,11 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Web Browser", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(L.settings.x11Desktop.webBrowser, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     if (browserInstalled) {
-                        Pill("Installed", QuotaGreen)
+                        Pill(L.common.installed, QuotaGreen)
                     } else {
-                        Pill("Optional", MaterialTheme.colorScheme.primary)
+                        Pill(L.common.optional, MaterialTheme.colorScheme.primary)
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -232,10 +233,10 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                         )
                     }
                 }
-                Hint(if (state.chroot) "Installs Chromium or Firefox in the Ubuntu chroot from the xtradeb/apps PPA (Ubuntu's own packages of both are snaps, which do not run in a chroot)."
-                    else "Install a browser from tur-repo to browse the web on your desktop.")
+                Hint(if (state.chroot) L.settings.x11Desktop.installsChromiumOrFirefoxInThe
+                    else L.settings.x11Desktop.installABrowserFromTurRepo)
                 if (!state.desktopOk) {
-                    Hint("Install a desktop above first.")
+                    Hint(L.settings.x11Desktop.installADesktopAboveFirst)
                 }
                 if (!browserInstalled) {
                     Button(
@@ -244,14 +245,14 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                     ) {
                         Icon(Icons.Outlined.Download, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Install ${state.browser.label}")
+                        Text(L.settings.x11Desktop.installLabel(state.browser.label))
                     }
                 } else {
                     OutlinedButton(
                         enabled = !busy && state.desktopOk,
                         onClick = X11DesktopManager::installBrowser
                     ) {
-                        Text("Reinstall ${state.browser.label}")
+                        Text(L.settings.x11Desktop.reinstallLabel(state.browser.label))
                     }
                 }
                 TaskOutput(state, Task.BROWSER)
@@ -263,16 +264,16 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("If the desktop closes by itself", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Pill("Optional", MaterialTheme.colorScheme.primary)
+                        Text(L.settings.x11Desktop.ifTheDesktopClosesByItself, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Pill(L.common.optional, MaterialTheme.colorScheme.primary)
                     }
-                    Hint("Android 12 and newer stop the extra processes of apps once there are more than 32 in total. A desktop starts many, so Android may close it. You can turn this limit off once, over ADB. It stays off until you turn it back on or reset the phone.")
+                    Hint(L.settings.x11Desktop.android12AndNewerStopThe)
                     val device = adb.connectedDevice
                     if (device != null) {
-                        Button(enabled = !busy, onClick = { X11DesktopManager.disableChildProcessLimit(device.serial) }) { Text("Turn off the limit") }
+                        Button(enabled = !busy, onClick = { X11DesktopManager.disableChildProcessLimit(device.serial) }) { Text(L.settings.x11Desktop.turnOffTheLimit) }
                     } else {
-                        Hint("Connect the terminal's adb to this phone first.")
-                        OutlinedButton(onClick = onOpenAdbConnect) { Text("Set up ADB Connect") }
+                        Hint(L.settings.x11Desktop.connectTheTerminalsAdbToThis)
+                        OutlinedButton(onClick = onOpenAdbConnect) { Text(L.common.setUpAdbConnect) }
                     }
                     TaskOutput(state, Task.CHILD_LIMIT)
                 }
@@ -290,12 +291,12 @@ private fun IntroCard(running: Boolean, cardBg: Color, cardBorder: BorderStroke)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.DesktopWindows, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("Linux desktop", fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                if (running) Pill("Running", QuotaGreen)
+                Text(L.settings.x11Desktop.linuxDesktop, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (running) Pill(L.common.running, QuotaGreen)
             }
-            Hint("Run Linux desktop apps (a browser, an IDE, office apps) from AntiGem's terminal. Termux:X11 shows the desktop.")
+            Hint(L.settings.x11Desktop.runLinuxDesktopAppsABrowser)
             Text(
-                "The desktop runs inside AntiGem, so Android won't slow it down or stop it while you use it.",
+                L.settings.x11Desktop.theDesktopRunsInsideAntigemSo,
                 fontSize = 12.sp, color = QuotaGreen
             )
         }
@@ -307,7 +308,7 @@ private fun IntroCard(running: Boolean, cardBg: Color, cardBorder: BorderStroke)
 private fun TaskOutput(state: X11DesktopManager.State, task: Task) {
     if (state.task == task) {
         LinearProgressIndicator(Modifier.fillMaxWidth().clip(CircleShape))
-        Hint(state.progress ?: state.log.lastOrNull { !it.startsWith("$") } ?: "Starting…")
+        Hint(state.progress ?: state.log.lastOrNull { !it.startsWith("$") } ?: L.common.starting)
     }
     if (state.logTask == task && state.log.isNotEmpty()) LogBox(state.log)
 }
@@ -318,20 +319,20 @@ private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderS
     var open by remember { mutableStateOf(false) }
     val start = "termux-x11 :0 -xstartup \"${desktop.startCommand}\""
     val commands = listOf(
-        "1. Install antigem-termux-x11-sharedUid.apk and download antigem-termux-x11-*-all.deb from ${X11DesktopManager.FORK_RELEASES_PAGE}" to null,
-        "2. Enable x11-repo" to "pkg install x11-repo",
-        "3. Install the termux-x11 command (in the folder with the .deb)" to "apt install ./antigem-termux-x11-*-all.deb",
-        "4. Update your packages, then install a desktop" to "pkg upgrade -y && pkg install dbus ${desktop.packages}",
-        "5. Start it, then open Termux:X11" to start
+        L.settings.x11Desktop.n1InstallAntigemTermuxX11Shareduid(X11DesktopManager.FORK_RELEASES_PAGE) to null,
+        L.settings.x11Desktop.n2EnableX11Repo to "pkg install x11-repo",
+        L.settings.x11Desktop.n3InstallTheTermuxX11Command to "apt install ./antigem-termux-x11-*-all.deb",
+        L.settings.x11Desktop.n4UpdateYourPackagesThenInstall to "pkg upgrade -y && pkg install dbus ${desktop.packages}",
+        L.settings.x11Desktop.n5StartItThenOpenTermux to start
     )
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Set up manually", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { open = !open }) { Text(if (open) "Hide" else "Show", fontSize = 12.5.sp) }
+                Text(L.settings.x11Desktop.setUpManually, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                TextButton(onClick = { open = !open }) { Text(if (open) L.common.hide else L.common.show, fontSize = 12.5.sp) }
             }
             if (!open) {
-                Hint("Prefer the terminal? These are the same steps as commands.")
+                Hint(L.settings.x11Desktop.preferTheTerminalTheseAreThe)
                 return@Column
             }
             commands.forEach { (label, command) ->
@@ -340,12 +341,12 @@ private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderS
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { Mono(command) }
                         IconButton(onClick = { clipboard.setText(AnnotatedString(command)) }) {
-                            Icon(Icons.Outlined.ContentCopy, "Copy", Modifier.size(18.dp))
+                            Icon(Icons.Outlined.ContentCopy, L.common.copy, Modifier.size(18.dp))
                         }
                     }
                 }
             }
-            Hint("Don't install termux-x11-nightly from x11-repo: it only works with the official Termux:X11, not AntiGem's build.")
+            Hint(L.settings.x11Desktop.dontInstallTermuxX11NightlyFrom)
         }
     }
 }

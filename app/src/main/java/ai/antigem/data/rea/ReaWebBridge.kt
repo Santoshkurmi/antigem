@@ -36,6 +36,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
+import ai.antigem.i18n.L
 
 /**
  * Settings → REA → Websites: lets REA's website tools (list_browser_targets, inspect_web_page, capture_web_screenshot…)
@@ -343,7 +344,7 @@ object ReaWebBridge {
         val upstream = connectDevTools()
         open.add(upstream)
         _state.update { it.copy(connections = it.connections + 1) }
-        activity("REA attached to ${tab.url.ifBlank { tab.title }}")
+        activity(L.rea.webBridge.reaAttachedToValue(tab.url.ifBlank { tab.title }))
         try {
             client.soTimeout = 0
             val upIn = upstream.inputStream
@@ -404,7 +405,7 @@ object ReaWebBridge {
                         val message = runCatching { JSONObject(String(text, Charsets.UTF_8)) }.getOrNull()
                         if (message?.optString("method") == "Page.captureScreenshot" && message.has("id")) {
                             val id = message.getInt("id")
-                            activity("Screenshot of ${tab.url.ifBlank { tab.title }}")
+                            activity(L.rea.webBridge.screenshotOfValue(tab.url.ifBlank { tab.title }))
                             if (!tab.isOnScreen) {
                                 // DevTools only draws what is on screen: the WebView draws background tabs itself
                                 answerWithDrawing(id)

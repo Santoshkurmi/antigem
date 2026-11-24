@@ -27,6 +27,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.Socket
 import java.util.Locale
+import ai.antigem.i18n.L
 
 class TermuxApiReceiver : BroadcastReceiver() {
 
@@ -180,7 +181,7 @@ class TermuxApiReceiver : BroadcastReceiver() {
     private fun handleNotification(context: Context, intent: Intent) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val id = intent.getIntExtra("id", 4242)
-        val title = intent.getStringExtra("title") ?: "Termux Notification"
+        val title = intent.getStringExtra("title") ?: L.receiver.termuxApiReceiver.termuxNotification
         val content = intent.getStringExtra("content") ?: intent.getStringExtra("text") ?: ""
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

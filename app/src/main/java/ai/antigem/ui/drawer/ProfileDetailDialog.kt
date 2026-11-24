@@ -19,6 +19,10 @@ import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,8 +37,10 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import ai.antigem.data.remote.AgyHubClient
+import ai.antigem.ui.components.label
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.theme.QuotaGreen
+import ai.antigem.i18n.L
 
 /**
  * Safely parses base64 data URIs ("data:image/jpeg;base64,...") into ByteArray for Coil,
@@ -61,6 +67,18 @@ fun ProfileDetailDialog(
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
+    var confirmSignOut by remember { mutableStateOf(false) }
+    if (confirmSignOut) {
+        ai.antigem.ui.agents.ConfirmSignOutDialog(
+            agentName = ai.antigem.domain.model.AgentKind.AGY.label(),
+            account = authInfo.email,
+            onConfirm = {
+                onLogout()
+                onDismiss()
+            },
+            onDismiss = { confirmSignOut = false }
+        )
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -90,7 +108,7 @@ fun ProfileDetailDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Close,
-                            contentDescription = "Close",
+                            contentDescription = L.common.close,
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
@@ -102,7 +120,7 @@ fun ProfileDetailDialog(
                         .data(parseProfileAvatarModel(authInfo.profilePictureUrl))
                         .crossfade(true)
                         .build(),
-                    contentDescription = "Profile Picture",
+                    contentDescription = L.drawer.profileDetail.profilePicture,
                     modifier = Modifier
                         .size(76.dp)
                         .clip(CircleShape)
@@ -166,7 +184,7 @@ fun ProfileDetailDialog(
                 }
 
                 // User Tier / Plan Badge Card
-                val tierName = authInfo.userTier.ifBlank { authInfo.planName.ifBlank { "Pro" } }
+                val tierName = authInfo.userTier.ifBlank { authInfo.planName.ifBlank { L.drawer.profileDetail.pro } }
                 if (tierName.isNotBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
@@ -231,14 +249,14 @@ fun ProfileDetailDialog(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "Prompt Credits",
+                                            text = L.drawer.profileDetail.promptCredits,
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "${authInfo.availablePromptCredits} Available",
+                                        text = L.drawer.profileDetail.availablepromptcreditsAvailable(authInfo.availablePromptCredits),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -266,14 +284,14 @@ fun ProfileDetailDialog(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "Flow Credits",
+                                            text = L.drawer.profileDetail.flowCredits,
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "${authInfo.availableFlowCredits} Available",
+                                        text = L.drawer.profileDetail.availableflowcreditsAvailable(authInfo.availableFlowCredits),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -298,14 +316,14 @@ fun ProfileDetailDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Email,
-                            contentDescription = "Email",
+                            contentDescription = L.drawer.profileDetail.email,
                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Account Email",
+                                text = L.drawer.profileDetail.accountEmail,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
@@ -330,19 +348,19 @@ fun ProfileDetailDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.VerifiedUser,
-                        contentDescription = "Status",
+                        contentDescription = L.drawer.profileDetail.status,
                         tint = ClaudeTerracotta,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Status",
+                            text = L.drawer.profileDetail.status,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                         Text(
-                            text = if (authInfo.isOffline) "Connected (Offline verification)" else "Active & Authenticated (AGY RPC)",
+                            text = if (authInfo.isOffline) L.drawer.profileDetail.connectedOfflineVerification else L.drawer.profileDetail.activeAuthenticatedAgyRpc,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Normal,
                             color = MaterialTheme.colorScheme.onSurface
@@ -368,19 +386,19 @@ fun ProfileDetailDialog(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                            contentDescription = "Upgrade",
+                            contentDescription = L.drawer.profileDetail.upgrade,
                             tint = ClaudeTerracotta,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Subscription",
+                                text = L.drawer.profileDetail.subscription,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                             Text(
-                                text = if (authInfo.upgradeSubscriptionText.isNotBlank()) authInfo.upgradeSubscriptionText else "Manage / Upgrade Plan",
+                                text = if (authInfo.upgradeSubscriptionText.isNotBlank()) authInfo.upgradeSubscriptionText else L.drawer.profileDetail.manageUpgradePlan,
                                 fontSize = 12.sp,
                                 color = ClaudeTerracotta,
                                 maxLines = 1,
@@ -394,10 +412,7 @@ fun ProfileDetailDialog(
 
                 // Logout Button
                 OutlinedButton(
-                    onClick = {
-                        onLogout()
-                        onDismiss()
-                    },
+                    onClick = { confirmSignOut = true },
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
@@ -407,12 +422,12 @@ fun ProfileDetailDialog(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.Logout,
-                        contentDescription = "Sign Out",
+                        contentDescription = L.drawer.profileDetail.signOut,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Sign Out",
+                        text = L.drawer.profileDetail.signOut,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )

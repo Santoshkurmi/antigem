@@ -50,6 +50,7 @@ import ai.antigem.data.homescreen.HomePrefs
 import ai.antigem.data.homescreen.HomeSnapshot
 import ai.antigem.domain.model.AgentKind
 import kotlin.math.max
+import ai.antigem.i18n.L
 
 /**
  * The One chat widget: a chat picked in its setup screen (or in the app), with its status, its latest reply, and
@@ -98,7 +99,7 @@ private fun OneChat(sample: HomeChat?) {
     val chat = sample ?: snap?.chats?.firstOrNull { it.id == id } ?: HomeChat(
         id = id,
         agent = prefs?.get(ChatWidget.KEY_AGENT) ?: AgentKind.AGY.name,
-        title = prefs?.get(ChatWidget.KEY_TITLE)?.takeIf { it.isNotBlank() } ?: "Chat"
+        title = prefs?.get(ChatWidget.KEY_TITLE)?.takeIf { it.isNotBlank() } ?: L.common.chat
     )
     val openChat = open(ctx, HomeLinks.Target.Chat(chat.agentKind, chat.id))
     val size = LocalSize.current
@@ -121,12 +122,12 @@ private fun OneChat(sample: HomeChat?) {
         }
         Spacer(GlanceModifier.height(10.dp))
         if (chat.running || chat.done) StatusLine(chat)
-        else Label("Latest reply", 12.sp, c.onSurfaceVariant, bold = true)
+        else Label(L.homescreen.chatWidget.latestReply, 12.sp, c.onSurfaceVariant, bold = true)
         Spacer(GlanceModifier.height(6.dp))
         val text = when {
-            hide -> "Open the chat to read it"
+            hide -> L.homescreen.chatWidget.openTheChatToReadIt
             chat.reply.isNotBlank() -> chat.reply
-            else -> "Open this chat in AntiGem once and its latest reply shows here."
+            else -> L.homescreen.chatWidget.openThisChatInAntigemOnce
         }
         Text(
             text,
@@ -137,10 +138,10 @@ private fun OneChat(sample: HomeChat?) {
         if (buttons) {
             Spacer(GlanceModifier.height(8.dp))
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Pill("Reply", R.drawable.ic_home_reply, c.primary, c.onPrimary,
+                Pill(L.homescreen.chatWidget.reply, R.drawable.ic_home_reply, c.primary, c.onPrimary,
                     open(ctx, HomeLinks.Target.Reply(chat.agentKind, chat.id)), GlanceModifier.defaultWeight())
                 Spacer(GlanceModifier.width(8.dp))
-                Pill("Open", R.drawable.ic_home_open, cardColor(), c.onSurface, openChat, GlanceModifier.defaultWeight())
+                Pill(L.common.open, R.drawable.ic_home_open, cardColor(), c.onSurface, openChat, GlanceModifier.defaultWeight())
             }
         }
     }
@@ -179,6 +180,6 @@ private fun NotChosen() {
     ) {
         GlyphDisc(44.dp, c.primaryContainer, R.drawable.ic_home_chat, c.onPrimaryContainer)
         Spacer(GlanceModifier.height(8.dp))
-        Text("Tap to choose a chat", style = TextStyle(color = c.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), maxLines = 2)
+        Text(L.homescreen.chatWidget.tapToChooseAChat, style = TextStyle(color = c.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), maxLines = 2)
     }
 }

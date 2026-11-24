@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.data.daemon.ProjectItem
 import ai.antigem.data.files.*
 import kotlinx.coroutines.launch
+import ai.antigem.i18n.L
 
 // ---------------- places ----------------
 
@@ -66,22 +67,22 @@ internal fun PlacesSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 12.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
-            item { Text("Places", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp)) }
+            item { Text(L.files.explorerDialogs.places, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp)) }
             if (roots.isEmpty()) {
-                item { Text("Loading places…", modifier = Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item { Text(L.files.explorerDialogs.loadingPlaces, modifier = Modifier.padding(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             items(roots, key = { "r" + it.path }) { r ->
                 PlaceRow(rootIcon(r.kind), r.name, r.path, currentPath == r.path, r.total, r.free) { onPick(r.path) }
             }
             if (projects.isNotEmpty()) {
-                item { SectionLabel("Projects") }
+                item { SectionLabel(L.common.projects) }
                 items(projects.take(10), key = { "p" + it.path }) { p ->
                     PlaceRow(Icons.Outlined.FolderSpecial, p.name, p.path, currentPath == p.path) { onPick(p.path) }
                 }
             }
             val rec = recent.filter { r -> roots.none { it.path == r } && projects.none { it.path == r } }
             if (rec.isNotEmpty()) {
-                item { SectionLabel("Recent") }
+                item { SectionLabel(L.files.explorerDialogs.recent) }
                 items(rec, key = { "h$it" }) { p ->
                     PlaceRow(Icons.Outlined.History, p.trimEnd('/').substringAfterLast('/').ifBlank { p }, p, currentPath == p) { onPick(p) }
                 }
@@ -182,31 +183,31 @@ internal fun EntryActionsSheet(
             }
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.SpaceEvenly) {
-                QuickAction(if (entry.isDir) Icons.Outlined.FolderOpen else Icons.AutoMirrored.Outlined.OpenInNew, "Open", onClick = onOpen)
-                if (!entry.isDir) QuickAction(Icons.Outlined.Share, "Share", onClick = onShare)
-                QuickAction(Icons.Outlined.ContentCopy, "Copy", onClick = onCopy)
-                QuickAction(Icons.Outlined.ContentCut, "Cut", onClick = onCut)
-                QuickAction(Icons.Outlined.DriveFileRenameOutline, "Rename", onClick = onRename)
-                QuickAction(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.error, onClick = onDelete)
+                QuickAction(if (entry.isDir) Icons.Outlined.FolderOpen else Icons.AutoMirrored.Outlined.OpenInNew, L.common.open, onClick = onOpen)
+                if (!entry.isDir) QuickAction(Icons.Outlined.Share, L.common.share, onClick = onShare)
+                QuickAction(Icons.Outlined.ContentCopy, L.common.copy, onClick = onCopy)
+                QuickAction(Icons.Outlined.ContentCut, L.files.explorerDialogs.cut, onClick = onCut)
+                QuickAction(Icons.Outlined.DriveFileRenameOutline, L.common.rename, onClick = onRename)
+                QuickAction(Icons.Outlined.Delete, L.common.delete, tint = MaterialTheme.colorScheme.error, onClick = onDelete)
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             if (entry.isDir) {
-                if (caps.openFolderInIde) SheetRow(Icons.Outlined.Code, "Open folder in IDE", "Use it as the active project", tint = MaterialTheme.colorScheme.primary, onClick = onOpenFolderInIde)
+                if (caps.openFolderInIde) SheetRow(Icons.Outlined.Code, L.files.explorerDialogs.openFolderInIde, L.files.explorerDialogs.useItAsTheActiveProject, tint = MaterialTheme.colorScheme.primary, onClick = onOpenFolderInIde)
             } else {
-                SheetRow(Icons.Outlined.Apps, "Open with…", "Choose the editor or another app", onClick = onOpenWith)
-                if (caps.ide) SheetRow(Icons.Outlined.Code, "Open in code editor", if (entry.kind.isTextual || entry.kind == FileKind.IMAGE) null else "Not a text file: may not display correctly", onClick = onOpenInIde)
+                SheetRow(Icons.Outlined.Apps, L.files.explorerDialogs.openWith, L.files.explorerDialogs.chooseTheEditorOrAnotherApp, onClick = onOpenWith)
+                if (caps.ide) SheetRow(Icons.Outlined.Code, L.files.explorerDialogs.openInCodeEditor, if (entry.kind.isTextual || entry.kind == FileKind.IMAGE) null else L.files.explorerDialogs.notATextFileMayNot, onClick = onOpenInIde)
             }
-            if (!entry.isDir && FileKinds.isBrowsableArchive(entry.name)) SheetRow(Icons.Outlined.Inventory2, "View contents", onClick = onViewArchive)
+            if (!entry.isDir && FileKinds.isBrowsableArchive(entry.name)) SheetRow(Icons.Outlined.Inventory2, L.files.explorerDialogs.viewContents, onClick = onViewArchive)
             if (!entry.isDir && FileKinds.isExtractable(entry.name)) {
-                SheetRow(Icons.Outlined.Unarchive, "Extract here", "Into a new folder next to it", onClick = onExtractHere)
-                SheetRow(Icons.Outlined.DriveFolderUpload, "Extract to…", onClick = onExtractTo)
+                SheetRow(Icons.Outlined.Unarchive, L.common.extractHere, L.files.explorerDialogs.intoANewFolderNextTo, onClick = onExtractHere)
+                SheetRow(Icons.Outlined.DriveFolderUpload, L.files.explorerDialogs.extractTo, onClick = onExtractTo)
             }
-            SheetRow(Icons.Outlined.FolderZip, "Compress to ZIP", onClick = onCompress)
-            SheetRow(Icons.Outlined.FileCopy, "Copy to…", onClick = onCopyTo)
-            SheetRow(Icons.AutoMirrored.Outlined.DriveFileMove, "Move to…", onClick = onMoveTo)
-            SheetRow(Icons.Outlined.ControlPointDuplicate, "Duplicate", onClick = onDuplicate)
-            SheetRow(Icons.Outlined.Link, "Copy path", entry.path, onClick = onCopyPath)
-            SheetRow(Icons.Outlined.Info, "Details", onClick = onDetails)
+            SheetRow(Icons.Outlined.FolderZip, L.files.explorerDialogs.compressToZip, onClick = onCompress)
+            SheetRow(Icons.Outlined.FileCopy, L.files.explorerDialogs.copyTo, onClick = onCopyTo)
+            SheetRow(Icons.AutoMirrored.Outlined.DriveFileMove, L.files.explorerDialogs.moveTo, onClick = onMoveTo)
+            SheetRow(Icons.Outlined.ControlPointDuplicate, L.files.explorerDialogs.duplicate, onClick = onDuplicate)
+            SheetRow(Icons.Outlined.Link, L.files.explorerDialogs.copyPath, entry.path, onClick = onCopyPath)
+            SheetRow(Icons.Outlined.Info, L.common.details, onClick = onDetails)
         }
     }
 }
@@ -220,10 +221,10 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean, content
     val k = entry.kind
     val textual = contentIsText ?: k.isTextual
     val ide = if (!ideAvailable) null else when {
-        textual -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "Code editor", "Edit in the IDE", recommended = true)
+        textual -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, L.files.explorerDialogs.codeEditor, L.files.explorerDialogs.editInTheIde, recommended = true)
         // pictures and videos have AntiGem's own viewer and player
         k == FileKind.IMAGE || k == FileKind.VIDEO -> null
-        else -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, "Code editor", "Not a text file: it may not display or save correctly", recommended = false, warn = true)
+        else -> OpenOption(OpenChoice.IDE, Icons.Outlined.Code, L.files.explorerDialogs.codeEditor, L.files.explorerDialogs.notATextFileItMay, recommended = false, warn = true)
     }
     // a mini app package goes to AntiGem's own installer (FileOpener), like an .apk to Android's
     val agapp = entry.name.endsWith(".agapp", ignoreCase = true)
@@ -237,28 +238,28 @@ internal fun openOptionsFor(entry: ExplorerEntry, ideAvailable: Boolean, content
             FileKind.APK -> Icons.Outlined.InstallMobile
             else -> Icons.AutoMirrored.Outlined.OpenInNew
         },
-        if (agapp) "Install mini app" else when (k) {
-            FileKind.VIDEO -> "Play in video player"
-            FileKind.AUDIO -> "Play in music player"
-            FileKind.IMAGE -> "Open in gallery"
-            FileKind.PDF -> "Open in PDF reader"
-            FileKind.APK -> "Install app"
-            FileKind.DOCUMENT -> "Open in document app"
-            else -> "Open in another app"
+        if (agapp) L.files.explorerDialogs.installMiniApp else when (k) {
+            FileKind.VIDEO -> L.files.explorerDialogs.playInVideoPlayer
+            FileKind.AUDIO -> L.files.explorerDialogs.playInMusicPlayer
+            FileKind.IMAGE -> L.files.explorerDialogs.openInGallery
+            FileKind.PDF -> L.files.explorerDialogs.openInPdfReader
+            FileKind.APK -> L.files.explorerDialogs.installApp
+            FileKind.DOCUMENT -> L.files.explorerDialogs.openInDocumentApp
+            else -> L.files.explorerDialogs.openInAnotherApp
         },
-        if (agapp) "Check the developer's signature, then install or update" else "Pick any app installed on this phone",
+        if (agapp) L.files.explorerDialogs.checkTheDevelopersSignatureThenInstall else L.files.explorerDialogs.pickAnyAppInstalledOnThis,
         recommended = !textual
     )
     val preview = when {
         !allowPreview -> null
-        k == FileKind.MARKDOWN -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Visibility, "Preview", "Rendered Markdown", recommended = false)
-        k == FileKind.VIDEO -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.SmartDisplay, "Play in AntiGem", "Built-in player: full screen, seek, speed", recommended = true)
-        k == FileKind.IMAGE && !textual -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Image, "View in AntiGem", "Built-in viewer: zoom, save, share", recommended = true)
-        FileKinds.isBrowsableArchive(entry.name) -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Inventory2, "View contents", "See what is inside, then extract", recommended = k == FileKind.ARCHIVE)
+        k == FileKind.MARKDOWN -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Visibility, L.common.preview, L.files.explorerDialogs.renderedMarkdown, recommended = false)
+        k == FileKind.VIDEO -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.SmartDisplay, L.files.explorerDialogs.playInAntigem, L.files.explorerDialogs.builtInPlayerFullScreenSeek, recommended = true)
+        k == FileKind.IMAGE && !textual -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Image, L.files.explorerDialogs.viewInAntigem, L.files.explorerDialogs.builtInViewerZoomSaveShare, recommended = true)
+        FileKinds.isBrowsableArchive(entry.name) -> OpenOption(OpenChoice.PREVIEW, Icons.Outlined.Inventory2, L.files.explorerDialogs.viewContents, L.files.explorerDialogs.seeWhatIsInsideThenExtract, recommended = k == FileKind.ARCHIVE)
         else -> null
     }
     // sending the file to another app is always offered, last
-    val share = OpenOption(OpenChoice.SHARE, Icons.Outlined.Share, "Share", "Send it to another app", recommended = false)
+    val share = OpenOption(OpenChoice.SHARE, Icons.Outlined.Share, L.common.share, L.files.explorerDialogs.sendItToAnotherApp, recommended = false)
     val list = listOfNotNull(ide, preview, external, share)
     // exactly one recommendation, and it goes first
     val rec = list.firstOrNull { it.recommended } ?: list.first()
@@ -284,7 +285,7 @@ internal fun OpenWithSheet(
                 EntryIcon(entry, 44.dp, thumbnails = true)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Open with", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(L.files.explorerDialogs.openWith2, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(entry.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
                 }
             }
@@ -309,7 +310,7 @@ internal fun OpenWithSheet(
                                 if (o.recommended) {
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "Recommended",
+                                        L.common.recommended,
                                         fontSize = 10.5.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.primary,
@@ -331,7 +332,7 @@ internal fun OpenWithSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(checked = remember, onCheckedChange = { remember = it })
-                    Text("Always open .$ext files this way", fontSize = 13.5.sp)
+                    Text(L.files.explorerDialogs.alwaysOpenExtFilesThisWay(ext), fontSize = 13.5.sp)
                 }
             }
         }
@@ -346,7 +347,7 @@ internal fun DeleteConfirmDialog(entries: List<ExplorerEntry>, onConfirm: () -> 
     val nested = folders.sumOf { it.childCount }
     val needsAck = folders.any { it.childCount > 0 } || entries.size > 5
     var ack by remember { mutableStateOf(false) }
-    val title = if (entries.size == 1) "Delete \"${entries.first().name}\"?" else "Delete ${entries.size} items?"
+    val title = if (entries.size == 1) "Delete \"${entries.first().name}\"?" else L.files.explorerDialogs.deleteEntriescountItems(entries.size)
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.DeleteForever, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(30.dp)) },
@@ -363,25 +364,25 @@ internal fun DeleteConfirmDialog(entries: List<ExplorerEntry>, onConfirm: () -> 
                                     Text(e.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
                                 }
                             }
-                            if (entries.size > 4) Text("and ${entries.size - 4} more", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (entries.size > 4) Text(L.files.explorerDialogs.andValueMore(entries.size - 4), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 if (folders.isNotEmpty()) {
                     Text(
-                        if (nested > 0) "Folders are deleted with everything inside them (${if (nested > 1000) "1000+" else nested} items at the top level alone)."
-                        else "Empty folders will be removed.",
+                        if (nested > 0) L.files.explorerDialogs.foldersAreDeletedWithEverythingInside(if (nested > 1000) "1000+" else nested)
+                        else L.files.explorerDialogs.emptyFoldersWillBeRemoved,
                         fontSize = 13.5.sp
                     )
                 }
-                Text("This is permanent. Deleted files cannot be recovered.", fontSize = 13.5.sp, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
+                Text(L.files.explorerDialogs.thisIsPermanentDeletedFilesCannot, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
                 if (needsAck) {
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { ack = !ack },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(checked = ack, onCheckedChange = { ack = it }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error))
-                        Text("I understand, delete permanently", fontSize = 13.5.sp)
+                        Text(L.files.explorerDialogs.iUnderstandDeletePermanently, fontSize = 13.5.sp)
                     }
                 }
             }
@@ -391,9 +392,9 @@ internal fun DeleteConfirmDialog(entries: List<ExplorerEntry>, onConfirm: () -> 
                 onClick = onConfirm,
                 enabled = !needsAck || ack,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError)
-            ) { Text("Delete") }
+            ) { Text(L.common.delete) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -421,9 +422,9 @@ internal fun NameDialog(
     val name = value.text.trim()
     val localError = when {
         name.isEmpty() -> null
-        name.contains('/') -> "A name cannot contain \"/\""
-        name == "." || name == ".." -> "Not a valid name"
-        name != initial && name in existingNames -> "\"$name\" already exists here"
+        name.contains('/') -> L.files.explorerDialogs.aNameCannotContain
+        name == "." || name == ".." -> L.files.explorerDialogs.notAValidName
+        name != initial && name in existingNames -> L.files.explorerDialogs.nameAlreadyExistsHere(name)
         else -> null
     }
     val error = localError ?: serverError
@@ -460,7 +461,7 @@ internal fun NameDialog(
                 else Text(confirmLabel)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -471,10 +472,10 @@ internal fun NameDialog(
 internal fun CreateSheet(allowProject: Boolean, onFolder: () -> Unit, onFile: () -> Unit, onProject: () -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 28.dp)) {
-            Text("Create", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
-            SheetRow(Icons.Outlined.CreateNewFolder, "Folder", tint = MaterialTheme.colorScheme.primary, onClick = onFolder)
-            SheetRow(Icons.Outlined.NoteAdd, "File", "Empty file, any extension", tint = MaterialTheme.colorScheme.primary, onClick = onFile)
-            if (allowProject) SheetRow(Icons.Outlined.RocketLaunch, "Project from template", "Python, Node.js, Web, Kotlin, C++…", tint = MaterialTheme.colorScheme.primary, onClick = onProject)
+            Text(L.common.create, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
+            SheetRow(Icons.Outlined.CreateNewFolder, L.files.explorerDialogs.folder, tint = MaterialTheme.colorScheme.primary, onClick = onFolder)
+            SheetRow(Icons.Outlined.NoteAdd, L.common.file, L.files.explorerDialogs.emptyFileAnyExtension, tint = MaterialTheme.colorScheme.primary, onClick = onFile)
+            if (allowProject) SheetRow(Icons.Outlined.RocketLaunch, L.files.explorerDialogs.projectFromTemplate, L.files.explorerDialogs.pythonNodeJsWebKotlinC, tint = MaterialTheme.colorScheme.primary, onClick = onProject)
         }
     }
 }
@@ -486,15 +487,15 @@ internal fun NewProjectDialog(onCreate: suspend (name: String, template: String)
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val templates = listOf("python" to "Python", "node" to "Node.js", "web" to "Web", "kotlin" to "Kotlin", "cpp" to "C++", "blank" to "Blank")
+    val templates = listOf("python" to L.files.explorerDialogs.python, "node" to "Node.js", "web" to L.files.explorerDialogs.web, "kotlin" to L.files.explorerDialogs.kotlin, "cpp" to "C++", "blank" to L.files.explorerDialogs.blank)
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.RocketLaunch, null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text("New project", fontWeight = FontWeight.SemiBold) },
+        title = { Text(L.files.explorerDialogs.newProject, fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = name, onValueChange = { name = it; error = null }, label = { Text("Project name") }, singleLine = true,
+                    value = name, onValueChange = { name = it; error = null }, label = { Text(L.files.explorerDialogs.projectName) }, singleLine = true,
                     isError = error != null, supportingText = error?.let { { Text(it) } }, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
                 )
                 @OptIn(ExperimentalLayoutApi::class)
@@ -509,9 +510,9 @@ internal fun NewProjectDialog(onCreate: suspend (name: String, template: String)
             Button(
                 enabled = name.isNotBlank() && !busy && !name.contains('/'),
                 onClick = { busy = true; scope.launch { error = onCreate(name.trim(), template); busy = false } }
-            ) { Text(if (busy) "Creating…" else "Create & open") }
+            ) { Text(if (busy) L.files.explorerDialogs.creating else L.files.explorerDialogs.createOpen) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -539,28 +540,28 @@ internal fun DetailsSheet(entry: ExplorerEntry, onCopyPath: (String) -> Unit, on
             }
             Spacer(Modifier.height(16.dp))
             val s = stat
-            DetailRow("Location", entry.path.substringBeforeLast('/').ifBlank { "/" }, mono = true) { onCopyPath(entry.path) }
+            DetailRow(L.common.location, entry.path.substringBeforeLast('/').ifBlank { "/" }, mono = true) { onCopyPath(entry.path) }
             when {
-                s == null && error == null -> DetailRow("Size", "Calculating…")
-                s == null -> DetailRow("Size", error ?: "")
+                s == null && error == null -> DetailRow(L.common.size, L.files.explorerDialogs.calculating)
+                s == null -> DetailRow(L.common.size, error ?: "")
                 s.isDir -> {
-                    DetailRow("Size", FileKinds.formatSize(s.size) + if (s.partial) " (partial, very large folder)" else "")
-                    DetailRow("Contains", "${s.files} files, ${s.dirs} folders")
+                    DetailRow(L.common.size, FileKinds.formatSize(s.size) + if (s.partial) L.files.explorerDialogs.partialVeryLargeFolder else "")
+                    DetailRow(L.files.explorerDialogs.contains, L.files.explorerDialogs.filesFilesDirsFolders(s.files, s.dirs))
                 }
-                else -> DetailRow("Size", "${FileKinds.formatSize(s.size)} (${"%,d".format(s.size)} bytes)")
+                else -> DetailRow(L.common.size, "${FileKinds.formatSize(s.size)} (${"%,d".format(s.size)} bytes)")
             }
-            DetailRow("Modified", formatModified(entry.modTime))
+            DetailRow(L.files.explorerDialogs.modified, formatModified(entry.modTime))
             if (s != null) {
-                if (s.mime.isNotBlank()) DetailRow("Type", s.mime)
-                DetailRow("Permissions", "${s.mode}  (${s.modeOctal})", mono = true)
-                DetailRow("Access", listOfNotNull(if (s.readable) "read" else null, if (s.writable) "write" else null).joinToString(" + ").ifBlank { "none" })
-                if (s.symlinkTarget.isNotBlank()) DetailRow("Links to", s.symlinkTarget, mono = true)
+                if (s.mime.isNotBlank()) DetailRow(L.files.explorerDialogs.type, s.mime)
+                DetailRow(L.common.permissions, "${s.mode}  (${s.modeOctal})", mono = true)
+                DetailRow(L.files.explorerDialogs.access, listOfNotNull(if (s.readable) "read" else null, if (s.writable) "write" else null).joinToString(" + ").ifBlank { "none" })
+                if (s.symlinkTarget.isNotBlank()) DetailRow(L.files.explorerDialogs.linksTo, s.symlinkTarget, mono = true)
                 // the bridge's machine only (Android storage has no Unix permissions to change)
                 if (!s.isDir && side == ExplorerSide.BRIDGE) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Executable", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text("Lets scripts and programs run (chmod +x)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(L.files.explorerDialogs.executable, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(L.files.explorerDialogs.letsScriptsAndProgramsRunChmod, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Switch(checked = s.executable, onCheckedChange = { on ->
                             scope.launch {
@@ -581,7 +582,7 @@ private fun DetailRow(label: String, value: String, mono: Boolean = false, onCop
         Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(104.dp))
         Text(value, fontSize = 13.5.sp, fontFamily = if (mono) FontFamily.Monospace else null, modifier = Modifier.weight(1f))
         if (onCopy != null) {
-            Icon(Icons.Outlined.ContentCopy, "Copy path", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp).clickable(onClick = onCopy))
+            Icon(Icons.Outlined.ContentCopy, L.files.explorerDialogs.copyPath, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp).clickable(onClick = onCopy))
         }
     }
 }
@@ -593,20 +594,20 @@ internal fun ConflictDialog(names: List<String>, move: Boolean, onChoose: (Confl
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.CopyAll, null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text(if (names.size == 1) "\"${names.first()}\" already exists" else "${names.size} items already exist here", fontWeight = FontWeight.SemiBold) },
+        title = { Text(if (names.size == 1) L.files.explorerDialogs.firstAlreadyExists(names.first()) else L.files.explorerDialogs.namescountItemsAlreadyExistHere(names.size), fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (names.size > 1) Text(names.take(5).joinToString("\n") + if (names.size > 5) "\n…" else "", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("What should happen to the ${if (move) "moved" else "copied"} items with the same name?", fontSize = 14.sp)
+                Text(L.files.explorerDialogs.whatShouldHappenToTheValue(if (move) "moved" else "copied"), fontSize = 14.sp)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ChoiceButton(Icons.Outlined.ControlPointDuplicate, "Keep both", "New ones get a number, like \"name (1)\"") { onChoose(ConflictPolicy.RENAME) }
-                    ChoiceButton(Icons.Outlined.SkipNext, "Skip", "Leave the existing ones alone") { onChoose(ConflictPolicy.SKIP) }
-                    ChoiceButton(Icons.Outlined.SwapHoriz, "Replace", "Existing items are deleted first", danger = true) { onChoose(ConflictPolicy.OVERWRITE) }
+                    ChoiceButton(Icons.Outlined.ControlPointDuplicate, L.files.explorerDialogs.keepBoth, L.files.explorerDialogs.newOnesGetANumberLike) { onChoose(ConflictPolicy.RENAME) }
+                    ChoiceButton(Icons.Outlined.SkipNext, L.common.skip, L.files.explorerDialogs.leaveTheExistingOnesAlone) { onChoose(ConflictPolicy.SKIP) }
+                    ChoiceButton(Icons.Outlined.SwapHoriz, L.common.replace, L.files.explorerDialogs.existingItemsAreDeletedFirst, danger = true) { onChoose(ConflictPolicy.OVERWRITE) }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }
 
@@ -647,8 +648,8 @@ internal fun ArchiveSheet(entry: ExplorerEntry, onExtractHere: () -> Unit, onExt
                     Text(
                         when {
                             error != null -> error!!
-                            list == null -> "Reading…"
-                            else -> "${list.count { !it.isDir }}${if (truncated) "+" else ""} files  ·  ${FileKinds.formatSize(list.sumOf { it.size })} unpacked"
+                            list == null -> L.files.explorerDialogs.reading
+                            else -> L.files.explorerDialogs.valueValue2FilesFormatsizeUnpacked(list.count { !it.isDir }, if (truncated) "+" else "", FileKinds.formatSize(list.sumOf { it.size }))
                         },
                         fontSize = 12.5.sp,
                         color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
@@ -659,9 +660,9 @@ internal fun ArchiveSheet(entry: ExplorerEntry, onExtractHere: () -> Unit, onExt
             if (FileKinds.isExtractable(entry.name)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = onExtractHere, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Outlined.Unarchive, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Extract here")
+                        Icon(Icons.Outlined.Unarchive, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.common.extractHere)
                     }
-                    OutlinedButton(onClick = onExtractTo, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Extract to…") }
+                    OutlinedButton(onClick = onExtractTo, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text(L.files.explorerDialogs.extractTo) }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -693,25 +694,25 @@ internal fun ArchiveSheet(entry: ExplorerEntry, onExtractHere: () -> Unit, onExt
 internal fun ViewOptionsSheet(settings: ExplorerSettings, onChange: ((ExplorerSettings) -> ExplorerSettings) -> Unit, onForgetChoices: () -> Unit, rememberedCount: Int, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Sort & view", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Text("Sort by", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            Text(L.files.explorerDialogs.sortView, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(L.files.explorerDialogs.sortBy, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SortBy.entries.forEach { s ->
                     FilterChip(selected = settings.sortBy == s, onClick = { onChange { it.copy(sortBy = s) } }, label = { Text(s.label) })
                 }
             }
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                SegmentedButton(selected = !settings.descending, onClick = { onChange { it.copy(descending = false) } }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Ascending") }
-                SegmentedButton(selected = settings.descending, onClick = { onChange { it.copy(descending = true) } }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Descending") }
+                SegmentedButton(selected = !settings.descending, onClick = { onChange { it.copy(descending = false) } }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text(L.files.explorerDialogs.ascending) }
+                SegmentedButton(selected = settings.descending, onClick = { onChange { it.copy(descending = true) } }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text(L.files.explorerDialogs.descending) }
             }
-            Text("Layout", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            Text(L.files.explorerDialogs.layout, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                SegmentedButton(selected = !settings.grid, onClick = { onChange { it.copy(grid = false) } }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = { Icon(Icons.Outlined.ViewList, null, Modifier.size(18.dp)) }) { Text("List") }
-                SegmentedButton(selected = settings.grid, onClick = { onChange { it.copy(grid = true) } }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = { Icon(Icons.Outlined.GridView, null, Modifier.size(18.dp)) }) { Text("Grid") }
+                SegmentedButton(selected = !settings.grid, onClick = { onChange { it.copy(grid = false) } }, shape = SegmentedButtonDefaults.itemShape(0, 2), icon = { Icon(Icons.Outlined.ViewList, null, Modifier.size(18.dp)) }) { Text(L.common.list) }
+                SegmentedButton(selected = settings.grid, onClick = { onChange { it.copy(grid = true) } }, shape = SegmentedButtonDefaults.itemShape(1, 2), icon = { Icon(Icons.Outlined.GridView, null, Modifier.size(18.dp)) }) { Text(L.files.explorerDialogs.grid) }
             }
-            SwitchRow("Folders first", settings.foldersFirst) { v -> onChange { it.copy(foldersFirst = v) } }
-            SwitchRow("Show hidden files", settings.showHidden, "Names starting with a dot, like .git or .env") { v -> onChange { it.copy(showHidden = v) } }
-            SwitchRow("Image thumbnails", settings.thumbnails) { v -> onChange { it.copy(thumbnails = v) } }
+            SwitchRow(L.files.explorerDialogs.foldersFirst, settings.foldersFirst) { v -> onChange { it.copy(foldersFirst = v) } }
+            SwitchRow(L.files.explorerDialogs.showHiddenFiles, settings.showHidden, L.files.explorerDialogs.namesStartingWithADotLike) { v -> onChange { it.copy(showHidden = v) } }
+            SwitchRow(L.files.explorerDialogs.imageThumbnails, settings.thumbnails) { v -> onChange { it.copy(thumbnails = v) } }
             if (rememberedCount > 0) {
                 TextButton(onClick = onForgetChoices) { Text("Forget \"always open with\" choices ($rememberedCount)") }
             }
@@ -737,18 +738,18 @@ internal fun NotTextDialog(name: String, mime: String, onOpenAnyway: () -> Unit,
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error) },
-        title = { Text("Not a text file", fontWeight = FontWeight.SemiBold) },
+        title = { Text(L.files.explorerDialogs.notATextFile, fontWeight = FontWeight.SemiBold) },
         text = {
             Text(
-                "\"$name\" looks like ${mime.ifBlank { "binary data" }}. The code editor may show garbled text, and saving it from the editor can damage the file.",
+                L.files.explorerDialogs.nameLooksLikeValueTheCode(name, mime.ifBlank { L.files.explorerDialogs.binaryData }),
                 fontSize = 14.sp
             )
         },
-        confirmButton = { TextButton(onClick = onOpenAnyway) { Text("Open anyway", color = MaterialTheme.colorScheme.error) } },
+        confirmButton = { TextButton(onClick = onOpenAnyway) { Text(L.files.explorerDialogs.openAnyway, color = MaterialTheme.colorScheme.error) } },
         dismissButton = {
             Row {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Button(onClick = onOpenElsewhere) { Text("Other app") }
+                TextButton(onClick = onDismiss) { Text(L.common.cancel) }
+                Button(onClick = onOpenElsewhere) { Text(L.files.explorerDialogs.otherApp) }
             }
         }
     )

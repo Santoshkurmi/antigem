@@ -33,6 +33,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import ai.antigem.i18n.L
 
 /**
  * Singleton manager that retains the active YouTube player WebView across Compose list recycling,
@@ -68,7 +69,7 @@ object YouTubeMediaSessionManager {
     @Volatile
     private var activeVideoId: String? = null
     @Volatile
-    private var activeTitle: String = "YouTube Video"
+    private var activeTitle: String = L.media.youTubeMediaSessionManager.youtubeVideo
     @Volatile
     private var activeThumbnailUrl: String? = null
     @Volatile
@@ -220,7 +221,7 @@ object YouTubeMediaSessionManager {
 
         val appContext = context.applicationContext
         activeVideoId = video.videoId
-        activeTitle = video.title?.takeIf { it.isNotBlank() } ?: "YouTube Video"
+        activeTitle = video.title?.takeIf { it.isNotBlank() } ?: L.media.youTubeMediaSessionManager.youtubeVideo
         activeThumbnailUrl = video.customThumbnailUrl?.takeIf { it.isNotBlank() }
             ?: "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
 
@@ -500,7 +501,7 @@ object YouTubeMediaSessionManager {
 
             val ytVideoId = extractYouTubeVideoId(url)
             activeVideoId = ytVideoId ?: "browser_media"
-            activeTitle = title.takeIf { it.isNotBlank() && it != "New Tab" } ?: "Browser Video"
+            activeTitle = title.takeIf { it.isNotBlank() && it != "New Tab" } ?: L.media.youTubeMediaSessionManager.browserVideo
             activeThumbnailUrl = if (!ytVideoId.isNullOrBlank()) {
                 "https://img.youtube.com/vi/$ytVideoId/hqdefault.jpg"
             } else null
@@ -619,7 +620,7 @@ object YouTubeMediaSessionManager {
         )
 
         val playPauseIcon = if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val playPauseTitle = if (isPlaying) "Pause" else "Play"
+        val playPauseTitle = if (isPlaying) L.media.youTubeMediaSessionManager.pause else L.media.youTubeMediaSessionManager.play
 
         val mediaStyle = Notification.MediaStyle()
             .setMediaSession(session.sessionToken)
@@ -628,8 +629,8 @@ object YouTubeMediaSessionManager {
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(activeTitle)
-            .setContentText("YouTube Video")
-            .setSubText("Antigravity")
+            .setContentText(L.media.youTubeMediaSessionManager.youtubeVideo)
+            .setSubText(L.common.antigravity)
             .setContentIntent(contentIntent)
             .setDeleteIntent(stopIntent)
             .setStyle(mediaStyle)
@@ -702,7 +703,7 @@ object YouTubeMediaSessionManager {
                 "YouTube Playback",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows playback controls for videos in chat"
+                description = L.media.youTubeMediaSessionManager.showsPlaybackControlsForVideosIn
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -747,7 +748,7 @@ object YouTubeMediaSessionManager {
             isBrowserMedia = false
             activeWebView = null
             activeVideoId = null
-            activeTitle = "YouTube Video"
+            activeTitle = L.media.youTubeMediaSessionManager.youtubeVideo
             activeThumbnailUrl = null
             thumbnailBitmap = null
             isPlaying = false

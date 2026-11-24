@@ -69,6 +69,7 @@ import androidx.compose.ui.window.DialogProperties
 import ai.antigem.R
 import ai.antigem.data.preferences.TerminalLauncherManager
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 @Composable
 fun TerminalLauncherOnboardingDialog(
@@ -88,11 +89,11 @@ fun TerminalLauncherOnboardingDialog(
         total = total,
         accent = ClaudeTerracotta,
         icon = { Icon(Icons.Default.Terminal, contentDescription = null, tint = ClaudeTerracotta, modifier = Modifier.size(36.dp)) },
-        title = "Terminal App Setup",
-        subtitle = "Choose how you want to open the Linux command line on your device.",
-        primaryLabel = "Save & Continue",
+        title = L.onboarding.terminalLauncherOnboarding.terminalAppSetup,
+        subtitle = L.onboarding.terminalLauncherOnboarding.chooseHowYouWantToOpen,
+        primaryLabel = L.onboarding.terminalLauncherOnboarding.saveContinue,
         onPrimary = { onConfirm(isEnabled, selectedStyle) },
-        footnote = "You can change this anytime in Settings.",
+        footnote = L.onboarding.terminalLauncherOnboarding.youCanChangeThisAnytimeIn,
         onBack = onDismiss
     ) {
                 // Visual Preview: Home Screen Apps Simulation
@@ -148,7 +149,7 @@ fun TerminalLauncherOnboardingDialog(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Chat & IDE",
+                                    text = L.onboarding.terminalLauncherOnboarding.chatIde,
                                     fontSize = 9.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
@@ -187,7 +188,7 @@ fun TerminalLauncherOnboardingDialog(
                                     if (selectedStyle == TerminalLauncherManager.STYLE_TERMUX) {
                                         Image(
                                             painter = painterResource(id = R.drawable.ic_termux_foreground),
-                                            contentDescription = "Termux",
+                                            contentDescription = L.common.termux,
                                             modifier = Modifier.size(38.dp)
                                         )
                                     } else {
@@ -199,13 +200,13 @@ fun TerminalLauncherOnboardingDialog(
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = if (!isEnabled) "Hidden" else if (selectedStyle == TerminalLauncherManager.STYLE_TERMUX) "Termux" else "AntiTerm",
+                                    text = if (!isEnabled) L.onboarding.terminalLauncherOnboarding.hidden else if (selectedStyle == TerminalLauncherManager.STYLE_TERMUX) L.common.termux else "AntiTerm",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (!isEnabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (isEnabled) "Terminal" else "In-App only",
+                                    text = if (isEnabled) L.common.terminal else L.onboarding.terminalLauncherOnboarding.inAppOnly,
                                     fontSize = 9.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                 )
@@ -233,14 +234,14 @@ fun TerminalLauncherOnboardingDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(
-                                text = "Standalone Terminal App Icon",
+                                text = L.onboarding.terminalLauncherOnboarding.standaloneTerminalAppIcon,
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Places a dedicated icon in your app launcher for 1-tap terminal access",
+                                text = L.onboarding.terminalLauncherOnboarding.placesADedicatedIconInYour,
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -270,7 +271,7 @@ fun TerminalLauncherOnboardingDialog(
                             .animateContentSize()
                     ) {
                         Text(
-                            text = "Select Icon & App Name:",
+                            text = L.onboarding.terminalLauncherOnboarding.selectIconAppName,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
@@ -318,7 +319,7 @@ fun TerminalLauncherOnboardingDialog(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Modern unified icon matching AntiGem",
+                                        text = L.onboarding.terminalLauncherOnboarding.modernUnifiedIconMatchingAntigem,
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )
@@ -363,7 +364,7 @@ fun TerminalLauncherOnboardingDialog(
                                 ) {
                                     Image(
                                         painter = painterResource(id = R.drawable.ic_termux_foreground),
-                                        contentDescription = "Termux",
+                                        contentDescription = L.common.termux,
                                         modifier = Modifier.size(28.dp)
                                     )
                                 }
@@ -372,13 +373,13 @@ fun TerminalLauncherOnboardingDialog(
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Termux",
+                                        text = L.common.termux,
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Classic terminal >_ prompt icon & familiar name",
+                                        text = L.onboarding.terminalLauncherOnboarding.classicTerminalPromptIconFamiliarName,
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                     )

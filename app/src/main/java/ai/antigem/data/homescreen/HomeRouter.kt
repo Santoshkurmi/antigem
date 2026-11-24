@@ -11,6 +11,7 @@ import ai.antigem.ui.chat.ChatViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
+import ai.antigem.i18n.L
 
 /** MainActivity's side of a home-screen link ([HomeLinks.ACTION_SHOW], forwarded by [HomeLaunchActivity]). */
 object HomeRouter {
@@ -78,7 +79,7 @@ object HomeRouter {
                 }
                 else -> {
                     vm.requestViewMode("CHAT")
-                    Toast.makeText(activity, "Set up the terminal first: open Terminal from AntiGem's page switcher", Toast.LENGTH_LONG).show()
+                    Toast.makeText(activity, L.homescreen.homeRouter.setUpTheTerminalFirstOpen, Toast.LENGTH_LONG).show()
                 }
             }
         }

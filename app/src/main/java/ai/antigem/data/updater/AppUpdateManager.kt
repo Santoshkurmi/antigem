@@ -16,6 +16,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 private const val TAG = "AppUpdateManager"
 private const val DEFAULT_VERSION_URL = "https://raw.githubusercontent.com/santoshkurmi/antigem/standalone/version.json"
@@ -84,8 +85,8 @@ class AppUpdateManager(private val context: Context) {
             val response = httpClient.newCall(request).execute()
             if (!response.isSuccessful) {
                 val errorMsg = when (response.code) {
-                    404 -> "version.json not found on GitHub repository (HTTP 404). Please ensure version.json is pushed to the repository."
-                    403 -> "GitHub rate limit exceeded or access forbidden (HTTP 403)."
+                    404 -> L.updater.appUpdateManager.versionJsonNotFoundOnGithub
+                    403 -> L.updater.appUpdateManager.githubRateLimitExceededOrAccess
                     else -> "Failed to fetch version info: HTTP ${response.code} (${response.message})"
                 }
                 return@withContext Result.failure(Exception(errorMsg))
@@ -154,7 +155,7 @@ class AppUpdateManager(private val context: Context) {
     private fun changelogOf(json: JSONObject): List<String> = when (val raw = json.opt("changelog")) {
         is org.json.JSONArray -> (0 until raw.length()).map { raw.optString(it) }
         is String -> listOf(raw)
-        else -> listOf("General improvements and bug fixes.")
+        else -> listOf(L.updater.appUpdateManager.generalImprovementsAndBugFixes)
     }
 
     private fun apkUrl(versionName: String, suffix: String) =
@@ -227,7 +228,7 @@ class AppUpdateManager(private val context: Context) {
             val targetDir = context.externalCacheDir ?: context.cacheDir
             // the APK, and Android's installer copies it once more while it installs
             if (totalBytes > 0) {
-                StorageSpace.shortage(targetDir, totalBytes * 2 + StorageSpace.MARGIN_BYTES, "the update")?.let {
+                StorageSpace.shortage(targetDir, totalBytes * 2 + StorageSpace.MARGIN_BYTES, L.updater.appUpdateManager.theUpdate)?.let {
                     response.close()
                     return@withContext Result.failure(Exception(it))
                 }
@@ -263,7 +264,7 @@ class AppUpdateManager(private val context: Context) {
             Log.e(TAG, "Download APK error: ${e.message}", e)
             if (StorageSpace.isOutOfSpace(e)) {
                 targetFile?.delete()
-                return@withContext Result.failure(Exception(StorageSpace.outOfSpaceMessage("the update")))
+                return@withContext Result.failure(Exception(StorageSpace.outOfSpaceMessage(L.updater.appUpdateManager.theUpdate)))
             }
             Result.failure(e)
         }

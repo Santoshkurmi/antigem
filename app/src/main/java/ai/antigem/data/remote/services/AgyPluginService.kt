@@ -18,6 +18,7 @@ import okio.ByteString
 import okio.ByteString.Companion.decodeBase64
 import org.json.JSONArray
 import org.json.JSONObject
+import ai.antigem.i18n.L
 
 /**
  * Service for Google Plugins, Cascade Marketplace, Skills, and MCP auto-configuration.
@@ -322,9 +323,9 @@ class AgyPluginService(
         AgyLanguageService.DownloadBuildWithGooglePlugin().executeSafely(req).map { res ->
             if (res.success) {
                 mcpService.refreshMcpServers(hubUrl)
-                res.message.ifBlank { "Plugin installed successfully" }
+                res.message.ifBlank { L.remote.agyPluginService.pluginInstalledSuccessfully }
             } else {
-                throw Exception(res.message.ifBlank { "Download failed" })
+                throw Exception(res.message.ifBlank { L.remote.agyPluginService.downloadFailed })
             }
         }
     }
@@ -340,9 +341,9 @@ class AgyPluginService(
         AgyLanguageService.DeletePlugin().executeSafely(req).map { res ->
             if (res.success) {
                 mcpService.refreshMcpServers(hubUrl)
-                res.message.ifBlank { "Plugin deleted successfully" }
+                res.message.ifBlank { L.remote.agyPluginService.pluginDeletedSuccessfully }
             } else {
-                throw Exception(res.message.ifBlank { "Delete failed" })
+                throw Exception(res.message.ifBlank { L.remote.agyPluginService.deleteFailed })
             }
         }
     }

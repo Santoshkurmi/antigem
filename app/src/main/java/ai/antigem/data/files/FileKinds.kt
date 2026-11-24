@@ -7,23 +7,25 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import java.util.Locale
+import ai.antigem.i18n.L
 
 /** What a file is, which decides its icon, color and how it opens. */
-enum class FileKind(val label: String) {
-    FOLDER("Folder"),
-    CODE("Code"),
-    TEXT("Text"),
-    MARKDOWN("Markdown"),
-    DATA("Data"),
-    IMAGE("Image"),
-    VIDEO("Video"),
-    AUDIO("Audio"),
-    ARCHIVE("Archive"),
-    PDF("PDF"),
-    DOCUMENT("Document"),
-    APK("App package"),
-    FONT("Font"),
-    BINARY("File");
+enum class FileKind(private val labelText: () -> String) {
+    FOLDER({ L.files.fileKinds.folder }),
+    CODE({ L.files.fileKinds.code }),
+    TEXT({ L.files.fileKinds.text }),
+    MARKDOWN({ L.files.fileKinds.markdown }),
+    DATA({ L.files.fileKinds.data }),
+    IMAGE({ L.files.fileKinds.image }),
+    VIDEO({ L.files.fileKinds.video }),
+    AUDIO({ L.files.fileKinds.audio }),
+    ARCHIVE({ L.files.fileKinds.archive }),
+    PDF({ "PDF" }),
+    DOCUMENT({ L.files.fileKinds.document }),
+    APK({ L.files.fileKinds.appPackage }),
+    FONT({ L.files.fileKinds.font }),
+    BINARY({ L.files.fileKinds.file });
+    val label: String get() = labelText()
 
     /** Opens fine in the code editor. */
     val isTextual: Boolean get() = this == CODE || this == TEXT || this == MARKDOWN || this == DATA

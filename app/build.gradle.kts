@@ -651,6 +651,132 @@ val generateChangelog = tasks.register<GenerateChangelogTask>("generateChangelog
     outputDir.set(layout.buildDirectory.dir("generated/changelog/kotlin"))
 }
 
+// App languages: every text the app shows is a key in src/main/assets/i18n/en.json (English, the source). This writes
+// ai.antigem.i18n.L from it: one accessor per key (L.settings.dialog.themes), numbered in the file's order. English is
+// the literal inside the accessor, so in English nothing is looked up; another language is one array read
+// (ai.antigem.i18n.I18n). Keys: segments of letters and digits, starting lowercase, at least two ("area.name").
+// A value is a text ("Show more ({left} left)": {left} becomes a parameter) or plural forms
+// ({"one": "{count} file", "other": "{count} files"}: a function taking count first). The same en.json ships in the
+// APK: the language editor, language_mcp and the loader of other languages read the keys from it.
+// Adding texts: scripts/i18n/extract_strings.py (see its header).
+abstract class GenerateStringsTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val englishJson: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    private fun kotlinString(s: String) = "\"" + s
+        .replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
+        .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
+
+    private class Node(val name: String) {
+        val children = LinkedHashMap<String, Node>()
+        val leaves = ArrayList<String>()
+    }
+
+    @TaskAction
+    fun generate() {
+        val file = englishJson.get().asFile
+        fun fail(message: String): Nothing = throw GradleException("${file.name}: $message")
+        val root = StrictJson.parse(file.readText()) as? Map<*, *> ?: fail("must be a JSON object")
+        val strings = root["strings"] as? Map<*, *> ?: fail("needs a \"strings\" object")
+        val keywords = setOf("as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in", "interface",
+            "is", "null", "object", "package", "return", "super", "this", "throw", "true", "try", "typealias", "typeof",
+            "val", "var", "when", "while")
+        val segment = Regex("[a-z][A-Za-z0-9]*")
+        val placeholder = Regex("\\{([A-Za-z_][A-Za-z0-9_]*)\\}")
+        val forms = listOf("zero", "one", "two", "few", "many", "other")
+
+        val top = Node("L")
+        val members = LinkedHashMap<String, String>() // full key -> member source
+        val fingerprintSource = StringBuilder()
+        strings.entries.forEachIndexed { index, (rawKey, value) ->
+            val key = rawKey.toString()
+            val parts = key.split('.')
+            if (parts.size < 2) fail("\"$key\": a key needs an area and a name, like \"chat.send\"")
+            parts.forEach { p ->
+                if (!segment.matches(p)) fail("\"$key\": \"$p\" must start with a lowercase letter and have only letters and digits")
+                if (p in keywords) fail("\"$key\": \"$p\" is a Kotlin keyword or reserved here, pick another name")
+            }
+            var node = top
+            parts.dropLast(1).forEach { p ->
+                if (p in node.leaves) fail("\"$key\": \"$p\" is already a text, it can't also hold texts")
+                node = node.children.getOrPut(p) { Node(p) }
+            }
+            val leaf = parts.last()
+            if (leaf in node.children) fail("\"$key\": \"$leaf\" already holds texts, it can't also be a text")
+            node.leaves += leaf
+            fun params(text: String) = placeholder.findAll(text).map { it.groupValues[1] }.distinct().toList().onEach {
+                if (it in keywords) fail("\"$key\": the placeholder {$it} is a Kotlin keyword, pick another name")
+            }
+            fun call(fn: String, head: String, names: List<String>): String {
+                val sig = names.joinToString(", ") { "$it: Any?" }
+                val args = names.joinToString(", ") { "${kotlinString(it)}, $it" }
+                return if (names.size <= 3) "fun $leaf($sig): String = I18n.$fn($head, $args)"
+                else "fun $leaf($sig): String = I18n.${fn}v($head, arrayOf(${names.joinToString(", ") { kotlinString(it) }}), arrayOf(${names.joinToString(", ")}))"
+            }
+            members[key] = when (value) {
+                is String -> {
+                    fingerprintSource.append(key).append('\n')
+                    val names = params(value)
+                    if (names.isEmpty()) "val $leaf: String get() = I18n.s($index, ${kotlinString(value)})"
+                    else call("f", "$index, ${kotlinString(value)}", names)
+                }
+                is Map<*, *> -> {
+                    fingerprintSource.append(key).append("#\n")
+                    value.keys.forEach { if (it !in forms) fail("\"$key\": plural forms are ${forms.joinToString()}, not \"$it\"") }
+                    val other = value["other"] as? String ?: fail("\"$key\": plural forms need \"other\"")
+                    val one = value["one"] as? String ?: other
+                    val names = value.values.flatMap { params(it.toString()) }.distinct().filter { it != "count" }
+                    val sig = (listOf("count: Int") + names.map { "$it: Any?" }).joinToString(", ")
+                    val args = names.joinToString("") { ", ${kotlinString(it)}, $it" }
+                    "fun $leaf($sig): String = I18n.p($index, count, ${kotlinString(one)}, ${kotlinString(other)}$args)"
+                }
+                else -> fail("\"$key\": a text or an object of plural forms, not $value")
+            }
+        }
+
+        // FNV-1a over the key list: changes when a key is added, removed, moved or changes kind
+        var h = -0x340d631b7bdddcdbL
+        fingerprintSource.toString().forEach { c -> h = (h xor c.code.toLong()) * 0x100000001b3L }
+        val fingerprint = "%016x".format(h)
+        val out = StringBuilder()
+        out.append("package ai.antigem.i18n\n\n")
+        out.append("// Generated by the generateStrings Gradle task from src/main/assets/i18n/en.json. Do not edit.\n")
+        out.append("@Suppress(\"ClassName\", \"unused\", \"FunctionName\", \"ObjectPropertyName\")\n")
+        fun write(node: Node, path: String, indent: String) {
+            node.leaves.forEach { out.append(indent).append(members.getValue(if (path.isEmpty()) it else "$path.$it")).append('\n') }
+            node.children.values.forEach { child ->
+                out.append(indent).append("object ${child.name} {\n")
+                write(child, if (path.isEmpty()) child.name else "$path.${child.name}", "$indent    ")
+                out.append(indent).append("}\n")
+            }
+        }
+        out.append("object L {\n")
+        out.append("    /** How many texts the app has (the size of a language's table). */\n")
+        out.append("    const val COUNT: Int = ${strings.size}\n")
+        out.append("    /** Changes when a key is added, removed, moved or changes between text and plural (cached tables are then rebuilt). */\n")
+        out.append("    const val FINGERPRINT: String = \"$fingerprint\"\n")
+        write(top, "", "    ")
+        out.append("}\n")
+
+        val target = outputDir.get().asFile.resolve("ai/antigem/i18n/L.kt")
+        outputDir.get().asFile.walkBottomUp()
+            .filter { it != target && it != outputDir.get().asFile && !target.startsWith(it) }
+            .forEach { it.delete() }
+        target.parentFile.mkdirs()
+        val source = out.toString()
+        if (!target.exists() || target.readText() != source) target.writeText(source)
+    }
+}
+
+val generateStrings = tasks.register<GenerateStringsTask>("generateStrings") {
+    englishJson.set(layout.projectDirectory.file("src/main/assets/i18n/en.json"))
+    outputDir.set(layout.buildDirectory.dir("generated/i18n/kotlin"))
+}
+
 // Checks version.json's version_codes against every version the file has had in git, so a release can't reuse a
 // number or go below one (the file's shape is checked when the build is configured, at the top of this file):
 //  - a new version_code must be higher than every one used before, betas included
@@ -759,6 +885,7 @@ tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(checkVersionJ
 androidComponents {
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateChangelog, GenerateChangelogTask::outputDir)
+        variant.sources.kotlin?.addGeneratedSourceDirectory(generateStrings, GenerateStringsTask::outputDir)
 
         // Debug builds are their own app, ai.antidev ("AntiGem Dev"), so they install next to the release one. It must
         // have the length of com.termux (10): the Termux packages are rewritten for it byte for byte.

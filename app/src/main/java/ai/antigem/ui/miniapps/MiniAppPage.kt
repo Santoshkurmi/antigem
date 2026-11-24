@@ -69,6 +69,7 @@ import java.io.FileInputStream
 import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
+import ai.antigem.i18n.L
 
 /**
  * One page of a mini app: a WebView that only renders. Everything else goes through [handle]:
@@ -291,12 +292,12 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
                 path == "/_antigem/sdk.js" -> text("text/javascript", 200, "OK", sdkScript())
                 path == "/_antigem/worker-sdk.js" -> text("text/javascript", 200, "OK", workerSdkScript())
                 path == "/_antigem/ui.css" -> text("text/css", 200, "OK", Sdk.asset(ctx, "ui.css"))
-                path.startsWith("/_antigem/net/") -> MiniAppNet.openStream(path.removePrefix("/_antigem/net/")) ?: text("text/plain", 404, "Not Found", "Gone")
+                path.startsWith("/_antigem/net/") -> MiniAppNet.openStream(path.removePrefix("/_antigem/net/")) ?: text("text/plain", 404, "Not Found", "Gone")  // i18n: keep (HTTP reason phrase: ASCII only)
                 path == "/_antigem/fs" -> MiniAppFs.serve(ctx, app, url.getQueryParameter("p").orEmpty(), request.requestHeaders?.entries?.firstOrNull { it.key.equals("range", true) }?.value,
                     url.getQueryParameter("thumb")?.toIntOrNull())
                 path == "/_antigem/background.html" && task != null -> text("text/html", 200, "OK", inject(backgroundHtml()))
-                path == "/_antigem/icon" -> app.iconFile?.let { WebResourceResponse(MiniAppNet.guessMime(it.name), null, 200, "OK", headers(), FileInputStream(it)) } ?: text("text/plain", 404, "Not Found", "")
-                path.startsWith("/_antigem/") -> text("text/plain", 404, "Not Found", "")
+                path == "/_antigem/icon" -> app.iconFile?.let { WebResourceResponse(MiniAppNet.guessMime(it.name), null, 200, "OK", headers(), FileInputStream(it)) } ?: text("text/plain", 404, "Not Found", "")  // i18n: keep (HTTP reason phrase: ASCII only)
+                path.startsWith("/_antigem/") -> text("text/plain", 404, "Not Found", "")  // i18n: keep (HTTP reason phrase: ASCII only)
                 else -> serveFile(path, url.getQueryParameter("__agw"))
             }
         } catch (e: Exception) {
@@ -322,7 +323,7 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
             val rel = f.path.removePrefix(root.path + File.separator)
             if (!ai.antigem.data.miniapps.MiniAppInstaller.isIntact(ctx, app, rel, f)) {
                 log("error", "Refused /$rel: it isn't the file ${app.developer} signed (modified after install)")
-                return text("text/plain", 403, "Forbidden", "Modified file")
+                return text("text/plain", 403, "Forbidden", "Modified file")  // i18n: keep (HTTP reason phrase: ASCII only)
             }
         }
         val mime = MiniAppNet.guessMime(f.name)
@@ -334,9 +335,9 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
 
     private fun notFound(path: String): WebResourceResponse {
         // the WebView asks for a favicon on its own: not the app's mistake, so no console noise
-        if (path == "/favicon.ico") return text("text/plain", 404, "Not Found", "")
+        if (path == "/favicon.ico") return text("text/plain", 404, "Not Found", "")  // i18n: keep (HTTP reason phrase: ASCII only)
         log("warn", "404 $path")
-        return text("text/html", 404, "Not Found", "<!doctype html><meta name=viewport content='width=device-width'><body style='font:16px system-ui;padding:24px'><h3>Not found</h3><p>$path</p>")
+        return text("text/html", 404, "Not Found", "<!doctype html><meta name=viewport content='width=device-width'><body style='font:16px system-ui;padding:24px'><h3>Not found</h3><p>$path</p>")  // i18n: keep (HTTP reason phrase: ASCII only)
     }
 
     private val headRe = Regex("<head(\\s[^>]*)?>", RegexOption.IGNORE_CASE)
@@ -487,8 +488,8 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         // ---- native UI
         "ui.toast" -> { host.toast(p.optString("text"), p.optBoolean("long")); null }
         "ui.alert" -> { host.showDialog(NativeDialog.Alert(p.optString("title"), p.optString("message"), p.optString("ok").ifBlank { "OK" })); null }
-        "ui.confirm" -> host.showDialog(NativeDialog.Confirm(p.optString("title"), p.optString("message"), p.optString("ok").ifBlank { "OK" }, p.optString("cancel").ifBlank { "Cancel" }, p.optBoolean("destructive"))) == true
-        "ui.prompt" -> host.showDialog(NativeDialog.Prompt(p.optString("title"), p.optString("message"), p.optString("value"), p.optString("placeholder"), p.optString("ok").ifBlank { "OK" }, p.optString("cancel").ifBlank { "Cancel" })) ?: JSONObject.NULL
+        "ui.confirm" -> host.showDialog(NativeDialog.Confirm(p.optString("title"), p.optString("message"), p.optString("ok").ifBlank { "OK" }, p.optString("cancel").ifBlank { L.common.cancel }, p.optBoolean("destructive"))) == true
+        "ui.prompt" -> host.showDialog(NativeDialog.Prompt(p.optString("title"), p.optString("message"), p.optString("value"), p.optString("placeholder"), p.optString("ok").ifBlank { "OK" }, p.optString("cancel").ifBlank { L.common.cancel })) ?: JSONObject.NULL
         "ui.sheet" -> {
             val items = p.optJSONArray("items")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { NativeDialog.SheetItem(it.optString("id"), it.optString("label"), it.optString("icon"), it.optBoolean("destructive")) } }.orEmpty()
             host.showDialog(NativeDialog.Sheet(p.optString("title"), items)) ?: JSONObject.NULL
@@ -586,9 +587,9 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         val targets = withContext(Dispatchers.IO) { MiniAppIntents.targets(ctx, action, type) }.filter { it.id != app.id }
         val android = action in setOf("share", "view", "open") && (file != null || text != null || url != null)
         val items = targets.map { NativeDialog.SheetItem(it.id, it.name, if (it.signed) "▣" else "◇", false) } +
-            (if (android) listOf(NativeDialog.SheetItem("__android__", "Other apps…", "📤", false)) else emptyList())
+            (if (android) listOf(NativeDialog.SheetItem("__android__", L.miniapps.miniApp.otherApps, "📤", false)) else emptyList())
         if (items.isEmpty()) throw MiniAppError("NotFoundError", "No app accepts \"$action\" for $type")
-        val title = when (action) { "share" -> "Share with"; "open", "view" -> "Open with"; "edit" -> "Edit with"; else -> action.replaceFirstChar { it.uppercase() } + " with" }
+        val title = when (action) { "share" -> L.miniapps.miniApp.shareWith; "open", "view" -> L.miniapps.miniApp.openWith; "edit" -> L.miniapps.miniApp.editWith; else -> L.miniapps.miniApp.actionWith(action.replaceFirstChar { it.uppercase() }) }
         val pick = host.showDialog(NativeDialog.Sheet(title, items)) as? String ?: return JSONObject.NULL
         if (pick == "__android__") {
             when {
@@ -645,7 +646,7 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
     /** AntiGem.fs.pickFolder: the user chooses a folder in AntiGem's file explorer; the app gets the manifest's "pick" access to it. */
     private suspend fun pickFolder(): Any? {
         val access = app.storagePick ?: throw MiniAppError("NotAllowedError", "The manifest doesn't allow picking folders (permissions.storage.pick)")
-        val folder = host.pickFolder("Choose a folder for ${app.name}") ?: return JSONObject.NULL
+        val folder = host.pickFolder(L.miniapps.miniApp.chooseAFolderForName(app.name)) ?: return JSONObject.NULL
         if (!folder.isDirectory) throw MiniAppError("NotFoundError", "Not a folder: ${folder.path}")
         if (MiniAppPermissions.isProtected(ctx, folder)) throw MiniAppError("NotAllowedError", "${folder.path} is protected")
         // a whole storage root or home: the typed confirmation, as for "all files"
@@ -785,7 +786,7 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         val uri = Uri.parse(url)
         if (uri.scheme?.lowercase() !in setOf("http", "https", "mailto", "tel")) throw MiniAppError("TypeError", "Only http(s), mailto and tel links")
         if (!MiniAppPermissions.isGranted(ctx, app, "network")) {
-            val ok = host.showDialog(NativeDialog.Confirm("Open link?", "${app.name} wants to open:\n$url", "Open", "Cancel", false)) == true
+            val ok = host.showDialog(NativeDialog.Confirm(L.miniapps.miniApp.openLink, L.miniapps.miniApp.nameWantsToOpenUrl(app.name, url), L.common.open, L.common.cancel, false)) == true
             if (!ok) throw MiniAppError("NotAllowedError", "The user did not open the link")
         }
         host.startActivity(Intent(Intent.ACTION_VIEW, uri))
@@ -847,13 +848,13 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         }
 
         override fun onJsConfirm(view: WebView, url: String?, message: String?, result: JsResult): Boolean {
-            scope.launch { if (dialog(NativeDialog.Confirm(app.name, message.orEmpty(), "OK", "Cancel", false), "confirm") == true) result.confirm() else result.cancel() }
+            scope.launch { if (dialog(NativeDialog.Confirm(app.name, message.orEmpty(), "OK", L.common.cancel, false), "confirm") == true) result.confirm() else result.cancel() }
             return true
         }
 
         override fun onJsPrompt(view: WebView, url: String?, message: String?, defaultValue: String?, result: JsPromptResult): Boolean {
             scope.launch {
-                val v = dialog(NativeDialog.Prompt(app.name, message.orEmpty(), defaultValue.orEmpty(), "", "OK", "Cancel"), "prompt")
+                val v = dialog(NativeDialog.Prompt(app.name, message.orEmpty(), defaultValue.orEmpty(), "", "OK", L.common.cancel), "prompt")
                 if (v is String) result.confirm(v) else result.cancel()
             }
             return true

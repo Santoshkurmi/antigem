@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import ai.antigem.i18n.L
 
 /**
  * How OpenCode's providers sign in (`GET /integration`): API key, OAuth (device code, or a browser that comes back to
@@ -89,7 +90,7 @@ object OpenCodeAuth {
             name = o.str("name") ?: id,
             methods = o.a("methods").orEmpty().mapNotNull { it.obj() }.map(::method),
             connections = o.a("connections").orEmpty().mapNotNull { it.obj() }.mapNotNull { c ->
-                Connection(c.str("id") ?: return@mapNotNull null, c.str("label") ?: c.str("method") ?: c.str("type") ?: "Account", c.str("method"))
+                Connection(c.str("id") ?: return@mapNotNull null, c.str("label") ?: c.str("method") ?: c.str("type") ?: L.agent.openCodeAuth.account, c.str("method"))
             }
         )
     }.sortedBy { it.name.lowercase() }
@@ -142,7 +143,7 @@ object OpenCodeAuth {
         val d = o.o("data") ?: o
         return when (d.str("status")) {
             "complete" -> AttemptStatus.Complete
-            "failed" -> AttemptStatus.Failed(d.str("message") ?: "The sign-in failed.")
+            "failed" -> AttemptStatus.Failed(d.str("message") ?: L.agent.openCodeAuth.theSignInFailed)
             else -> AttemptStatus.Pending
         }
     }
@@ -151,7 +152,7 @@ object OpenCodeAuth {
         Credential(
             id = c.str("id") ?: return@mapNotNull null,
             integrationId = c.str("integrationID").orEmpty(),
-            label = c.str("label") ?: "Account",
+            label = c.str("label") ?: L.agent.openCodeAuth.account,
             active = c.bool("active") == true,
             type = c.str("type")
         )
@@ -215,8 +216,8 @@ object OpenCodeAuth {
 
     /** A label for a method in the provider's list. */
     fun methodTitle(m: Method): String = when {
-        m.isKey -> m.label ?: "API key"
-        m.isExternal -> m.label ?: "Use the server's login"
-        else -> m.label ?: "Sign in"
+        m.isKey -> m.label ?: L.agent.openCodeAuth.apiKey
+        m.isExternal -> m.label ?: L.agent.openCodeAuth.useTheServersLogin
+        else -> m.label ?: L.agent.openCodeAuth.signIn
     }
 }

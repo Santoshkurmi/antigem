@@ -3,6 +3,7 @@ package ai.antigem.domain.model
 import exa.language_server_pb.AskQuestionEntry
 import kotlinx.serialization.Serializable
 import java.util.UUID
+import ai.antigem.i18n.L
 
 @Serializable
 data class ChoiceOption(
@@ -26,7 +27,7 @@ data class ChoiceQuestion(
 
 @Serializable
 data class ChoiceQuestionnaire(
-    val title: String = "Clarification & Options",
+    val title: String = L.model.choiceQuestionModels.clarificationOptions,
     val description: String? = null,
     val questions: List<ChoiceQuestion> = emptyList(),
     val allowCustomNote: Boolean = true
@@ -37,7 +38,7 @@ data class ChoiceQuestionnaire(
          */
         fun fromProto(title: String, questions: List<AskQuestionEntry>, description: String? = null): ChoiceQuestionnaire {
             return ChoiceQuestionnaire(
-                title = title.ifBlank { "Clarification & Options" },
+                title = title.ifBlank { L.model.choiceQuestionModels.clarificationOptions },
                 description = description,
                 questions = questions.mapIndexed { idx, q ->
                     ChoiceQuestion(

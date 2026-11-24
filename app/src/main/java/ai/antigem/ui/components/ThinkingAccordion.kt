@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 @Composable
 fun ThinkingAccordion(
@@ -75,7 +76,7 @@ fun ThinkingAccordion(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                 modifier = Modifier
                     .size(15.dp)
@@ -86,7 +87,7 @@ fun ThinkingAccordion(
 
             Icon(
                 imageVector = Icons.Outlined.Psychology,
-                contentDescription = "Thinking",
+                contentDescription = L.common.thinking,
                 tint = ClaudeTerracotta.copy(alpha = 0.85f),
                 modifier = Modifier.size(15.dp)
             )
@@ -102,13 +103,13 @@ fun ThinkingAccordion(
                 )
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
-                    text = "Thinking...",
+                    text = L.components.thinkingAccordion.thinking,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = ClaudeTerracotta
                 )
             } else {
-                val title = if (durationMs != null && durationMs > 0) "Thought for ${formatDuration(durationMs)}" else "Thinking process"
+                val title = if (durationMs != null && durationMs > 0) L.components.thinkingAccordion.thoughtForFormatduration(formatDuration(durationMs)) else L.components.thinkingAccordion.thinkingProcess
                 Text(
                     text = title,
                     fontSize = 12.5.sp,
@@ -171,7 +172,7 @@ fun ThinkingAccordion(
                     if (!isStreaming && durationMs != null && durationMs > 0) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "⏱️ Thought for ${formatDuration(durationMs)}",
+                            text = L.components.thinkingAccordion.thoughtForFormatduration2(formatDuration(durationMs)),
                             fontSize = 11.5.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Medium,

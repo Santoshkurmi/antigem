@@ -20,6 +20,7 @@ import java.util.UUID
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import ai.antigem.i18n.L
 
 class AntiGemApplication : Application(), coil.ImageLoaderFactory {
     /**
@@ -54,6 +55,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         ai.antigem.data.preferences.AuthPreferences(this)
         // the chosen light / dark themes and the custom ones, before the first screen draws
         ai.antigem.theme.ThemeManager.init(this)
+        // the app language (Settings → Language), from its cache, before the first screen draws
+        ai.antigem.i18n.LanguageManager.init(this)
         UpdateCheckWorker.schedule(this)
         PluginUpdateCheckWorker.schedule(this)
         // mini app reminders and exact-time tasks: alarms again (Android may have dropped them), off the main thread
@@ -74,7 +77,7 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         if (!BuildConfig.DEBUG && !isOfficialRelease()) {
             Toast.makeText(
                 this,
-                "Unofficial build: analytics disabled. Developer: set your own TelemetryDeck app ID and RELEASE_CERT_SHA256 in AntiGemApplication.kt.",
+                L.app.antiGemApplication.unofficialBuildAnalyticsDisabled,
                 Toast.LENGTH_LONG
             ).show()
             return

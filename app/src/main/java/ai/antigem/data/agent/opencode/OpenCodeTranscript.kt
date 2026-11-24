@@ -20,6 +20,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import ai.antigem.i18n.L
 
 val OpenCodeJson = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true; isLenient = true }
 
@@ -236,7 +237,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
             }
             "compaction", "summary" -> {
                 val msg = Msg(id, "summary", created)
-                msg.text = m.str("text") ?: m.str("summary") ?: "The conversation was compacted."
+                msg.text = m.str("text") ?: m.str("summary") ?: L.agent.openCodeTranscript.theConversationWasCompacted
                 messages[id] = msg
             }
         }
@@ -389,7 +390,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                 // "attempt" is the attempt about to run: attempt 2 is the first retry
                 retries = d.long("attempt")?.let { (it - 1).toInt() } ?: (retries + 1)
                 val why = d.o("error").str("message").orEmpty().take(160)
-                retryNotice = "The provider is busy — retry $retries of $MAX_RETRIES" + if (why.isNotBlank()) ": $why" else ""
+                retryNotice = L.agent.openCodeTranscript.theProviderIsBusyRetryRetries(retries, MAX_RETRIES) + if (why.isNotBlank()) ": $why" else ""
                 lastRetryError = why
             }
             "session.compaction.started" -> compacting = true
@@ -517,10 +518,10 @@ class OpenCodeTranscript(var sessionId: String = "") {
     }
 
     private fun errorTitle(err: JsonObject): String = when {
-        err.str("type")?.contains("rate-limit") == true -> "Rate limited"
-        err.str("type")?.contains("auth") == true -> "Not signed in to the provider"
-        err.str("type")?.startsWith("provider") == true -> "Provider error"
-        else -> "OpenCode error"
+        err.str("type")?.contains("rate-limit") == true -> L.agent.openCodeTranscript.rateLimited
+        err.str("type")?.contains("auth") == true -> L.agent.openCodeTranscript.notSignedInToTheProvider
+        err.str("type")?.startsWith("provider") == true -> L.agent.openCodeTranscript.providerError
+        else -> L.agent.openCodeTranscript.opencodeError
     }
 
     // ------------------------------------------------------------------ output
@@ -682,7 +683,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
     /** The choice card of a pending form. */
     private fun formCall(f: Form): ToolCall? {
         val q = questionnaireOf(f) ?: return null
-        return ToolCall(id = formToolId(f.id), name = "question", toolType = ToolType.ASK_CHOICE, command = f.title.ifBlank { "Question" },
+        return ToolCall(id = formToolId(f.id), name = "question", toolType = ToolType.ASK_CHOICE, command = f.title.ifBlank { L.agent.openCodeTranscript.question },
             status = "AWAITING_CHOICE", interactionType = "opencode", questionnaire = q)
     }
 
@@ -720,7 +721,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
             output = output,
             durationMs = p.startedAt?.let { s -> p.endedAt?.let { e -> (e - s).coerceAtLeast(0) } },
             interactionType = "opencode",
-            questionnaire = ChoiceQuestionnaire(title = "Questions", questions = questions, allowCustomNote = false)
+            questionnaire = ChoiceQuestionnaire(title = L.agent.openCodeTranscript.questions, questions = questions, allowCustomNote = false)
         )
     }
 
@@ -780,7 +781,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
         }
         f.questionKeys = keys
         if (questions.isEmpty()) return null
-        return ChoiceQuestionnaire(title = f.title.ifBlank { "OpenCode has a question" }, questions = questions, allowCustomNote = false)
+        return ChoiceQuestionnaire(title = f.title.ifBlank { L.agent.openCodeTranscript.opencodeHasAQuestion }, questions = questions, allowCustomNote = false)
     }
 
     companion object {
@@ -823,16 +824,16 @@ class OpenCodeTranscript(var sessionId: String = "") {
                 "shell", "bash" -> s("command", "cmd")
                 "read", "view" -> file("path", "filePath", "file_path")
                 "edit", "write", "patch", "multiedit" -> file("path", "filePath", "file_path")
-                "apply_patch" -> "Apply a patch"
+                "apply_patch" -> L.agent.openCodeTranscript.applyAPatch
                 "glob", "find" -> s("pattern", "glob")
                 "grep", "search" -> s("pattern", "query") + s("path").takeIf { it.isNotBlank() }?.let { " in $it" }.orEmpty()
                 "list", "ls" -> s("path").ifBlank { "." }
                 "websearch", "web_search" -> s("query")
                 "webfetch", "fetch" -> s("url")
-                "task", "agent", "subagent" -> s("description", "prompt").take(80).ifBlank { "Subagent" }
+                "task", "agent", "subagent" -> s("description", "prompt").take(80).ifBlank { L.agent.openCodeTranscript.subagent }
                 "todowrite" -> {
                     val todos = input.a("todos").orEmpty().mapNotNull { it.obj() }
-                    "Todo list (${todos.count { it.str("status") == "completed" }}/${todos.size} done)"
+                    L.agent.openCodeTranscript.todoListValueTodoscountDone(todos.count { it.str("status") == "completed" }, todos.size)
                 }
                 "skill" -> s("name", "id")
                 else -> input.entries.firstOrNull { it.value is JsonPrimitive }?.let { (it.value as JsonPrimitive).contentOrNull?.take(80) }.orEmpty()

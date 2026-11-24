@@ -36,6 +36,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.UUID
+import ai.antigem.i18n.L
 
 /**
  * Claude Code chat backend. The bridge runs one `claude` process per conversation; this class attaches to the
@@ -282,7 +283,7 @@ class ClaudeChatBackend(
 
     override fun selectConversation(id: String) {
         val conv = _conversations.value.find { it.id == id }
-            ?: Conversation(id = id, title = "Claude Chat", sessionId = id, agent = AgentKind.CLAUDE, readOnly = ClaudeTranscript.isSubagentId(id))
+            ?: Conversation(id = id, title = L.agent.claudeChatBackend.claudeChat, sessionId = id, agent = AgentKind.CLAUDE, readOnly = ClaudeTranscript.isSubagentId(id))
         showConversation(conv, loading = true)
         backendScope.launch(worker) {
             detachLocked()
@@ -297,15 +298,15 @@ class ClaudeChatBackend(
         if (content.isBlank() && atts.isEmpty()) return
         val conv = store.currentConversation.value ?: return
         if (conv.agent != AgentKind.CLAUDE) return
-        if (ClaudeTranscript.isSubagentId(conv.id)) { _controlMessages.tryEmit("A subagent chat can only be read"); return }
+        if (ClaudeTranscript.isSubagentId(conv.id)) { _controlMessages.tryEmit(L.agent.claudeChatBackend.aSubagentChatCanOnlyBe); return }
         store.attachments.value = emptyList()
         sendPrompt(conv, content.trim(), atts)
     }
 
     private fun sendPrompt(conv: Conversation, text: String, atts: List<ChatAttachment>) {
-        val displayText = text.ifBlank { if (atts.any { it.isImage }) "Image" else "Attachment" }
+        val displayText = text.ifBlank { if (atts.any { it.isImage }) L.agent.claudeChatBackend.image else L.agent.claudeChatBackend.attachment }
         val title = if (conv.title == "New Chat" || conv.title.isBlank()) {
-            val first = ai.antigem.data.remote.PromptExpansion.collapse(displayText).lines().firstOrNull { it.isNotBlank() } ?: "Chat"
+            val first = ai.antigem.data.remote.PromptExpansion.collapse(displayText).lines().firstOrNull { it.isNotBlank() } ?: L.agent.claudeChatBackend.chat
             first.take(40) + if (first.length > 40) "..." else ""
         } else conv.title
         val updated = conv.copy(title = title, updatedAt = System.currentTimeMillis(), modelId = _selectedModelId.value)
@@ -348,7 +349,7 @@ class ClaudeChatBackend(
                 startupNoticeJob?.cancel()
                 startupNoticeJob = backendScope.launch(worker) {
                     delay(STARTUP_NOTICE_DELAY_MS)
-                    if (awaitingProcess) _startupStatus.value = "Starting Claude Code…"
+                    if (awaitingProcess) _startupStatus.value = L.agent.claudeChatBackend.startingClaudeCode
                 }
             }
             emitNow()
@@ -390,7 +391,7 @@ class ClaudeChatBackend(
         if (dropped.isNullOrEmpty()) return
         publishQueue()
         transcript.addError(
-            if (dropped.size == 1) "Queued message not sent" else "${dropped.size} queued messages not sent",
+            if (dropped.size == 1) L.agent.claudeChatBackend.queuedMessageNotSent else L.agent.claudeChatBackend.countQueuedMessagesNotSent(dropped.size),
             reason + "\n\n" + dropped.values.joinToString("\n") { "• " + it.text.take(120) }
         )
     }
@@ -433,7 +434,7 @@ class ClaudeChatBackend(
                     withContext(Dispatchers.Main) { selectConversation(newId) }
                     refreshSessions()
                 }
-                .onFailure { _controlMessages.tryEmit("Cannot fork this chat: ${it.message}") }
+                .onFailure { _controlMessages.tryEmit(L.agent.claudeChatBackend.cannotForkThisChatError(it.message)) }
         }
     }
 
@@ -569,7 +570,7 @@ class ClaudeChatBackend(
             // provider with other limits needs a new process (the chat is resumed, nothing is lost)
             val p = _providers.value.find { it.id == sameProvider }
             if (p != null && p.limitsOf(rawModel(modelId)) != p.limitsOf(rawModel(previous))) {
-                _controlMessages.tryEmit("${modelLabel(modelId)} has other limits: the chat restarts to apply them")
+                _controlMessages.tryEmit(L.agent.claudeChatBackend.modelHasOtherLimitsTheChat(modelLabel(modelId)))
                 switchProvider(modelId)
                 return
             }
@@ -583,7 +584,7 @@ class ClaudeChatBackend(
             // a provider's process knows its models by their own id
             live = ClaudeControlRequestBody(subtype = "set_model", model = rawModel(modelId)),
             spawn = BridgeConfigFrame(model = modelId),
-            what = "model",
+            what = L.agent.claudeChatBackend.model,
             revert = { setSelectedModel(previous) },
             // the bridge remembers the chat's model for its next start (a reopened chat stays on the provider)
             configureLive = true
@@ -624,7 +625,7 @@ class ClaudeChatBackend(
         if (providerOf(modelId).isNotEmpty()) _effort.value = null
         if (_isTurnActive.value) {
             queuedRestart = modelId
-            _controlMessages.tryEmit("Switches to ${modelLabel(modelId)} after this reply")
+            _controlMessages.tryEmit(L.agent.claudeChatBackend.switchesToModelAfterThisReply(modelLabel(modelId)))
             return
         }
         restartOn(modelId)
@@ -654,7 +655,7 @@ class ClaudeChatBackend(
                 settings = buildJsonObject { put("effortLevel", level?.let { JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) }
             ),
             spawn = BridgeConfigFrame(effort = level ?: "default"),
-            what = "effort",
+            what = L.agent.claudeChatBackend.effort,
             revert = { _effort.value = previous }
         )
     }
@@ -674,7 +675,7 @@ class ClaudeChatBackend(
                 thinking_display = if (enabled) "summarized" else null
             ),
             spawn = BridgeConfigFrame(thinking = if (enabled) "on" else "off"),
-            what = "thinking",
+            what = L.agent.claudeChatBackend.thinking,
             revert = { _thinkingEnabled.value = previous }
         )
     }
@@ -687,7 +688,7 @@ class ClaudeChatBackend(
         applyControl(
             live = ClaudeControlRequestBody(subtype = "set_permission_mode", mode = mode),
             spawn = BridgeConfigFrame(permission_mode = mode),
-            what = "mode",
+            what = L.agent.claudeChatBackend.mode,
             revert = { _permissionMode.value = previous }
         )
     }
@@ -710,10 +711,10 @@ class ClaudeChatBackend(
             if (!processLive || live == null) return@launch
             val reply = request(live, timeoutMs = 15_000)
             when {
-                reply == null -> _controlMessages.tryEmit("Claude Code did not confirm the $what change")
+                reply == null -> _controlMessages.tryEmit(L.agent.claudeChatBackend.claudeCodeDidNotConfirmThe(what))
                 reply.subtype == "error" -> {
                     revert()
-                    _controlMessages.tryEmit("Claude Code refused the $what change: ${reply.error ?: "unknown error"}")
+                    _controlMessages.tryEmit(L.agent.claudeChatBackend.claudeCodeRefusedTheWhatChange(what, reply.error ?: L.agent.claudeChatBackend.unknownError))
                 }
                 else -> syncApplied()
             }
@@ -821,7 +822,7 @@ class ClaudeChatBackend(
         val res = client.rewind(id, userUuid).mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
         if (res.isFailure) {
             _isLoadingConversation.value = false
-            _controlMessages.tryEmit("Cannot edit this message: ${res.exceptionOrNull()?.message}")
+            _controlMessages.tryEmit(L.agent.claudeChatBackend.cannotEditThisMessageError(res.exceptionOrNull()?.message))
             return false
         }
         if (store.currentConversation.value?.id != id) return false
@@ -896,7 +897,7 @@ class ClaudeChatBackend(
                     Log.w(TAG, "archive $id failed: ${e.message}")
                     _conversations.value = _conversations.value.map { if (it.id == id) it.copy(archived = before) else it }
                     ai.antigem.ui.components.AppToastHelper.showToast(
-                        "Could not ${if (archived) "archive" else "unarchive"}: ${e.message}", ai.antigem.ui.components.ChatToastType.ERROR
+                        if (archived) L.agent.claudeChatBackend.couldNotArchiveError(e.message) else L.agent.claudeChatBackend.couldNotUnarchiveError(e.message), ai.antigem.ui.components.ChatToastType.ERROR
                     )
                 }
             refreshSessions()
@@ -965,10 +966,10 @@ class ClaudeChatBackend(
                             if (!processLive && !modeTouched) _permissionMode.value = mode
                         }
                     } else {
-                        _modelsError.value = resp.error ?: "Claude Code did not return its models"
+                        _modelsError.value = resp.error ?: L.agent.claudeChatBackend.claudeCodeDidNotReturnIts
                     }
                 }
-                .onFailure { _modelsError.value = it.message ?: "Cannot reach the bridge" }
+                .onFailure { _modelsError.value = it.message ?: L.agent.claudeChatBackend.cannotReachTheBridge }
             _isRefreshingModels.value = false
         }
     }
@@ -1050,7 +1051,7 @@ class ClaudeChatBackend(
     /** Adds or updates [provider]; [onDone] gets the error, or null when it was saved. */
     fun saveProvider(provider: ClaudeProvider, onDone: (String?) -> Unit = {}) {
         backendScope.launch {
-            val err = client.saveProvider(provider).fold({ if (it.success) null else it.error ?: "the bridge refused" }, { it.message ?: "failed" })
+            val err = client.saveProvider(provider).fold({ if (it.success) null else it.error ?: L.agent.claudeChatBackend.theBridgeRefused }, { it.message ?: L.agent.claudeChatBackend.failed })
             if (err == null) refreshProviders()
             withContext(Dispatchers.Main) { onDone(err) }
         }
@@ -1058,7 +1059,7 @@ class ClaudeChatBackend(
 
     fun deleteProvider(id: String) {
         backendScope.launch {
-            client.deleteProvider(id).onFailure { _controlMessages.tryEmit("Cannot remove the provider: ${it.message}") }
+            client.deleteProvider(id).onFailure { _controlMessages.tryEmit(L.agent.claudeChatBackend.cannotRemoveTheProviderError(it.message)) }
             refreshProviders()
         }
     }
@@ -1075,8 +1076,8 @@ class ClaudeChatBackend(
         backendScope.launch {
             onDone(
                 client.restartSession(id).fold(
-                    { if (it.success) "Restarted: the next message uses the current provider settings" else it.error ?: "Could not restart the chat" },
-                    { it.message ?: "The bridge is not reachable" }
+                    { if (it.success) L.agent.claudeChatBackend.restartedTheNextMessageUsesThe else it.error ?: L.agent.claudeChatBackend.couldNotRestartTheChat },
+                    { it.message ?: L.agent.claudeChatBackend.theBridgeIsNotReachable }
                 )
             )
         }
@@ -1086,8 +1087,8 @@ class ClaudeChatBackend(
     fun restartProviderChats(id: String, onDone: (restarted: Int, busy: Int, error: String?) -> Unit) {
         backendScope.launch {
             client.restartProviderSessions(id).fold(
-                { onDone(it.restarted, it.busy, if (it.success) null else it.error ?: "the bridge refused") },
-                { onDone(0, 0, it.message ?: "the bridge is not reachable") }
+                { onDone(it.restarted, it.busy, if (it.success) null else it.error ?: L.agent.claudeChatBackend.theBridgeRefused) },
+                { onDone(0, 0, it.message ?: L.agent.claudeChatBackend.theBridgeIsNotReachable2) }
             )
         }
     }
@@ -1097,8 +1098,8 @@ class ClaudeChatBackend(
         backendScope.launch {
             onResult(
                 client.fetchFormModels(provider, freeOnly).fold(
-                    { if (it.success) ClaudeFetchOutcome(it.models, null, it.raw) else ClaudeFetchOutcome(error = it.error ?: "the provider did not answer", raw = it.raw) },
-                    { ClaudeFetchOutcome(error = it.message ?: "the bridge is not reachable") }
+                    { if (it.success) ClaudeFetchOutcome(it.models, null, it.raw) else ClaudeFetchOutcome(error = it.error ?: L.agent.claudeChatBackend.theProviderDidNotAnswer, raw = it.raw) },
+                    { ClaudeFetchOutcome(error = it.message ?: L.agent.claudeChatBackend.theBridgeIsNotReachable2) }
                 )
             )
         }
@@ -1108,8 +1109,8 @@ class ClaudeChatBackend(
     fun testProvider(provider: ClaudeProvider, model: String, onResult: (ClaudeProviderTestResult) -> Unit) {
         backendScope.launch {
             val res = client.testProvider(provider, model).fold(
-                { it.result ?: ClaudeProviderTestResult(error = it.error ?: "the bridge gave no answer") },
-                { ClaudeProviderTestResult(error = it.message ?: "the bridge is not reachable") }
+                { it.result ?: ClaudeProviderTestResult(error = it.error ?: L.agent.claudeChatBackend.theBridgeGaveNoAnswer) },
+                { ClaudeProviderTestResult(error = it.message ?: L.agent.claudeChatBackend.theBridgeIsNotReachable2) }
             )
             onResult(res)
         }
@@ -1117,7 +1118,7 @@ class ClaudeChatBackend(
 
     fun importSettingsProvider(onDone: (String?) -> Unit = {}) {
         backendScope.launch {
-            val err = client.importSettingsProvider().fold({ if (it.success) null else it.error ?: "the bridge refused" }, { it.message ?: "failed" })
+            val err = client.importSettingsProvider().fold({ if (it.success) null else it.error ?: L.agent.claudeChatBackend.theBridgeRefused }, { it.message ?: L.agent.claudeChatBackend.failed })
             if (err == null) {
                 refreshProviders()
                 loadChatDefaults()
@@ -1144,28 +1145,28 @@ class ClaudeChatBackend(
             "clear", "new" -> ClaudeAppCommand.NewChat
             "model" -> if (arg.isBlank()) ClaudeAppCommand.ModelPicker else {
                 selectModel(arg)
-                ClaudeAppCommand.Done("Model set to $arg")
+                ClaudeAppCommand.Done(L.agent.claudeChatBackend.modelSetToArg(arg))
             }
             "effort" -> when {
                 arg.isBlank() -> ClaudeAppCommand.ModelPicker
                 arg.equals("auto", true) || arg.equals("default", true) -> {
                     setEffort(null)
-                    ClaudeAppCommand.Done("Effort set to the model default")
+                    ClaudeAppCommand.Done(L.agent.claudeChatBackend.effortSetToTheModelDefault)
                 }
                 else -> {
                     setEffort(arg.lowercase())
-                    ClaudeAppCommand.Done("Effort set to ${effortName(arg)}")
+                    ClaudeAppCommand.Done(L.agent.claudeChatBackend.effortSetToEffortname(effortName(arg)))
                 }
             }
             "rename" -> if (arg.isBlank()) null else {
                 store.currentConversation.value?.id?.let { renameConversation(it, arg) }
-                ClaudeAppCommand.Done("Chat renamed")
+                ClaudeAppCommand.Done(L.agent.claudeChatBackend.chatRenamed)
             }
             else -> null
         }
     }
 
-    private fun effortName(level: String) = if (level.equals("xhigh", true)) "extra high" else level.lowercase()
+    private fun effortName(level: String) = if (level.equals("xhigh", true)) L.agent.claudeChatBackend.extraHigh else level.lowercase()
 
     /** Chats already asked for a title in this run of the app. */
     private val titleAsked = HashSet<String>()
@@ -1219,7 +1220,7 @@ class ClaudeChatBackend(
                 Conversation(
                     id = s.id,
                     // an older bridge makes titles from the raw first prompt, hidden blocks included
-                    title = ai.antigem.data.remote.PromptExpansion.cleanTitle(s.title).ifBlank { "Claude Chat" },
+                    title = ai.antigem.data.remote.PromptExpansion.cleanTitle(s.title).ifBlank { L.agent.claudeChatBackend.claudeChat },
                     sessionId = s.id,
                     createdAt = s.created_at,
                     updatedAt = s.updated_at,
@@ -1292,7 +1293,7 @@ class ClaudeChatBackend(
         if (attachedId != id) return
         if (ClaudeTranscript.isSubagentId(id)) {
             res.onSuccess { h -> showSubagent(id, h) }
-                .onFailure { _isLoadingConversation.value = false; _conversationError.value = "Cannot load the subagent: ${it.message}" }
+                .onFailure { _isLoadingConversation.value = false; _conversationError.value = L.agent.claudeChatBackend.cannotLoadTheSubagentMessage(it.message) }
             return
         }
         res.onSuccess { h ->
@@ -1333,7 +1334,7 @@ class ClaudeChatBackend(
                 return
             }
             _isLoadingConversation.value = false
-            _conversationError.value = "Cannot load Claude chat: ${it.message}"
+            _conversationError.value = L.agent.claudeChatBackend.cannotLoadClaudeChatMessage(it.message)
         }
     }
 
@@ -1487,7 +1488,7 @@ class ClaudeChatBackend(
                             transcript.permissionMode?.let { _permissionMode.value = it }
                             if (data["status"]?.jsonPrimitive?.contentOrNull == "compacting") {
                                 _isCompacting.value = true
-                                _startupStatus.value = "Compacting the conversation…"
+                                _startupStatus.value = L.agent.claudeChatBackend.compactingTheConversation
                             } else endCompactingNotice()
                         }
                         "compact_boundary" -> {
@@ -1524,18 +1525,18 @@ class ClaudeChatBackend(
                     }
                     "spawned" -> {
                         // only when the start-up notice is already shown (a slow start)
-                        if (awaitingProcess && _startupStatus.value != null) _startupStatus.value = "Claude Code is starting…"
+                        if (awaitingProcess && _startupStatus.value != null) _startupStatus.value = L.agent.claudeChatBackend.claudeCodeIsStarting
                     }
                     "exited" -> {
                         awaitingProcess = false
                         clearStartupNotice()
                         if (replayUntilSeq != null) finishReplay()
-                        failReplies("Claude process exited")
-                        dropQueued("Claude Code stopped before it was delivered.")
+                        failReplies(L.agent.claudeChatBackend.claudeProcessExited)
+                        dropQueued(L.agent.claudeChatBackend.claudeCodeStoppedBeforeItWas)
                         val err = frame.error.orEmpty()
                         if (transcript.isTurnActive || (frame.exit_code ?: 0) != 0) {
                             if ((frame.exit_code ?: 0) != 0) {
-                                transcript.addError("Claude Code stopped", err.ifBlank { "The claude process exited with code ${frame.exit_code}." })
+                                transcript.addError(L.agent.claudeChatBackend.claudeCodeStopped, err.ifBlank { L.agent.claudeChatBackend.theClaudeProcessExitedWithCode(frame.exit_code) })
                             }
                             transcript.endTurn()
                         }
@@ -1551,8 +1552,8 @@ class ClaudeChatBackend(
                 failReplies(err)
                 dropQueued(err)
                 transcript.addError(
-                    if (err.contains("not found", ignoreCase = true)) "Claude Code is not installed" else "Claude Code unavailable",
-                    if (err.contains("not found", ignoreCase = true)) "$err\n\nInstall it from Settings → Claude Code → Account & CLI." else err
+                    if (err.contains("not found", ignoreCase = true)) L.agent.claudeChatBackend.claudeCodeIsNotInstalled else L.agent.claudeChatBackend.claudeCodeUnavailable,
+                    if (err.contains("not found", ignoreCase = true)) L.agent.claudeChatBackend.errorInstallItFromSettingsClaude(err) else err
                 )
                 transcript.endTurn()
                 emitNow()
@@ -1570,15 +1571,15 @@ class ClaudeChatBackend(
         val delaySec = ((data["retry_delay_ms"]?.jsonPrimitive?.longOrNull ?: 0L) + 999) / 1000
         val status = data["error_status"]?.jsonPrimitive?.intOrNull
         val reason = when {
-            status == 429 -> "rate limit (HTTP 429)"
-            status == 401 || status == 403 -> "the key was rejected (HTTP $status)"
-            status == 402 -> "payment or balance problem (HTTP 402)"
-            status != null && status >= 500 -> "the provider is having problems (HTTP $status)"
+            status == 429 -> L.agent.claudeChatBackend.rateLimitHttp429
+            status == 401 || status == 403 -> L.agent.claudeChatBackend.theKeyWasRejectedHttpStatus(status)
+            status == 402 -> L.agent.claudeChatBackend.paymentOrBalanceProblemHttp402
+            status != null && status >= 500 -> L.agent.claudeChatBackend.theProviderIsHavingProblemsHttp(status)
             status != null -> "HTTP $status"
-            else -> "cannot reach the provider"
+            else -> L.agent.claudeChatBackend.cannotReachTheProvider
         }
         retryNoticeShown = true
-        _startupStatus.value = "Provider error: $reason. Retrying in ${delaySec}s · attempt $attempt${if (max != null) " of $max" else ""}"
+        _startupStatus.value = if (max != null) L.agent.claudeChatBackend.providerErrorReasonRetryingInDelaysec3(reason, delaySec, attempt, max) else L.agent.claudeChatBackend.providerErrorReasonRetryingInDelaysec2(reason, delaySec, attempt)
     }
 
     private fun clearStartupNotice() {
@@ -1637,7 +1638,7 @@ class ClaudeChatBackend(
         emitJob?.cancel()
         emitJob = null
         outbox.clear()
-        failReplies("chat closed")
+        failReplies(L.agent.claudeChatBackend.chatClosed)
         attachedId = null
         lastSeq = -1
         processLive = false
@@ -1737,14 +1738,14 @@ class ClaudeChatBackend(
         private const val STARTUP_NOTICE_DELAY_MS = 4_000L
 
         /** Built-in commands whose terminal view the app replaces with its own screen (see [appCommand]). */
-        val APP_COMMANDS = mapOf(
-            "usage" to "Plan usage limits and this chat's cost",
-            "context" to "Context window usage",
-            "model" to "Choose the model",
-            "effort" to "Set the effort level",
-            "mcp" to "MCP servers",
-            "config" to "Claude Code settings",
-            "clear" to "Start a new chat"
+        val APP_COMMANDS get() = mapOf(
+            "usage" to L.agent.claudeChatBackend.planUsageLimitsAndThisChats,
+            "context" to L.agent.claudeChatBackend.contextWindowUsage,
+            "model" to L.agent.claudeChatBackend.chooseTheModel,
+            "effort" to L.agent.claudeChatBackend.setTheEffortLevel,
+            "mcp" to L.agent.claudeChatBackend.mcpServers,
+            "config" to L.agent.claudeChatBackend.claudeCodeSettings,
+            "clear" to L.agent.claudeChatBackend.startANewChat
         )
 
         /** Built-ins that do nothing useful in the app (terminal-only views, internal or removed commands). */
@@ -1753,12 +1754,12 @@ class ClaudeChatBackend(
         )
 
         /** Permission modes in the order the mode menu shows them. */
-        val PERMISSION_MODES = listOf(
-            "default" to "Manual",
-            "acceptEdits" to "Accept edits",
-            "plan" to "Plan",
-            "auto" to "Auto",
-            "dontAsk" to "Don't ask"
+        val PERMISSION_MODES get() = listOf(
+            "default" to L.agent.claudeChatBackend.manual,
+            "acceptEdits" to L.agent.claudeChatBackend.acceptEdits,
+            "plan" to L.agent.claudeChatBackend.plan,
+            "auto" to L.agent.claudeChatBackend.auto,
+            "dontAsk" to L.agent.claudeChatBackend.dontAsk
         )
     }
 }
@@ -1769,15 +1770,15 @@ fun ClaudeProviderModel.contextLabel(provider: ClaudeProvider? = null): String? 
     val ctx = limits?.context ?: context_length
     val out = limits?.maxOutput ?: max_output_tokens
     if (ctx <= 0) return null
-    return "${tokenLabel(ctx)} context" + if (out > 0) " · ${tokenLabel(out)} output" else ""
+    return if (out > 0) L.agent.claudeChatBackend.contextContextOutputOutput(tokenLabel(ctx), tokenLabel(out)) else L.agent.claudeChatBackend.contextContext(tokenLabel(ctx))
 }
 
 /** "thinking 16K", "no thinking", or null when the model inherits a provider that sends no budget. */
 fun ClaudeProviderModel.thinkingLabel(provider: ClaudeProvider): String? {
     val budget = provider.limitsOf(this).thinkingBudget
     return when {
-        budget > 0 -> "thinking ${tokenLabel(budget.toLong())}"
-        thinking_mode == "off" -> "no thinking"
+        budget > 0 -> L.agent.claudeChatBackend.thinkingBudget(tokenLabel(budget.toLong()))
+        thinking_mode == "off" -> L.agent.claudeChatBackend.noThinking
         else -> null
     }
 }

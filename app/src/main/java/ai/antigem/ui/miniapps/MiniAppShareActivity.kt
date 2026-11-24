@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import ai.antigem.i18n.L
 
 /**
  * "Mini app" in Android's share sheet: pick which mini app gets what was shared. Files are copied into that app's
@@ -75,13 +76,13 @@ class MiniAppShareActivity : ComponentActivity() {
     private fun showTargets(type: String, text: String?, subject: String?, stream: Uri?) {
         val targets = MiniAppIntents.targets(this, "share", type)
         if (targets.isEmpty()) {
-            Toast.makeText(this, "No mini app accepts $type", Toast.LENGTH_LONG).show(); finish(); return
+            Toast.makeText(this, L.miniapps.miniAppShareActivity.noMiniAppAcceptsType(type), Toast.LENGTH_LONG).show(); finish(); return
         }
         val dark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         setContent {
             MaterialTheme(colorScheme = ThemeManager.schemeOf(ThemeManager.themeFor(dark))) {
                 ActionSheet(
-                    title = "Send to a mini app",
+                    title = L.miniapps.miniAppShareActivity.sendToAMiniApp,
                     items = targets.map { NativeDialog.SheetItem(it.id, it.name, if (it.signed) "▣" else "◇", false) },
                     onDismiss = { finish() },
                 ) { id -> deliver(targets.first { it.id == id }, type, text, subject, stream) }

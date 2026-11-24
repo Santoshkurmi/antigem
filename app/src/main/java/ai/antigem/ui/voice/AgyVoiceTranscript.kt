@@ -40,12 +40,13 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.data.voice.VoiceChatRecord
 import ai.antigem.theme.GeminiBlue
 import ai.antigem.ui.chat.ChatFeedItem
+import ai.antigem.i18n.L
 
 /** "3m 01s" / "42s", as the Antigravity app writes call lengths. */
 fun voiceCallLength(ms: Long): String {
     val s = (ms / 1000).coerceAtLeast(0)
     val m = s / 60
-    return if (m > 0) "${m}m ${(s % 60).toString().padStart(2, '0')}s" else "${s}s"
+    return if (m > 0) L.voice.agyVoiceTranscript.mMValueS(m, (s % 60).toString().padStart(2, '0')) else "${s}s"
 }
 
 private fun clockTime(context: Context, ms: Long): String = android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(ms))
@@ -59,9 +60,9 @@ fun VoiceCallMarker(item: ChatFeedItem.VoiceCall, onOpen: () -> Unit) {
     val context = LocalContext.current
     val time = clockTime(context, item.startedAt)
     val label = when {
-        item.live -> "Voice call started · $time"
-        item.durationMs != null -> "Voice call · $time · ${voiceCallLength(item.durationMs)}"
-        else -> "Voice call · $time"
+        item.live -> L.voice.agyVoiceTranscript.voiceCallStartedTime(time)
+        item.durationMs != null -> L.voice.agyVoiceTranscript.voiceCallTimeVoicecalllength(time, voiceCallLength(item.durationMs))
+        else -> L.voice.agyVoiceTranscript.voiceCallTime(time)
     }
     ai.antigem.ui.components.WaveDivider(
         label = label,
@@ -90,22 +91,22 @@ fun AgyVoiceTranscriptSheet(record: VoiceChatRecord, onDismiss: () -> Unit) {
                 Icon(Icons.Rounded.HeadsetMic, null, tint = GeminiBlue, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Voice transcript", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(L.voice.agyVoiceTranscript.voiceTranscript, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     if (subtitle.isNotBlank()) Text(subtitle, fontSize = 12.sp, color = subtle)
                 }
                 TextButton(onClick = {
                     val text = lines.joinToString("\n\n") { l ->
                         val t = l.timeMs?.let { "[${clockTime(context, it)}] " } ?: ""
                         when {
-                            l.isHandoff -> "${t}Sent to the agent"
-                            l.isUser -> "${t}You: ${l.text}"
-                            else -> "${t}Voice: ${l.text}"
+                            l.isHandoff -> L.voice.agyVoiceTranscript.tSentToTheAgent(t)
+                            l.isUser -> L.voice.agyVoiceTranscript.tYouText(t, l.text)
+                            else -> L.voice.agyVoiceTranscript.tVoiceText(t, l.text)
                         }
                     }
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                         .setPrimaryClip(ClipData.newPlainText("Voice transcript", text))
-                    ai.antigem.ui.components.AppToastHelper.showToast("Transcript copied", ai.antigem.ui.components.ChatToastType.SUCCESS)
-                }) { Text("Copy") }
+                    ai.antigem.ui.components.AppToastHelper.showToast(L.voice.agyVoiceTranscript.transcriptCopied, ai.antigem.ui.components.ChatToastType.SUCCESS)
+                }) { Text(L.common.copy) }
             }
             Spacer(Modifier.height(12.dp))
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -117,10 +118,10 @@ fun AgyVoiceTranscriptSheet(record: VoiceChatRecord, onDismiss: () -> Unit) {
                         ) {
                             Icon(Icons.Rounded.ArrowForward, null, tint = subtle, modifier = Modifier.size(13.dp))
                             Spacer(Modifier.width(5.dp))
-                            Text("Sent to the agent" + (time?.let { " · $it" } ?: ""), fontSize = 11.5.sp, color = subtle)
+                            Text(L.voice.agyVoiceTranscript.sentToTheAgentValue((time?.let { " · $it" } ?: "")), fontSize = 11.5.sp, color = subtle)
                         }
                         l.isUser -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                            Text("You" + (time?.let { " · $it" } ?: ""), fontSize = 10.5.sp, color = subtle)
+                            Text(L.voice.agyVoiceTranscript.youValue((time?.let { " · $it" } ?: "")), fontSize = 10.5.sp, color = subtle)
                             Text(
                                 l.text, fontSize = 14.5.sp, lineHeight = 20.sp,
                                 modifier = Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(14.dp))
@@ -128,7 +129,7 @@ fun AgyVoiceTranscriptSheet(record: VoiceChatRecord, onDismiss: () -> Unit) {
                             )
                         }
                         else -> Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                            Text("Voice" + (time?.let { " · $it" } ?: ""), fontSize = 10.5.sp, color = GeminiBlue.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold)
+                            Text(L.voice.agyVoiceTranscript.voiceValue((time?.let { " · $it" } ?: "")), fontSize = 10.5.sp, color = GeminiBlue.copy(alpha = 0.85f), fontWeight = FontWeight.SemiBold)
                             Text(l.text, fontSize = 14.5.sp, lineHeight = 20.sp, modifier = Modifier.widthIn(max = 320.dp))
                         }
                     }

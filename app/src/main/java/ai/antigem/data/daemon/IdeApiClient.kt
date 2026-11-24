@@ -18,6 +18,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 data class ProjectItem(
     val name: String,
@@ -38,7 +39,7 @@ fun mergeProjects(
         if (conv.workspaceUri.isNotBlank()) {
             val path = conv.workspaceUri.removePrefix("file://").trimEnd('/')
             if (path.isNotBlank() && seenPaths.add(path)) {
-                val name = java.io.File(path).name.ifBlank { "Workspace" }
+                val name = java.io.File(path).name.ifBlank { L.daemon.ideApiClient.workspace }
                 list.add(ProjectItem(name = name, path = path, isCustom = false))
             }
         }
@@ -169,7 +170,7 @@ object IdeApiClient {
 
     private fun errorText(response: Response): String =
         runCatching { JSONObject(response.body?.string().orEmpty()).optString("error") }.getOrNull()?.takeIf { it.isNotBlank() }
-            ?: "The IDE bridge answered ${response.code}"
+            ?: L.daemon.ideApiClient.theIdeBridgeAnsweredCode(response.code)
 
     suspend fun checkHealth(): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -415,7 +416,7 @@ object IdeApiClient {
             throw e
         } catch (e: Exception) {
             Log.w(TAG, "Listing $dir failed: ${e.message}")
-            TreeLevelResult.Failed("The IDE bridge is not reachable")
+            TreeLevelResult.Failed(L.daemon.ideApiClient.theIdeBridgeIsNotReachable)
         }
     }
 
@@ -453,7 +454,7 @@ object IdeApiClient {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error reading file: $path", e)
-            FileReadOutcome.Failed(e.message ?: "Read failed")
+            FileReadOutcome.Failed(e.message ?: L.daemon.ideApiClient.readFailed)
         }
     }
 

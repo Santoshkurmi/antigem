@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import ai.antigem.i18n.L
 
 /**
  * One-tap voice calls from outside the app: the Voice call Quick Settings tile and the "Voice call" launcher shortcut.
@@ -94,7 +95,7 @@ object VoiceCallLauncher {
         // the floating call window (when on) opens as the panel, so the call is seen connecting
         ai.antigem.ui.voice.AgyVoiceBubble.openPanelForNextCall()
         // the call service starts in here, while the invisible screen is in front: that lets it use the microphone
-        AgyVoiceCall.start(app, "Voice call") { vm.prepareVoiceCallInLastCallChat() }
+        AgyVoiceCall.start(app, L.voice.callLauncher.voiceCall) { vm.prepareVoiceCallInLastCallChat() }
         reportFailure(app)
     }
 
@@ -112,15 +113,15 @@ object VoiceCallLauncher {
                 AgyVoiceCall.state.first { it.phase == AgyVoiceCall.Phase.LIVE || it.phase == AgyVoiceCall.Phase.FAILED || !it.active }
             } ?: return@launch
             if (st.phase == AgyVoiceCall.Phase.FAILED && !_appVisible.value) {
-                Toast.makeText(app, "Voice call failed: " + (st.error ?: "open AntiGem for details"), Toast.LENGTH_LONG).show()
+                Toast.makeText(app, L.voice.callLauncher.voiceCallFailedValue((st.error ?: L.voice.callLauncher.openAntigemForDetails)), Toast.LENGTH_LONG).show()
             }
         }
     }
 
     private fun shortcut(context: Context): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, SHORTCUT_ID)
-            .setShortLabel("Voice call")
-            .setLongLabel("Antigravity voice call")
+            .setShortLabel(L.voice.callLauncher.voiceCall)
+            .setLongLabel(L.voice.callLauncher.antigravityVoiceCall)
             .setIcon(IconCompat.createWithResource(context, R.drawable.ic_shortcut_voice_call))
             .setIntent(Intent(context, VoiceCallLaunchActivity::class.java).setAction(ACTION_CALL))
             .build()
@@ -147,7 +148,7 @@ object VoiceCallLauncher {
             val sbm = context.getSystemService(StatusBarManager::class.java) ?: return false
             sbm.requestAddTileService(
                 ComponentName(context, VoiceCallTileService::class.java),
-                "Voice call",
+                L.voice.callLauncher.voiceCall,
                 Icon.createWithResource(context, R.drawable.ic_voice_call),
                 context.mainExecutor
             ) { result -> Log.i(TAG, "add tile: $result") }

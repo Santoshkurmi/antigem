@@ -46,6 +46,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import ai.antigem.theme.*
+import ai.antigem.i18n.L
 
 object PermissionUtils {
 
@@ -219,7 +220,7 @@ fun AppPermissionsDialog(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "Welcome to AntiGem",
+                    text = L.components.appPermissions.welcomeToAntigem,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     color = textPrimary,
@@ -227,7 +228,7 @@ fun AppPermissionsDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Allow a few things so AntiGem can run in the background and work with your files.",
+                    text = L.components.appPermissions.allowAFewThingsSoAntigem,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                     color = textSecondary,
@@ -243,14 +244,14 @@ fun AppPermissionsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Permissions",
+                        text = L.common.permissions,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = textPrimary,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "$allowedCount of 3 allowed",
+                        text = L.components.appPermissions.allowedcountOf3Allowed(allowedCount),
                         fontSize = 12.5.sp,
                         color = textSecondary
                     )
@@ -279,8 +280,8 @@ fun AppPermissionsDialog(
                         PermissionRow(
                             icon = Icons.Outlined.NotificationsActive,
                             accent = ClaudeTerracotta,
-                            title = "Notifications",
-                            subtitle = "Keeps the background service running and shows progress",
+                            title = L.components.appPermissions.notifications,
+                            subtitle = L.components.appPermissions.keepsTheBackgroundServiceRunningAnd,
                             required = true,
                             isGranted = hasNotification,
                             onAllow = {
@@ -298,8 +299,8 @@ fun AppPermissionsDialog(
                         PermissionRow(
                             icon = Icons.Outlined.Folder,
                             accent = GeminiBlue,
-                            title = "Files",
-                            subtitle = "Open projects and files on your storage",
+                            title = L.common.files,
+                            subtitle = L.components.appPermissions.openProjectsAndFilesOnYour,
                             required = false,
                             isGranted = hasStorage,
                             onAllow = { requestStorage() }
@@ -311,8 +312,8 @@ fun AppPermissionsDialog(
                         PermissionRow(
                             icon = Icons.Outlined.Mic,
                             accent = GeminiPurple,
-                            title = "Microphone",
-                            subtitle = "Dictate messages and voice notes",
+                            title = L.components.appPermissions.microphone,
+                            subtitle = L.components.appPermissions.dictateMessagesAndVoiceNotes,
                             required = false,
                             isGranted = hasAudio,
                             onAllow = { audioLauncher.launch(Manifest.permission.RECORD_AUDIO) }
@@ -322,7 +323,7 @@ fun AppPermissionsDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "You can change these anytime in Android settings.",
+                    text = L.components.appPermissions.youCanChangeTheseAnytimeIn,
                     fontSize = 12.sp,
                     color = textSecondary.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center
@@ -339,7 +340,7 @@ fun AppPermissionsDialog(
             ) {
                 AnimatedVisibility(visible = !hasNotification) {
                     Text(
-                        text = "Allow notifications to continue",
+                        text = L.components.appPermissions.allowNotificationsToContinue,
                         fontSize = 12.5.sp,
                         color = textSecondary,
                         modifier = Modifier.padding(bottom = 10.dp)
@@ -359,7 +360,7 @@ fun AppPermissionsDialog(
                         disabledContentColor = AppColors.textSecondary
                     )
                 ) {
-                    Text(text = "Continue", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text(text = L.common.continueText, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
             }
         }
@@ -405,7 +406,7 @@ private fun PermissionRow(
                 if (required && !isGranted) {
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Required",
+                        text = L.common.required,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = ClaudeTerracotta
@@ -432,7 +433,7 @@ private fun PermissionRow(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Allowed",
+                        contentDescription = L.common.allowed,
                         tint = AppColors.success,
                         modifier = Modifier.size(18.dp)
                     )
@@ -448,7 +449,7 @@ private fun PermissionRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     modifier = Modifier.height(34.dp)
                 ) {
-                    Text(text = "Allow", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(text = L.common.allow, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

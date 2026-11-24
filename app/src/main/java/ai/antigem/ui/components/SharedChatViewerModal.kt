@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 @Composable
 fun SharedChatViewerModal(
@@ -64,7 +65,7 @@ fun SharedChatViewerModal(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = data.title.ifBlank { "Shared Conversation" },
+                                    text = data.title.ifBlank { L.components.sharedChatViewerModal.sharedConversation },
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -78,7 +79,7 @@ fun SharedChatViewerModal(
                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                 ) {
                                     Text(
-                                        text = "READ-ONLY",
+                                        text = L.components.sharedChatViewerModal.readOnly,
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -88,7 +89,7 @@ fun SharedChatViewerModal(
                             }
 
                             Text(
-                                text = "${data.messages.size} messages · AntiGem Shared Trajectory",
+                                text = L.components.sharedChatViewerModal.messagescountMessagesAntigemShared(data.messages.size),
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -102,7 +103,7 @@ fun SharedChatViewerModal(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = L.common.close,
                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.size(20.dp)
                             )
@@ -120,7 +121,7 @@ fun SharedChatViewerModal(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No messages found in this trajectory",
+                            text = L.components.sharedChatViewerModal.noMessagesFoundInThisTrajectory,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
@@ -192,7 +193,7 @@ fun SharedChatLoadingDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Opening Shared Chat",
+                    text = L.components.sharedChatViewerModal.openingSharedChat,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -202,7 +203,7 @@ fun SharedChatLoadingDialog(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Reading trajectory steps and conversation messages...",
+                    text = L.components.sharedChatViewerModal.readingTrajectoryStepsAndConversation,
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -218,7 +219,7 @@ fun SharedChatLoadingDialog(
                     contentPadding = PaddingValues(horizontal = 18.dp, vertical = 7.dp)
                 ) {
                     Text(
-                        text = "Don't Open",
+                        text = L.components.sharedChatViewerModal.dontOpen,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

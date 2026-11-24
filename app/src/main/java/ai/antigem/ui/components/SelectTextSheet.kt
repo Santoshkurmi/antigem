@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.i18n.L
 
 /**
  * A whole reply in one selection area, so text can be selected across paragraphs, lists and code in one drag.
@@ -63,17 +64,17 @@ fun SelectTextSheet(content: String, onDismiss: () -> Unit) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close") }
-                    Text("Select text", fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, L.common.close) }
+                    Text(L.components.selectText.selectText, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     IconButton(onClick = {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Copied Response", content))
-                        Toast.makeText(context, "Copied response", Toast.LENGTH_SHORT).show()
-                    }) { Icon(Icons.Outlined.ContentCopy, "Copy all") }
+                        Toast.makeText(context, L.components.selectText.copiedResponse, Toast.LENGTH_SHORT).show()
+                    }) { Icon(Icons.Outlined.ContentCopy, L.components.selectText.copyAll) }
                 }
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ModeChip("Formatted", selected = !markdown) { markdown = false }
-                    ModeChip("Markdown", selected = markdown) { markdown = true }
+                    ModeChip(L.components.selectText.formatted, selected = !markdown) { markdown = false }
+                    ModeChip(L.components.selectText.markdown, selected = markdown) { markdown = true }
                 }
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))

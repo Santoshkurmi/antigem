@@ -34,6 +34,7 @@ import ai.antigem.data.media.YouTubeMediaSessionManager
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.theme.isAppInDarkTheme
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 /**
  * Floating in-app controller for active YouTube playback across Chat, IDE, Browser, and Terminal.
@@ -123,7 +124,7 @@ fun FloatingVideoPlayerOverlay(
                         // Central Play/Pause badge
                         Icon(
                             imageVector = if (activeState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (activeState.isPlaying) "Pause" else "Play",
+                            contentDescription = if (activeState.isPlaying) L.common.pause else L.components.floatingVideoPlayerOverlay.play,
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
@@ -217,7 +218,7 @@ fun FloatingVideoPlayerOverlay(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.ExpandLess,
-                                        contentDescription = "Collapse",
+                                        contentDescription = L.common.collapse,
                                         tint = contentColor.copy(alpha = 0.6f),
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -233,7 +234,7 @@ fun FloatingVideoPlayerOverlay(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Close,
-                                        contentDescription = "Stop & Close",
+                                        contentDescription = L.components.floatingVideoPlayerOverlay.stopClose,
                                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -279,7 +280,7 @@ fun FloatingVideoPlayerOverlay(
                             ) {
                                 Icon(
                                     imageVector = if (activeState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                    contentDescription = if (activeState.isPlaying) "Pause" else "Play",
+                                    contentDescription = if (activeState.isPlaying) L.common.pause else L.components.floatingVideoPlayerOverlay.play,
                                     tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )

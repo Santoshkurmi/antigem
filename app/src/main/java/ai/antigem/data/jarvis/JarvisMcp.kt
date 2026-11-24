@@ -1436,6 +1436,14 @@ object JarvisMcp {
                     ai.antigem.theme.ThemeManager.find(v)?.let { ai.antigem.theme.ThemeManager.select(it); null }
                         ?: "No theme \"$v\". Themes: ${ai.antigem.theme.ThemeManager.all().joinToString { "${it.name} (${it.id})" }}"
                 }),
+            Setting("app_language", "The app's language by id or name (en = English). Translating: the language_mcp tools.",
+                "en|or a language's id or name", false,
+                get = { ai.antigem.i18n.LanguageManager.load(ai.antigem.i18n.LanguageManager.currentId)?.let { "${it.id} (${it.name})" } },
+                set = { v ->
+                    val lang = ai.antigem.i18n.LanguageManager.find(v)
+                    if (lang != null && ai.antigem.i18n.LanguageManager.apply(lang.id)) null
+                    else "No language \"$v\". Languages: " + ai.antigem.i18n.LanguageManager.refreshList().joinToString { "${it.name} (${it.id})" }
+                }),
             Setting("chat_font_scale", "Chat text size", "0.8-1.6", false, get = { vm.chatFontScale.first() }, set = { v ->
                 v.trim().removeSuffix("x").toFloatOrNull()?.let { vm.setChatFontScale(it.coerceIn(0.8f, 1.6f)); null } ?: "Not a number."
             }),

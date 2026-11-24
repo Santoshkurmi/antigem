@@ -1,5 +1,7 @@
 package ai.antigem.data.local
 
+import ai.antigem.i18n.L
+
 data class DiscoveredPackageInfo(
     val url: String,
     val releaseTag: String,
@@ -14,7 +16,7 @@ sealed class LocalInstallerState {
     object Idle : LocalInstallerState()
 
     data class Discovering(
-        val message: String = "Searching GitHub for compatible Termux bootstrap release..."
+        val message: String = L.local.installerState.searchingGithubForCompatibleTermux
     ) : LocalInstallerState()
 
     data class AwaitingConfirmation(

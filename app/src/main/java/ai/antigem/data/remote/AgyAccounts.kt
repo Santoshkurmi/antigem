@@ -12,6 +12,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import ai.antigem.i18n.L
 
 /**
  * Antigravity account switcher (Settings > Antigravity > Account & CLI). The bridge does the work: it keeps copies of
@@ -78,7 +79,7 @@ object AgyAccounts {
             if (r.code == 404 && action == null) error("The bridge is older than the app (no account switching). Update the bridge.")
             val o = runCatching { JSONObject(text) }.getOrElse { error("The bridge answered HTTP ${r.code}") }
             if (r.code == 409 && o.optString("error") == "current_not_saved") throw NotSavedException(o.optString("email"))
-            if (!r.isSuccessful || !o.optBoolean("success")) error(o.optString("error").ifBlank { "The bridge answered HTTP ${r.code}" })
+            if (!r.isSuccessful || !o.optBoolean("success")) error(o.optString("error").ifBlank { L.remote.agyAccounts.theBridgeAnsweredHttpCode(r.code) })
             return parse(o)
         }
     }

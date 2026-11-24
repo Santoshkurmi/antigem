@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.label
+import ai.antigem.i18n.L
 
 /** Sheet header shared by both agents' pickers: agent mark, title, "Agent · detail" line, refresh. */
 @Composable
@@ -71,7 +72,7 @@ fun AgentSheetHeader(
                     .animateFloat(0f, 360f, infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Restart), label = "sheet_refresh_angle").value
             } else 0f
             IconButton(onClick = onRefresh, enabled = !refreshing, modifier = Modifier.size(38.dp)) {
-                Icon(Icons.Outlined.Refresh, "Refresh", tint = agent.accent(), modifier = Modifier.size(20.dp).rotate(angle))
+                Icon(Icons.Outlined.Refresh, L.common.refresh, tint = agent.accent(), modifier = Modifier.size(20.dp).rotate(angle))
             }
         }
     }

@@ -33,6 +33,7 @@ import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.parseMarkdownBlocks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import ai.antigem.i18n.L
 
 /**
  * Settings → STEM & diagrams: download the render bundle (one zip from the app's GitHub release), switch each kind
@@ -57,8 +58,7 @@ fun StemRenderingScreen() {
 
     Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)) {
         Text(
-            "Extra blocks for study notes in chats: chemistry, molecules, graphs, geometry, physics simulations and " +
-                "TikZ figures (circuits, free-body diagrams, optics). Everything runs on this phone, offline.",
+            L.settings.stemRendering.extraBlocksForStudyNotesIn,
             fontSize = 12.5.sp, lineHeight = 17.sp, color = muted
         )
         Spacer(Modifier.height(16.dp))
@@ -68,7 +68,7 @@ fun StemRenderingScreen() {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Offline bundle", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.settings.stemRendering.offlineBundle, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             "${RenderBundle.BUNDLE_TAG} · ${mb(RenderBundle.BUNDLE_SIZE)} download" + if (installed) " · installed" else "",
                             fontSize = 12.sp, color = if (installed) QuotaGreen else muted
@@ -77,8 +77,7 @@ fun StemRenderingScreen() {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "SmilesDrawer, function-plot, JSXGraph, Matter.js, TikZJax (TeX with circuitikz, pgfplots, chemfig) and " +
-                        "Mermaid, at fixed versions, from AntiGem's GitHub release. Checked against a fixed checksum, then kept in the app's private storage.",
+                    L.settings.stemRendering.smilesdrawerFunctionPlotJsxgraphMatterJs,
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
                 Spacer(Modifier.height(10.dp))
@@ -95,10 +94,7 @@ fun StemRenderingScreen() {
                     Icon(Icons.Outlined.Warning, null, tint = warn, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Heavy on the phone. Each diagram block runs in its own web view, and TikZ pictures run TeX on the " +
-                            "phone (a few seconds and a lot of memory the first time, one at a time; after that they're saved). " +
-                            "Chats with many diagrams can lag or scroll less smoothly, especially on older phones. " +
-                            "Switch off what you don't use below.",
+                        L.settings.stemRendering.heavyOnThePhoneEachDiagram,
                         fontSize = 12.5.sp, lineHeight = 17.sp
                     )
                 }
@@ -109,14 +105,14 @@ fun StemRenderingScreen() {
                         LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
                         Spacer(Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Downloading ${mb(s.done)} of ${mb(s.total)}", fontSize = 12.sp, color = muted, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { RenderBundle.cancel() }) { Text("Cancel") }
+                            Text(L.settings.stemRendering.downloadingMbOfMb2(mb(s.done), mb(s.total)), fontSize = 12.sp, color = muted, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { RenderBundle.cancel() }) { Text(L.common.cancel) }
                         }
                     }
                     RenderBundle.Status.Extracting -> {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Spacer(Modifier.height(6.dp))
-                        Text("Unpacking…", fontSize = 12.sp, color = muted)
+                        Text(L.settings.stemRendering.unpacking, fontSize = 12.sp, color = muted)
                     }
                     else -> {
                         if (s is RenderBundle.Status.Failed) {
@@ -125,7 +121,7 @@ fun StemRenderingScreen() {
                         }
                         if (installed) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedButton(onClick = { confirmRemove = true }) { Text("Remove") }
+                                OutlinedButton(onClick = { confirmRemove = true }) { Text(L.common.remove) }
                                 Spacer(Modifier.width(8.dp))
                                 TextButton(
                                     onClick = { RenderBundle.clearCache(); cacheTick++ },
@@ -136,7 +132,7 @@ fun StemRenderingScreen() {
                             Button(onClick = { RenderBundle.download(context) }) {
                                 Icon(Icons.Outlined.CloudDownload, null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(if (s is RenderBundle.Status.Failed) "Try again" else "Download bundle")
+                                Text(if (s is RenderBundle.Status.Failed) L.common.tryAgain else L.settings.stemRendering.downloadBundle)
                             }
                         }
                     }
@@ -146,10 +142,9 @@ fun StemRenderingScreen() {
 
         // ----- what to use -----
         Spacer(Modifier.height(22.dp))
-        Text("What to use", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(L.settings.stemRendering.whatToUse, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text(
-            "All off at first. Switched off: the block shows as code, and agents aren't told about it." +
-                if (installed) "" else " Download the bundle to switch on the parts that need it.",
+            if (installed) L.settings.stemRendering.allOffAtFirstSwitchedOff else L.settings.stemRendering.allOffAtFirstSwitchedOff2,
             fontSize = 12.sp, color = muted
         )
         Spacer(Modifier.height(10.dp))
@@ -162,8 +157,8 @@ fun StemRenderingScreen() {
                             Text(c.title, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             Text(c.summary, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
                             val note = when {
-                                !c.fromBundle -> "${c.library} · built in, no download"
-                                !installed -> "${c.library} ${c.version} · needs the bundle"
+                                !c.fromBundle -> L.settings.stemRendering.libraryBuiltInNoDownload(c.library)
+                                !installed -> L.settings.stemRendering.libraryVersionNeedsTheBundle(c.library, c.version)
                                 else -> "${c.library} ${c.version}"
                             }
                             Text(note, fontSize = 11.5.sp, color = if (c in active) QuotaGreen else muted)
@@ -186,25 +181,23 @@ fun StemRenderingScreen() {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Tell agents about these blocks", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Global context · first message of each chat", fontSize = 12.sp, color = muted)
+                        Text(L.settings.stemRendering.tellAgentsAboutTheseBlocks, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(L.settings.stemRendering.globalContextFirstMessageOfEach, fontSize = 12.sp, color = muted)
                     }
                     Switch(checked = tellAgents, onCheckedChange = { RenderBundle.setTellAgents(it) })
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "A short list of the blocks that work here, with their exact versions, so agents use them in their answers" +
-                        (if (GlobalContext.canReadAppFiles) ", and where the full guide is on this phone (they read it only when needed)" else "") +
-                        ". Chats get it again when it changes. Jarvis doesn't get it.",
+                    L.settings.stemRendering.aShortListOfTheBlocks((if (GlobalContext.canReadAppFiles) L.settings.stemRendering.andWhereTheFullGuideIs else "")),
                     fontSize = 13.sp, lineHeight = 18.sp
                 )
                 TextButton(onClick = { showPrompt = !showPrompt }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                    Text(if (showPrompt) "Hide the text" else "Show exactly what is sent")
+                    Text(if (showPrompt) L.settings.stemRendering.hideTheText else L.settings.stemRendering.showExactlyWhatIsSent)
                 }
                 if (showPrompt) {
                     val text = remember(active, tellAgents, installed) {
-                        if (!tellAgents) "(off: nothing is sent)"
-                        else RenderBundle.promptSection(canReadFiles = GlobalContext.canReadAppFiles) ?: "(nothing switched on)"
+                        if (!tellAgents) L.settings.stemRendering.offNothingIsSent
+                        else RenderBundle.promptSection(canReadFiles = GlobalContext.canReadAppFiles) ?: L.settings.stemRendering.nothingSwitchedOn
                     }
                     SelectionContainer {
                         Text(
@@ -226,7 +219,7 @@ fun StemRenderingScreen() {
         FilledTonalButton(onClick = { showGuide = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Guide: syntax and live examples")
+            Text(L.settings.stemRendering.guideSyntaxAndLiveExamples)
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -234,12 +227,12 @@ fun StemRenderingScreen() {
     if (confirmRemove) {
         AlertDialog(
             onDismissRequest = { confirmRemove = false },
-            title = { Text("Remove the bundle?") },
-            text = { Text("Blocks that need it show as code until you download it again. Compiled TikZ pictures are removed too.") },
+            title = { Text(L.settings.stemRendering.removeTheBundle) },
+            text = { Text(L.settings.stemRendering.blocksThatNeedItShowAs) },
             confirmButton = {
-                TextButton(onClick = { RenderBundle.remove(); confirmRemove = false; cacheTick++ }) { Text("Remove") }
+                TextButton(onClick = { RenderBundle.remove(); confirmRemove = false; cacheTick++ }) { Text(L.common.remove) }
             },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(L.common.cancel) } }
         )
     }
     if (showGuide) StemGuideDialog(onDismiss = { showGuide = false })
@@ -259,9 +252,9 @@ private fun StemGuideDialog(onDismiss: () -> Unit) {
                     Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Close, "Close") }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Close, L.common.close) }
                     Spacer(Modifier.width(6.dp))
-                    Text("STEM & diagrams guide", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(L.settings.stemRendering.stemDiagramsGuide, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)) {

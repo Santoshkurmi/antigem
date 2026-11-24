@@ -28,6 +28,7 @@ import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.theme.ClaudeThinkingDark
 import ai.antigem.theme.ClaudeThinkingLight
 import ai.antigem.theme.QuotaGreen
+import ai.antigem.i18n.L
 
 /**
  * Collapsible & Editable Summary Card shown at the top of the chat
@@ -82,7 +83,7 @@ fun ActiveContextSummaryCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Context Memory",
+                            text = L.components.contextSummaryCard.contextMemory,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -95,7 +96,7 @@ fun ActiveContextSummaryCard(
                                 .padding(horizontal = 5.dp, vertical = 1.dp)
                         ) {
                             Text(
-                                text = "Active Summary",
+                                text = L.components.contextSummaryCard.activeSummary,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = QuotaGreen
@@ -103,7 +104,7 @@ fun ActiveContextSummaryCard(
                         }
                     }
                     Text(
-                        text = if (isExpanded) "Tap to collapse" else "Older turns compressed • Tap to view/edit",
+                        text = if (isExpanded) L.components.contextSummaryCard.tapToCollapse else L.components.contextSummaryCard.olderTurnsCompressedTapToView,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -116,7 +117,7 @@ fun ActiveContextSummaryCard(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Edit Summary",
+                        contentDescription = L.components.contextSummaryCard.editSummary,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.size(15.dp)
                     )
@@ -129,7 +130,7 @@ fun ActiveContextSummaryCard(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = "Delete Summary",
+                        contentDescription = L.components.contextSummaryCard.deleteSummary,
                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                         modifier = Modifier.size(16.dp)
                     )
@@ -212,7 +213,7 @@ fun ContextSummarizeAlertBanner(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Context Threshold Reached ($messageCount msgs)",
+                    text = L.components.contextSummaryCard.contextThresholdReachedMessagecountMsgs(messageCount),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -221,7 +222,7 @@ fun ContextSummarizeAlertBanner(
 
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Summarizing older conversation turns keeps replies fast and saves tokens while keeping the last $windowLimit messages verbatim.",
+                text = L.components.contextSummaryCard.summarizingOlderConversationTurnsKeeps(windowLimit),
                 fontSize = 11.5.sp,
                 lineHeight = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -239,7 +240,7 @@ fun ContextSummarizeAlertBanner(
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier.height(32.dp)
                     ) {
-                        Text("Not Now", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(L.components.contextSummaryCard.notNow, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     DropdownMenu(
@@ -247,28 +248,28 @@ fun ContextSummarizeAlertBanner(
                         onDismissRequest = { showPostponeMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Ask after +5 messages") },
+                            text = { Text(L.components.contextSummaryCard.askAfter5Messages) },
                             onClick = {
                                 onPostpone(5)
                                 showPostponeMenu = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Ask after +10 messages") },
+                            text = { Text(L.components.contextSummaryCard.askAfter10Messages) },
                             onClick = {
                                 onPostpone(10)
                                 showPostponeMenu = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Ask after +20 messages") },
+                            text = { Text(L.components.contextSummaryCard.askAfter20Messages) },
                             onClick = {
                                 onPostpone(20)
                                 showPostponeMenu = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Never for this session") },
+                            text = { Text(L.components.contextSummaryCard.neverForThisSession) },
                             onClick = {
                                 onPostpone(1000)
                                 showPostponeMenu = false
@@ -292,7 +293,7 @@ fun ContextSummarizeAlertBanner(
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Summarize", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.components.contextSummaryCard.summarize, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -340,7 +341,7 @@ fun LiveSummarizingCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Summarizing context with $modelName...",
+                    text = L.components.contextSummaryCard.summarizingContextWithModelname(modelName),
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface
@@ -350,7 +351,7 @@ fun LiveSummarizingCard(
             if (!pendingQueuedMessage.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "⏳ Queued: \"${pendingQueuedMessage.take(80)}\"${if (pendingQueuedMessage.length > 80) "..." else ""} (will send immediately after summary)",
+                    text = L.components.contextSummaryCard.queuedValueValue2WillSendImmediately(pendingQueuedMessage.take(80), if (pendingQueuedMessage.length > 80) "..." else ""),
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -393,7 +394,7 @@ fun EditSummaryDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Edit Context Memory",
+                        text = L.components.contextSummaryCard.editContextMemory,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -402,7 +403,7 @@ fun EditSummaryDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Modify or add custom notes to this executive summary. The AI will use this as its permanent context.",
+                    text = L.components.contextSummaryCard.modifyOrAddCustomNotesTo,
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -430,7 +431,7 @@ fun EditSummaryDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancel")
+                        Text(L.common.cancel)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -438,7 +439,7 @@ fun EditSummaryDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Save Summary")
+                        Text(L.components.contextSummaryCard.saveSummary)
                     }
                 }
             }

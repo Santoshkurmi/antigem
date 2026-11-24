@@ -90,6 +90,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 // ==========================================
 // SUB-SCREEN 2: SERVERS & CONNECTIVITY
@@ -97,16 +98,16 @@ import java.util.concurrent.TimeUnit
 // ==========================================
 
 private fun describeNetworkError(e: Throwable): String = when (e) {
-    is java.net.UnknownHostException -> "unknown host name"
-    is java.net.SocketTimeoutException -> "timed out (firewall or wrong port?)"
-    is java.net.ConnectException -> "connection refused (is the service running and the port open?)"
-    is javax.net.ssl.SSLException -> "TLS problem: ${e.message?.take(80)}"
+    is java.net.UnknownHostException -> L.settings.serversSettings.unknownHostName
+    is java.net.SocketTimeoutException -> L.settings.serversSettings.timedOutFirewallOrWrongPort
+    is java.net.ConnectException -> L.settings.serversSettings.connectionRefusedIsTheServiceRunning
+    is javax.net.ssl.SSLException -> L.settings.serversSettings.tlsProblemValue(e.message?.take(80))
     is java.net.SocketException, is java.io.EOFException ->
-        "the connection was closed (a proxy that requires the access header closes it when the header is missing or wrong: check \"Proxy access header\")"
+        L.settings.serversSettings.theConnectionWasClosedAProxy
     else -> {
         val m = e.message.orEmpty()
         if (m.contains("unexpected end of stream", true) || m.contains("connection reset", true))
-            "the connection was closed with no answer: a proxy that requires the access header does this when the header is missing or the value is wrong (check \"Proxy access header\" against the proxy)"
+            L.settings.serversSettings.theConnectionWasClosedWithNo
         else m.take(100).ifBlank { e.javaClass.simpleName }
     }
 }
@@ -120,9 +121,9 @@ private suspend fun probeHub(url: String, edge: Pair<String, String>? = null): P
         conn.readTimeout = 10_000
         val code = try { conn.responseCode } finally { conn.disconnect() }
         when {
-            code in 502..504 -> false to "the proxy answered $code: it cannot reach the hub (is agy --hub running on that port?)"
-            code in 200..499 -> true to "answered HTTP $code"
-            else -> false to "answered HTTP $code"
+            code in 502..504 -> false to L.settings.serversSettings.theProxyAnsweredCodeItCannot(code)
+            code in 200..499 -> true to L.settings.serversSettings.answeredHttpCode(code)
+            else -> false to L.settings.serversSettings.answeredHttpCode(code)
         }
     } catch (e: Exception) {
         false to describeNetworkError(e)
@@ -137,7 +138,7 @@ private suspend fun probeBridge(base: String, token: String, edge: Pair<String, 
     try {
         val health = client.newCall(Request.Builder().url("${base.trimEnd('/')}/api/health").apply { edge?.let { header(it.first, it.second) } }.build()).execute()
         health.use {
-            if (!it.isSuccessful) return@withContext false to "health check answered HTTP ${it.code}"
+            if (!it.isSuccessful) return@withContext false to L.settings.serversSettings.healthCheckAnsweredHttpCode(it.code)
         }
         val header = AuthPreferences.buildFramedHeader(token)
         val info = client.newCall(
@@ -153,9 +154,9 @@ private suspend fun probeBridge(base: String, token: String, edge: Pair<String, 
                     true to "$os/$arch" + if (home.isNotBlank()) ", home $home" else ""
                 }
                 401 -> false to "reachable, but the token was rejected: either it differs from the one the server was started with, or the proxy drops headers with an underscore (nginx needs underscores_in_headers on;)"
-                404 -> true to "reachable (older bridge without server info)"
-                429 -> false to "blocked for a while after too many wrong tokens, try again later"
-                else -> false to "info answered HTTP ${it.code}"
+                404 -> true to L.settings.serversSettings.reachableOlderBridgeWithoutServerInfo
+                429 -> false to L.settings.serversSettings.blockedForAWhileAfterToo
+                else -> false to L.settings.serversSettings.infoAnsweredHttpCode(it.code)
             }
         }
     } catch (e: Exception) {
@@ -371,7 +372,7 @@ internal fun ServersSubScreen(
                 sshKey = text.trim()
                 saveFeedback = null
             } else {
-                Toast.makeText(context, "That file is not a private key (expected -----BEGIN … PRIVATE KEY-----)", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, L.settings.serversSettings.thatFileIsNotAPrivate, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -380,10 +381,10 @@ internal fun ServersSubScreen(
         AlertDialog(
             onDismissRequest = { showUnsavedDialog = false },
             icon = { Icon(Icons.Outlined.Info, null, tint = ClaudeTerracotta, modifier = Modifier.size(28.dp)) },
-            title = { Text("Unsaved Server Settings", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(L.settings.serversSettings.unsavedServerSettings, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
             text = {
                 Text(
-                    "You have unsaved changes in the server settings. Save them with the button at the bottom or discard them.",
+                    L.settings.serversSettings.youHaveUnsavedChangesInThe,
                     fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
             },
@@ -392,7 +393,7 @@ internal fun ServersSubScreen(
                     onClick = { showUnsavedDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                     shape = RoundedCornerShape(8.dp)
-                ) { Text("Keep Editing", fontWeight = FontWeight.Bold) }
+                ) { Text(L.settings.serversSettings.keepEditing, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -423,7 +424,7 @@ internal fun ServersSubScreen(
                         sshUser = authPrefs.termuxSshUser.first().takeIf { AuthPreferences.currentRemoteMode } ?: ""
                         sshPass = authPrefs.termuxSshPass.first().takeIf { AuthPreferences.currentRemoteMode } ?: ""
                     }
-                }) { Text("Discard Changes", color = MaterialTheme.colorScheme.error) }
+                }) { Text(L.settings.serversSettings.discardChanges, color = MaterialTheme.colorScheme.error) }
             },
             shape = RoundedCornerShape(16.dp),
             containerColor = MaterialTheme.colorScheme.surface
@@ -434,11 +435,11 @@ internal fun ServersSubScreen(
         AlertDialog(
             onDismissRequest = { showRestartDialog = false },
             icon = { Icon(Icons.Outlined.RestartAlt, null, tint = ClaudeTerracotta, modifier = Modifier.size(28.dp)) },
-            title = { Text("Reopen AntiGem?", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(L.settings.serversSettings.reopenAntigem, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
             text = {
                 Text(
-                    if (remote) "Settings saved. Reopening the app connects over SSH, starts the bridge that is already on the server and opens the connections with the new settings."
-                    else "Settings saved. Reopening the app restarts the local bridge and daemon so every connection uses the new settings.",
+                    if (remote) L.settings.serversSettings.settingsSavedReopeningTheAppConnects
+                    else L.settings.serversSettings.settingsSavedReopeningTheAppRestarts,
                     fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 )
             },
@@ -454,11 +455,11 @@ internal fun ServersSubScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
                     shape = RoundedCornerShape(8.dp)
-                ) { Text("Reopen Now", fontWeight = FontWeight.Bold) }
+                ) { Text(L.settings.serversSettings.reopenNow, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showRestartDialog = false }, shape = RoundedCornerShape(8.dp)) {
-                    Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(L.common.later, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
             shape = RoundedCornerShape(16.dp),
@@ -476,11 +477,11 @@ internal fun ServersSubScreen(
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                Text("Saved profiles", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text("Tap one to load it. Its mode is selected for you; press Save to apply. Update overwrites a profile with what is in the form now (same mode only).", fontSize = 12.sp,
+                Text(L.settings.serversSettings.savedProfiles, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(L.settings.serversSettings.tapOneToLoadItIts, fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 if (list.isEmpty()) {
-                    Text("Nothing saved yet. Fill in the settings and tap \"Save as profile\".", fontSize = 13.sp,
+                    Text(L.settings.serversSettings.nothingSavedYetFillInThe, fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 24.dp))
                 }
                 Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -495,7 +496,7 @@ internal fun ServersSubScreen(
                                 applyProfile(r, o)
                                 loadedProfile = r to o.optString("name")
                                 showProfileMenu = false
-                                saveFeedback = "Loaded profile \"${o.optString("name")}\". Tap Save below to apply it."
+                                saveFeedback = L.settings.serversSettings.loadedProfileOptstringTapSaveBelow(o.optString("name"))
                                 saveIsError = false
                             },
                             shape = RoundedCornerShape(14.dp),
@@ -512,17 +513,17 @@ internal fun ServersSubScreen(
                                             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                         Spacer(Modifier.width(8.dp))
                                         Surface(shape = RoundedCornerShape(4.dp), color = accent.copy(alpha = 0.15f)) {
-                                            Text(if (r && o.optBoolean("tunnel")) "SSH TUNNEL" else if (r) "SERVER" else "LOCAL", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = accent,
+                                            Text(if (r && o.optBoolean("tunnel")) "SSH TUNNEL" else if (r) L.settings.serversSettings.server else L.settings.serversSettings.local, fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = accent,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
                                         }
                                     }
                                     if (where.isNotBlank()) Text(where, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), maxLines = 1)
                                 }
                                 TextButton(enabled = r == remote, onClick = { profileToUpdate = o }) {
-                                    Text("Update", fontSize = 12.sp)
+                                    Text(L.common.update, fontSize = 12.sp)
                                 }
                                 TextButton(onClick = { profileToDelete = r to o.optString("name") }) {
-                                    Text("Delete", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                    Text(L.common.delete, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
@@ -535,22 +536,22 @@ internal fun ServersSubScreen(
     if (showSaveProfile) {
         AlertDialog(
             onDismissRequest = { showSaveProfile = false },
-            title = { Text(if (remote) "Save server profile" else "Save local profile", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(if (remote) L.settings.serversSettings.saveServerProfile else L.settings.serversSettings.saveLocalProfile, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
             text = {
                 Column {
-                    OutlinedTextField(profileName, { profileName = it }, label = { Text("Profile name") }, singleLine = true, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(profileName, { profileName = it }, label = { Text(L.settings.serversSettings.profileName) }, singleLine = true, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth())
                     if (remote) {
                         Spacer(Modifier.height(8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.material3.Checkbox(checked = profileWithSecrets, onCheckedChange = { profileWithSecrets = it })
                             Column {
-                                Text("Include SSH password and key", fontSize = 13.sp)
-                                Text("Off by default: anyone using this phone could read them.", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                Text(L.settings.serversSettings.includeSshPasswordAndKey, fontSize = 13.sp)
+                                Text(L.settings.serversSettings.offByDefaultAnyoneUsingThis, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             }
                         }
                     }
                     if (authPrefs.listProfiles(remote).any { it.optString("name") == profileName.trim() } && profileName.isNotBlank()) {
-                        Text("A profile with this name will be replaced.", fontSize = 11.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
+                        Text(L.settings.serversSettings.aProfileWithThisNameWill, fontSize = 11.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
             },
@@ -560,12 +561,12 @@ internal fun ServersSubScreen(
                     onClick = {
                         authPrefs.saveProfile(remote, profileName.trim(), profileJson(remote, remote && profileWithSecrets))
                         showSaveProfile = false; profileTick++
-                        saveFeedback = "Profile \"${profileName.trim()}\" saved on this phone."; saveIsError = false
+                        saveFeedback = L.settings.serversSettings.profileProfilenameSavedOnThisPhone(profileName.trim()); saveIsError = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(8.dp)
-                ) { Text("Save", fontWeight = FontWeight.Bold) }
+                ) { Text(L.common.save, fontWeight = FontWeight.Bold) }
             },
-            dismissButton = { TextButton(onClick = { showSaveProfile = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { showSaveProfile = false }) { Text(L.common.cancel) } },
             shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
         )
     }
@@ -576,11 +577,10 @@ internal fun ServersSubScreen(
         val hadSecrets = o.has("sshPass")
         AlertDialog(
             onDismissRequest = { profileToUpdate = null },
-            title = { Text("Update profile?", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(L.settings.serversSettings.updateProfile, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
             text = {
                 Text(
-                    "\"$uName\" will be overwritten with the values currently in the form" +
-                        (if (uRemote) (if (hadSecrets) ", including the SSH password and key (it had them before)." else ", without the SSH password and key (it had none before).") else "."),
+                    L.settings.serversSettings.unameWillBeOverwrittenWithThe(uName, (if (uRemote) (if (hadSecrets) L.settings.serversSettings.includingTheSshPasswordAndKey else L.settings.serversSettings.withoutTheSshPasswordAndKey) else ".")),
                     fontSize = 13.5.sp
                 )
             },
@@ -589,12 +589,12 @@ internal fun ServersSubScreen(
                     onClick = {
                         authPrefs.saveProfile(uRemote, uName, profileJson(uRemote, uRemote && hadSecrets))
                         profileToUpdate = null; profileTick++
-                        saveFeedback = "Profile \"$uName\" updated."; saveIsError = false
+                        saveFeedback = L.settings.serversSettings.profileUnameUpdated(uName); saveIsError = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(8.dp)
-                ) { Text("Update", fontWeight = FontWeight.Bold) }
+                ) { Text(L.common.update, fontWeight = FontWeight.Bold) }
             },
-            dismissButton = { TextButton(onClick = { profileToUpdate = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { profileToUpdate = null }) { Text(L.common.cancel) } },
             shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
         )
     }
@@ -602,15 +602,15 @@ internal fun ServersSubScreen(
     profileToDelete?.let { (delRemote, name) ->
         AlertDialog(
             onDismissRequest = { profileToDelete = null },
-            title = { Text("Delete profile?", fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            title = { Text(L.settings.serversSettings.deleteProfile, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
             text = { Text("\"$name\" (${if (delRemote) "server" else "local"}) will be removed from this phone.", fontSize = 13.5.sp) },
             confirmButton = {
                 Button(
                     onClick = { authPrefs.deleteProfile(delRemote, name); profileToDelete = null; profileTick++ },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(8.dp)
-                ) { Text("Delete", fontWeight = FontWeight.Bold) }
+                ) { Text(L.common.delete, fontWeight = FontWeight.Bold) }
             },
-            dismissButton = { TextButton(onClick = { profileToDelete = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { profileToDelete = null }) { Text(L.common.cancel) } },
             shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
         )
     }
@@ -630,31 +630,31 @@ internal fun ServersSubScreen(
                     Icon(Icons.Outlined.Dns, null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Agents run on", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(L.settings.serversSettings.agentsRunOn, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             when {
-                                !remote && phoneChroot -> "This phone, in the rooted Ubuntu chroot: the bridge, the agents and the terminal (apt, glibc, sudo)."
-                                !remote -> "This phone, in AntiGem's built-in environment: the bridge, the agents and the terminal (no root needed)."
-                                tunnel -> "On your server, reached through the SSH connection: no open ports, no domain, no reverse proxy."
-                                else -> "The bridge and the agents run on your server, reached by a domain or open ports. The app manages them over SSH."
+                                !remote && phoneChroot -> L.settings.serversSettings.thisPhoneInTheRootedUbuntu
+                                !remote -> L.settings.serversSettings.thisPhoneInAntigemsBuiltIn
+                                tunnel -> L.settings.serversSettings.onYourServerReachedThroughThe
+                                else -> L.settings.serversSettings.theBridgeAndTheAgentsRun
                             },
                             fontSize = 11.5.sp, color = subtle
                         )
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                Text("This phone", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)
+                Text(L.common.thisPhone, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)
                 Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ModeOption("AntiGem", !remote && !phoneChroot, Modifier.weight(1f)) { selectPhone(false) }
-                    ModeOption("Ubuntu chroot", !remote && phoneChroot, Modifier.weight(1f)) { selectPhone(true) }
+                    ModeOption(L.common.ubuntuChroot, !remote && phoneChroot, Modifier.weight(1f)) { selectPhone(true) }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("Your server", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)
+                Text(L.settings.serversSettings.yourServer, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)
                 Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ModeOption("Server", remote && !tunnel, Modifier.weight(1f)) { selectMode(true, false) }
-                    ModeOption("SSH tunnel", remote && tunnel, Modifier.weight(1f)) { selectMode(true, true) }
+                    ModeOption(L.common.server, remote && !tunnel, Modifier.weight(1f)) { selectMode(true, false) }
+                    ModeOption(L.settings.serversSettings.sshTunnel, remote && tunnel, Modifier.weight(1f)) { selectMode(true, true) }
                 }
 
                 // ----- Saved profiles (saved only when the user taps "Save as profile") -----
@@ -670,10 +670,10 @@ internal fun ServersSubScreen(
                         Text("Saved profiles ($n)", fontSize = 12.sp)
                     }
                     OutlinedButton(onClick = { profileName = loadedProfile?.takeIf { it.first == remote }?.second.orEmpty(); showSaveProfile = true }, shape = RoundedCornerShape(8.dp)) {
-                        Text("Save as profile", fontSize = 12.sp)
+                        Text(L.settings.serversSettings.saveAsProfile, fontSize = 12.sp)
                     }
                 }
-                Text("Picking a profile switches to its mode. Profiles are saved only when you tap Save as profile, and only on this phone.", fontSize = 10.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
+                Text(L.settings.serversSettings.pickingAProfileSwitchesToIts, fontSize = 10.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
             }
         }
 
@@ -703,13 +703,12 @@ internal fun ServersSubScreen(
         // ----- The two addresses -----
         Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
             Column(Modifier.padding(16.dp)) {
-                Text("Server addresses", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(L.settings.serversSettings.serverAddresses, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(
                     when {
-                        remote && tunnel -> "Use 127.0.0.1 with the port the bridge and the hub listen on at the server (default ${BuildConfig.BRIDGE_PORT} and ${BuildConfig.HUB_PORT}). " +
-                            "The app starts them on the server's 127.0.0.1 only and forwards the same ports on this phone to them over SSH."
+                        remote && tunnel -> L.settings.serversSettings.use127001With(BuildConfig.BRIDGE_PORT, BuildConfig.HUB_PORT)
                         remote -> "Two addresses, e.g. https://bridge.example.com and https://hub.example.com behind nginx/Apache, or http://203.0.113.5:1234 and http://203.0.113.5:1235 straight to the ports."
-                        else -> "Where this phone's bridge and hub listen."
+                        else -> L.settings.serversSettings.whereThisPhonesBridgeAndHub
                     },
                     fontSize = 11.5.sp, color = subtle
                 )
@@ -718,7 +717,7 @@ internal fun ServersSubScreen(
                 OutlinedTextField(
                     value = bridgeText,
                     onValueChange = { bridgeText = it; saveFeedback = null; bridgeTestStatus = null },
-                    label = { Text("IDE Bridge address") },
+                    label = { Text(L.settings.serversSettings.ideBridgeAddress) },
                     placeholder = { Text(if (remote && !tunnel) "https://bridge.example.com" else AuthPreferences.DEFAULT_BRIDGE_HTTP_URL) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
@@ -727,46 +726,44 @@ internal fun ServersSubScreen(
                 OutlinedTextField(
                     value = hubText,
                     onValueChange = { hubText = it; saveFeedback = null; hubTestStatus = null },
-                    label = { Text("AGY Hub address") },
+                    label = { Text(L.settings.serversSettings.agyHubAddress) },
                     placeholder = { Text(if (remote && !tunnel) "https://hub.example.com" else AuthPreferences.DEFAULT_HUB_URL) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (remote && tunnel) "Test Hub and Test Bridge work once the settings are saved and SSH is connected: the tunnel runs on that connection."
+                    if (remote && tunnel) L.settings.serversSettings.testHubAndTestBridgeWork
                     else "https:// needs no port. Without https://, a missing port becomes ${BuildConfig.BRIDGE_PORT} (bridge) / ${BuildConfig.HUB_PORT} (hub).",
                     fontSize = 11.sp, color = subtle
                 )
 
                 if (remote && !tunnel) {
                     Spacer(Modifier.height(14.dp))
-                    Text("Ports on the server", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(L.settings.serversSettings.portsOnTheServer, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
-                        "The addresses above are what the phone connects to (the reverse proxy). These are the ports the bridge and the hub " +
-                            "really listen on, on the server. Behind nginx or Apache use ${BuildConfig.BRIDGE_PORT} and ${BuildConfig.HUB_PORT} " +
-                            "(blank = automatic).",
+                        L.settings.serversSettings.theAddressesAboveAreWhatThe(BuildConfig.BRIDGE_PORT, BuildConfig.HUB_PORT),
                         fontSize = 11.sp, color = subtle
                     )
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(listenBridge, { listenBridge = it.filter(Char::isDigit); saveFeedback = null }, label = { Text("Bridge listens on") },
+                        OutlinedTextField(listenBridge, { listenBridge = it.filter(Char::isDigit); saveFeedback = null }, label = { Text(L.settings.serversSettings.bridgeListensOn) },
                             placeholder = { Text(BuildConfig.BRIDGE_PORT.toString()) }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                        OutlinedTextField(listenHub, { listenHub = it.filter(Char::isDigit); saveFeedback = null }, label = { Text("Hub listens on") },
+                        OutlinedTextField(listenHub, { listenHub = it.filter(Char::isDigit); saveFeedback = null }, label = { Text(L.settings.serversSettings.hubListensOn) },
                             placeholder = { Text(BuildConfig.HUB_PORT.toString()) }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(listenBind, { listenBind = it; saveFeedback = null }, label = { Text("Bridge bind address") },
-                        placeholder = { Text("127.0.0.1 behind a proxy, 0.0.0.0 for a direct address") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
+                    OutlinedTextField(listenBind, { listenBind = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.bridgeBindAddress) },
+                        placeholder = { Text(L.settings.serversSettings.n127001BehindA) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                 }
 
                 Spacer(Modifier.height(12.dp))
-                StatusLine(isServerOnline || hubTestStatus?.startsWith("✓") == true, "Hub", AuthPreferences.normalizeServerUrl(hubText, BuildConfig.HUB_PORT) ?: "invalid address")
+                StatusLine(isServerOnline || hubTestStatus?.startsWith("✓") == true, L.settings.serversSettings.hub, AuthPreferences.normalizeServerUrl(hubText, BuildConfig.HUB_PORT) ?: L.settings.serversSettings.invalidAddress)
                 hubTestStatus?.let { Text(it, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = if (it.startsWith("✓")) QuotaGreen else Color.Red, modifier = Modifier.padding(top = 4.dp)) }
                 Spacer(Modifier.height(6.dp))
-                StatusLine(isBridgeOnline || bridgeTestStatus?.startsWith("✓") == true, "Bridge", AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT) ?: "invalid address")
+                StatusLine(isBridgeOnline || bridgeTestStatus?.startsWith("✓") == true, L.settings.serversSettings.bridge, AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT) ?: L.settings.serversSettings.invalidAddress)
                 bridgeTestStatus?.let { Text(it, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = if (it.startsWith("✓")) QuotaGreen else Color.Red, modifier = Modifier.padding(top = 4.dp)) }
                 ai.antigem.ui.agents.BridgeVersionLine(Modifier.padding(top = 6.dp))
 
@@ -775,7 +772,7 @@ internal fun ServersSubScreen(
                     OutlinedButton(
                         onClick = {
                             val url = AuthPreferences.normalizeServerUrl(hubText, BuildConfig.HUB_PORT)
-                            if (url == null) { hubTestStatus = "✗ Not a valid address"; return@OutlinedButton }
+                            if (url == null) { hubTestStatus = L.settings.serversSettings.notAValidAddress; return@OutlinedButton }
                             isTestingHub = true
                             hubTestStatus = "Contacting $url…"
                             coroutineScope.launch {
@@ -787,12 +784,12 @@ internal fun ServersSubScreen(
                         modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), enabled = !isTestingHub
                     ) {
                         if (isTestingHub) { CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp); Spacer(Modifier.width(6.dp)) }
-                        Text("Test Hub", fontSize = 12.sp)
+                        Text(L.settings.serversSettings.testHub, fontSize = 12.sp)
                     }
                     OutlinedButton(
                         onClick = {
                             val url = AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT)
-                            if (url == null) { bridgeTestStatus = "✗ Not a valid address"; return@OutlinedButton }
+                            if (url == null) { bridgeTestStatus = L.settings.serversSettings.notAValidAddress; return@OutlinedButton }
                             isTestingBridge = true
                             bridgeTestStatus = "Contacting $url…"
                             coroutineScope.launch {
@@ -804,7 +801,7 @@ internal fun ServersSubScreen(
                         modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), enabled = !isTestingBridge
                     ) {
                         if (isTestingBridge) { CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp); Spacer(Modifier.width(6.dp)) }
-                        Text("Test Bridge", fontSize = 12.sp)
+                        Text(L.settings.serversSettings.testBridge, fontSize = 12.sp)
                     }
                 }
             }
@@ -818,10 +815,9 @@ internal fun ServersSubScreen(
                         Icon(Icons.Outlined.Security, null, tint = QuotaGreen, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Proxy access header (second layer)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(L.settings.serversSettings.proxyAccessHeaderSecondLayer, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             Text(
-                                "Optional. The app adds this header to every request to the bridge and the hub. Make nginx / Apache / Caddy refuse " +
-                                    "requests without exactly this value, so strangers never reach the bridge or agy. Leave the value empty if your proxy does not check it.",
+                                L.settings.serversSettings.optionalTheAppAddsThisHeader,
                                 fontSize = 11.5.sp, color = subtle
                             )
                         }
@@ -829,14 +825,14 @@ internal fun ServersSubScreen(
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = edgeName, onValueChange = { edgeName = it.trim(); saveFeedback = null },
-                        label = { Text("Header name") }, singleLine = true, shape = RoundedCornerShape(10.dp),
+                        label = { Text(L.settings.serversSettings.headerName) }, singleLine = true, shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = edgeValue, onValueChange = { edgeValue = it.trim(); saveFeedback = null },
-                        label = { Text("Header value (secret)") }, singleLine = true, shape = RoundedCornerShape(10.dp),
-                        placeholder = { Text("empty = off") },
+                        label = { Text(L.settings.serversSettings.headerValueSecret) }, singleLine = true, shape = RoundedCornerShape(10.dp),
+                        placeholder = { Text(L.settings.serversSettings.emptyOff) },
                         textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -845,19 +841,18 @@ internal fun ServersSubScreen(
                         OutlinedButton(
                             onClick = { edgeValue = AuthPreferences.generateEdgeHeaderValue(); saveFeedback = null },
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
-                        ) { Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text("Generate", fontSize = 12.sp) }
+                        ) { Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.serversSettings.generate, fontSize = 12.sp) }
                         OutlinedButton(
                             enabled = edgeValue.isNotBlank(),
                             onClick = {
                                 val nginxVar = "http_" + edgeName.trim().lowercase().replace('-', '_')
-                                val snippet = "map \$$nginxVar \$antigem_key_ok { default 0; \"${edgeValue.trim()}\" 1; }\n\n" +
-                                    "# put this in every server { } block of the bridge and of the hub:\nif (\$antigem_key_ok = 0) { return 444; }"
+                                val snippet = L.settings.serversSettings.mapNginxvarAntigemKeyOkDefault(nginxVar, edgeValue.trim())
                                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("nginx rule", snippet))
-                                Toast.makeText(context, "nginx rule copied", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, L.settings.serversSettings.nginxRuleCopied, Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
-                        ) { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text("Copy nginx rule", fontSize = 12.sp) }
+                        ) { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.serversSettings.copyNginxRule, fontSize = 12.sp) }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -875,9 +870,9 @@ internal fun ServersSubScreen(
                         Icon(Icons.Outlined.Terminal, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("SSH access", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(L.settings.serversSettings.sshAccess, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             Text(
-                                "Used to install, start and stop the bridge, for the terminal and to let the server's agents use this phone's MCP tools.",
+                                L.settings.serversSettings.usedToInstallStartAndStop,
                                 fontSize = 11.5.sp, color = subtle
                             )
                         }
@@ -886,56 +881,56 @@ internal fun ServersSubScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = sshHost, onValueChange = { sshHost = it; sshTestStatus = null; saveFeedback = null },
-                            label = { Text("SSH host") }, placeholder = { Text("server host or IP") },
+                            label = { Text(L.settings.serversSettings.sshHost) }, placeholder = { Text(L.settings.serversSettings.serverHostOrIp) },
                             modifier = Modifier.weight(2f), singleLine = true, shape = RoundedCornerShape(10.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                         )
                         OutlinedTextField(
                             value = sshPort, onValueChange = { sshPort = it.filter(Char::isDigit); sshTestStatus = null; saveFeedback = null },
-                            label = { Text("Port") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
+                            label = { Text(L.common.port) }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = sshUser, onValueChange = { sshUser = it; sshTestStatus = null; saveFeedback = null },
-                        label = { Text("User") }, placeholder = { Text("not root if you can avoid it") },
+                        label = { Text(L.common.user) }, placeholder = { Text(L.settings.serversSettings.notRootIfYouCanAvoid) },
                         modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp)
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = sshPass, onValueChange = { sshPass = it; sshTestStatus = null; saveFeedback = null },
-                        label = { Text("Password (optional when a key is set)") },
+                        label = { Text(L.settings.serversSettings.passwordOptionalWhenAKeyIs) },
                         modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                         visualTransformation = PasswordVisualTransformation()
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = sshKey, onValueChange = { sshKey = it; sshTestStatus = null; saveFeedback = null },
-                        label = { Text("Private key (recommended)") },
+                        label = { Text(L.settings.serversSettings.privateKeyRecommended) },
                         placeholder = { Text("-----BEGIN OPENSSH PRIVATE KEY-----") },
                         modifier = Modifier.fillMaxWidth().height(110.dp), minLines = 3, maxLines = 4, shape = RoundedCornerShape(10.dp),
                         textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp)
                     )
                     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { keyPicker.launch(arrayOf("*/*")) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
-                            Text("Choose key file", fontSize = 12.sp)
+                            Text(L.settings.serversSettings.chooseKeyFile, fontSize = 12.sp)
                         }
                         OutlinedButton(
                             onClick = {
                                 val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                                 val text = cm?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
                                 if (SshSessionFactory.looksLikePrivateKey(text)) { sshKey = text.trim(); saveFeedback = null }
-                                else Toast.makeText(context, "The clipboard does not hold a private key", Toast.LENGTH_SHORT).show()
+                                else Toast.makeText(context, L.settings.serversSettings.theClipboardDoesNotHoldA, Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
-                        ) { Text("Paste key", fontSize = 12.sp) }
+                        ) { Text(L.settings.serversSettings.pasteKey, fontSize = 12.sp) }
                     }
                     if (sshKey.isNotBlank()) {
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = sshPassphrase, onValueChange = { sshPassphrase = it; saveFeedback = null },
-                            label = { Text("Key passphrase (if it has one)") },
+                            label = { Text(L.settings.serversSettings.keyPassphraseIfItHasOne) },
                             modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                             visualTransformation = PasswordVisualTransformation()
                         )
@@ -949,9 +944,9 @@ internal fun ServersSubScreen(
                         OutlinedButton(
                             onClick = {
                                 val host = sshHost.trim()
-                                if (host.isBlank() || sshUser.isBlank()) { sshTestStatus = "✗ Enter the host and the user first"; return@OutlinedButton }
+                                if (host.isBlank() || sshUser.isBlank()) { sshTestStatus = L.settings.serversSettings.enterTheHostAndTheUser; return@OutlinedButton }
                                 isTestingSsh = true
-                                sshTestStatus = "Connecting to $host…"
+                                sshTestStatus = L.settings.serversSettings.connectingToHost(host)
                                 val prevKey = AuthPreferences.currentSshPrivateKey
                                 val prevPass = AuthPreferences.currentSshKeyPassphrase
                                 AuthPreferences.currentSshPrivateKey = sshKey.trim()
@@ -962,7 +957,7 @@ internal fun ServersSubScreen(
                                     AuthPreferences.currentSshKeyPassphrase = prevPass
                                     isTestingSsh = false
                                     sshTestStatus = res.fold(
-                                        { "✓ SSH works: " + it.replace('\n', ' ') },
+                                        { L.settings.serversSettings.sshWorksReplace(it.replace('\n', ' ')) },
                                         { "✗ ${it.message}" }
                                     )
                                 }
@@ -970,19 +965,19 @@ internal fun ServersSubScreen(
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), enabled = !isTestingSsh
                         ) {
                             if (isTestingSsh) { CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp); Spacer(Modifier.width(6.dp)) }
-                            Text("Test SSH", fontSize = 12.sp)
+                            Text(L.settings.serversSettings.testSsh, fontSize = 12.sp)
                         }
                         OutlinedButton(
                             onClick = {
                                 SshSessionFactory.forgetHostKey(sshHost.trim(), sshPort.toIntOrNull() ?: 22)
-                                Toast.makeText(context, "Saved host key forgotten. The next connection trusts the server's current key.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, L.settings.serversSettings.savedHostKeyForgottenTheNext, Toast.LENGTH_LONG).show()
                             },
                             modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
-                        ) { Text("Forget host key", fontSize = 12.sp) }
+                        ) { Text(L.settings.serversSettings.forgetHostKey, fontSize = 12.sp) }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "The server's SSH key is pinned the first time you connect; a different key later is refused.",
+                        L.settings.serversSettings.theServersSshKeyIsPinned,
                         fontSize = 11.sp, color = subtle
                     )
 
@@ -993,17 +988,16 @@ internal fun ServersSubScreen(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).let { it },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Advanced (server paths and ports)", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { showAdvanced = !showAdvanced }) { Text(if (showAdvanced) "Hide" else "Show", fontSize = 12.sp) }
+                        Text(L.settings.serversSettings.advancedServerPathsAndPorts, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { showAdvanced = !showAdvanced }) { Text(if (showAdvanced) L.common.hide else L.common.show, fontSize = 12.sp) }
                     }
                     if (showAdvanced) {
                         Text(
-                            "These are the paths on the server (~ is the SSH user's home). The app never uploads the bridge: copy agy_ide_bridge " +
-                                "(linux amd64 / arm64 build) to the bridge path yourself and run chmod +x on it.",
+                            L.settings.serversSettings.theseAreThePathsOnThe,
                             fontSize = 11.sp, color = subtle
                         )
                         Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(remoteBridgeBin, { remoteBridgeBin = it; saveFeedback = null }, label = { Text("Bridge binary on the server") },
+                        OutlinedTextField(remoteBridgeBin, { remoteBridgeBin = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.bridgeBinaryOnTheServer) },
                             placeholder = { Text(RemoteServerManager.defaultBridgeBin(remoteInstallDir)) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(remoteAgyBin, { remoteAgyBin = it; saveFeedback = null }, label = { Text("agy binary on the server") },
@@ -1022,7 +1016,7 @@ internal fun ServersSubScreen(
                             // while the bridge path is still the default of the old folder, it follows the folder
                             if (remoteBridgeBin == RemoteServerManager.defaultBridgeBin(remoteInstallDir)) remoteBridgeBin = RemoteServerManager.defaultBridgeBin(it)
                             remoteInstallDir = it; saveFeedback = null
-                        }, label = { Text("Bridge folder (in the server home)") },
+                        }, label = { Text(L.settings.serversSettings.bridgeFolderInTheServerHome) },
                             modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     }
                 }
@@ -1052,44 +1046,44 @@ internal fun ServersSubScreen(
                         Icon(Icons.Outlined.Terminal, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Agent paths in the Ubuntu chroot", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            Text("For advanced use only: leave them empty and the defaults (shown in grey) are used", fontSize = 11.5.sp, color = subtle)
+                            Text(L.settings.serversSettings.agentPathsInTheUbuntuChroot, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(L.settings.serversSettings.forAdvancedUseOnlyLeaveThem, fontSize = 11.5.sp, color = subtle)
                         }
                     }
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(chrootBridgeBin, { chrootBridgeBin = it; saveFeedback = null }, label = { Text("IDE Bridge") },
+                    OutlinedTextField(chrootBridgeBin, { chrootBridgeBin = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.ideBridge) },
                         placeholder = { Text(ai.antigem.data.local.chroot.ChrootManager.BRIDGE_IN_CHROOT) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(chrootAgyBin, { chrootAgyBin = it; saveFeedback = null }, label = { Text("AGY Hub (agy)") },
+                    OutlinedTextField(chrootAgyBin, { chrootAgyBin = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.agyHubAgy) },
                         placeholder = { Text(RemoteServerManager.DEFAULT_AGY_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(chrootClaudeBin, { chrootClaudeBin = it; saveFeedback = null }, label = { Text("Claude Code") },
+                    OutlinedTextField(chrootClaudeBin, { chrootClaudeBin = it; saveFeedback = null }, label = { Text(L.common.claudeCode) },
                         placeholder = { Text(RemoteServerManager.DEFAULT_CLAUDE_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(chrootOpenCodeBin, { chrootOpenCodeBin = it; saveFeedback = null }, label = { Text("OpenCode") },
                         placeholder = { Text(RemoteServerManager.DEFAULT_OPENCODE_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(chrootCodexBin, { chrootCodexBin = it; saveFeedback = null }, label = { Text("Codex") },
+                    OutlinedTextField(chrootCodexBin, { chrootCodexBin = it; saveFeedback = null }, label = { Text(L.common.codex) },
                         placeholder = { Text(RemoteServerManager.DEFAULT_CODEX_BIN) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("• Passed to the bridge on launch (--bin, --claude-bin, --opencode-bin, --codex-bin). The bridge also finds an agent in the usual folders when its path is wrong.",
+                    Text(L.settings.serversSettings.passedToTheBridgeOnLaunch,
                         fontSize = 11.sp, color = subtle)
-                    Text("• Installing from the app (Settings → each agent → Install) uses the agents' official Linux installers, which put them at these defaults.",
+                    Text(L.settings.serversSettings.installingFromTheAppSettingsEach,
                         fontSize = 11.sp, color = subtle)
-                    Text("• IDE Bridge: AntiGem puts this app version's bridge at ${ai.antigem.data.local.chroot.ChrootManager.BRIDGE_IN_CHROOT} at every start. Another path runs your own bridge instead.",
+                    Text(L.settings.serversSettings.ideBridgeAntigemPutsThisApp(ai.antigem.data.local.chroot.ChrootManager.BRIDGE_IN_CHROOT),
                         fontSize = 11.sp, color = subtle)
                     Spacer(Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = {
                             chrootBridgeBin = ""; chrootAgyBin = ""; chrootClaudeBin = ""; chrootOpenCodeBin = ""; chrootCodexBin = ""
-                            saveFeedback = "Agent paths reset to the defaults (click Save to apply)."
+                            saveFeedback = L.settings.serversSettings.agentPathsResetToTheDefaults
                             saveIsError = false
                         },
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Reset to defaults", fontSize = 12.sp)
+                        Text(L.settings.serversSettings.resetToDefaults, fontSize = 12.sp)
                     }
                 }
             }
@@ -1101,40 +1095,40 @@ internal fun ServersSubScreen(
                         Icon(Icons.Outlined.Terminal, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Agent paths in AntiGem", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            Text("For advanced use only: leave them empty and the defaults (shown in grey) are used", fontSize = 11.5.sp, color = subtle)
+                            Text(L.settings.serversSettings.agentPathsInAntigem, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(L.settings.serversSettings.forAdvancedUseOnlyLeaveThem, fontSize = 11.5.sp, color = subtle)
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    OutlinedTextField(bridgeBinPath, { bridgeBinPath = it; saveFeedback = null }, label = { Text("IDE Bridge Binary Path") },
+                    OutlinedTextField(bridgeBinPath, { bridgeBinPath = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.ideBridgeBinaryPath) },
                         placeholder = { Text(authPrefs.getDefaultBridgeBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(agyBinPath, { agyBinPath = it; saveFeedback = null }, label = { Text("AGY Hub Binary Path") },
+                    OutlinedTextField(agyBinPath, { agyBinPath = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.agyHubBinaryPath) },
                         placeholder = { Text(authPrefs.getDefaultAgyBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(claudeBinPath, { claudeBinPath = it; saveFeedback = null }, label = { Text("Claude Code Binary Path") },
+                    OutlinedTextField(claudeBinPath, { claudeBinPath = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.claudeCodeBinaryPath) },
                         placeholder = { Text(authPrefs.getDefaultClaudeBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(openCodeBinPath, { openCodeBinPath = it; saveFeedback = null }, label = { Text("OpenCode Binary Path") },
+                    OutlinedTextField(openCodeBinPath, { openCodeBinPath = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.opencodeBinaryPath) },
                         placeholder = { Text(authPrefs.getDefaultOpenCodeBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(codexBinPath, { codexBinPath = it; saveFeedback = null }, label = { Text("Codex Binary Path") },
+                    OutlinedTextField(codexBinPath, { codexBinPath = it; saveFeedback = null }, label = { Text(L.settings.serversSettings.codexBinaryPath) },
                         placeholder = { Text(authPrefs.getDefaultCodexBinaryPath()) }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp))
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "• Passed to the bridge on launch (--bin for AGY, --claude-bin for Claude Code, --opencode-bin for OpenCode, --codex-bin for Codex) so auto-start executes the designated binary directly without interactive prompts.",
+                        L.settings.serversSettings.passedToTheBridgeOnLaunch2,
                         fontSize = 11.sp, color = subtle
                     )
                     Text(
-                        "• Claude Code: the default is AntiGem's launcher, which runs the newest official Claude version through the bundled glibc. Claude updates never replace it.",
+                        L.settings.serversSettings.claudeCodeTheDefaultIsAntigems,
                         fontSize = 11.sp, color = subtle
                     )
                     Text(
-                        "• OpenCode: the default is where its installer (and Settings → OpenCode → Install) puts it. The bridge starts it through the bundled glibc, and finds it in the usual folders when this path is wrong.",
+                        L.settings.serversSettings.opencodeTheDefaultIsWhereIts,
                         fontSize = 11.sp, color = subtle
                     )
                     Text(
-                        "• Codex: the default is the Termux package (pkg install codex, also Settings → Codex → Install). The bridge finds it in the usual folders when this path is wrong.",
+                        L.settings.serversSettings.codexTheDefaultIsTheTermux,
                         fontSize = 11.sp, color = subtle
                     )
                     Spacer(Modifier.height(10.dp))
@@ -1143,14 +1137,14 @@ internal fun ServersSubScreen(
                             hubText = AuthPreferences.defaultLocalHubUrl(phoneChroot)
                             bridgeText = AuthPreferences.defaultLocalBridgeUrl(phoneChroot)
                             bridgeBinPath = ""; agyBinPath = ""; claudeBinPath = ""; openCodeBinPath = ""; codexBinPath = ""
-                            saveFeedback = "Settings reset to defaults (click Save to apply)."
+                            saveFeedback = L.settings.serversSettings.settingsResetToDefaultsClickSave
                             saveIsError = false
                         },
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Reset All to Defaults", fontSize = 12.sp)
+                        Text(L.settings.serversSettings.resetAllToDefaults, fontSize = 12.sp)
                     }
                 }
             }
@@ -1163,11 +1157,11 @@ internal fun ServersSubScreen(
                     Icon(Icons.Outlined.Security, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Security Token (Header Obfuscation)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(L.settings.serversSettings.securityTokenHeaderObfuscation, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(
-                            if (remote && tunnel) "The secret that protects the bridge. The app starts the server with it. Through the SSH tunnel it is encrypted; it still keeps other users of the server out of the bridge."
+                            if (remote && tunnel) L.settings.serversSettings.theSecretThatProtectsTheBridge
                             else if (remote) "The secret that protects the bridge. The app starts the server with it. Use https:// on the internet: over plain http it is visible on the network."
-                            else "12-char token framing localhost requests to prevent unauthorized app access",
+                            else L.settings.serversSettings.n12CharTokenFramingLocalhostRequests,
                             fontSize = 11.5.sp, color = subtle
                         )
                     }
@@ -1179,7 +1173,7 @@ internal fun ServersSubScreen(
                         securityToken = it.take(AuthPreferences.TOKEN_LENGTH).filter { c -> c.isLetterOrDigit() }
                         saveFeedback = null
                     },
-                    label = { Text("12-Character Secret Token") },
+                    label = { Text(L.settings.serversSettings.n12CharacterSecretToken) },
                     modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(10.dp),
                     trailingIcon = {
                         Text(
@@ -1191,24 +1185,24 @@ internal fun ServersSubScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 val framedHeader = AuthPreferences.buildFramedHeader(securityToken)
-                Text("HTTP Framed Header: $framedHeader", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                Text(L.settings.serversSettings.httpFramedHeaderFramedheader(framedHeader), fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = { securityToken = AuthPreferences.generateRandomToken(); saveFeedback = null },
                         modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text("Randomize", fontSize = 12.sp)
+                        Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.serversSettings.randomize, fontSize = 12.sp)
                     }
                     OutlinedButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                             clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Framed Security Header", framedHeader))
-                            Toast.makeText(context, "Copied $framedHeader to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, L.settings.serversSettings.copiedFramedheaderToClipboard(framedHeader), Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text("Copy Header", fontSize = 12.sp)
+                        Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.serversSettings.copyHeader, fontSize = 12.sp)
                     }
                 }
             }
@@ -1226,29 +1220,29 @@ internal fun ServersSubScreen(
                 val bridge = AuthPreferences.normalizeServerUrl(bridgeText, BuildConfig.BRIDGE_PORT)
                 val problem = when {
                     !remote && phoneChroot && ai.antigem.data.local.chroot.ChrootManager.activeInstall(context) == null ->
-                        "Install the Ubuntu chroot first (Install or find, above), or choose AntiGem."
-                    bridge == null -> "The IDE Bridge address is not valid."
-                    hub == null -> "The AGY Hub address is not valid."
+                        L.settings.serversSettings.installTheUbuntuChrootFirstInstall
+                    bridge == null -> L.settings.serversSettings.theIdeBridgeAddressIsNot
+                    hub == null -> L.settings.serversSettings.theAgyHubAddressIsNot
                     remote && tunnel && (!AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(bridge)) || !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(hub))) ->
                         "In SSH tunnel mode both addresses are 127.0.0.1 with the port the service listens on at the server, e.g. http://127.0.0.1:${BuildConfig.BRIDGE_PORT}."
                     remote && tunnel && (bridge.startsWith("https://") || hub.startsWith("https://")) ->
                         "In SSH tunnel mode use http:// (SSH already encrypts the connection)."
                     remote && tunnel && runCatching { java.net.URI(bridge).port == java.net.URI(hub).port }.getOrDefault(false) ->
-                        "The bridge and the hub need two different ports."
+                        L.settings.serversSettings.theBridgeAndTheHubNeed
                     remote && AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(bridge)) && sshHost.isBlank() ->
-                        "A remote server needs its address (not 127.0.0.1) or an SSH host."
-                    remote && sshHost.isBlank() -> "Enter the SSH host."
-                    remote && sshUser.isBlank() -> "Enter the SSH user."
-                    remote && sshPass.isBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> "Enter an SSH password or a private key."
-                    remote && sshKey.isNotBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> "The SSH key is not a valid private key."
+                        L.settings.serversSettings.aRemoteServerNeedsItsAddress
+                    remote && sshHost.isBlank() -> L.settings.serversSettings.enterTheSshHost
+                    remote && sshUser.isBlank() -> L.settings.serversSettings.enterTheSshUser
+                    remote && sshPass.isBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> L.settings.serversSettings.enterAnSshPasswordOrA
+                    remote && sshKey.isNotBlank() && !SshSessionFactory.looksLikePrivateKey(sshKey) -> L.settings.serversSettings.theSshKeyIsNotA
                     remote && !tunnel && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeName(edgeName.trim()) ->
-                        "The access header name may only contain letters, digits and dashes."
+                        L.settings.serversSettings.theAccessHeaderNameMayOnly
                     remote && !tunnel && edgeValue.isNotBlank() && !AuthPreferences.isValidEdgeValue(edgeValue.trim()) ->
-                        "The access header value must be 8 to 200 visible characters, without quotes or backslashes."
+                        L.settings.serversSettings.theAccessHeaderValueMustBe
                     else -> null
                 }
                 if (problem != null || hub == null || bridge == null) {
-                    saveFeedback = problem ?: "Check the addresses."
+                    saveFeedback = problem ?: L.settings.serversSettings.checkTheAddresses
                     saveIsError = true
                     return@Button
                 }
@@ -1286,7 +1280,7 @@ internal fun ServersSubScreen(
                     }
                 }
                 savedSnapshot = snapshot()
-                saveFeedback = "✓ Server, connection and security settings saved!"
+                saveFeedback = L.settings.serversSettings.serverConnectionAndSecuritySettingsSaved
                 saveIsError = false
                 showRestartDialog = true
             },
@@ -1295,7 +1289,7 @@ internal fun ServersSubScreen(
         ) {
             Icon(Icons.Default.Save, null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Save Server & Security Settings", fontWeight = FontWeight.Bold)
+            Text(L.settings.serversSettings.saveServerSecuritySettings, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1349,7 +1343,7 @@ private fun PortForwardsCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
                 Icon(Icons.Outlined.Dns, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Port forwards (server → this phone)", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(L.settings.serversSettings.portForwardsServerThisPhone, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
                         "Reach a port of the server on this phone, e.g. a dev server started with npm run dev on port 5173: " +
                             "then open http://127.0.0.1:5173 here. Runs over the SSH connection; changes apply right away.",
@@ -1371,56 +1365,56 @@ private fun PortForwardsCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
                 val state = when {
                     !f.enabled -> "off"
                     active -> "active"
-                    failed -> "could not open the phone port"
-                    !live -> "starts once Server mode is saved"
-                    !ssh.connected -> "waiting for SSH"
+                    failed -> L.settings.serversSettings.couldNotOpenThePhonePort
+                    !live -> L.settings.serversSettings.startsOnceServerModeIsSaved
+                    !ssh.connected -> L.settings.serversSettings.waitingForSsh
                     else -> "opening…"
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Surface(Modifier.size(8.dp), shape = CircleShape, color = dot) {}
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(f.name.ifBlank { "Port ${f.serverPort}" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                        Text(f.name.ifBlank { L.settings.serversSettings.portServerport(f.serverPort) }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                         Text("server :${f.serverPort} → http://127.0.0.1:${f.localPort} · $state", fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = subtle)
                     }
                     androidx.compose.material3.IconButton(onClick = {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("Forwarded address", "http://127.0.0.1:${f.localPort}"))
                         Toast.makeText(context, "Copied http://127.0.0.1:${f.localPort}", Toast.LENGTH_SHORT).show()
-                    }) { Icon(Icons.Outlined.ContentCopy, "Copy address", modifier = Modifier.size(17.dp)) }
+                    }) { Icon(Icons.Outlined.ContentCopy, L.settings.serversSettings.copyAddress, modifier = Modifier.size(17.dp)) }
                     Switch(
                         checked = f.enabled,
                         onCheckedChange = { on -> persist(list.toMutableList().also { it[index] = f.copy(enabled = on) }) },
                         colors = SwitchDefaults.colors(checkedTrackColor = QuotaGreen)
                     )
                     androidx.compose.material3.IconButton(onClick = { persist(list.filterIndexed { i, _ -> i != index }) }) {
-                        Icon(Icons.Outlined.DeleteOutline, "Remove", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(19.dp))
+                        Icon(Icons.Outlined.DeleteOutline, L.common.remove, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(19.dp))
                     }
                 }
             }
 
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(serverPort, { serverPort = it.filter(Char::isDigit).take(5); error = null }, label = { Text("Server port") },
+                OutlinedTextField(serverPort, { serverPort = it.filter(Char::isDigit).take(5); error = null }, label = { Text(L.settings.serversSettings.serverPort) },
                     placeholder = { Text("5173") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                OutlinedTextField(localPort, { localPort = it.filter(Char::isDigit).take(5); error = null }, label = { Text("Phone port") },
+                OutlinedTextField(localPort, { localPort = it.filter(Char::isDigit).take(5); error = null }, label = { Text(L.settings.serversSettings.phonePort) },
                     placeholder = { Text(serverPort.ifBlank { "same" }) }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it.take(40); error = null }, label = { Text("Name (optional)") },
-                    placeholder = { Text("Vite dev server") }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp))
+                OutlinedTextField(name, { name = it.take(40); error = null }, label = { Text(L.settings.serversSettings.nameOptional) },
+                    placeholder = { Text(L.settings.serversSettings.viteDevServer) }, modifier = Modifier.weight(1f), singleLine = true, shape = RoundedCornerShape(10.dp))
                 Button(
                     onClick = {
                         val sp = serverPort.toIntOrNull()
                         val lp = localPort.toIntOrNull() ?: sp
                         error = when {
-                            sp == null || sp !in 1..65535 -> "Enter the server port (1-65535)."
-                            lp == null || lp !in 1024..65535 -> "The phone port must be 1024-65535 (lower ports need root)."
-                            lp in reservedPorts -> "Phone port $lp is already used by the app (bridge, hub or tools). Pick another phone port."
-                            list.any { it.localPort == lp } -> "Phone port $lp is already in the list."
+                            sp == null || sp !in 1..65535 -> L.settings.serversSettings.enterTheServerPort165535
+                            lp == null || lp !in 1024..65535 -> L.settings.serversSettings.thePhonePortMustBe1024
+                            lp in reservedPorts -> L.settings.serversSettings.phonePortLpIsAlreadyUsed(lp)
+                            list.any { it.localPort == lp } -> L.settings.serversSettings.phonePortLpIsAlreadyIn(lp)
                             else -> null
                         }
                         if (error == null && sp != null && lp != null) {
@@ -1429,13 +1423,12 @@ private fun PortForwardsCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta), shape = RoundedCornerShape(8.dp)
-                ) { Text("Add", fontWeight = FontWeight.Bold) }
+                ) { Text(L.common.add, fontWeight = FontWeight.Bold) }
             }
             error?.let { Text(it, fontSize = 11.5.sp, color = Color.Red, modifier = Modifier.padding(top = 6.dp)) }
             Spacer(Modifier.height(6.dp))
             Text(
-                "The program on the server has to listen on 127.0.0.1 or 0.0.0.0 (for Vite: npm run dev -- --host 127.0.0.1 if it picks another address). " +
-                    "Only this phone can use the forwarded port; nothing is opened on the server.",
+                L.settings.serversSettings.theProgramOnTheServerHas,
                 fontSize = 11.sp, color = subtle
             )
         }
@@ -1461,17 +1454,17 @@ private fun RemoteServerCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
     val tunnels by RemoteServerManager.tunnels.collectAsState()
 
     val (label, color) = when (val s = status) {
-        is LocalServerStatus.Running -> "Bridge running on the server" to QuotaGreen
-        is LocalServerStatus.Starting -> "Starting…" to ai.antigem.theme.AppColors.warning
-        is LocalServerStatus.Stopping -> "Stopping…" to ai.antigem.theme.AppColors.warning
-        is LocalServerStatus.Stopped -> "Bridge stopped" to ai.antigem.theme.AppColors.textSecondary
+        is LocalServerStatus.Running -> L.settings.serversSettings.bridgeRunningOnTheServer to QuotaGreen
+        is LocalServerStatus.Starting -> L.common.starting to ai.antigem.theme.AppColors.warning
+        is LocalServerStatus.Stopping -> L.settings.serversSettings.stopping to ai.antigem.theme.AppColors.warning
+        is LocalServerStatus.Stopped -> L.settings.serversSettings.bridgeStopped to ai.antigem.theme.AppColors.textSecondary
         is LocalServerStatus.Error -> s.message to Color.Red
-        is LocalServerStatus.Idle -> "Not started" to ai.antigem.theme.AppColors.textSecondary
+        is LocalServerStatus.Idle -> L.settings.serversSettings.notStarted to ai.antigem.theme.AppColors.textSecondary
     }
 
     Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.padding(16.dp)) {
-            Text("Server control", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text(L.settings.serversSettings.serverControl, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.Top) {
                 Surface(Modifier.padding(top = 4.dp).size(8.dp), shape = CircleShape, color = color) {}
@@ -1483,22 +1476,22 @@ private fun RemoteServerCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "SSH: " + ssh.message,
+                L.settings.serversSettings.sshMessage(ssh.message),
                 fontSize = 11.5.sp, color = if (ssh.connected) QuotaGreen else subtle
             )
             if (tunnels.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
-                Text("SSH tunnels:", fontSize = 11.sp, color = subtle)
+                Text(L.settings.serversSettings.sshTunnels, fontSize = 11.sp, color = subtle)
                 tunnels.forEach { Text("• $it", fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = subtle) }
             }
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { LocalServerManager.startServer(context, forceRestart = false) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text("Start", fontSize = 12.sp) }
-                OutlinedButton(onClick = { LocalServerManager.restartServer(context) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text("Restart", fontSize = 12.sp) }
-                OutlinedButton(onClick = { LocalServerManager.stopServer() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text("Stop", fontSize = 12.sp) }
+                OutlinedButton(onClick = { LocalServerManager.startServer(context, forceRestart = false) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text(L.common.start, fontSize = 12.sp) }
+                OutlinedButton(onClick = { LocalServerManager.restartServer(context) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text(L.common.restart, fontSize = 12.sp) }
+                OutlinedButton(onClick = { LocalServerManager.stopServer() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) { Text(L.common.stop, fontSize = 12.sp) }
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onShowLog, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) { Text("Server log", fontSize = 12.sp) }
+            OutlinedButton(onClick = onShowLog, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) { Text(L.settings.serversSettings.serverLog, fontSize = 12.sp) }
         }
     }
 }
@@ -1508,17 +1501,17 @@ private fun ServerLogDialog(context: Context, onDismiss: () -> Unit) {
     val log by RemoteServerManager.log.collectAsState()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Server log", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+        title = { Text(L.settings.serversSettings.serverLog, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
         text = {
             Column(Modifier.height(380.dp).verticalScroll(rememberScrollState(), reverseScrolling = true)) {
                 Text(
-                    log.ifBlank { "(empty: the bridge has not written anything yet or SSH is not connected)" },
+                    log.ifBlank { L.settings.serversSettings.emptyTheBridgeHasNotWritten },
                     fontSize = 10.sp, fontFamily = FontFamily.Monospace, lineHeight = 13.sp
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        dismissButton = { TextButton(onClick = { RemoteServerManager.refreshLog(context) }) { Text("Refresh") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(L.common.close) } },
+        dismissButton = { TextButton(onClick = { RemoteServerManager.refreshLog(context) }) { Text(L.common.refresh) } },
         shape = RoundedCornerShape(16.dp),
         containerColor = MaterialTheme.colorScheme.surface
     )

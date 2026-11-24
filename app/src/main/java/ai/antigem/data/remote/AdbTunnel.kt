@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.InetSocketAddress
 import java.net.Socket
+import ai.antigem.i18n.L
 
 /**
  * Lets the `adb` that runs on the server reach THIS phone's adb daemon, through the SSH connection the app already
@@ -71,7 +72,7 @@ object AdbTunnel {
         val prefs = AuthPreferences(context)
         val (c, p) = prefs.getAdbTunnelPortsSync()
         prefs.saveAdbTunnelSync(enabled, c, p)
-        _state.value = _state.value.copy(enabled = enabled, serverPort = c, serverPairPort = p, message = if (enabled) "Looking for the phone's adb…" else "")
+        _state.value = _state.value.copy(enabled = enabled, serverPort = c, serverPairPort = p, message = if (enabled) L.remote.adbTunnel.lookingForThePhonesAdb else "")
         lastCheck = 0L
         // applied by the next sync (the SSH supervisor runs it every few seconds)
     }
@@ -153,7 +154,7 @@ object AdbTunnel {
                 forwardedPort = port
             } catch (e: Exception) {
                 Log.w(TAG, "Reverse forward $serverPort failed: ${e.message}")
-                _state.value = _state.value.copy(enabled = true, message = "Could not open port $serverPort on the server: ${e.message?.take(80)}")
+                _state.value = _state.value.copy(enabled = true, message = L.remote.adbTunnel.couldNotOpenPortServerportOn(serverPort, e.message?.take(80)))
                 return@withLock
             }
             // connect the server's adb right away (needs adb installed there, and the key paired once for Wireless debugging)
@@ -197,15 +198,15 @@ object AdbTunnel {
         val state = Regex("STATE:(\\w+)").find(result)?.groupValues?.get(1)
         val said = Regex("ADBSAID:(.*)").find(result)?.groupValues?.get(1)?.trim().orEmpty()
         return when {
-            result.contains("NO_ADB") -> "adb is not installed on the server (sudo apt install adb). The tunnel is open on 127.0.0.1:$serverPort."
+            result.contains("NO_ADB") -> L.remote.adbTunnel.adbIsNotInstalledOnThe(serverPort)
             state == "device" -> "Connected: `adb devices` on the server lists the phone (127.0.0.1:$serverPort)."
-            state == "unauthorized" -> "The tunnel works but the phone has not authorized the server's adb. " +
-                (if (mode == "tcpip") "Accept the \"Allow USB debugging\" prompt on the phone." else "Use \"Pair the server (Wireless debugging)\" below.")
-            state == "offline" -> "The server's adb sees the phone as offline. " +
-                (if (mode == "wireless") "Wireless debugging needs the server paired once (\"Pair the server\" below) and an adb version 30 or newer on the server." else "Toggle USB debugging / restart adbd on the phone.")
-            result.isBlank() -> "Tunnel open on 127.0.0.1:$serverPort, but the server's adb could not be checked."
-            else -> "Tunnel open on 127.0.0.1:$serverPort but the phone is not in the server's `adb devices`." +
-                if (said.isNotBlank()) " adb connect said: ${said.take(140)}" else ""
+            state == "unauthorized" -> L.remote.adbTunnel.theTunnelWorksButThePhone + " " +
+                (if (mode == "tcpip") L.remote.adbTunnel.acceptTheAllowUsbDebuggingPrompt else L.remote.adbTunnel.usePairTheServerWirelessDebugging)
+            state == "offline" -> L.remote.adbTunnel.theServersAdbSeesThePhone + " " +
+                (if (mode == "wireless") L.remote.adbTunnel.wirelessDebuggingNeedsTheServerPaired else L.remote.adbTunnel.toggleUsbDebuggingRestartAdbdOn)
+            result.isBlank() -> L.remote.adbTunnel.tunnelOpenOn12700(serverPort)
+            else -> L.remote.adbTunnel.tunnelOpenOn127002(serverPort) +
+                if (said.isNotBlank()) " " + L.remote.adbTunnel.adbConnectSaidSaid(said.take(140)) else ""
         }
     }
 
@@ -229,7 +230,7 @@ object AdbTunnel {
         forwardedPort = null
         sync(context, s)
         val msg = _state.value.message
-        return if (msg.startsWith("Connected")) Result.success(msg) else Result.failure(IllegalStateException(msg.ifBlank { "Could not connect the server's adb." }))
+        return if (msg.startsWith("Connected")) Result.success(msg) else Result.failure(IllegalStateException(msg.ifBlank { L.remote.adbTunnel.couldNotConnectTheServersAdb }))
     }
 
     /** Takes the phone away from the server's adb again (closes the forward, `adb disconnect` there). */
@@ -284,9 +285,9 @@ object AdbTunnel {
         } finally {
             stopPairingForward(context)
         }
-        if (out.contains("NO_ADB")) return Result.failure(IllegalStateException("adb is not installed on the server. Use \"Install adb on the server\", or install it yourself (sudo apt install adb)."))
+        if (out.contains("NO_ADB")) return Result.failure(IllegalStateException(L.remote.adbTunnel.adbIsNotInstalledOnThe2))
         if (!out.contains("Successfully paired", ignoreCase = true)) {
-            return Result.failure(IllegalStateException(out.ifBlank { "Pairing failed. Check the code, and that the pairing dialog is still open on the phone." }.take(200)))
+            return Result.failure(IllegalStateException(out.ifBlank { L.remote.adbTunnel.pairingFailedCheckTheCodeAnd }.take(200)))
         }
         // paired: let the next sync connect (the port may be new)
         lastCheck = 0L

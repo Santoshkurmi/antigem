@@ -37,6 +37,7 @@ import androidx.compose.ui.window.DialogProperties
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.ui.ide.IdeExecutionRequest
 import ai.antigem.ui.ide.IdeExecutionRunnerSheet
+import ai.antigem.i18n.L
 
 /**
  * Runs a chat bash command in a fresh interactive terminal over the chat. The user first sees (and can edit) the command;
@@ -72,7 +73,7 @@ fun ChatCommandRunDialog(command: String, onDismiss: () -> Unit) {
             CommandConfirmCard(
                 initial = command,
                 onCancel = onDismiss,
-                onRun = { cmd -> request = IdeExecutionRequest(profileName = "Chat command", command = cmd) }
+                onRun = { cmd -> request = IdeExecutionRequest(profileName = L.components.chatCommandRun.chatCommand, command = cmd) }
             )
         }
     }
@@ -106,8 +107,8 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Run in terminal", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("Opens a new terminal session. Edit the command if needed.", fontSize = 12.sp, color = ai.antigem.theme.AppColors.editorMuted)
+                    Text(L.components.chatCommandRun.runInTerminal, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(L.components.chatCommandRun.opensANewTerminalSessionEdit, fontSize = 12.sp, color = ai.antigem.theme.AppColors.editorMuted)
                 }
             }
 
@@ -144,14 +145,14 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
             }
 
             Text(
-                if (singleLine) "Press Enter to run · closing the terminal stops everything in it"
-                else "Shift+Enter or Run to start · closing the terminal stops everything in it",
+                if (singleLine) L.components.chatCommandRun.pressEnterToRunClosingThe
+                else L.components.chatCommandRun.shiftEnterOrRunToStart,
                 fontSize = 11.sp,
                 color = ai.antigem.theme.AppColors.editorMuted
             )
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onCancel) { Text("Cancel", color = ai.antigem.theme.AppColors.editorMuted) }
+                TextButton(onClick = onCancel) { Text(L.common.cancel, color = ai.antigem.theme.AppColors.editorMuted) }
                 Spacer(Modifier.width(6.dp))
                 Button(
                     onClick = run,
@@ -161,7 +162,7 @@ private fun CommandConfirmCard(initial: String, onCancel: () -> Unit, onRun: (St
                 ) {
                     Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Run")
+                    Text(L.common.run)
                 }
             }
         }

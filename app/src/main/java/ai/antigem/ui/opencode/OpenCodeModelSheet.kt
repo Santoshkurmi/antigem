@@ -46,6 +46,7 @@ import ai.antigem.data.agent.opencode.OpenCodeChatBackend
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.agents.AgentSheetHeader
 import ai.antigem.ui.components.OpenCodeAccent
+import ai.antigem.i18n.L
 
 /** OpenCode's model picker: every model of the connected providers, grouped by provider, with search. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +69,7 @@ fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit,
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 16.dp).navigationBarsPadding()) {
             AgentSheetHeader(
                 AgentKind.OPENCODE,
-                title = "Select model",
+                title = L.common.selectModel,
                 detail = if (models.isNotEmpty()) "${models.size} models" else null,
                 refreshing = refreshing,
                 onRefresh = { backend.refreshModels() }
@@ -77,7 +78,7 @@ fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit,
             if (models.size > 8) {
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, singleLine = true,
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text("Search models or providers") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, null) }, placeholder = { Text(L.opencode.model.searchModelsOrProviders) },
                     shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
@@ -125,7 +126,7 @@ fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit,
             TextButton(onClick = { onDismiss(); onOpenSettings() }) {
                 Icon(Icons.Outlined.Settings, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Connect providers or add an OpenAI-compatible endpoint")
+                Text(L.opencode.model.connectProvidersOrAddAnOpenai)
             }
         }
     }

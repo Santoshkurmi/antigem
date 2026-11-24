@@ -24,6 +24,7 @@ import ai.antigem.ui.agents.AgentActionPill
 import ai.antigem.ui.agents.AgentSetupPrompt
 import ai.antigem.ui.agents.AgentStatusDot
 import ai.antigem.ui.components.ClaudeAccent
+import ai.antigem.i18n.L
 
 /** Empty Claude chat when Claude Code is not ready: what is wrong and the one action that fixes it. */
 @Composable
@@ -42,58 +43,58 @@ fun ClaudeStatusPrompt(
     val dot = state.dotColor
     if (serverStarting) {
         AgentSetupPrompt(
-            AgentKind.CLAUDE, "Starting the local server…", "Claude Code will be ready in a moment.", modifier, ClaudeStatus.CHECKING.dotColor
+            AgentKind.CLAUDE, L.claude.statusViews.startingTheLocalServer, L.claude.statusViews.claudeCodeWillBeReadyIn, modifier, ClaudeStatus.CHECKING.dotColor
         )
         return
     }
     when (state) {
         ClaudeStatus.CHECKING -> AgentSetupPrompt(
-            AgentKind.CLAUDE, "Checking Claude Code…", "Looking for the Claude Code CLI and your sign-in.", modifier, dot
+            AgentKind.CLAUDE, L.claude.statusViews.checkingClaudeCode, L.claude.statusViews.lookingForTheClaudeCodeCli, modifier, dot
         )
         ClaudeStatus.SIGNED_OUT -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Sign in to Claude Code",
-            "Use your Claude Pro or Max subscription, or an Anthropic Console account, to chat with Claude Code.",
+            L.claude.statusViews.signInToClaudeCode,
+            L.claude.statusViews.useYourClaudeProOrMax,
             modifier, dot,
-            actionLabel = "Sign in", onAction = onSignIn
+            actionLabel = L.common.signIn, onAction = onSignIn
         )
         ClaudeStatus.SIGNING_IN -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Finishing sign-in…",
-            "Complete the sign-in in your browser, then come back here.",
+            L.claude.statusViews.finishingSignIn,
+            L.claude.statusViews.completeTheSignInInYour,
             modifier, dot,
-            actionLabel = "Open sign-in", onAction = onSignIn
+            actionLabel = L.claude.statusViews.openSignIn, onAction = onSignIn
         )
         ClaudeStatus.NOT_INSTALLED -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Claude Code not found",
-            "The claude CLI is not installed on this device yet. You can install it from Settings in one tap.",
+            L.claude.statusViews.claudeCodeNotFound,
+            L.claude.statusViews.theClaudeCliIsNotInstalled,
             modifier, dot,
-            actionLabel = "Set up Claude Code", onAction = onSetup,
-            secondaryLabel = "Check again", onSecondary = onRetry
+            actionLabel = L.claude.statusViews.setUpClaudeCode, onAction = onSetup,
+            secondaryLabel = L.common.checkAgain, onSecondary = onRetry
         )
         ClaudeStatus.BRIDGE_OUTDATED -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Restart the local server",
-            error ?: "The running local server cannot run Claude Code yet. Restart it to load Claude.",
+            L.claude.statusViews.restartTheLocalServer,
+            error ?: L.claude.statusViews.theRunningLocalServerCannotRun,
             modifier, dot,
-            actionLabel = "Restart server", onAction = onRestartServer,
-            secondaryLabel = "Check again", onSecondary = onRetry
+            actionLabel = L.common.restartServer, onAction = onRestartServer,
+            secondaryLabel = L.common.checkAgain, onSecondary = onRetry
         )
         ClaudeStatus.BRIDGE_OFFLINE -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Local server offline",
-            "Claude Code runs through the local server. Start it to chat with Claude.",
+            L.claude.statusViews.localServerOffline,
+            L.claude.statusViews.claudeCodeRunsThroughTheLocal,
             modifier, dot,
-            actionLabel = "Retry", onAction = onRetry,
-            secondaryLabel = "Server logs", onSecondary = onServerLogs
+            actionLabel = L.common.retry, onAction = onRetry,
+            secondaryLabel = L.common.serverLogs, onSecondary = onServerLogs
         )
         ClaudeStatus.ERROR -> AgentSetupPrompt(
             AgentKind.CLAUDE,
-            "Couldn't check Claude Code",
-            (error ?: "The status check failed.") + " You can still send a message.",
+            L.claude.statusViews.couldntCheckClaudeCode,
+            L.claude.statusViews.valueYouCanStillSendA((error ?: L.claude.statusViews.theStatusCheckFailed)),
             modifier, dot,
-            actionLabel = "Check again", onAction = onRetry
+            actionLabel = L.common.checkAgain, onAction = onRetry
         )
         ClaudeStatus.READY -> Unit
     }
@@ -110,11 +111,11 @@ fun ClaudeStatusBanner(
     modifier: Modifier = Modifier
 ) {
     val (text, action) = when (state) {
-        ClaudeStatus.SIGNED_OUT -> "Claude Code is signed out" to ("Sign in" to onSignIn)
-        ClaudeStatus.SIGNING_IN -> "Finishing Claude sign-in…" to ("Open" to onSignIn)
-        ClaudeStatus.NOT_INSTALLED -> "Claude Code not found on this device" to ("Set up" to onSetup)
-        ClaudeStatus.BRIDGE_OUTDATED -> "Restart the local server to use Claude Code" to ("Restart" to onRestartServer)
-        ClaudeStatus.BRIDGE_OFFLINE -> "Local server offline" to ("Retry" to onRetry)
+        ClaudeStatus.SIGNED_OUT -> L.claude.statusViews.claudeCodeIsSignedOut to (L.common.signIn to onSignIn)
+        ClaudeStatus.SIGNING_IN -> L.claude.statusViews.finishingClaudeSignIn to (L.common.open to onSignIn)
+        ClaudeStatus.NOT_INSTALLED -> L.claude.statusViews.claudeCodeNotFoundOnThis to (L.common.setUp to onSetup)
+        ClaudeStatus.BRIDGE_OUTDATED -> L.claude.statusViews.restartTheLocalServerToUse to (L.common.restart to onRestartServer)
+        ClaudeStatus.BRIDGE_OFFLINE -> L.claude.statusViews.localServerOffline to (L.common.retry to onRetry)
         else -> return
     }
     Surface(
@@ -159,7 +160,7 @@ fun ClaudeStartupNotice(text: String, modifier: Modifier = Modifier) {
             androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
                 Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "The first message of a chat starts Claude Code, which can take a little while on a phone.",
+                    L.claude.statusViews.theFirstMessageOfAChat,
                     fontSize = 11.5.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )

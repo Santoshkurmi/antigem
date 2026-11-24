@@ -34,6 +34,7 @@ import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.URL
 import kotlin.coroutines.resume
+import ai.antigem.i18n.L
 
 /**
  * Connect to PC: the agents run on a PC (the AntiGem bridge VS Code started there) and this app is a second screen for
@@ -550,10 +551,10 @@ object PcConnect {
 
     /** Label of the way back: the server set in Where agents run, or this phone's own runtime (Termux or Ubuntu chroot). */
     fun ownModeLabel(): String = when {
-        AuthPreferences.storedRemoteMode -> "Use my server"
-        ai.antigem.data.local.chroot.ChrootManager.isActiveNow() -> "Use this phone (Ubuntu chroot)"
-        appContext?.let { ai.antigem.data.local.LocalEnvironmentManager.isTermuxInstalled(it) } == true -> "Use this phone (AntiGem)"
-        else -> "Use this phone"
+        AuthPreferences.storedRemoteMode -> L.pc.connect.useMyServer
+        ai.antigem.data.local.chroot.ChrootManager.isActiveNow() -> L.pc.connect.useThisPhoneUbuntuChroot
+        appContext?.let { ai.antigem.data.local.LocalEnvironmentManager.isTermuxInstalled(it) } == true -> L.pc.connect.useThisPhoneAntigem
+        else -> L.pc.connect.useThisPhone
     }
 
     /**

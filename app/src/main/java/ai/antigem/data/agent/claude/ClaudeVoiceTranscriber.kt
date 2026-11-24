@@ -25,6 +25,7 @@ import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
+import ai.antigem.i18n.L
 
 /**
  * Claude Code dictation: 16 kHz mono PCM from the microphone is streamed to the bridge, which relays it to
@@ -147,7 +148,7 @@ class ClaudeVoiceTranscriber(
                 }
             }
             "TranscriptError", "error" -> {
-                val msg = obj["description"]?.jsonPrimitive?.contentOrNull ?: obj["message"]?.jsonPrimitive?.contentOrNull ?: "transcription error"
+                val msg = obj["description"]?.jsonPrimitive?.contentOrNull ?: obj["message"]?.jsonPrimitive?.contentOrNull ?: L.agent.claudeVoiceTranscriber.transcriptionError
                 report { it.onError(msg) }
                 cancelTranscriptionSession()
             }

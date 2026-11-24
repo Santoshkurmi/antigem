@@ -18,6 +18,7 @@ import androidx.work.WorkerParameters
 import ai.antigem.BuildConfig
 import ai.antigem.R
 import java.util.concurrent.TimeUnit
+import ai.antigem.i18n.L
 
 private const val WORK_NAME = "app_update_check"
 private const val CHANNEL_ID = "app_updates"
@@ -33,7 +34,9 @@ private const val KEY_BACKGROUND_UNIT = "background_check_unit"
  * hours, days or weeks, or turns it off. Only the background one: opening the app always checks (MainActivity).
  */
 object BackgroundUpdateCheck {
-    enum class IntervalUnit(val label: String, val hours: Long) { HOURS("Hours", 1), DAYS("Days", 24), WEEKS("Weeks", 168) }
+    enum class IntervalUnit(private val labelText: () -> String, val hours: Long) { HOURS({ L.updater.updateCheckWorker.hours }, 1), DAYS({ L.updater.updateCheckWorker.days }, 24), WEEKS({ L.updater.updateCheckWorker.weeks }, 168);
+        val label: String get() = labelText()
+    }
 
     data class Interval(val enabled: Boolean = true, val every: Int = 12, val unit: IntervalUnit = IntervalUnit.HOURS) {
         val hours: Long get() = every.toLong() * unit.hours
@@ -89,7 +92,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, "App Updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Notifies when a new AntiGem version is available"
+                description = L.updater.updateCheckWorker.notifiesWhenANewAntigemVersion
             }
             context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
@@ -103,8 +106,8 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) : CoroutineW
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Update available: v${info.versionName}")
-            .setContentText(info.changelog.firstOrNull() ?: "Tap to update AntiGem")
+            .setContentTitle(L.updater.updateCheckWorker.updateAvailableVVersionname(info.versionName))
+            .setContentText(info.changelog.firstOrNull() ?: L.updater.updateCheckWorker.tapToUpdateAntigem)
             .setStyle(NotificationCompat.BigTextStyle().bigText(info.changelog.joinToString("\n") { "• $it" }))
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

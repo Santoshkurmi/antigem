@@ -55,6 +55,7 @@ import ai.antigem.theme.QuotaAmber
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.theme.QuotaRed
 import ai.antigem.ui.agents.SegmentedSelector
+import ai.antigem.i18n.L
 
 /** Green / amber / red by the share left. */
 fun quotaLeftColor(remaining: Float): Color = when {
@@ -117,7 +118,7 @@ fun QuotaGroupHeader(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                if (count == 1) "1 model" else "$count models",
+                if (count == 1) "1 model" else L.models.quotaGroupUi.countModels(count),
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
@@ -136,9 +137,9 @@ fun QuotaGroupHeader(
 fun PillWindowRow(selected: QuotaPillWindow, accent: Color, modifier: Modifier = Modifier, onSelect: (QuotaPillWindow) -> Unit) {
     Row(modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("Shown in chat", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(L.models.quotaGroupUi.shownInChat, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Text(
-                "Share left next to the model name. Models with no 5h limit show 7d.",
+                L.models.quotaGroupUi.shareLeftNextToTheModel,
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
@@ -163,7 +164,7 @@ fun EditGroupsAction(editing: Boolean, accent: Color, onToggle: () -> Unit) {
         Box(Modifier.size(32.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
             Icon(
                 if (editing) Icons.Filled.Check else Icons.Outlined.Edit,
-                contentDescription = if (editing) "Done editing groups" else "Edit quota groups",
+                contentDescription = if (editing) L.models.quotaGroupUi.doneEditingGroups else L.models.quotaGroupUi.editQuotaGroups,
                 tint = accent,
                 modifier = Modifier.size(18.dp)
             )
@@ -184,15 +185,15 @@ fun EditGroupsBanner(accent: Color, modifier: Modifier = Modifier, onDone: () ->
             Icon(Icons.Outlined.Tune, null, tint = accent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text("Edit quota groups", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(L.models.quotaGroupUi.editQuotaGroups, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(
-                    "Pick which limit each model counts against. Saved on this device.",
+                    L.models.quotaGroupUi.pickWhichLimitEachModelCounts,
                     fontSize = 11.5.sp,
                     lineHeight = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
-            TextButton(onClick = onDone) { Text("Done", color = accent, fontWeight = FontWeight.SemiBold) }
+            TextButton(onClick = onDone) { Text(L.common.done, color = accent, fontWeight = FontWeight.SemiBold) }
         }
     }
 }
@@ -219,7 +220,7 @@ fun GroupMoveButton(
             Row(Modifier.padding(start = 8.dp, end = 4.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.SwapHoriz, null, tint = accent, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(5.dp))
-                Text(current?.title ?: "No group", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = accent, maxLines = 1)
+                Text(current?.title ?: L.models.quotaGroupUi.noGroup, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = accent, maxLines = 1)
                 if (isMoved) Text("  · moved", fontSize = 10.5.sp, color = muted.copy(alpha = 0.5f))
                 Icon(Icons.Filled.ArrowDropDown, null, tint = accent, modifier = Modifier.size(18.dp))
             }
@@ -228,8 +229,8 @@ fun GroupMoveButton(
             DropdownMenuItem(
                 text = {
                     Column {
-                        Text("Automatic", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text(automatic?.title ?: "No group", fontSize = 11.5.sp, color = muted.copy(alpha = 0.55f))
+                        Text(L.models.quotaGroupUi.automatic, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(automatic?.title ?: L.models.quotaGroupUi.noGroup, fontSize = 11.5.sp, color = muted.copy(alpha = 0.55f))
                     }
                 },
                 leadingIcon = { CheckSlot(!isMoved, accent) },
@@ -269,6 +270,6 @@ fun ActiveModelBadge(accent: Color) {
     ) {
         Icon(Icons.Filled.Check, null, tint = accent, modifier = Modifier.size(12.dp))
         Spacer(Modifier.width(3.dp))
-        Text("Active", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = accent)
+        Text(L.common.active, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = accent)
     }
 }

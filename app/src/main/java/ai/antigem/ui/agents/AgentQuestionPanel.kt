@@ -64,6 +64,7 @@ import ai.antigem.domain.model.ChatMessage
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.formatSelectionsSummary
 import ai.antigem.ui.components.label
+import ai.antigem.i18n.L
 
 /** A question an agent is waiting on (Claude's AskUserQuestion, Antigravity's ask-choice step). */
 class PendingQuestion(val agent: AgentKind, val toolCall: ToolCall, val messageId: String)
@@ -136,7 +137,7 @@ fun AgentQuestionPanel(
                 ) { Icon(Icons.AutoMirrored.Outlined.HelpOutline, null, tint = accent, modifier = Modifier.size(19.dp)) }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("${question.agent.label()} has ${if (questions.size > 1) "${questions.size} questions" else "a question"}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.agents.agentQuestion.labelHasValue(question.agent.label(), if (questions.size > 1) "${questions.size} questions" else L.agents.agentQuestion.aQuestion), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     if (questions.size > 1) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
                             questions.forEachIndexed { i, q ->
@@ -160,7 +161,7 @@ fun AgentQuestionPanel(
                     }
                 }
                 IconButton(onClick = onCancel, modifier = Modifier.size(30.dp)) {
-                    Icon(Icons.Outlined.Close, "Dismiss question", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Close, L.agents.agentQuestion.dismissQuestion, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -193,7 +194,7 @@ fun AgentQuestionPanel(
                         Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 2.dp))
                     }
                     Text(
-                        if (q.isMultiSelect) "Choose any" else "Choose one",
+                        if (q.isMultiSelect) L.agents.agentQuestion.chooseAny else L.agents.agentQuestion.chooseOne,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
@@ -213,7 +214,7 @@ fun AgentQuestionPanel(
                         }
                         if (q.allowCustomAnswer) {
                             val isOn = otherOn[q.id] == true
-                            OptionCard("Other…", null, isOn, q.isMultiSelect, accent) {
+                            OptionCard(L.agents.agentQuestion.other, null, isOn, q.isMultiSelect, accent) {
                                 otherOn[q.id] = !isOn
                                 if (!q.isMultiSelect && !isOn) selected[q.id] = emptySet()
                             }
@@ -221,7 +222,7 @@ fun AgentQuestionPanel(
                                 OutlinedTextField(
                                     value = otherText[q.id].orEmpty(),
                                     onValueChange = { otherText[q.id] = it },
-                                    placeholder = { Text("Your answer", fontSize = 13.sp) },
+                                    placeholder = { Text(L.agents.agentQuestion.yourAnswer, fontSize = 13.sp) },
                                     shape = RoundedCornerShape(12.dp),
                                     textStyle = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.fillMaxWidth(),
@@ -238,11 +239,11 @@ fun AgentQuestionPanel(
             val isLast = page >= questions.lastIndex
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { onSkip(responses(skipAll = true)) }, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text(if (questions.size > 1) "Skip all" else "Skip", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(if (questions.size > 1) L.agents.agentQuestion.skipAll else L.common.skip, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
                 Spacer(Modifier.weight(1f))
                 if (page > 0) {
-                    TextButton(onClick = { page-- }) { Text("Back", fontSize = 13.sp) }
+                    TextButton(onClick = { page-- }) { Text(L.common.back, fontSize = 13.sp) }
                     Spacer(Modifier.width(4.dp))
                 }
                 val canSubmit = questions.any { answered(it) }
@@ -261,8 +262,8 @@ fun AgentQuestionPanel(
                 ) {
                     Text(
                         when {
-                            !isLast -> if (answered(current)) "Next" else "Skip question"
-                            else -> "Submit"
+                            !isLast -> if (answered(current)) L.agents.agentQuestion.next else L.agents.agentQuestion.skipQuestion
+                            else -> L.agents.agentQuestion.submit
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold

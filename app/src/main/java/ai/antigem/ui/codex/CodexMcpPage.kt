@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Refresh
@@ -71,6 +72,7 @@ import ai.antigem.ui.components.ChatToastType
 import ai.antigem.ui.components.CodexAccent
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
+import ai.antigem.i18n.L
 
 /** A server being added or edited: remote (URL + headers) or local (a command Codex starts). */
 private data class McpDraft(
@@ -142,20 +144,21 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
     val bridge = ai.antigem.data.remote.AndroidLocalBridgeServer
     fun local(name: String, path: String) = McpDraft(name = name, url = "http://127.0.0.1:${bridge.DEFAULT_PORT}$path", headers = lines(deviceHeaders))
     val presets = listOf(
-        CodexMcpPreset("Custom Plugin MCP", "Pick an installed plugin", Icons.Outlined.Extension, ClaudeTerracotta, null),
-        CodexMcpPreset("Plugin Developer", "Build & test AntiGem plugins", Icons.Outlined.DeveloperMode, GeminiPurple, local(bridge.DEVELOPER_MCP_NAME, "/extension_developer")),
-        CodexMcpPreset("Mini App Developer", "Build, test & sign mini apps", Icons.Outlined.Apps, GeminiBlue, local(bridge.MINI_APP_DEVELOPER_MCP_NAME, "/mini_app_developer")),
-        CodexMcpPreset("Browser", "Control the in-app browser", Icons.Outlined.Language, GeminiBlue, local("browser_mcp", "/browser")),
-        CodexMcpPreset("Terminal", "Run commands in the terminal", Icons.Outlined.Terminal, QuotaGreen, local("terminal_mcp", "/terminal")),
-        CodexMcpPreset("Android", "Tap, type & read this phone", Icons.Outlined.PhoneAndroid, ai.antigem.theme.AppColors.accentTeal, local(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
-        CodexMcpPreset("Notes & To-dos", "Read & edit your notes", Icons.Outlined.EditNote, ai.antigem.theme.AppColors.warning, local(bridge.NOTES_MCP_NAME, "/notes")),
-        CodexMcpPreset("Jarvis", "Voice control of this app", Icons.Outlined.RecordVoiceOver, ai.antigem.theme.AppColors.accentTeal, local(bridge.JARVIS_MCP_NAME, "/jarvis")),
-        CodexMcpPreset("Theme", "Create & switch app themes", Icons.Outlined.Palette, ai.antigem.theme.AppColors.accentAlt, local(bridge.THEME_MCP_NAME, "/theme")),
-        CodexMcpPreset("Stitch", "Google Stitch UI design · API key", Icons.Outlined.Palette, ai.antigem.theme.AppColors.accentPink,
+        CodexMcpPreset(L.common.customPluginMcp, L.common.pickAnInstalledPlugin, Icons.Outlined.Extension, ClaudeTerracotta, null),
+        CodexMcpPreset(L.common.pluginDeveloper, L.codex.mcp.buildTestAntigemPlugins, Icons.Outlined.DeveloperMode, GeminiPurple, local(bridge.DEVELOPER_MCP_NAME, "/extension_developer")),
+        CodexMcpPreset(L.common.miniAppDeveloper, L.codex.mcp.buildTestSignMiniApps, Icons.Outlined.Apps, GeminiBlue, local(bridge.MINI_APP_DEVELOPER_MCP_NAME, "/mini_app_developer")),
+        CodexMcpPreset(L.common.browser, L.common.controlTheInAppBrowser, Icons.Outlined.Language, GeminiBlue, local("browser_mcp", "/browser")),
+        CodexMcpPreset(L.common.terminal, L.codex.mcp.runCommandsInTheTerminal, Icons.Outlined.Terminal, QuotaGreen, local("terminal_mcp", "/terminal")),
+        CodexMcpPreset(L.codex.mcp.android, L.codex.mcp.tapTypeReadThisPhone, Icons.Outlined.PhoneAndroid, ai.antigem.theme.AppColors.accentTeal, local(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
+        CodexMcpPreset(L.common.notesToDos, L.codex.mcp.readEditYourNotes, Icons.Outlined.EditNote, ai.antigem.theme.AppColors.warning, local(bridge.NOTES_MCP_NAME, "/notes")),
+        CodexMcpPreset(L.common.jarvis, L.codex.mcp.voiceControlOfThisApp, Icons.Outlined.RecordVoiceOver, ai.antigem.theme.AppColors.accentTeal, local(bridge.JARVIS_MCP_NAME, "/jarvis")),
+        CodexMcpPreset(L.common.theme, L.codex.mcp.createSwitchAppThemes, Icons.Outlined.Palette, ai.antigem.theme.AppColors.accentAlt, local(bridge.THEME_MCP_NAME, "/theme")),
+        CodexMcpPreset(L.common.language, L.codex.mcp.translateTheAppAddLanguages, Icons.Outlined.Translate, ai.antigem.theme.AppColors.accentTeal, local(bridge.LANGUAGE_MCP_NAME, "/language")),
+        CodexMcpPreset(L.common.stitch, L.codex.mcp.googleStitchUiDesignApiKey, Icons.Outlined.Palette, ai.antigem.theme.AppColors.accentPink,
             McpDraft(name = "stitch", url = "https://stitch.googleapis.com/mcp", headers = "X-Goog-Api-Key: ")),
         // REA runs in the terminal's proot-distro Ubuntu; its tile picks the tool groups
-        CodexMcpPreset("REA", "Reverse engineering · APK & native", Icons.Outlined.BugReport, ai.antigem.theme.AppColors.accentPink, null),
-        CodexMcpPreset("Custom server", "Any remote (HTTP) or local (command) server", Icons.Outlined.Add, CodexAccent, McpDraft())
+        CodexMcpPreset("REA", L.codex.mcp.reverseEngineeringApkNative, Icons.Outlined.BugReport, ai.antigem.theme.AppColors.accentPink, null),
+        CodexMcpPreset(L.codex.mcp.customServer, L.codex.mcp.anyRemoteHttpOrLocalCommand, Icons.Outlined.Add, CodexAccent, McpDraft())
     ).filterNotNull()
     // REA servers: local servers running the rea-mcp launcher (name → env)
     val reaServers = servers.mapNotNull { srv ->
@@ -174,7 +177,7 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
             scope.launch {
                 backend.addLocalMcp(name, listOf(ai.antigem.data.rea.ReaManager.LAUNCHER), env)
                     .onSuccess { AppToastHelper.showToast("$name saved", ChatToastType.SUCCESS); reload() }
-                    .onFailure { AppToastHelper.showToast("Could not save: ${it.message}", ChatToastType.ERROR) }
+                    .onFailure { AppToastHelper.showToast(L.codex.mcp.couldNotSaveMessage(it.message), ChatToastType.ERROR) }
             }
         },
         onOpenRea = { showReaDialog = false; onOpenRea() },
@@ -193,17 +196,17 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
         ClaudeCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Tools Codex can call", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(L.codex.mcp.toolsCodexCanCall, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Text(
-                        "Servers added here go into Codex's own config, so every Codex chat (and the Codex CLI on the server) can use them. They connect when a chat starts.",
+                        L.codex.mcp.serversAddedHereGoIntoCodexs,
                         fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
                 if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = CodexAccent)
-                else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+                else IconButton(onClick = { scope.launch { reload() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
             }
             Spacer(Modifier.height(10.dp))
-            Text("Quick presets", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            Text(L.common.quickPresets, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             Spacer(Modifier.height(6.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 presets.chunked(2).forEach { row ->
@@ -216,7 +219,7 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
                                 else name.isNotBlank() && servers.any { it.name == name || (bridge.isDeveloperMcpName(name) && bridge.isDeveloperMcpName(it.name)) }
                             ai.antigem.ui.settings.McpPresetTile(
                                 name = p.name, subtitle = p.subtitle, icon = p.icon, accent = p.accent,
-                                added = added, addedLabel = "Added",
+                                added = added, addedLabel = L.common.added,
                                 // REA can be added more than once (different tool groups)
                                 enabled = isRea || !added,
                                 modifier = Modifier.weight(1f).fillMaxHeight()
@@ -235,20 +238,20 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
         }
 
         ClaudeCard {
-            Text("Servers (${servers.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(L.codex.mcp.serversCount(servers.size), fontWeight = FontWeight.Bold, fontSize = 14.sp)
             error?.let { Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp)) }
             if (servers.isEmpty() && error == null) {
-                Text("None yet. Add one from the presets above.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
+                Text(L.codex.mcp.noneYetAddOneFromThe, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
             }
             servers.forEachIndexed { i, srv ->
                 if (i > 0) HorizontalDivider(Modifier.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                 val (label, color) = when (srv.status) {
-                    "connected" -> (if (srv.toolCount > 0) "Connected · ${srv.toolCount} tools" else "Connected") to CodexAccent
-                    "failed" -> "Failed" to MaterialTheme.colorScheme.error
-                    "disabled" -> "Disabled" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    "authenticationRequired" -> "Needs sign-in" to ai.antigem.theme.AppColors.warning
-                    "starting", "notStarted" -> "Connecting…" to ai.antigem.theme.AppColors.warning
-                    null -> "Connects with the next chat" to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    "connected" -> (if (srv.toolCount > 0) L.codex.mcp.connectedToolcountTools(srv.toolCount) else L.codex.mcp.connected) to CodexAccent
+                    "failed" -> L.common.failed to MaterialTheme.colorScheme.error
+                    "disabled" -> L.common.disabled to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    "authenticationRequired" -> L.common.needsSignIn to ai.antigem.theme.AppColors.warning
+                    "starting", "notStarted" -> L.common.connecting to ai.antigem.theme.AppColors.warning
+                    null -> L.codex.mcp.connectsWithTheNextChat to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     else -> srv.status to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 }
                 val c = srv.config
@@ -275,15 +278,15 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
                             headers = stringsOf(c, "http_headers").entries.joinToString("\n") { "${it.key}: ${it.value}" },
                             isNew = false
                         )
-                    }) { Text("Edit") }
+                    }) { Text(L.common.edit) }
                     IconButton(onClick = {
                         scope.launch {
                             backend.removeMcp(srv.name)
                                 .onSuccess { AppToastHelper.showToast("${srv.name} removed", ChatToastType.SUCCESS) }
-                                .onFailure { AppToastHelper.showToast("Could not remove: ${it.message}", ChatToastType.ERROR) }
+                                .onFailure { AppToastHelper.showToast(L.codex.mcp.couldNotRemoveMessage(it.message), ChatToastType.ERROR) }
                             reload()
                         }
-                    }) { Icon(Icons.Outlined.Delete, "Remove", tint = MaterialTheme.colorScheme.error) }
+                    }) { Icon(Icons.Outlined.Delete, L.common.remove, tint = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -298,7 +301,7 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
                     AppToastHelper.showToast("${saved.name.trim()} saved", ChatToastType.SUCCESS)
                     draft = null
                     reload()
-                }.onFailure { AppToastHelper.showToast("Could not save: ${it.message}", ChatToastType.ERROR) }
+                }.onFailure { AppToastHelper.showToast(L.codex.mcp.couldNotSaveMessage(it.message), ChatToastType.ERROR) }
                 done()
             }
         }
@@ -313,38 +316,38 @@ private fun McpServerDialog(initial: McpDraft, onDismiss: () -> Unit, onSave: (M
     val ok = nameOk && if (d.remote) d.url.trim().let { it.startsWith("http://") || it.startsWith("https://") } else splitCommand(d.command).isNotEmpty()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial.isNew) "Add an MCP server" else "Edit ${initial.name}", fontWeight = FontWeight.Bold) },
+        title = { Text(if (initial.isNew) L.codex.mcp.addAnMcpServer else L.codex.mcp.editName(initial.name), fontWeight = FontWeight.Bold) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
-                    d.name, { d = d.copy(name = it) }, label = { Text("Name") }, singleLine = true, enabled = initial.isNew,
+                    d.name, { d = d.copy(name = it) }, label = { Text(L.common.name) }, singleLine = true, enabled = initial.isNew,
                     isError = d.name.isNotBlank() && !nameOk, modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = d.remote, onClick = { d = d.copy(remote = true) }, label = { Text("Remote (HTTP)") })
-                    FilterChip(selected = !d.remote, onClick = { d = d.copy(remote = false) }, label = { Text("Local (command)") })
+                    FilterChip(selected = d.remote, onClick = { d = d.copy(remote = true) }, label = { Text(L.codex.mcp.remoteHttp) })
+                    FilterChip(selected = !d.remote, onClick = { d = d.copy(remote = false) }, label = { Text(L.codex.mcp.localCommand) })
                 }
                 Spacer(Modifier.height(4.dp))
                 if (d.remote) {
-                    OutlinedTextField(d.url, { d = d.copy(url = it) }, label = { Text("URL") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    OutlinedTextField(d.url, { d = d.copy(url = it) }, label = { Text(L.common.url) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("https://example.com/mcp") })
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(d.headers, { d = d.copy(headers = it) }, label = { Text("Headers (one per line, Name: value)") },
+                    OutlinedTextField(d.headers, { d = d.copy(headers = it) }, label = { Text(L.codex.mcp.headersOnePerLineNameValue) },
                         minLines = 2, modifier = Modifier.fillMaxWidth())
                 } else {
-                    OutlinedTextField(d.command, { d = d.copy(command = it) }, label = { Text("Command") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    OutlinedTextField(d.command, { d = d.copy(command = it) }, label = { Text(L.common.command) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("npx -y @modelcontextprotocol/server-filesystem ~/projects") })
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(d.env, { d = d.copy(env = it) }, label = { Text("Environment (one per line, KEY=value)") },
                         minLines = 2, modifier = Modifier.fillMaxWidth())
-                    Text("It runs on the server, in Codex's environment.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                    Text(L.codex.mcp.itRunsOnTheServerIn, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { saving = true; onSave(d) { saving = false } }, enabled = ok && !saving) { Text(if (saving) "Saving…" else "Save") }
+            Button(onClick = { saving = true; onSave(d) { saving = false } }, enabled = ok && !saving) { Text(if (saving) L.common.saving else L.common.save) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
 }

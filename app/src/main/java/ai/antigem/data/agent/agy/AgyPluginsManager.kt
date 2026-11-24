@@ -33,6 +33,7 @@ import org.json.JSONObject
 import java.util.UUID
 import ai.antigem.data.agent.ChatSessionStore
 import kotlinx.coroutines.CoroutineScope
+import ai.antigem.i18n.L
 
 /** Antigravity skills, installed plugins and the Google plugins catalog. Moved out of ChatViewModel unchanged. */
 class AgyPluginsManager(
@@ -114,7 +115,7 @@ class AgyPluginsManager(
                     }
                     _allSkills.value = skills
                 } else {
-                    _pluginActionErrorMessage.value = "Failed to load skills: ${res.exceptionOrNull()?.message}"
+                    _pluginActionErrorMessage.value = L.agent.agyPluginsManager.failedToLoadSkillsValue(res.exceptionOrNull()?.message)
                 }
             } catch (e: Exception) {
                 _pluginActionErrorMessage.value = e.message
@@ -150,7 +151,7 @@ class AgyPluginsManager(
                 if (res.isSuccess) {
                     _googlePluginsCatalog.value = res.getOrDefault(emptyList())
                 } else {
-                    _pluginActionErrorMessage.value = "Failed to load Google plugins: ${res.exceptionOrNull()?.message}"
+                    _pluginActionErrorMessage.value = L.agent.agyPluginsManager.failedToLoadGooglePluginsValue(res.exceptionOrNull()?.message)
                 }
             } catch (e: Exception) {
                 _pluginActionErrorMessage.value = e.message
@@ -168,7 +169,7 @@ class AgyPluginsManager(
             try {
                 val res = agyHubClient.downloadBuildWithGooglePlugin(pluginId)
                 if (res.isSuccess) {
-                    _pluginActionStatusMessage.value = "Successfully installed $pluginName!"
+                    _pluginActionStatusMessage.value = L.agent.agyPluginsManager.successfullyInstalledPluginname(pluginName)
                     delay(400)
                     loadAllInstalledPlugins()
                     loadAllSkills()
@@ -176,7 +177,7 @@ class AgyPluginsManager(
                     // the plugin's skills join (or leave) the "/" menu
                     ai.antigem.data.remote.SlashCommandsCache.refresh()
                 } else {
-                    _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: "Failed to install $pluginName"
+                    _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: L.agent.agyPluginsManager.failedToInstallPluginname(pluginName)
                 }
             } catch (e: Exception) {
                 _pluginActionErrorMessage.value = e.message
@@ -194,7 +195,7 @@ class AgyPluginsManager(
             try {
                 val res = agyHubClient.deletePlugin(pluginId)
                 if (res.isSuccess) {
-                    _pluginActionStatusMessage.value = "Uninstalled $pluginName successfully."
+                    _pluginActionStatusMessage.value = L.agent.agyPluginsManager.uninstalledPluginnameSuccessfully(pluginName)
                     delay(400)
                     loadAllInstalledPlugins()
                     loadAllSkills()
@@ -202,7 +203,7 @@ class AgyPluginsManager(
                     // the plugin's skills join (or leave) the "/" menu
                     ai.antigem.data.remote.SlashCommandsCache.refresh()
                 } else {
-                    _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: "Failed to delete $pluginName"
+                    _pluginActionErrorMessage.value = res.exceptionOrNull()?.message ?: L.agent.agyPluginsManager.failedToDeletePluginname(pluginName)
                 }
             } catch (e: Exception) {
                 _pluginActionErrorMessage.value = e.message

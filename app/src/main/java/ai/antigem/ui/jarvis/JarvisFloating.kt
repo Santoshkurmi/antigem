@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
+import ai.antigem.i18n.L
 
 /**
  * Floating Jarvis (Settings → Jarvis → Screen & look → Float over other apps, off by default): outside AntiGem the
@@ -182,7 +183,7 @@ object JarvisFloating : LifecycleOwner, SavedStateRegistryOwner, OnBackPressedDi
     private fun talk() {
         val a = app ?: return
         if (!JarvisController.hasMic()) {
-            JarvisController.showProblem("Jarvis needs the microphone: allow it in AntiGem.")
+            JarvisController.showProblem(L.jarvis.floating.jarvisNeedsTheMicrophoneAllowIt)
             JarvisLauncher.openApp(a)
             return
         }
@@ -218,7 +219,7 @@ object JarvisFloating : LifecycleOwner, SavedStateRegistryOwner, OnBackPressedDi
     /** The orb was dropped on ✕: hidden until the user talks to Jarvis in the app. */
     private fun hideOrb() {
         JarvisPreferences.floatingHidden.set(true)
-        app?.let { Toast.makeText(it, "Jarvis is hidden. Talk to Jarvis in AntiGem to bring it back.", Toast.LENGTH_LONG).show() }
+        app?.let { Toast.makeText(it, L.jarvis.floating.jarvisIsHiddenTalkToJarvis, Toast.LENGTH_LONG).show() }
     }
 
     // ------------------------------------------------------------------------------------------------ windows
@@ -439,10 +440,10 @@ object JarvisFloating : LifecycleOwner, SavedStateRegistryOwner, OnBackPressedDi
                     .background(if (over) Danger.copy(alpha = 0.9f) else Color(0xE6101827))
                     .border(1.5.dp, if (over) Color.White.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.35f), CircleShape),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Filled.Close, "Hide Jarvis", tint = Color.White, modifier = Modifier.size(28.dp)) }
+            ) { Icon(Icons.Filled.Close, L.jarvis.floating.hideJarvis, tint = Color.White, modifier = Modifier.size(28.dp)) }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Hide until you talk to Jarvis in AntiGem",
+                L.jarvis.floating.hideUntilYouTalkToJarvis,
                 color = Color.White, fontSize = 11.5.sp,
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xCC101827)).padding(horizontal = 10.dp, vertical = 4.dp)
             )

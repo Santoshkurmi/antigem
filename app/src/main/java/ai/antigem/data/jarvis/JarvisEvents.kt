@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import ai.antigem.i18n.L
 
 /**
  * News for the Jarvis managers: a task finished, failed, got stuck, wants an approval or asks something, or the
@@ -265,9 +266,9 @@ object JarvisEvents {
             val n = drain(owner).size
             if (!droppedVoiceNotice) {
                 droppedVoiceNotice = true
-                val why = if (chatOnly) "Jarvis is set to chat only (Settings → Jarvis → Floating button & voice)"
-                    else "no voice agent is set (Settings → Jarvis → Voice agent)"
-                JarvisController.showProblem("$n update${if (n == 1) "" else "s"} for the voice Jarvis could not be delivered: $why.")
+                val why = if (chatOnly) L.jarvis.events.jarvisIsSetToChatOnly
+                    else L.jarvis.events.noVoiceAgentIsSetSettings
+                JarvisController.showProblem(L.jarvis.events.countUpdatesForTheVoiceJarvis(n, why))
             }
             return
         }

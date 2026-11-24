@@ -63,6 +63,7 @@ import ai.antigem.AppViewMode
 import ai.antigem.theme.ClaudeTerracotta
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 /** Expanded panel: holding an icon / the collapse arrow this long flips VERTICAL <-> HORIZONTAL. */
 private const val ORIENTATION_HOLD_MS = 500L
@@ -312,8 +313,8 @@ fun FloatingSwitcherWidget(
                     .size(32.dp)
                     .clip(CircleShape)
                     .combinedClickable(
-                        onClickLabel = "Collapse Switcher",
-                        onLongClickLabel = "Toggle switcher orientation",
+                        onClickLabel = L.components.floatingSwitcherWidget.collapseSwitcher,
+                        onLongClickLabel = L.components.floatingSwitcherWidget.toggleSwitcherOrientation,
                         onLongClick = toggleOrientation,
                         onClick = {
                             lastInteractionTimestamp = System.currentTimeMillis()
@@ -324,7 +325,7 @@ fun FloatingSwitcherWidget(
             ) {
                 Icon(
                     imageVector = collapseArrowIcon,
-                    contentDescription = "Collapse Switcher",
+                    contentDescription = L.components.floatingSwitcherWidget.collapseSwitcher,
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                     modifier = Modifier.size(18.dp)
                 )
@@ -355,13 +356,13 @@ fun FloatingSwitcherWidget(
                     else -> Icons.Outlined.ChatBubbleOutline
                 }
                 val contentDesc = when (id) {
-                    "chat" -> "Chat"
+                    "chat" -> L.common.chat
                     "ide" -> "IDE"
-                    "terminal" -> "Terminal"
-                    "browser" -> "Browser"
-                    "notes" -> "Notes"
-                    "files" -> "Files"
-                    "run" -> "Run"
+                    "terminal" -> L.common.terminal
+                    "browser" -> L.common.browser
+                    "notes" -> L.common.notes
+                    "files" -> L.common.files
+                    "run" -> L.common.run
                     else -> itemId
                 }
                 FloatingSwitcherItemButton(
@@ -490,7 +491,7 @@ fun FloatingSwitcherWidget(
                                 .clip(RoundedCornerShape(24.dp))
                                 .indication(pillInteractionSource, ripple())
                                 .semantics {
-                                    onClick(label = if (tapOpensOverview) "Open page overview" else "Expand Switcher") {
+                                    onClick(label = if (tapOpensOverview) L.components.floatingSwitcherWidget.openPageOverview else L.components.floatingSwitcherWidget.expandSwitcher) {
                                         if (tapOpensOverview) onOpenOverview() else expand()
                                         true
                                     }
@@ -501,7 +502,7 @@ fun FloatingSwitcherWidget(
                         ) {
                             Icon(
                                 imageVector = handleIconOverride ?: floatingSwitcherHandleIcon(handleIcon),
-                                contentDescription = if (tapOpensOverview) "Open page overview" else "Expand Switcher",
+                                contentDescription = if (tapOpensOverview) L.components.floatingSwitcherWidget.openPageOverview else L.components.floatingSwitcherWidget.expandSwitcher,
                                 tint = ClaudeTerracotta,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -581,7 +582,7 @@ private fun FloatingSwitcherItemButton(
             .size(36.dp)
             .clip(CircleShape)
             .combinedClickable(
-                onLongClickLabel = "Toggle switcher orientation",
+                onLongClickLabel = L.components.floatingSwitcherWidget.toggleSwitcherOrientation,
                 onLongClick = onLongClick,
                 onClick = onClick
             )

@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import ai.antigem.data.DefaultDataRepository
 import ai.antigem.theme.GeminiTheme
+import ai.antigem.i18n.L
 
 @Composable
 fun MainScreen(
@@ -27,7 +28,7 @@ fun MainScreen(
       MainScreen(data = (state as MainScreenUiState.Success).data, modifier = modifier)
     }
     is MainScreenUiState.Error -> {
-      Text("Error loading data: ${(state as MainScreenUiState.Error).throwable.message}")
+      Text(L.main.screen.errorLoadingDataValue((state as MainScreenUiState.Error).throwable.message))
     }
   }
 }

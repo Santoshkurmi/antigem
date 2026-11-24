@@ -35,6 +35,7 @@ import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import java.util.UUID
 import kotlinx.coroutines.flow.first
+import ai.antigem.i18n.L
 
 data class IdeExecutionRequest(
     val id: String = UUID.randomUUID().toString(),
@@ -186,7 +187,7 @@ fun IdeExecutionRunnerSheet(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = if (!isExited) "Running: ${request.command}" else "Finished / Exited",
+                            text = if (!isExited) L.ide.executionRunner.runningCommand(request.command) else L.ide.executionRunner.finishedExited,
                             fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -209,7 +210,7 @@ fun IdeExecutionRunnerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Restart",
+                            contentDescription = L.common.restart,
                             tint = Color.LightGray,
                             modifier = Modifier.size(18.dp)
                         )
@@ -228,7 +229,7 @@ fun IdeExecutionRunnerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop",
+                            contentDescription = L.common.stop,
                             tint = if (!isExited) ai.antigem.theme.AppColors.danger else Color.DarkGray,
                             modifier = Modifier.size(18.dp)
                         )
@@ -246,7 +247,7 @@ fun IdeExecutionRunnerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ClearAll,
-                            contentDescription = "Clear",
+                            contentDescription = L.common.clear,
                             tint = Color.LightGray,
                             modifier = Modifier.size(18.dp)
                         )
@@ -259,7 +260,7 @@ fun IdeExecutionRunnerSheet(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = L.common.close,
                             tint = Color.LightGray,
                             modifier = Modifier.size(19.dp)
                         )
@@ -415,7 +416,7 @@ fun IdeExecutionRunnerSheet(
                         sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
                     }
                     IdeTermKey(
-                        label = "CTRL",
+                        label = L.ide.executionRunner.ctrl,
                         isActive = ctrlState != IdeKeyModifierState.OFF,
                         isLocked = ctrlState == IdeKeyModifierState.LOCKED,
                         modifier = Modifier.weight(1f),
@@ -427,7 +428,7 @@ fun IdeExecutionRunnerSheet(
                         }
                     )
                     IdeTermKey(
-                        label = "ALT",
+                        label = L.ide.executionRunner.alt,
                         isActive = altState != IdeKeyModifierState.OFF,
                         isLocked = altState == IdeKeyModifierState.LOCKED,
                         modifier = Modifier.weight(1f),

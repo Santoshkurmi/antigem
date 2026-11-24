@@ -58,6 +58,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import kotlin.math.roundToInt
+import ai.antigem.i18n.L
 
 /** The last folder the Run panel worked in, and the recent ones, kept across app starts. */
 private class RunPanelPrefs(context: Context) {
@@ -74,7 +75,9 @@ private class RunPanelPrefs(context: Context) {
     }
 }
 
-private enum class CommandFilter(val label: String) { PROJECT("Project"), GLOBAL("Global"), SUGGESTED("Suggested") }
+private enum class CommandFilter(private val labelText: () -> String) { PROJECT({ L.run.screen.project }), GLOBAL({ L.common.global }), SUGGESTED({ L.run.screen.suggested }) ;
+    val label: String get() = labelText()
+}
 
 /**
  * The Run screen, one of the app's screens like Chat, IDE and Terminal (floating switcher → Run): a folder's commands,
@@ -165,7 +168,7 @@ private fun RunScreenContent(runs: List<RunEntry>, onClose: () -> Unit, onSendTo
     fun start(name: String, command: String, cwd: String?, env: Map<String, String>? = null, args: List<String>? = null) {
         if (cannotRun) {
             ai.antigem.ui.components.AppToastHelper.showToast(
-                "This PC doesn't let the phone run commands", ai.antigem.ui.components.ChatToastType.ERROR
+                L.run.screen.thisPcDoesntLetThePhone, ai.antigem.ui.components.ChatToastType.ERROR
             )
             return
         }
@@ -192,7 +195,7 @@ private fun RunScreenContent(runs: List<RunEntry>, onClose: () -> Unit, onSendTo
                 if (edit.wasGlobal) RunConfigManager.saveGlobal(context, globalConfigs.filterNot { it.name == edit.originalName })
                 else RunConfigManager.saveProject(folder, projectConfigs.filterNot { it.name == edit.originalName })
             }
-            if (!ok) ai.antigem.ui.components.AppToastHelper.showToast("Couldn't save the command", ai.antigem.ui.components.ChatToastType.ERROR)
+            if (!ok) ai.antigem.ui.components.AppToastHelper.showToast(L.run.screen.couldntSaveTheCommand, ai.antigem.ui.components.ChatToastType.ERROR)
             filter = if (global) CommandFilter.GLOBAL else CommandFilter.PROJECT
             refreshKey++
         }
@@ -252,7 +255,7 @@ private fun RunScreenContent(runs: List<RunEntry>, onClose: () -> Unit, onSendTo
                             scope.launch {
                                 val list = projectConfigs.filterNot { it.name.equals(t.name, ignoreCase = true) }
                                 if (RunConfigManager.saveProject(folder, list + t.toConfig())) {
-                                    ai.antigem.ui.components.AppToastHelper.showToast("Added \"${t.name}\" to the project")
+                                    ai.antigem.ui.components.AppToastHelper.showToast(L.run.screen.addedNameToTheProject(t.name))
                                 }
                                 refreshKey++
                             }
@@ -301,22 +304,22 @@ private fun PanelHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onClose) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = AppColors.editorText)
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, L.common.back, tint = AppColors.editorText)
         }
         Box(
             Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(ClaudeTerracotta.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) { Icon(Icons.Filled.PlayArrow, null, tint = ClaudeTerracotta, modifier = Modifier.size(20.dp)) }
         Spacer(Modifier.width(8.dp))
-        Text("Run", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText)
+        Text(L.common.run, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText)
         Spacer(Modifier.width(12.dp))
         Row(
             Modifier.clip(RoundedCornerShape(10.dp)).background(AppColors.editorBg).padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            SegmentButton("Commands", selected = !showRuns, onClick = onShowCommands)
+            SegmentButton(L.run.screen.commands, selected = !showRuns, onClick = onShowCommands)
             SegmentButton(
-                if (runningCount > 0) "Runs · $runningCount running" else "Runs ($runCount)",
+                if (runningCount > 0) L.run.screen.runsRunningcountRunning(runningCount) else "Runs ($runCount)",
                 selected = showRuns,
                 enabled = runCount > 0,
                 onClick = onShowRuns
@@ -398,7 +401,7 @@ private fun CommandsView(
         }
 
         if (cannotRun) {
-            Banner("This PC doesn't let the phone run commands. Allow it on the PC (shell access), or switch to the phone.", AppColors.warning)
+            Banner(L.run.screen.thisPcDoesntLetThePhone2, AppColors.warning)
         }
 
         LazyColumn(
@@ -412,14 +415,14 @@ private fun CommandsView(
             when (filter) {
                 CommandFilter.PROJECT -> {
                     if (folder.isBlank()) {
-                        item { EmptyHint("Pick a folder above: its commands are saved in .antigem/run.json inside it.") }
+                        item { EmptyHint(L.run.screen.pickAFolderAboveItsCommands) }
                     } else {
                         if (projectFileBroken) item { Banner(".antigem/run.json in this folder isn't valid JSON. Fix it (or delete it) to see its commands.", AppColors.danger) }
                         if (usableProject.isEmpty() && !loading && !projectFileBroken) {
                             item {
                                 EmptyHint(
                                     if (suggestedCount > 0) "No commands saved for this folder yet. Add your own, or pick one from Suggested ($suggestedCount)."
-                                    else "No commands saved for this folder yet. Add one below."
+                                    else L.run.screen.noCommandsSavedForThisFolder
                                 )
                             }
                         }
@@ -434,7 +437,7 @@ private fun CommandsView(
                 }
                 CommandFilter.GLOBAL -> {
                     if (globalConfigs.isEmpty()) {
-                        item { EmptyHint("Global commands work in any folder (they run in the folder picked above). For example adb devices, adb logcat or a backup script.") }
+                        item { EmptyHint(L.run.screen.globalCommandsWorkInAnyFolder) }
                     }
                     itemsIndexed(globalConfigs, key = { i, c -> "g:$i:" + c.name }) { _, cfg ->
                         CommandRow(cfg.name, cfg.command.orEmpty(), cfg.cwd, onRun = { onRunConfig(cfg) },
@@ -443,7 +446,7 @@ private fun CommandsView(
                 }
                 CommandFilter.SUGGESTED -> {
                     if (suggested.isEmpty() && !loading) {
-                        item { EmptyHint(if (folder.isBlank()) "Pick a folder to see what can be run in it." else "Nothing recognised in this folder (Flutter, React Native, Android Gradle, Node.js, Python, Go, Rust, make).") }
+                        item { EmptyHint(if (folder.isBlank()) L.run.screen.pickAFolderToSeeWhat else L.run.screen.nothingRecognisedInThisFolderFlutter) }
                     }
                     suggested.forEach { group ->
                         item(key = "h:" + group.kind) {
@@ -451,7 +454,7 @@ private fun CommandsView(
                         }
                         if (group.needsAndroidSetup) {
                             item(key = "w:" + group.kind) {
-                                Banner("These need the Android build tools: set them up in Settings → Android Development first.", AppColors.warning)
+                                Banner(L.run.screen.theseNeedTheAndroidBuildTools, AppColors.warning)
                             }
                         }
                         itemsIndexed(group.templates, key = { i, t -> "s:" + group.kind + ":$i" }) { _, t ->
@@ -465,7 +468,7 @@ private fun CommandsView(
         HorizontalDivider(color = AppColors.editorBorder, thickness = 0.5.dp)
         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.End) {
             Button(onClick = onNew, colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)) {
-                Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("New command")
+                Icon(Icons.Filled.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.run.screen.newCommand)
             }
         }
     }
@@ -494,22 +497,22 @@ private fun FolderRow(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        if (folder.isBlank()) "Choose a folder" else folder.substringAfterLast('/').ifBlank { folder },
+                        if (folder.isBlank()) L.run.screen.chooseAFolder else folder.substringAfterLast('/').ifBlank { folder },
                         fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = AppColors.editorText, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                     if (folder.isNotBlank()) {
                         Text(shortPath(folder), fontSize = 11.sp, color = AppColors.editorMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, fontFamily = FontFamily.Monospace)
                     }
                 }
-                Icon(Icons.Filled.UnfoldMore, "Change folder", tint = AppColors.editorMuted, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.UnfoldMore, L.run.screen.changeFolder, tint = AppColors.editorMuted, modifier = Modifier.size(20.dp))
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             val seen = mutableSetOf<String>()
             val choices = buildList {
-                activeProjectPath?.let { add(it to "IDE project") }
-                recent.forEach { add(it to "Recent") }
-                ideProjects.forEach { add(it to "Project") }
+                activeProjectPath?.let { add(it to L.run.screen.ideProject) }
+                recent.forEach { add(it to L.run.screen.recent) }
+                ideProjects.forEach { add(it to L.run.screen.project) }
             }.filter { seen.add(it.first.trimEnd('/')) }.take(14)
             choices.forEach { (path, label) ->
                 DropdownMenuItem(
@@ -525,7 +528,7 @@ private fun FolderRow(
             if (choices.isNotEmpty()) HorizontalDivider()
             DropdownMenuItem(
                 leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                text = { Text("Browse…") },
+                text = { Text(L.run.screen.browse) },
                 onClick = { menu = false; onBrowse() }
             )
         }
@@ -554,22 +557,22 @@ private fun CommandRow(
         Row(Modifier.padding(start = 6.dp, end = 2.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onRun) {
                 Box(Modifier.size(32.dp).clip(CircleShape).background(ClaudeTerracotta.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.PlayArrow, "Run $name", tint = ClaudeTerracotta, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.PlayArrow, L.run.screen.runName(name), tint = ClaudeTerracotta, modifier = Modifier.size(20.dp))
                 }
             }
             Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
                 Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = AppColors.editorText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(command, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, color = AppColors.editorMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (!cwd.isNullOrBlank() && cwd != "\${workspaceFolder}") {
-                    Text("in $cwd", fontSize = 10.5.sp, color = AppColors.editorMuted.copy(alpha = 0.8f), maxLines = 1)
+                    Text(L.run.screen.inCwd(cwd), fontSize = 10.5.sp, color = AppColors.editorMuted.copy(alpha = 0.8f), maxLines = 1)
                 }
             }
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "More", tint = AppColors.editorMuted) }
+                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, L.common.more, tint = AppColors.editorMuted) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(leadingIcon = { Icon(Icons.Outlined.Edit, null) }, text = { Text("Edit") }, onClick = { menu = false; onEdit() })
-                    DropdownMenuItem(leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) }, text = { Text("Duplicate") }, onClick = { menu = false; onDuplicate() })
-                    DropdownMenuItem(leadingIcon = { Icon(Icons.Outlined.Delete, null) }, text = { Text("Delete") }, onClick = { menu = false; confirmDelete = true })
+                    DropdownMenuItem(leadingIcon = { Icon(Icons.Outlined.Edit, null) }, text = { Text(L.common.edit) }, onClick = { menu = false; onEdit() })
+                    DropdownMenuItem(leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) }, text = { Text(L.run.screen.duplicate) }, onClick = { menu = false; onDuplicate() })
+                    DropdownMenuItem(leadingIcon = { Icon(Icons.Outlined.Delete, null) }, text = { Text(L.common.delete) }, onClick = { menu = false; confirmDelete = true })
                 }
             }
         }
@@ -578,8 +581,8 @@ private fun CommandRow(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Delete \"$name\"?") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } }
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(L.common.cancel) } }
         )
     }
 }
@@ -596,7 +599,7 @@ private fun TemplateRow(t: RunTemplate, onRun: () -> Unit, onAdd: (() -> Unit)?)
         Row(Modifier.padding(start = 6.dp, end = 2.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onRun) {
                 Box(Modifier.size(32.dp).clip(CircleShape).background(ClaudeTerracotta.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.PlayArrow, "Run ${t.name}", tint = ClaudeTerracotta, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.PlayArrow, L.run.screen.runName(t.name), tint = ClaudeTerracotta, modifier = Modifier.size(20.dp))
                 }
             }
             Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
@@ -610,7 +613,7 @@ private fun TemplateRow(t: RunTemplate, onRun: () -> Unit, onAdd: (() -> Unit)?)
                 }
             }
             if (onAdd != null) {
-                IconButton(onClick = onAdd) { Icon(Icons.Outlined.BookmarkAdd, "Save to this project", tint = AppColors.editorMuted) }
+                IconButton(onClick = onAdd) { Icon(Icons.Outlined.BookmarkAdd, L.run.screen.saveToThisProject, tint = AppColors.editorMuted) }
             }
         }
     }
@@ -676,15 +679,15 @@ private fun CommandEditorDialog(
             modifier = Modifier.fillMaxWidth(0.94f).imePadding()
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (edit.originalName == null) "New command" else "Edit command", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText)
+                Text(if (edit.originalName == null) L.run.screen.newCommand else L.run.screen.editCommand, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText)
                 OutlinedTextField(
                     value = name, onValueChange = { name = it }, singleLine = true,
-                    label = { Text("Name") }, placeholder = { Text("Build debug APK") },
+                    label = { Text(L.common.name) }, placeholder = { Text(L.run.screen.buildDebugApk) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = command, onValueChange = { command = it },
-                    label = { Text("Command") }, placeholder = { Text("adev ./gradlew assembleDebug") },
+                    label = { Text(L.common.command) }, placeholder = { Text(L.run.screen.adevGradlewAssembledebug) },
                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     minLines = 2, maxLines = 8,
@@ -692,23 +695,23 @@ private fun CommandEditorDialog(
                 )
                 OutlinedTextField(
                     value = cwd, onValueChange = { cwd = it }, singleLine = true,
-                    label = { Text("Folder (optional)") }, placeholder = { Text("android  ·  empty = the project folder") },
+                    label = { Text(L.run.screen.folderOptional) }, placeholder = { Text(L.run.screen.androidEmptyTheProjectFolder) },
                     textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text("Save to", fontSize = 12.sp, color = AppColors.editorMuted)
+                Text(L.run.screen.saveTo, fontSize = 12.sp, color = AppColors.editorMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterPill("This project", selected = !global) { if (canSaveToProject) global = false }
-                    FilterPill("Global (any folder)", selected = global) { global = true }
+                    FilterPill(L.run.screen.thisProject, selected = !global) { if (canSaveToProject) global = false }
+                    FilterPill(L.run.screen.globalAnyFolder, selected = global) { global = true }
                 }
                 Text(
                     if (global) "Kept in the app's home (~/.antigem/global-run.json); runs in the folder picked in the panel."
-                    else "Saved in the project's .antigem/run.json, which the IDE and the agents use too.",
+                    else L.run.screen.savedInTheProjectsAntigemRun,
                     fontSize = 11.5.sp, color = AppColors.editorMuted
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(L.common.cancel) }
                     Spacer(Modifier.width(6.dp))
                     Button(
                         enabled = canSave,
@@ -717,7 +720,7 @@ private fun CommandEditorDialog(
                             val base = edit.config ?: RunConfiguration(name = name.trim())
                             onSave(base.copy(name = name.trim(), type = "terminal", command = command.trim(), cwd = cwd.trim().ifBlank { null }), global)
                         }
-                    ) { Text("Save") }
+                    ) { Text(L.common.save) }
                 }
             }
         }
@@ -738,8 +741,8 @@ private fun RunsView(
     if (selected == null) {
         Box(Modifier.fillMaxSize().navigationBarsPadding(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Nothing running.", color = AppColors.editorMuted)
-                TextButton(onClick = onBackToCommands) { Text("Show commands") }
+                Text(L.run.screen.nothingRunning, color = AppColors.editorMuted)
+                TextButton(onClick = onBackToCommands) { Text(L.run.screen.showCommands) }
             }
         }
         return
@@ -763,7 +766,7 @@ private fun RunsView(
                         Spacer(Modifier.width(7.dp))
                         Text(run.name, fontSize = 12.5.sp, color = AppColors.editorText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
                         IconButton(onClick = { RunManager.remove(run.id) }, modifier = Modifier.size(30.dp)) {
-                            Icon(Icons.Filled.Close, if (run.status == RunStatus.RUNNING) "Stop and close" else "Close", tint = AppColors.editorMuted, modifier = Modifier.size(15.dp))
+                            Icon(Icons.Filled.Close, if (run.status == RunStatus.RUNNING) L.run.screen.stopAndClose else L.common.close, tint = AppColors.editorMuted, modifier = Modifier.size(15.dp))
                         }
                     }
                 }
@@ -782,15 +785,15 @@ private fun RunsView(
             }
             if (selected.status == RunStatus.RUNNING) {
                 TextButton(onClick = { RunManager.stop(selected.id) }) {
-                    Icon(Icons.Filled.Stop, null, tint = AppColors.danger, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Stop", color = AppColors.danger)
+                    Icon(Icons.Filled.Stop, null, tint = AppColors.danger, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(L.common.stop, color = AppColors.danger)
                 }
             } else {
                 IconButton(onClick = { onSendToChat(selected) }) {
-                    Icon(Icons.Outlined.ForwardToInbox, "Send output to chat", tint = if (selected.status == RunStatus.FAILED) ClaudeTerracotta else AppColors.editorMuted)
+                    Icon(Icons.Outlined.ForwardToInbox, L.run.screen.sendOutputToChat, tint = if (selected.status == RunStatus.FAILED) ClaudeTerracotta else AppColors.editorMuted)
                 }
             }
             IconButton(onClick = { RunManager.restart(context, selected.id) }) {
-                Icon(Icons.Filled.Refresh, "Run again", tint = AppColors.editorText)
+                Icon(Icons.Filled.Refresh, L.run.screen.runAgain, tint = AppColors.editorText)
             }
         }
         if (selected.status == RunStatus.FAILED) {
@@ -802,7 +805,7 @@ private fun RunsView(
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.ForwardToInbox, null, tint = AppColors.danger, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Failed. Send the output to the chat so the agent can fix it", fontSize = 12.sp, color = AppColors.danger)
+                    Text(L.run.screen.failedSendTheOutputToThe, fontSize = 12.sp, color = AppColors.danger)
                 }
             }
         }
@@ -827,9 +830,9 @@ private fun RunsView(
 private fun StatusDot(status: RunStatus, modifier: Modifier = Modifier) {
     when (status) {
         RunStatus.RUNNING -> CircularProgressIndicator(modifier, strokeWidth = 2.dp, color = ClaudeTerracotta)
-        RunStatus.SUCCEEDED -> Icon(Icons.Filled.CheckCircle, "Done", tint = AppColors.success, modifier = modifier)
-        RunStatus.FAILED -> Icon(Icons.Filled.Error, "Failed", tint = AppColors.danger, modifier = modifier)
-        RunStatus.STOPPED -> Icon(Icons.Filled.StopCircle, "Stopped", tint = AppColors.editorMuted, modifier = modifier)
+        RunStatus.SUCCEEDED -> Icon(Icons.Filled.CheckCircle, L.common.done, tint = AppColors.success, modifier = modifier)
+        RunStatus.FAILED -> Icon(Icons.Filled.Error, L.common.failed, tint = AppColors.danger, modifier = modifier)
+        RunStatus.STOPPED -> Icon(Icons.Filled.StopCircle, L.common.stopped, tint = AppColors.editorMuted, modifier = modifier)
     }
 }
 
@@ -843,9 +846,9 @@ private fun statusLine(run: RunEntry): String {
     val where = shortPath(run.folder)
     return when (run.status) {
         RunStatus.RUNNING -> "Running · $took · $where"
-        RunStatus.SUCCEEDED -> "Done in $took · exit 0 · $where"
-        RunStatus.FAILED -> "Failed after $took" + (run.exitCode?.let { " · exit $it" } ?: "") + " · $where"
-        RunStatus.STOPPED -> "Stopped after $took · $where"
+        RunStatus.SUCCEEDED -> L.run.screen.doneInTookExit0Where(took, where)
+        RunStatus.FAILED -> L.run.screen.failedAfterTookValueWhere(took, (run.exitCode?.let { " · exit $it" } ?: ""), where)
+        RunStatus.STOPPED -> L.run.screen.stoppedAfterTookWhere(took, where)
     }
 }
 
@@ -899,10 +902,10 @@ private fun RunBubble(runs: List<RunEntry>, seen: Set<String>) {
                     when {
                         running > 0 -> {
                             CircularProgressIndicator(Modifier.size(44.dp), strokeWidth = 2.5.dp, color = ClaudeTerracotta)
-                            Icon(Icons.Filled.PlayArrow, "Runs", tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Filled.PlayArrow, L.run.screen.runs, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                         }
-                        failed -> Icon(Icons.Filled.Close, "A run failed", tint = AppColors.danger, modifier = Modifier.size(26.dp))
-                        else -> Icon(Icons.Filled.Check, "Runs finished", tint = AppColors.success, modifier = Modifier.size(26.dp))
+                        failed -> Icon(Icons.Filled.Close, L.run.screen.aRunFailed, tint = AppColors.danger, modifier = Modifier.size(26.dp))
+                        else -> Icon(Icons.Filled.Check, L.run.screen.runsFinished, tint = AppColors.success, modifier = Modifier.size(26.dp))
                     }
                 }
             }
@@ -947,22 +950,22 @@ private fun duration(ms: Long): String {
     val s = ms / 1000
     return when {
         s < 60 -> "${s}s"
-        s < 3600 -> "${s / 60}m ${s % 60}s"
-        else -> "${s / 3600}h ${(s % 3600) / 60}m"
+        s < 3600 -> L.run.screen.valueMValue2S(s / 60, s % 60)
+        else -> L.run.screen.valueHValue2M(s / 3600, (s % 3600) / 60)
     }
 }
 
 /** What "Send to chat" puts in the message box: what ran, where, how it ended, and the end of its output. */
 private fun chatText(run: RunEntry, output: String): String {
     val how = when (run.status) {
-        RunStatus.FAILED -> "failed" + (run.exitCode?.let { " (exit code $it)" } ?: "")
-        RunStatus.SUCCEEDED -> "finished (exit code 0)"
-        RunStatus.STOPPED -> "was stopped"
-        RunStatus.RUNNING -> "is still running"
+        RunStatus.FAILED -> "failed" + (run.exitCode?.let { L.run.screen.exitCodeValue(it) } ?: "")
+        RunStatus.SUCCEEDED -> L.run.screen.finishedExitCode0
+        RunStatus.STOPPED -> L.run.screen.wasStopped
+        RunStatus.RUNNING -> L.run.screen.isStillRunning
     }
     val fence = if (output.contains("```")) "````" else "```"
     return buildString {
-        append("The command \"${run.name}\" $how in ${shortPath(run.folder).ifBlank { "the home folder" }}.\n\n")
+        append(L.run.screen.theCommandNameHowInValue(run.name, how, shortPath(run.folder).ifBlank { L.run.screen.theHomeFolder }))
         append(fence).append("text\n")
         append("$ ").append(run.command.trim()).append("\n")
         // the run's own "▶ command" header line repeats the line above

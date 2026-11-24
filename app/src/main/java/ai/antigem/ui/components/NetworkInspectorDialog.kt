@@ -39,13 +39,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.data.remote.inspector.NetworkInspectorManager
 import ai.antigem.data.remote.inspector.NetworkLogEntry
+import ai.antigem.i18n.L
 
-enum class NetworkFilterType(val label: String) {
-    ALL("All"),
-    GRPC("gRPC Daemon"),
-    BRIDGE("IDE Bridge"),
-    STREAMS("Streams"),
-    ERRORS("Errors")
+enum class NetworkFilterType(private val labelText: () -> String) {
+    ALL({ L.components.networkInspector.all }),
+    GRPC({ L.components.networkInspector.grpcDaemon }),
+    BRIDGE({ L.components.networkInspector.ideBridge }),
+    STREAMS({ L.components.networkInspector.streams }),
+    ERRORS({ L.components.networkInspector.errors })
+;
+    val label: String get() = labelText()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -122,13 +125,13 @@ fun NetworkInspectorDialog(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Network Inspector",
+                                text = L.components.networkInspector.networkInspector,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${logs.size} calls recorded · ${activeStreams} active stream${if (activeStreams == 1) "" else "s"}",
+                                text = L.components.networkInspector.logscountCallsRecordedActivestreams(logs.size, activeStreams, if (activeStreams == 1) "" else "s"),
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -142,7 +145,7 @@ fun NetworkInspectorDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
-                                contentDescription = "Clear logs",
+                                contentDescription = L.components.networkInspector.clearLogs,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(19.dp)
                             )
@@ -154,7 +157,7 @@ fun NetworkInspectorDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = L.common.close,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -174,7 +177,7 @@ fun NetworkInspectorDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
-                        placeholder = { Text("Filter by endpoint, route, or status...", fontSize = 12.5.sp) },
+                        placeholder = { Text(L.components.networkInspector.filterByEndpointRouteOrStatus, fontSize = 12.5.sp) },
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                         },
@@ -234,7 +237,7 @@ fun NetworkInspectorDialog(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = if (logs.isEmpty()) "No network calls captured yet" else "No matching calls found",
+                                text = if (logs.isEmpty()) L.components.networkInspector.noNetworkCallsCapturedYet else L.components.networkInspector.noMatchingCallsFound,
                                 fontSize = 13.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
@@ -308,7 +311,7 @@ private fun NetworkLogItemRow(
         } else {
             val mins = elapsed / 60_000L
             val secs = (elapsed % 60_000L) / 1000L
-            "${mins}m ${secs}s"
+            L.components.networkInspector.minsMSecsS(mins, secs)
         }
     }
 
@@ -360,7 +363,7 @@ private fun NetworkLogItemRow(
                         color = ai.antigem.theme.AppColors.success.copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = if (isConnected) "STREAMING" else "STREAM",
+                            text = if (isConnected) L.components.networkInspector.streaming else L.components.networkInspector.stream,
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = ai.antigem.theme.AppColors.success,
@@ -396,9 +399,9 @@ private fun NetworkLogItemRow(
             ) {
                 Text(
                     text = when {
-                        isConnected && elapsed >= 2000L -> "Live Stream"
-                        isConnected -> "Connected"
-                        entry.error != null -> "Err"
+                        isConnected && elapsed >= 2000L -> L.components.networkInspector.liveStream
+                        isConnected -> L.components.networkInspector.connected
+                        entry.error != null -> L.components.networkInspector.err
                         entry.grpcStatus != null && entry.grpcStatus != "0" -> "gRPC ${entry.grpcStatus}"
                         entry.statusCode > 0 -> "${entry.statusCode}"
                         else -> "OK"
@@ -429,14 +432,14 @@ private fun NetworkLogDetailDialog(
     onDismiss: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Overview", "Headers")
+    val tabs = listOf(L.components.networkInspector.overview, L.components.networkInspector.headers)
     val context = LocalContext.current
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText(label, text)
         clipboard.setPrimaryClip(clip)
-        Toast.makeText(context, "Copied $label to clipboard", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, L.components.networkInspector.copiedLabelToClipboard(label), Toast.LENGTH_SHORT).show()
     }
 
     Dialog(
@@ -480,7 +483,7 @@ private fun NetworkLogDetailDialog(
                         )
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Close, contentDescription = L.common.close, modifier = Modifier.size(18.dp))
                     }
                 }
 
@@ -534,7 +537,7 @@ private fun OverviewTab(
     }
     val durationStr = if (isConnected) {
         val elapsed = maxOf(0L, now - entry.startTimeMs)
-        if (elapsed < 1000L) "${elapsed} ms (Active)" else String.format(java.util.Locale.US, "%.1f s (Active)", elapsed / 1000f)
+        if (elapsed < 1000L) L.components.networkInspector.elapsedMsActive(elapsed) else String.format(java.util.Locale.US, "%.1f s (Active)", elapsed / 1000f)
     } else {
         "${entry.durationMs} ms"
     }
@@ -545,17 +548,17 @@ private fun OverviewTab(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        DetailRow("Full URL", entry.url, isCopyable = true, onCopy = onCopy)
-        DetailRow("Method", entry.method)
-        DetailRow("Service Target", entry.serviceType)
-        DetailRow("Timestamp", entry.formattedTime)
-        DetailRow("Duration", durationStr)
-        DetailRow("HTTP Status", if (entry.statusCode > 0) "${entry.statusCode}" else if (isConnected) "Connected / Streaming" else "Pending")
+        DetailRow(L.components.networkInspector.fullUrl, entry.url, isCopyable = true, onCopy = onCopy)
+        DetailRow(L.components.networkInspector.method, entry.method)
+        DetailRow(L.components.networkInspector.serviceTarget, entry.serviceType)
+        DetailRow(L.components.networkInspector.timestamp, entry.formattedTime)
+        DetailRow(L.components.networkInspector.duration, durationStr)
+        DetailRow(L.components.networkInspector.httpStatus, if (entry.statusCode > 0) "${entry.statusCode}" else if (isConnected) L.components.networkInspector.connectedStreaming else L.components.networkInspector.pending)
         if (entry.grpcStatus != null) {
-            DetailRow("gRPC Status", entry.grpcStatus)
+            DetailRow(L.components.networkInspector.grpcStatus, entry.grpcStatus)
         }
         if (entry.error != null) {
-            DetailRow("Error Message", entry.error, isError = true, isCopyable = true, onCopy = onCopy)
+            DetailRow(L.components.networkInspector.errorMessage, entry.error, isError = true, isCopyable = true, onCopy = onCopy)
         }
     }
 }
@@ -573,7 +576,7 @@ private fun HeadersTab(
     ) {
         Text("Request Headers (${entry.requestHeaders.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
         if (entry.requestHeaders.isEmpty()) {
-            Text("No request headers recorded.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(L.components.networkInspector.noRequestHeadersRecorded, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             entry.requestHeaders.forEach { (k, v) ->
                 HeaderItem(k, v, onCopy)
@@ -584,7 +587,7 @@ private fun HeadersTab(
 
         Text("Response Headers (${entry.responseHeaders.size})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
         if (entry.responseHeaders.isEmpty()) {
-            Text("No response headers recorded.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(L.components.networkInspector.noResponseHeadersRecorded, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             entry.responseHeaders.forEach { (k, v) ->
                 HeaderItem(k, v, onCopy)
