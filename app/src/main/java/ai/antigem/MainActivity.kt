@@ -186,6 +186,10 @@ class MainActivity : ComponentActivity() {
             val floatingSwitcherAutoCollapseSec by chatViewModel.floatingSwitcherAutoCollapseSec.collectAsState()
             val floatingSwitcherPosX by chatViewModel.floatingSwitcherPosX.collectAsState()
             val floatingSwitcherPosY by chatViewModel.floatingSwitcherPosY.collectAsState()
+            val floatingSwitcherHandleIcon by chatViewModel.floatingSwitcherHandleIcon.collectAsState()
+            // Where the chat's bottom input area starts (root px); read only inside the switcher, so updates don't
+            // recompose this whole screen.
+            val chatBottomAreaTop = remember { mutableStateOf<Float?>(null) }
             val isFloatingDiagnosticsEnabled by chatViewModel.isFloatingDiagnosticsEnabled.collectAsState()
             val isNetworkInspectorEnabled by chatViewModel.isNetworkInspectorEnabled.collectAsState()
             val isFloatingNetworkInspectorEnabled by chatViewModel.isFloatingNetworkInspectorEnabled.collectAsState()
@@ -351,7 +355,8 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToFiles = {
                                             previousViewMode = currentViewMode
                                             currentViewMode = AppViewMode.FILES
-                                        }
+                                        },
+                                        onBottomAreaTopChanged = { chatBottomAreaTop.value = it }
                                     )
                                 }
 
@@ -567,6 +572,11 @@ class MainActivity : ComponentActivity() {
                                     autoCollapseTimeoutSec = floatingSwitcherAutoCollapseSec,
                                     savedPosXRatio = floatingSwitcherPosX,
                                     savedPosYRatio = floatingSwitcherPosY,
+                                    handleIcon = floatingSwitcherHandleIcon,
+                                    // the chat stays composed (moved off-screen) under other screens: use it only when shown
+                                    bottomAreaTopPx = {
+                                        if (currentViewMode == AppViewMode.CHAT) chatBottomAreaTop.value else null
+                                    },
                                     onNavigateToChat = {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.CHAT

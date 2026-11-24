@@ -10,17 +10,25 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +45,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -54,6 +63,21 @@ import kotlin.math.roundToInt
 /** Expanded panel: holding an icon / the collapse arrow this long flips VERTICAL <-> HORIZONTAL. */
 private const val ORIENTATION_HOLD_MS = 500L
 
+/** Icons the collapsed pill can show (Settings → Appearance), by saved id. The first one is the default. */
+val FloatingSwitcherHandleIcons: List<Pair<String, ImageVector>> = listOf(
+    "grid" to Icons.Outlined.GridView,
+    "apps" to Icons.Outlined.Apps,
+    "dashboard" to Icons.Outlined.Dashboard,
+    "widgets" to Icons.Outlined.Widgets,
+    "layers" to Icons.Outlined.Layers,
+    "hub" to Icons.Outlined.Hub,
+    "drag" to Icons.Outlined.DragIndicator,
+    "spark" to Icons.Outlined.AutoAwesome
+)
+
+fun floatingSwitcherHandleIcon(id: String): ImageVector =
+    FloatingSwitcherHandleIcons.firstOrNull { it.first == id }?.second ?: FloatingSwitcherHandleIcons.first().second
+
 /** Non-state bookkeeping used by the gesture handler (updating it must not trigger recomposition). */
 private class SwitcherHitState {
     var widgetCoords: LayoutCoordinates? = null
@@ -64,6 +88,7 @@ private class SwitcherHitState {
     var tapRootPos: Offset = Offset.Zero
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FloatingSwitcherWidget(
     currentViewMode: AppViewMode,
@@ -72,6 +97,7 @@ fun FloatingSwitcherWidget(
     autoCollapseTimeoutSec: Int, // 0 = never, >0 = seconds
     savedPosXRatio: Float, // 0.0 .. 1.0 (default ~0.95f)
     savedPosYRatio: Float, // 0.0 .. 1.0 (default ~0.50f)
+    handleIcon: String = "grid", // collapsed pill icon id, see FloatingSwitcherHandleIcons
     onNavigateToChat: () -> Unit,
     onNavigateToIde: () -> Unit,
     onNavigateToBrowser: () -> Unit,
@@ -82,6 +108,9 @@ fun FloatingSwitcherWidget(
     onNavigateBack: () -> Unit = {},
     onPositionSaved: (Float, Float) -> Unit,
     onOrientationChange: (String) -> Unit = {},
+    // Y (root px) where the shown screen's bottom input area starts (chat: its input bar and the jump-to-bottom
+    // button above it), null = none. While the keyboard is open the widget stays above it, not just above the keyboard.
+    bottomAreaTopPx: () -> Float? = { null },
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -140,26 +169,28 @@ fun FloatingSwitcherWidget(
     // The gesture handler lives in a long-running pointerInput(Unit); always call the latest callback.
     val currentOnNavigateBack by rememberUpdatedState(onNavigateBack)
 
-    // Directional arrows: expand points toward the growth direction, collapse points back to the anchor.
-    val expandArrowIcon: ImageVector = if (isVertical) {
-        if (anchorBottom) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore
-    } else {
-        if (anchorRight) Icons.Outlined.ChevronLeft else Icons.Outlined.ChevronRight
-    }
+    // Directional arrow in the expanded panel: collapse points back to the anchor.
     val collapseArrowIcon: ImageVector = if (isVertical) {
         if (anchorBottom) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess
     } else {
         if (anchorRight) Icons.Outlined.ChevronRight else Icons.Outlined.ChevronLeft
     }
 
-    val imeBottomPx = WindowInsets.ime.getBottom(density).toFloat()
+    // The keyboard's final height, not the animated one: the screens lay out with the final height too (the chat's
+    // input bar jumps there at once), so the widget moves together with them in one step instead of two.
+    val imeBottomPx = WindowInsets.imeAnimationTarget.getBottom(density).toFloat()
     val navBarsBottomPx = WindowInsets.navigationBars.getBottom(density).toFloat()
     val effectiveBottomInset = maxOf(imeBottomPx, navBarsBottomPx)
+    // Only while the keyboard is open: with it closed the widget stays wherever the user dragged it.
+    val bottomAreaTopInRootPx = if (imeBottomPx > navBarsBottomPx) bottomAreaTopPx() else null
+    val bottomAreaGapPx = with(density) { 8.dp.toPx() }
+    var containerTopInRoot by remember { mutableFloatStateOf(0f) }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .zIndex(999f)
+            .onGloballyPositioned { containerTopInRoot = it.positionInRoot().y }
     ) {
         val containerW = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else 0f
         val containerH = if (constraints.hasBoundedHeight) constraints.maxHeight.toFloat() else 0f
@@ -171,9 +202,17 @@ fun FloatingSwitcherWidget(
         val currentRatioH by rememberUpdatedState(ratioH)
         val currentBottomInset by rememberUpdatedState(effectiveBottomInset)
         val currentOnPositionSaved by rememberUpdatedState(onPositionSaved)
+        // Lowest bottom edge allowed by the screen's bottom input area (this container's coordinates); null = none.
+        val currentBottomAreaLimit by rememberUpdatedState(
+            bottomAreaTopInRootPx?.let { it - containerTopInRoot - bottomAreaGapPx }
+        )
 
         fun maxXFor(w: Int) = (currentContainerW - w).coerceAtLeast(0f)
-        fun maxYFor(h: Int) = (currentContainerH - h - currentBottomInset).coerceAtLeast(0f)
+        fun maxYFor(h: Int): Float {
+            val aboveKeyboard = currentContainerH - h - currentBottomInset
+            val aboveBottomArea = currentBottomAreaLimit?.let { it - h } ?: aboveKeyboard
+            return minOf(aboveKeyboard, aboveBottomArea).coerceAtLeast(0f)
+        }
 
         // Top-left of a widget of size w x h, positioned from the anchored corner of the pill, clamped on screen.
         fun widgetTopLeft(w: Int, h: Int): Pair<Float, Float> {
@@ -412,9 +451,10 @@ fun FloatingSwitcherWidget(
                 shadowElevation = 8.dp
             ) {
                 if (!isExpanded) {
-                    // Collapsed Compact Pill with Directional Arrow. Touch is handled by the widget's gesture
-                    // handler above (tap / double-tap / drag).
-                    // 44dp = same footprint as the expanded panel's arrow cell, so the arrow doesn't shift on toggle.
+                    // Collapsed Compact Pill with the chosen icon (never an arrow, so it can't be mistaken for the chat's
+                    // jump-to-top/bottom button). Touch is handled by the widget's gesture handler above
+                    // (tap / double-tap / drag).
+                    // 44dp = same footprint as the expanded panel's arrow cell, so the pill doesn't shift on toggle.
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(24.dp))
@@ -429,7 +469,7 @@ fun FloatingSwitcherWidget(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = expandArrowIcon,
+                            imageVector = floatingSwitcherHandleIcon(handleIcon),
                             contentDescription = "Expand Switcher",
                             tint = ClaudeTerracotta,
                             modifier = Modifier.size(20.dp)

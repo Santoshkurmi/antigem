@@ -1294,6 +1294,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val floatingSwitcherOrientation: StateFlow<String> = authPrefs.floatingSwitcherOrientation
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherOrientationSync())
 
+    val floatingSwitcherHandleIcon: StateFlow<String> = authPrefs.floatingSwitcherHandleIcon
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherHandleIconSync())
+
     val floatingSwitcherItems: StateFlow<List<String>> = authPrefs.floatingSwitcherItems
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), authPrefs.getFloatingSwitcherItemsSync())
 
@@ -1318,6 +1321,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setFloatingSwitcherOrientation(orientation: String) {
         viewModelScope.launch {
             authPrefs.saveFloatingSwitcherOrientation(orientation)
+        }
+    }
+
+    fun setFloatingSwitcherHandleIcon(icon: String) {
+        viewModelScope.launch {
+            authPrefs.saveFloatingSwitcherHandleIcon(icon)
         }
     }
 

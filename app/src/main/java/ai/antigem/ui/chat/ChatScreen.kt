@@ -47,6 +47,8 @@ import ai.antigem.data.preferences.AuthPreferences
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -140,7 +142,10 @@ fun ChatScreen(
     onNavigateToBrowser: () -> Unit = {},
     // null where that screen doesn't exist (the floating chat window): its header icon is then hidden
     onNavigateToNotes: (() -> Unit)? = null,
-    onNavigateToFiles: (() -> Unit)? = null
+    onNavigateToFiles: (() -> Unit)? = null,
+    // Y (root px) where the bottom input area starts, including the jump-to-top/bottom button that floats just above
+    // it; the floating app switcher keeps above it while the keyboard is open
+    onBottomAreaTopChanged: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -321,6 +326,7 @@ fun ChatScreen(
     val showArchivedChats by viewModel.showArchivedChats.collectAsState()
     val floatingSwitcherOrientation by viewModel.floatingSwitcherOrientation.collectAsState()
     val floatingSwitcherItems by viewModel.floatingSwitcherItems.collectAsState()
+    val floatingSwitcherHandleIcon by viewModel.floatingSwitcherHandleIcon.collectAsState()
     val chatHeaderItems by viewModel.chatHeaderItems.collectAsState()
     val floatingSwitcherAutoCollapseSec by viewModel.floatingSwitcherAutoCollapseSec.collectAsState()
     val isFloatingDiagnosticsEnabled by viewModel.isFloatingDiagnosticsEnabled.collectAsState()
@@ -2015,6 +2021,12 @@ fun ChatScreen(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .onGloballyPositioned { coords ->
+                            // This box ends where the input area starts; the jump button sits 12dp + 38dp above that.
+                            // Y only: the chat is hidden by moving it sideways, which doesn't change it.
+                            val bottomY = coords.localToRoot(Offset(0f, coords.size.height.toFloat())).y
+                            onBottomAreaTopChanged(bottomY - with(density) { (12 + 38).dp.toPx() })
+                        }
                 ) {
                     val sysStatus = systemConnectionState.status
                     val isServerInitializing = sysStatus == ai.antigem.data.remote.SystemStatus.STARTING || sysStatus == ai.antigem.data.remote.SystemStatus.ACQUIRING_CSRF || (sysStatus == ai.antigem.data.remote.SystemStatus.OFFLINE && isInitialGracePeriod)
@@ -3233,6 +3245,8 @@ fun ChatScreen(
             floatingSwitcherItems = floatingSwitcherItems,
             floatingSwitcherAutoCollapseSec = floatingSwitcherAutoCollapseSec,
             onSetFloatingSwitcherOrientation = { viewModel.setFloatingSwitcherOrientation(it) },
+            floatingSwitcherHandleIcon = floatingSwitcherHandleIcon,
+            onSetFloatingSwitcherHandleIcon = { viewModel.setFloatingSwitcherHandleIcon(it) },
             onSetFloatingSwitcherItems = { viewModel.setFloatingSwitcherItems(it) },
             onSetFloatingSwitcherAutoCollapseSec = { viewModel.setFloatingSwitcherAutoCollapseSec(it) },
             onResetFloatingSwitcherPosition = { viewModel.resetFloatingSwitcherPosition() },

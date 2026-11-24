@@ -87,6 +87,7 @@ class AuthPreferences(private val context: Context) {
         val IS_FLOATING_SWITCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_switcher_enabled")
         val FLOATING_SWITCHER_ORIENTATION = stringPreferencesKey("floating_switcher_orientation")
         val FLOATING_SWITCHER_ITEMS = stringPreferencesKey("floating_switcher_items")
+        val FLOATING_SWITCHER_HANDLE_ICON = stringPreferencesKey("floating_switcher_handle_icon")
         val CHAT_HEADER_ITEMS = stringPreferencesKey("chat_header_items")
         val FLOATING_SWITCHER_AUTO_COLLAPSE_SEC = androidx.datastore.preferences.core.intPreferencesKey("floating_switcher_auto_collapse_sec")
         val FLOATING_SWITCHER_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("floating_switcher_pos_x")
@@ -1019,6 +1020,17 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveFloatingSwitcherOrientation(orientation: String) {
         syncPrefs.edit().putString("floating_switcher_orientation", orientation).apply()
         context.dataStore.edit { it[FLOATING_SWITCHER_ORIENTATION] = orientation }
+    }
+
+    /** Icon of the collapsed floating switcher pill (an id from FloatingSwitcherHandleIcons). */
+    val floatingSwitcherHandleIcon: Flow<String> = context.dataStore.data
+        .map { it[FLOATING_SWITCHER_HANDLE_ICON] ?: "grid" }
+
+    fun getFloatingSwitcherHandleIconSync(): String = syncPrefs.getString("floating_switcher_handle_icon", "grid") ?: "grid"
+
+    suspend fun saveFloatingSwitcherHandleIcon(icon: String) {
+        syncPrefs.edit().putString("floating_switcher_handle_icon", icon).apply()
+        context.dataStore.edit { it[FLOATING_SWITCHER_HANDLE_ICON] = icon }
     }
 
     val floatingSwitcherItems: Flow<List<String>> = context.dataStore.data

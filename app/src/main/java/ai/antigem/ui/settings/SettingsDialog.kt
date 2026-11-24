@@ -277,6 +277,8 @@ fun SettingsDialog(
     floatingSwitcherItems: List<String> = listOf("chat", "ide", "terminal", "browser", "notes", "files"),
     floatingSwitcherAutoCollapseSec: Int = 0,
     onSetFloatingSwitcherOrientation: (String) -> Unit = {},
+    floatingSwitcherHandleIcon: String = "grid",
+    onSetFloatingSwitcherHandleIcon: (String) -> Unit = {},
     onSetFloatingSwitcherItems: (List<String>) -> Unit = {},
     onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit = {},
     onResetFloatingSwitcherPosition: () -> Unit = {},
@@ -526,6 +528,8 @@ fun SettingsDialog(
                         cardBorder = cardBorder,
                         onSetChatFontScale = onSetChatFontScale,
                         onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
+                        floatingSwitcherHandleIcon = floatingSwitcherHandleIcon,
+                        onSetFloatingSwitcherHandleIcon = onSetFloatingSwitcherHandleIcon,
                         onSetFloatingSwitcherItems = onSetFloatingSwitcherItems,
                         onSetFloatingSwitcherAutoCollapseSec = onSetFloatingSwitcherAutoCollapseSec,
                         onResetFloatingSwitcherPosition = onResetFloatingSwitcherPosition,
@@ -1536,6 +1540,8 @@ private fun AppearanceSubScreen(
     cardBorder: BorderStroke,
     onSetChatFontScale: (Float) -> Unit,
     onSetFloatingSwitcherOrientation: (String) -> Unit,
+    floatingSwitcherHandleIcon: String,
+    onSetFloatingSwitcherHandleIcon: (String) -> Unit,
     onSetFloatingSwitcherItems: (List<String>) -> Unit,
     onSetFloatingSwitcherAutoCollapseSec: (Int) -> Unit,
     onResetFloatingSwitcherPosition: () -> Unit,
@@ -1916,6 +1922,62 @@ private fun AppearanceSubScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                // Collapsed Pill Icon Selector
+                Text(
+                    text = "Collapsed Icon",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "The icon on the small handle when the switcher is collapsed",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                val handleIcons = ai.antigem.ui.components.FloatingSwitcherHandleIcons
+                // an unknown saved id shows the default icon, so mark that one
+                val selectedHandleIcon = handleIcons.firstOrNull { it.first == floatingSwitcherHandleIcon }?.first
+                    ?: handleIcons.first().first
+                handleIcons.chunked(4).forEach { rowIcons ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowIcons.forEach { (iconId, icon) ->
+                            val isSelected = iconId == selectedHandleIcon
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { onSetFloatingSwitcherHandleIcon(iconId) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = iconId.replaceFirstChar { it.uppercase() },
+                                        tint = if (isSelected) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 // Auto-Collapse Timeout Selector
                 Text(
                     text = "Auto-Collapse Timeout",
@@ -1925,7 +1987,7 @@ private fun AppearanceSubScreen(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Automatically collapses into a small arrow handle after inactivity",
+                    text = "Automatically collapses into a small handle after inactivity",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 )
