@@ -389,6 +389,37 @@ object BuiltInThemes {
         )
     )
 
+    /**
+     * Discord's dark look: greys sampled from the Discord app (made darker so the app's dimmed text stays readable),
+     * blurple accent, yellow mentions. The colors below are set by hand; the IDE editor, the terminal and the soft
+     * status fills are worked out from them.
+     */
+    private fun discord(): AppTheme {
+        val m = mutableMapOf(
+            "background" to 0xFF121214, "surface" to 0xFF1A1A1E, "card" to 0xFF222327, "surface_variant" to 0xFF26272C,
+            "on_background" to 0xFFFFFFFF, "on_surface" to 0xFFFFFFFF, "on_surface_variant" to 0xFFB5B6BC, "text_secondary" to 0xFFB5B6BC,
+            "primary" to 0xFF5865F2, "on_primary" to 0xFFFFFFFF, "primary_container" to 0xFF2D305E, "on_primary_container" to 0xFFE0E3FF,
+            "secondary" to 0xFF4752C4, "on_secondary" to 0xFFFFFFFF, "tertiary" to 0xFF1ABC9C,
+            "accent_alt" to 0xFF94A8FF, "inverse_primary" to 0xFF94A8FF,
+            "success" to 0xFF23A55A, "warning" to 0xFFF0B232, "danger" to 0xFFF23F43, "info" to 0xFF00A8FC,
+            "surface_container_lowest" to 0xFF0E0E10, "surface_container_low" to 0xFF121214, "surface_container" to 0xFF222327,
+            "surface_container_high" to 0xFF28292E, "surface_container_highest" to 0xFF2E2F35,
+            "outline" to 0xFF4E5058, "outline_variant" to 0xFF2A2B30, "border" to 0xFF2E2F35, "fill" to 0xFF2A2B30,
+            "user_bubble" to 0xFF2E2F35, "thinking_bg" to 0xFF121214, "warning_container" to 0xFF2F2A22,
+            "inverse_surface" to 0xFF3E3F45, "inverse_on_surface" to 0xFFF3F3F4,
+            "accent_indigo" to 0xFF7984F5, "accent_teal" to 0xFF1ABC9C, "accent_pink" to 0xFFEB459E,
+            "code_bg" to 0xFF0F0F11, "code_text" to 0xFFF3F3F4,
+            "syntax_keyword" to 0xFF94A8FF, "syntax_type" to 0xFF1ABC9C, "syntax_string" to 0xFF57F287, "syntax_number" to 0xFFF0B232,
+            "syntax_comment" to 0xFF80848E, "syntax_function" to 0xFF00A8FC, "syntax_annotation" to 0xFFEB459E,
+            "syntax_punctuation" to 0xFFC5C6CA, "syntax_tag" to 0xFFF23F43, "syntax_attribute" to 0xFFF0B232
+        )
+        ThemeTokens.derive(m, m.keys.toSet(), true)
+        return AppTheme(
+            id = "discord", name = "Discord", dark = true, builtIn = true,
+            about = "Discord's dark look: deep greys, a blurple accent and yellow mentions", colors = m
+        )
+    }
+
     /** A full theme from a few colors; everything else is worked out ([ThemeTokens.derive]). */
     private fun seeded(
         id: String, name: String, about: String, dark: Boolean,
@@ -440,6 +471,7 @@ object BuiltInThemes {
                 0xFF002B36, listOf(0xFF859900, 0xFFB58900, 0xFF2AA198, 0xFFD33682, 0xFF657B83, 0xFF268BD2, 0xFFCB4B16, 0xFF93A1A1)),
             // dark: the same
             midnightAurora(),
+            discord(),
             seeded("obsidian", "Obsidian", "Refined deep black with layered surfaces and a soft periwinkle glow", true,
                 0xFF0D0E12, 0xFF0D0E12, 0xFF16181D, 0xFF1F2229, 0xFFECEDF0, 0xFF9297A3,
                 0xFF8B9CFF, 0xFF6E7FF3, 0xFFC4A1FF, 0xFF4ADE80, 0xFFF5B454, 0xFFF87171, 0xFF60A5FA,

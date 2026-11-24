@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Delete
@@ -151,12 +152,23 @@ internal fun ThemeCard(t: AppTheme, selected: Boolean, cardBg: Color, modifier: 
                     Icon(Icons.Filled.Star, "Default theme", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(11.dp))
                 }
             }
+            // a custom theme: a small brush in the same corner (a custom theme is never the default, so the two never
+            // meet), instead of a "Custom" text line that made its card taller than the others
+            if (!t.builtIn) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp).size(18.dp)
+                        .clip(CircleShape).background(MaterialTheme.colorScheme.tertiary)
+                        .border(1.5.dp, col("background"), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Brush, "Custom theme", tint = MaterialTheme.colorScheme.onTertiary, modifier = Modifier.size(11.dp))
+                }
+            }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(t.name, fontSize = 12.5.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface)
-                if (!t.builtIn) Text("Custom", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
             }
             if (onDelete != null) {
                 Icon(Icons.Outlined.Delete, "Delete", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
