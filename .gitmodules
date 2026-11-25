@@ -19,3 +19,6 @@
 [submodule "antigem_plugins"]
 	path = antigem_plugins
 	url = https://github.com/Santoshkurmi/antigem_plugins
+[submodule "website"]
+	path = website
+	url = https://github.com/Santoshkurmi/antigem_website.git
