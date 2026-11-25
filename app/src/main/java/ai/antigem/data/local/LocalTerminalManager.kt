@@ -5,7 +5,6 @@ import android.system.Os
 import android.util.Log
 import ai.antigem.data.preferences.AuthPreferences
 import com.jcraft.jsch.ChannelExec
-import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -17,7 +16,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.Properties
 import ai.antigem.i18n.L
 
 /** PATH for SSH sessions; also finds the tools of AntiGem or Termux when the host is an Android phone. */
@@ -1454,15 +1452,7 @@ object LocalTerminalManager {
         workingDir: String?
     ): TmuxWindowInfo? = withContext(Dispatchers.IO) {
         try {
-            val jsch = JSch()
-            val session = jsch.getSession(user, host, port)
-            session.setPassword(pass)
-            session.setConfig(Properties().apply {
-                put("StrictHostKeyChecking", "no")
-                put("PreferredAuthentications", "password,keyboard-interactive,publickey")
-                put("ConnectTimeout", "4000")
-            })
-            session.connect(4000)
+            val session = ai.antigem.data.ssh.SshSessionFactory.open(user = user, host = host, port = port, pass = pass, connectTimeoutMs = 4000)
             try {
                 val dirArg = if (!workingDir.isNullOrBlank()) "-c \"$workingDir\" " else ""
                 val cmd = UNIVERSAL_SSH_PATH +
@@ -1680,15 +1670,7 @@ object LocalTerminalManager {
             managerScope.launch(Dispatchers.IO) {
                 try {
                     Log.d(TAG, "[Manager] Connecting SSH to kill remote target (pane=$paneId, winIdx=$winIdx)...")
-                    val jsch = JSch()
-                    val session = jsch.getSession(user, host, port)
-                    session.setPassword(pass)
-                    session.setConfig(Properties().apply {
-                        put("StrictHostKeyChecking", "no")
-                        put("PreferredAuthentications", "password,keyboard-interactive,publickey")
-                        put("ConnectTimeout", "4000")
-                    })
-                    session.connect(4000)
+                    val session = ai.antigem.data.ssh.SshSessionFactory.open(user = user, host = host, port = port, pass = pass, connectTimeoutMs = 4000)
                     try {
                         val channel = session.openChannel("exec") as ChannelExec
                         val targetCmd = if (!paneId.isNullOrBlank()) "tmux kill-pane -t $paneId 2>/dev/null; " else ""
@@ -1723,15 +1705,7 @@ object LocalTerminalManager {
             val windowIndices = current.mapNotNull { it.tmuxWindowIndex }
             managerScope.launch(Dispatchers.IO) {
                 try {
-                    val jsch = JSch()
-                    val session = jsch.getSession(user, host, port)
-                    session.setPassword(pass)
-                    session.setConfig(Properties().apply {
-                        put("StrictHostKeyChecking", "no")
-                        put("PreferredAuthentications", "password,keyboard-interactive,publickey")
-                        put("ConnectTimeout", "4000")
-                    })
-                    session.connect(4000)
+                    val session = ai.antigem.data.ssh.SshSessionFactory.open(user = user, host = host, port = port, pass = pass, connectTimeoutMs = 4000)
                     try {
                         val channel = session.openChannel("exec") as ChannelExec
                         val clientKills =
