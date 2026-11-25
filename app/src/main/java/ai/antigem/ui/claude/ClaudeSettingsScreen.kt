@@ -565,9 +565,7 @@ private fun McpPage(deps: ClaudeSettingsDeps, onOpenRea: () -> Unit, onOpenReaGr
 
     // quick presets, like the Antigravity MCP screen
     val context = LocalContext.current
-    val deviceId = remember(context) {
-        runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) }.getOrNull().orEmpty()
-    }
+    val deviceId = remember(context) { ai.antigem.data.remote.LocalServerAuth.key(context) }
     val bridge = ai.antigem.data.remote.AndroidLocalBridgeServer
     val deviceHeaders = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
     fun local(name: String, path: String) =

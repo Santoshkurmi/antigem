@@ -222,9 +222,7 @@ fun JarvisSettingsSectionPage(page: JarvisSettingsPage, cardBg: Color, cardBorde
                     if (agent == null) {
                         JHint(L.jarvis.settings.pickTheAgentJarvisTalksTo2)
                     } else JCard(cardBg, cardBorder, L.jarvis.settings.setupForAgenttitle(agentTitle)) {
-                        val deviceId = remember(context) {
-                            runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: "" }.getOrDefault("")
-                        }
+                        val deviceId = remember(context) { ai.antigem.data.remote.LocalServerAuth.key(context) }
                         val headers = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
                         val url = "http://127.0.0.1:${AndroidLocalBridgeServer.DEFAULT_PORT}/jarvis"
                         val name = AndroidLocalBridgeServer.JARVIS_MCP_NAME

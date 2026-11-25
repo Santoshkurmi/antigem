@@ -131,7 +131,7 @@ class BrowserExtensionManager private constructor() {
     fun runtimeFile(context: Context) = File(context.filesDir, "browser-runtime/extension-host.mjs")
     fun hostPort() = ai.antigem.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT + 100
 
-    private fun deviceId() = appContext?.let { android.provider.Settings.Secure.getString(it.contentResolver, android.provider.Settings.Secure.ANDROID_ID) }.orEmpty()
+    private fun deviceId() = appContext?.let { ai.antigem.data.remote.LocalServerAuth.key(it) }.orEmpty()
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -245,6 +245,25 @@ class BrowserExtensionManager private constructor() {
         }
         throw IllegalStateException("Extension host did not start in time")
     } }
+
+    /**
+     * Starts the plugin host again when it runs, so it gets the current local server key (it is given the key at start).
+     * Remote mode: the server's host no longer answers the new key, so [ensureHost] starts it again there.
+     */
+    fun restartHost() {
+        if (!isHostRunning()) return
+        scope.launch {
+            hostMutex.withLock {
+                hostProcess?.let { process ->
+                    process.destroy()
+                    repeat(30) { if (process.isAlive) delay(100) } // the new host needs the port
+                }
+                hostProcess = null
+            }
+            runCatching { ensureHost() }.onFailure { lastError = it.message; Log.e(TAG, "Extension host failed", it) }
+            runCatching { loadExtensions() }
+        }
+    }
 
     suspend fun request(path: String, body: JSONObject = JSONObject()) = withContext(Dispatchers.IO) {
         ensureHost()

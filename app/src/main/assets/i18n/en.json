@@ -6738,7 +6738,6 @@
     "settings.serversSettings.settingsResetToDefaultsClickSave": "Settings reset to defaults (click Save to apply).",
     "settings.serversSettings.resetAllToDefaults": "Reset All to Defaults",
     "settings.serversSettings.securityTokenHeaderObfuscation": "Security Token (Header Obfuscation)",
-    "settings.serversSettings.n12CharTokenFramingLocalhostRequests": "12-char token framing localhost requests to prevent unauthorized app access",
     "settings.serversSettings.n12CharacterSecretToken": "12-Character Secret Token",
     "settings.serversSettings.httpFramedHeaderFramedheader": "HTTP Framed Header: {framedHeader}",
     "settings.serversSettings.randomize": "Randomize",
@@ -7348,7 +7347,15 @@
     "x11.desktopManager.downloadFailedHttpCode": "Download failed (HTTP {code}).",
     "x11.desktopManager.downloadFailedEmptyResponse": "Download failed (empty response).",
     "agents.accountsUi.signOutOfAgent": "Sign out of {agent}?",
-    "agents.accountsUi.youWillHaveToSignIn": "You will have to sign in again to chat with {agent}."
+    "agents.accountsUi.youWillHaveToSignIn": "You will have to sign in again to chat with {agent}.",
+    "settings.serversSettings.protectsTheIdeBridgeAndThe": "Protects the IDE bridge and the AGY hub: the app sends it with every request to them, inside the header name below. Requests without it are refused, so other apps cannot use your agents.",
+    "settings.serversSettings.phoneToolsKey": "Phone tools key",
+    "settings.serversSettings.protectsThisPhonesToolsAgentsSend": "Protects this phone's tools: agents send it (X-Device-Id) when they use the AntiGem MCP servers (browser, terminal, Android, Jarvis and the others), and so do rish, android-su and browser plugins. Requests without it are refused. Make a new one if you think it leaked.",
+    "settings.serversSettings.newKey": "New key",
+    "settings.serversSettings.makeANewKey": "Make a new key?",
+    "settings.serversSettings.theAntigemMcpServersYouAdded": "The AntiGem MCP servers you added to your agents (browser, terminal, Android, Jarvis, notes, theme, language, plugins) stop working, on this phone and on your servers. They are not changed for you: afterwards, remove them in each agent's MCP settings and add them again from the presets.",
+    "settings.serversSettings.makeNewKey": "Make new key",
+    "settings.serversSettings.newKeyMadeRemoveTheAntigem": "New key made. Remove the AntiGem MCP servers from your agents and add them again from the presets."
   },
   "notes": {
     "settings.language.aiOff": "Segmented button: the agent picks its reply language",

@@ -64,17 +64,13 @@ class AndroidLocalBridgeServer private constructor() {
     // one thread per open request: Flow calls wait up to ~50 s each, so a fixed pool would make parallel calls queue
     private val clientThreadPool = Executors.newCachedThreadPool()
     private var appContext: Context? = null
-    @Volatile
-    private var cachedDeviceId: String = ""
     var boundPort: Int = DEFAULT_PORT
         private set
 
     fun start(context: Context, port: Int = DEFAULT_PORT) {
         if (isRunning) return
         appContext = context.applicationContext
-        cachedDeviceId = try {
-            android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: ""
-        } catch (_: Exception) { "" }
+        LocalServerAuth.key(context) // created now, so the first request does not wait for it
         BrowserSessionManager.instance.init(context)
         LocalTerminalBridge.instance.init(context)
         ai.antigem.ui.browser.BrowserExtensionManager.instance.init(context)
@@ -242,15 +238,9 @@ class AndroidLocalBridgeServer private constructor() {
                 return
             }
 
-            // Verify device ID security header for all non-OPTIONS requests
-            if (cachedDeviceId.length <= 5) {
-                Log.e(TAG, "Bridge server security error: cachedDeviceId is not initialized or invalid")
-                sendResponse(out, 500, "application/json", "{\"error\": \"Server security error: Device ID not initialized or invalid\"}")
-                return
-            }
-
-            val clientDeviceId = headers["x-device-id"]
-            if (clientDeviceId.isNullOrBlank() || clientDeviceId != cachedDeviceId) {
+            // Every non-OPTIONS request needs the local server key (LocalServerAuth) in X-Device-Id
+            val ctx = appContext
+            if (ctx == null || !LocalServerAuth.matches(ctx, headers["x-device-id"])) {
                 Log.w(TAG, "Blocked unauthorized request to $path (missing or invalid X-Device-Id header)")
                 sendResponse(out, 401, "application/json", "{\"error\": \"Unauthorized: Invalid or missing X-Device-Id header\"}")
                 return

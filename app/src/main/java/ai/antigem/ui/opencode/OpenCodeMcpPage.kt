@@ -136,9 +136,7 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend, onOpenRea: () -> Unit = {}, on
     }
     LaunchedEffect(Unit) { reload() }
 
-    val deviceId = remember(context) {
-        runCatching { android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) }.getOrNull().orEmpty()
-    }
+    val deviceId = remember(context) { ai.antigem.data.remote.LocalServerAuth.key(context) }
     val deviceHeaders = if (deviceId.isNotBlank()) mapOf("X-Device-Id" to deviceId) else emptyMap()
     val bridge = ai.antigem.data.remote.AndroidLocalBridgeServer
     fun local(name: String, path: String) = McpDraft(name = name, url = "http://127.0.0.1:${bridge.DEFAULT_PORT}$path", headers = lines(deviceHeaders))

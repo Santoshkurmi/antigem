@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import ai.antigem.i18n.L
+import ai.antigem.i18n.LocalLanguageVersion
 
 // The "working" row of the Claude Code VS Code extension: a pulsing star glyph and a playful verb that is "decoded"
 // in with a running cursor. Same glyphs, verbs and timings as the extension.
@@ -45,8 +46,11 @@ private val VERBS get() = listOf(
     L.components.agentWorkingSpinner.wrangling
 )
 
-/** Room for the longest verb plus "...": the row never changes width. */
-private val TEXT_WIDTH = VERBS.maxOf { it.length } + 3
+/**
+ * Room for the longest verb (or "Compacting") plus "...", in the current language: the row never changes width.
+ * Worked out each time, not once: the language (and so the longest text) can change while the app runs.
+ */
+private fun textWidth() = (VERBS + L.components.agentWorkingSpinner.compacting2).maxOf { it.length } + 3
 
 private const val GLYPH_STEP_MS = 120L
 private const val DECODE_FRAME_MS = 40L
@@ -70,11 +74,12 @@ fun AgentWorkingSpinner(color: Color, modifier: Modifier = Modifier, compacting:
     val glyphStyle = remember(color) { TextStyle(color = color, fontSize = 21.sp, fontFamily = FontFamily.Monospace) }
     val wordStyle = remember(textColor) { TextStyle(color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Medium) }
     val density = LocalDensity.current
+    val language = LocalLanguageVersion.current
 
-    // measured once: every glyph, and the widest text the row can show
+    // measured once: every glyph, and the widest text the row can show (again when the language changes)
     val glyphLayouts = remember(measurer, glyphStyle) { GLYPHS.map { measurer.measure(it, glyphStyle) } }
-    val wordRef = remember(measurer, wordStyle) { measurer.measure(L.components.agentWorkingSpinner.compacting, wordStyle) }
-    val wordWidth = remember(measurer, wordStyle) {
+    val wordRef = remember(measurer, wordStyle, language) { measurer.measure(L.components.agentWorkingSpinner.compacting, wordStyle) }
+    val wordWidth = remember(measurer, wordStyle, language) {
         (VERBS + L.components.agentWorkingSpinner.compacting2).maxOf { measurer.measure("$it...", wordStyle).size.width } + measurer.measure("▌", wordStyle).size.width
     }
     val glyphBox = remember(glyphLayouts) { glyphLayouts.maxOf { it.size.width } }
@@ -84,9 +89,9 @@ fun AgentWorkingSpinner(color: Color, modifier: Modifier = Modifier, compacting:
     val wordBaseline = (heightPx - wordRef.size.height) / 2f + wordRef.firstBaseline
 
     val glyphStep = remember { mutableIntStateOf(0) }
-    val shown = remember { mutableStateOf(" ".repeat(TEXT_WIDTH)) }
+    val shown = remember { mutableStateOf(" ".repeat(textWidth())) }
     GlyphTicker(glyphStep)
-    WordDecoder(shown, compacting)
+    WordDecoder(shown, compacting, language)
 
     Canvas(
         modifier
@@ -113,7 +118,7 @@ private fun GlyphTicker(step: androidx.compose.runtime.MutableIntState) {
 }
 
 @Composable
-private fun WordDecoder(shown: androidx.compose.runtime.MutableState<String>, compacting: Boolean) {
+private fun WordDecoder(shown: androidx.compose.runtime.MutableState<String>, compacting: Boolean, language: Int) {
     var verb by remember { mutableStateOf(VERBS.random()) }
     LaunchedEffect(Unit) {
         var changes = 0
@@ -123,12 +128,16 @@ private fun WordDecoder(shown: androidx.compose.runtime.MutableState<String>, co
             verb = VERBS.random()
         }
     }
+    // a new language: a verb in it right away, not after the next change
+    LaunchedEffect(language) { if (verb !in VERBS) verb = VERBS.random() }
     // A cursor runs over the old text; the three characters behind it flicker through '.' and '_' before settling.
-    LaunchedEffect(verb, compacting) {
-        val target = ((if (compacting) L.components.agentWorkingSpinner.compacting2 else verb) + "...").padEnd(TEXT_WIDTH)
+    LaunchedEffect(verb, compacting, language) {
+        val target = ((if (compacting) L.components.agentWorkingSpinner.compacting2 else verb) + "...").padEnd(textWidth())
         var cursor = 0
         while (cursor - 3 < target.length) {
-            val next = StringBuilder(shown.value)
+            // the old text can be shorter or longer than the new one (it was in another language): cut or pad it to
+            // the new length, so every index the cursor writes exists
+            val next = StringBuilder(shown.value.take(target.length).padEnd(target.length))
             for (behind in 0..3) {
                 val k = cursor - behind
                 if (k < 0 || k >= target.length) continue

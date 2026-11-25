@@ -810,7 +810,7 @@ object RemoteServerManager {
         appContext = context.applicationContext
         val hostPort = ai.antigem.ui.browser.BrowserExtensionManager.instance.hostPort()
         val mcpPort = AndroidLocalBridgeServer.DEFAULT_PORT
-        val deviceId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID).orEmpty()
+        val deviceId = LocalServerAuth.key(context)
         val s = session()
 
         // Node.js: PATH of a non-interactive SSH login is short, so look in the usual places too

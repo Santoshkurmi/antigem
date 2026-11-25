@@ -70,3 +70,5 @@ scripts/render_bundle/out/
 scripts/render_bundle/.work/
 # IDE bridge copy of /version.json (copied by the Gradle build and scripts/agy_ide_bridge_builder.sh)
 agy_ide_bridge/pkg/buildinfo/version.json
+# Security audit / fix plan (unfixed vulnerability details, keep out of git)
+security_assesment.md

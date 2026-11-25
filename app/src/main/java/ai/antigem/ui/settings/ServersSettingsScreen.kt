@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shuffle
@@ -192,6 +193,7 @@ internal fun ServersSubScreen(
     // on this phone: the Termux environment or the rooted Ubuntu chroot
     var phoneChroot by remember { mutableStateOf(authPrefs.isChrootModeSync()) }
     var showFactoryReset by remember { mutableStateOf(false) }
+    var confirmNewPhoneKey by remember { mutableStateOf(false) }
     var hubText by remember { mutableStateOf(currentHubUrl.ifBlank { AuthPreferences.DEFAULT_HUB_URL }) }
     var bridgeText by remember { mutableStateOf(currentBridgeUrl.ifBlank { AuthPreferences.DEFAULT_BRIDGE_HTTP_URL }) }
 
@@ -611,6 +613,29 @@ internal fun ServersSubScreen(
                 ) { Text(L.common.delete, fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { profileToDelete = null }) { Text(L.common.cancel) } },
+            shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    if (confirmNewPhoneKey) {
+        AlertDialog(
+            onDismissRequest = { confirmNewPhoneKey = false },
+            title = { Text(L.settings.serversSettings.makeANewKey, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            text = { Text(L.settings.serversSettings.theAntigemMcpServersYouAdded, fontSize = 13.5.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmNewPhoneKey = false
+                        ai.antigem.data.remote.LocalServerAuth.rotate(context)
+                        // what the app hands the key to itself follows; the agents' MCP servers are left for the user to add again
+                        coroutineScope.launch(Dispatchers.IO) { runCatching { ai.antigem.data.adb.DeviceAccess.ensureTerminalCommands(context) } }
+                        ai.antigem.ui.browser.BrowserExtensionManager.instance.restartHost()
+                        Toast.makeText(context, L.settings.serversSettings.newKeyMadeRemoveTheAntigem, Toast.LENGTH_LONG).show()
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text(L.settings.serversSettings.makeNewKey, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { confirmNewPhoneKey = false }) { Text(L.common.cancel) } },
             shape = RoundedCornerShape(16.dp), containerColor = MaterialTheme.colorScheme.surface
         )
     }
@@ -1161,7 +1186,7 @@ internal fun ServersSubScreen(
                         Text(
                             if (remote && tunnel) L.settings.serversSettings.theSecretThatProtectsTheBridge
                             else if (remote) "The secret that protects the bridge. The app starts the server with it. Use https:// on the internet: over plain http it is visible on the network."
-                            else L.settings.serversSettings.n12CharTokenFramingLocalhostRequests,
+                            else L.settings.serversSettings.protectsTheIdeBridgeAndThe,
                             fontSize = 11.5.sp, color = subtle
                         )
                     }
@@ -1204,6 +1229,24 @@ internal fun ServersSubScreen(
                     ) {
                         Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.serversSettings.copyHeader, fontSize = 12.sp)
                     }
+                }
+            }
+        }
+
+        // ----- Phone tools key (LocalServerAuth): the other direction, agents -> this phone's MCP / REST server -----
+        Card(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp), CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Key, null, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(L.settings.serversSettings.phoneToolsKey, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(L.settings.serversSettings.protectsThisPhonesToolsAgentsSend, fontSize = 11.5.sp, color = subtle)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = { confirmNewPhoneKey = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+                    Icon(Icons.Outlined.Shuffle, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.serversSettings.newKey, fontSize = 12.sp)
                 }
             }
         }

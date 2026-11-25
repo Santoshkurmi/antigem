@@ -2937,11 +2937,7 @@ private fun McpSubScreen(
 
         run {
             val context = LocalContext.current
-            val deviceId = remember(context) {
-                try {
-                    android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID) ?: ""
-                } catch (_: Exception) { "" }
-            }
+            val deviceId = remember(context) { ai.antigem.data.remote.LocalServerAuth.key(context) }
             val extensionManager = remember { ai.antigem.ui.browser.BrowserExtensionManager.instance }
             if (chooseWebViewExtension) WebViewExtensionMcpPicker(onDismiss = { chooseWebViewExtension = false }) { extension ->
                 serverToEdit = ai.antigem.domain.model.McpServerSpec(
