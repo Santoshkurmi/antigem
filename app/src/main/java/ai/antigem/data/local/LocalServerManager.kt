@@ -271,7 +271,9 @@ object LocalServerManager {
         // agents switched off in the app never run (no AGY hub / no Claude Code endpoints)
         val agentFlags = ai.antigem.data.agent.AgentPreferences.bridgeFlags(context)
 
-        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset$binParam$claudeBinParam$openCodeBinParam$codexBinParam$agentFlags"
+        // --no-proxy-headers: on the phone every app reaches the bridge on loopback, so X-Forwarded-For can't be trusted
+        // (it would let them get around the failure limit); an older bridge ignores the flag
+        return "$bridgeCmd -f --token $token -p $bridgePort --hub-port $hubPort --tz-offset $tzOffset --no-proxy-headers$binParam$claudeBinParam$openCodeBinParam$codexBinParam$agentFlags"
     }
 
     /**

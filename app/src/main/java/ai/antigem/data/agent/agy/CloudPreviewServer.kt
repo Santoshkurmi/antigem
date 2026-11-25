@@ -14,23 +14,37 @@ import java.util.concurrent.Executors
 
 /**
  * Serves a web app running in a cloud chat's VM on this phone (`http://127.0.0.1:<port>`), so the system browser can
- * show it: every request goes through the hub to the VM's port ([AgyCloud.fetchPort]). Only this phone can reach it
- * (loopback). Hot reload (WebSocket) does not work through it; reload the page to see changes.
+ * show it: every request goes through the hub to the VM's port ([AgyCloud.fetchPort]). Hot reload (WebSocket) does not
+ * work through it; reload the page to see changes.
+ *
+ * Loopback is not private on a phone: any app (by scanning ports) and any website (by DNS rebinding) could otherwise
+ * send requests, any method and body, to the VM with the user's hub session. So the link AntiGem opens carries a
+ * one-time token ([AUTH_PATH]); the answer sets a cookie (HttpOnly, SameSite=Strict) that every later request needs, and
+ * a request whose Host is not this preview's own is refused.
  */
 object CloudPreviewServer {
     private const val TAG = "AgyCloud"
     private const val MAX_BODY = 32 * 1024 * 1024
 
-    private class Running(val server: ServerSocket, val conversationId: String, val vmPort: Int)
+    private class Running(val server: ServerSocket, val conversationId: String, val vmPort: Int) {
+        val token: String = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        val cookieName: String get() = "ag_preview_${server.localPort}"
+    }
+
+    private const val AUTH_PATH = "/__antigem_auth"
 
     private val servers = ConcurrentHashMap<String, Running>()
     private val pool = Executors.newCachedThreadPool { r -> Thread(r, "cloud-preview").apply { isDaemon = true } }
 
-    /** The local address showing [vmPort] of the chat's VM (started on first use, then kept while the app runs). */
-    fun urlFor(conversationId: String, vmPort: Int): String {
+    /**
+     * The link that opens [path] of [vmPort] in the chat's VM (the server is started on first use, then kept while the
+     * app runs). It carries the preview's token: only open it in the browser, never hand it to another app.
+     */
+    fun urlFor(conversationId: String, vmPort: Int, path: String = "/"): String {
         val key = "$conversationId:$vmPort"
         val running = servers[key]?.takeIf { !it.server.isClosed } ?: start(conversationId, vmPort).also { servers[key] = it }
-        return "http://127.0.0.1:${running.server.localPort}/"
+        val to = "/" + path.trim().removePrefix("/")
+        return "http://127.0.0.1:${running.server.localPort}$AUTH_PATH?t=${running.token}&to=${java.net.URLEncoder.encode(to, "UTF-8")}"
     }
 
     fun stopAll() {
@@ -40,6 +54,7 @@ object CloudPreviewServer {
 
     private fun start(conversationId: String, vmPort: Int): Running {
         val server = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
+        ai.antigem.data.security.LocalPorts.add(server.localPort)
         val running = Running(server, conversationId, vmPort)
         pool.execute {
             while (!server.isClosed) {
@@ -69,6 +84,39 @@ object CloudPreviewServer {
                     val i = line.indexOf(':')
                     if (i > 0) headers[line.substring(0, i).trim()] = line.substring(i + 1).trim()
                 }
+                // only this preview's own address (DNS rebinding: a website's name pointing at 127.0.0.1 is refused)
+                val hostHeader = headers.entries.firstOrNull { it.key.equals("host", true) }?.value?.lowercase()
+                val port = r.server.localPort
+                if (hostHeader != "127.0.0.1:$port" && hostHeader != "localhost:$port") {
+                    write(out, 403, "Forbidden", mapOf("Content-Type" to "text/plain"), "Forbidden".toByteArray())
+                    return
+                }
+                // the link from AntiGem: token → cookie, then on to the page
+                if (target.startsWith("$AUTH_PATH?")) {
+                    val q = runCatching { URI("http://x$target").rawQuery }.getOrNull().orEmpty().split('&')
+                        .associate { it.substringBefore('=') to java.net.URLDecoder.decode(it.substringAfter('=', ""), "UTF-8") }
+                    val to = q["to"]?.takeIf { it.startsWith("/") && !it.startsWith("//") } ?: "/"
+                    if (!java.security.MessageDigest.isEqual(q["t"].orEmpty().toByteArray(), r.token.toByteArray())) {
+                        write(out, 403, "Forbidden", mapOf("Content-Type" to "text/plain"), ai.antigem.i18n.L.agent.cloudPreviewServer.openThePreviewFromAntigemAgain.toByteArray())
+                        return
+                    }
+                    write(out, 302, "Found", mapOf(
+                        "Set-Cookie" to "${r.cookieName}=${r.token}; Path=/; HttpOnly; SameSite=Strict",
+                        "Location" to to, "Cache-Control" to "no-store"
+                    ), ByteArray(0))
+                    return
+                }
+                val cookieHeader = headers.entries.firstOrNull { it.key.equals("cookie", true) }?.value.orEmpty()
+                val cookies = cookieHeader.split(';').map { it.trim() }.filter { it.isNotEmpty() }
+                val ours = cookies.firstOrNull { it.startsWith("${r.cookieName}=") }?.substringAfter('=').orEmpty()
+                if (!java.security.MessageDigest.isEqual(ours.toByteArray(), r.token.toByteArray())) {
+                    write(out, 403, "Forbidden", mapOf("Content-Type" to "text/plain"), ai.antigem.i18n.L.agent.cloudPreviewServer.openThePreviewFromAntigemAgain.toByteArray())
+                    return
+                }
+                // the preview's own cookie never goes on to the VM
+                val otherCookies = cookies.filterNot { it.startsWith("${r.cookieName}=") || it.startsWith("ag_preview_") }.joinToString("; ")
+                headers.keys.filter { it.equals("cookie", true) }.forEach { headers.remove(it) }
+                if (otherCookies.isNotEmpty()) headers["Cookie"] = otherCookies
                 if (headers.keys.any { it.equals("upgrade", true) }) {
                     write(out, 404, "Not Found", mapOf("Content-Type" to "text/plain"), "Live reload is not available in the cloud preview; reload the page.".toByteArray())
                     return

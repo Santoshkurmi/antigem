@@ -431,12 +431,17 @@ func (l *failureLimiter) fail(ip string) {
 }
 
 // clientIP is the caller's address; behind a reverse proxy on this machine it is the forwarded one.
+// TrustProxyHeaders: X-Forwarded-For from loopback names the real client (a reverse proxy on a server). Off with
+// --no-proxy-headers (the phone): there every app reaches the bridge on loopback and could change the header on each
+// try to get around the failure limit.
+var TrustProxyHeaders = true
+
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+	if ip := net.ParseIP(host); TrustProxyHeaders && ip != nil && ip.IsLoopback() {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			if i := strings.Index(xff, ","); i >= 0 {
 				xff = xff[:i]

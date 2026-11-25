@@ -22,6 +22,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Button
@@ -105,6 +107,7 @@ fun AgentApprovalPanel(
     onDenyAll: (() -> Unit)? = null
 ) {
     val item = items.firstOrNull() ?: return
+    ai.antigem.ui.components.FilterObscuredTouches() // an overlay can't tap "Allow" through this panel (Android 7–11)
     val accent = item.agent.accent()
     Surface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -261,7 +264,12 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AllowGreen)
-                ) { Text(item.primary.label, fontWeight = FontWeight.SemiBold) }
+                ) {
+                    // fixed icons and colours: a language can't change what a button looks like (only English labels here)
+                    Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(item.primary.label, fontWeight = FontWeight.SemiBold)
+                }
                 item.secondary.forEach { choice ->
                     Spacer(Modifier.height(6.dp))
                     OutlinedButton(onClick = choice.onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
@@ -276,6 +284,8 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
 
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { denying = true }, contentPadding = PaddingValues(horizontal = 10.dp)) {
+                    Icon(Icons.Outlined.Close, null, tint = DenyRed, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(item.denyLabel, color = DenyRed, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.weight(1f))
@@ -313,7 +323,11 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AllowGreen),
                     contentPadding = PaddingValues(horizontal = 18.dp)
-                ) { Text(item.primary.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
+                ) {
+                    Icon(Icons.Outlined.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(item.primary.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
             }
         }
     }

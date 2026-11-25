@@ -48,7 +48,8 @@ object LanguageManager {
     /** Community languages' ids: "repo." + their pack id (user ids never have a dot, see [freeId]). */
     const val REPO_PREFIX = "repo."
     // "AGL2": tables cached by builds before the key index fix were empty, so they are not read again
-    private const val CACHE_MAGIC = 0x41474C32
+    // "AGL3": tables cached before ProtectedTexts still hold translated security texts, so they are rebuilt once
+    private const val CACHE_MAGIC = 0x41474C33
 
     // ------------------------------------------------------------------ data
 
@@ -370,6 +371,8 @@ object LanguageManager {
         check(src.keys.size == L.COUNT) { "en.json has ${src.keys.size} texts, the app ${L.COUNT}" }
         val t = arrayOfNulls<Any?>(L.COUNT)
         lang.strings.forEach { (k, v) ->
+            // security texts (Allow / Deny, permission and approval screens) always show the app's own English
+            if (k in ProtectedTexts.KEYS) return@forEach
             val i = src.index[k] ?: return@forEach
             // a file from elsewhere (downloaded, built for another app version) can have a text that doesn't fit: English shows
             if (lang.readOnly && checkText(src, i, v) != null) return@forEach

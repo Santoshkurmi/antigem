@@ -2095,23 +2095,46 @@ object JarvisController {
         fun withSource(source: String, chatId: String = this.chatId) = Perm(key, source, chatId, tool, summary, risk, approve, reject)
     }
 
-    private val readTools = setOf("Read", "Glob", "Grep", "LS", "NotebookRead", "WebSearch", "WebFetch", "TodoWrite", "ToolSearch")
+    // WebFetch is not here: fetching a URL can send data out (in its query), so it is a normal action
+    private val readTools = setOf("Read", "Glob", "Grep", "LS", "NotebookRead", "WebSearch", "TodoWrite", "ToolSearch")
     private val riskyBash = Regex(
         "\\brm\\s|\\bsudo\\b|git\\s+push|git\\s+reset\\s+--hard|git\\s+clean|\\bmkfs|\\bdd\\s+if=|chmod\\s+-R|chown\\s|(curl|wget)[^|]*\\|\\s*(sh|bash)|:\\(\\)\\s*\\{|\\bpkill\\b|kill\\s+-9|drop\\s+table|npm\\s+publish|--force|\\bformat\\b|>\\s*/(dev|etc|usr)"
     )
-    private val readBash = Regex("^\\s*(ls|cat|pwd|echo|head|tail|wc|grep|rg|find|which|date|whoami|df|du|ps|stat|file|tree|git\\s+(status|log|diff|branch|show|remote))\\b")
-    private val unsafeInRead = Regex("[>;&]|\\b(rm|mv|cp|sh|bash|xargs|sudo|tee|dd)\\b|-delete|-exec")
+    // read-only means one plain command that only looks: the whole line must match
+    private val readBash = Regex(
+        "^\\s*(?:(?:ls|cat|pwd|echo|head|tail|wc|grep|rg|find|which|date|whoami|df|du|ps|stat|file|tree)(?:\\s.*)?" +
+            "|git\\s+(?:status|log|diff|show)(?:\\s.*)?|git\\s+(?:branch|remote)(?:\\s+(?:-v|-vv|-a|-r|--list))*)\\s*$"
+    )
+    /** Pipes, chains, redirects, command substitution, subshells, escapes, more than one line: never read-only. */
+    private val notSimple = Regex("[|;&<>`$(){}\\\\\\n]")
+    /** Tools that write, run code or reach the network, anywhere in the line. */
+    private val unsafeInRead = Regex(
+        "\\b(rm|mv|cp|sh|bash|zsh|xargs|sudo|tee|dd|curl|wget|nc|ncat|netcat|socat|telnet|ssh|scp|sftp|rsync|ftp|" +
+            "python3?|node|perl|ruby|php|lua|awk|sed)\\b|-delete|-exec|-ok\\b|-fprint|-fls|--output"
+    )
 
     fun bashRisk(cmd: String?): Risk {
         val c = cmd.orEmpty()
         if (riskyBash.containsMatchIn(c)) return Risk.RISKY
-        if (readBash.containsMatchIn(c) && !unsafeInRead.containsMatchIn(c)) return Risk.READ
+        if (readBash.matches(c) && !notSimple.containsMatchIn(c) && !unsafeInRead.containsMatchIn(c)) return Risk.READ
         return Risk.NORMAL
     }
 
     /** Jarvis' own tools (any agent's naming) never need the user. */
-    private fun isJarvisTool(name: String) =
-        name.startsWith("mcp__jarvis_mcp") || name.startsWith("mcp_jarvis_mcp") || name.startsWith("jarvis_")
+    private fun isJarvisTool(name: String): Boolean {
+        // by what the tool is (one of jarvis_mcp's own tools, under any agent's naming), not by a name prefix: a server
+        // called "jarvis…" or a plugin tool named "jarvis_x" must not be auto-approved
+        val bare = JARVIS_PREFIXES.firstOrNull { name.startsWith(it) }?.let { name.removePrefix(it) } ?: name
+        return bare in jarvisToolNames
+    }
+
+    private val JARVIS_PREFIXES = listOf("mcp__jarvis_mcp__", "mcp_jarvis_mcp_", "jarvis_mcp__", "jarvis_mcp_", "jarvis_mcp/", "jarvis_mcp.")
+
+    /** jarvis_mcp's tool names, from its own tool list. */
+    private val jarvisToolNames: Set<String> by lazy {
+        val tools = JarvisMcp.tools()
+        (0 until tools.length()).mapNotNull { tools.optJSONObject(it)?.optString("name")?.takeIf { n -> n.isNotBlank() } }.toSet()
+    }
 
     private fun jstr(o: kotlinx.serialization.json.JsonObject, k: String) = (o[k] as? JsonPrimitive)?.contentOrNull
 
@@ -2197,7 +2220,8 @@ object JarvisController {
     private fun agyRisk(t: ToolCall): Risk = when (t.toolType) {
         ToolType.VIEW_FILE, ToolType.LIST_DIR, ToolType.GREP_SEARCH, ToolType.FIND, ToolType.SEARCH_WEB, ToolType.READ_URL -> Risk.READ
         ToolType.BASH -> bashRisk(t.command)
-        ToolType.MCP -> if (t.name.contains("jarvis", true)) Risk.READ else Risk.NORMAL
+        // Jarvis' own tools only (the same names as for the other agents), not any tool with "jarvis" in its name
+        ToolType.MCP -> if (isJarvisTool(t.name)) Risk.READ else Risk.NORMAL
         else -> Risk.NORMAL
     }
 

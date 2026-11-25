@@ -128,6 +128,34 @@ func (m *Manager) text(u string) (string, bool, error) {
 	return string(data), true, nil
 }
 
+var commitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// commitOf is the commit r's branch or tag points at now ("" when GitHub's API can't tell, e.g. its rate limit). An
+// install downloads everything at that commit, so the listing and the files can't come from two different pushes,
+// and the plugin records which commit it came from.
+func (m *Manager) commitOf(r Repo) string {
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s", r.Owner, r.Name, encodePath(r.ref())), nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("User-Agent", "AntiGem")
+	req.Header.Set("Accept", "application/vnd.github.sha")
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 128))
+	sha := strings.TrimSpace(string(data))
+	if !commitSHA.MatchString(sha) {
+		return ""
+	}
+	return sha
+}
+
 type treeEntry struct {
 	Path string `json:"path"`
 	Type string `json:"type"`

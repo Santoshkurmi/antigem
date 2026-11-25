@@ -115,6 +115,11 @@ object SshSessionFactory {
         appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.getString("$host:$port", null)?.substringAfter('|')
 
     /** Trust-on-first-use host key store, kept in the app's private preferences. */
+    /** The fingerprint of the last host key that did not match its pin (for the error message), or null. */
+    @Volatile
+    var lastChangedFingerprint: String? = null
+        private set
+
     private class PinnedHostKeys(private val host: String, private val port: Int) : HostKeyRepository {
         private val prefs get() = appContext?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         private val id = "$host:$port"
@@ -131,6 +136,9 @@ object SshSessionFactory {
             val savedKey = saved.substringAfter('|')
             return if (savedKey == presented) HostKeyRepository.OK else {
                 Log.w(TAG, "Host key for $id CHANGED")
+                // shown in the error, so the user can compare it with the server's (ssh-keygen -lf …)
+                lastChangedFingerprint = "SHA256:" + Base64.getEncoder().withoutPadding()
+                    .encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(Base64.getDecoder().decode(presented)))
                 HostKeyRepository.CHANGED
             }
         }
@@ -140,6 +148,14 @@ object SshSessionFactory {
         override fun remove(host: String?, type: String?, key: ByteArray?) {}
         override fun getKnownHostsRepositoryID(): String = "antigem-pinned"
         override fun getHostKey(): Array<HostKey> = emptyArray()
-        override fun getHostKey(host: String?, type: String?): Array<HostKey> = emptyArray()
+        /**
+         * The pinned key, so JSch asks the server for that key type first (prefer_known_host_key_types): a server that
+         * also offers another type later is not refused just because it offered that one first.
+         */
+        override fun getHostKey(host: String?, type: String?): Array<HostKey> {
+            val saved = prefs?.getString(id, null)?.substringAfter('|') ?: return emptyArray()
+            val key = runCatching { HostKey(host ?: id, Base64.getDecoder().decode(saved)) }.getOrNull() ?: return emptyArray()
+            return if (type == null || key.type == type) arrayOf(key) else emptyArray()
+        }
     }
 }

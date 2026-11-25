@@ -193,7 +193,7 @@ private fun PermissionDialog(d: NativeDialog.Permissions) {
     AlertDialog(
         onDismissRequest = { d.result.complete(d.names.associateWith { false }) },
         icon = { Image(icon, null, Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))) },
-        title = { Text(if (d.firstLaunch) L.miniapps.miniAppUi.nameWantsTo(app.name) else L.miniapps.miniAppUi.allowNameToUseThis(app.name), style = MaterialTheme.typography.titleLarge) },
+        title = { ai.antigem.ui.components.FilterObscuredTouches(); Text(if (d.firstLaunch) L.miniapps.miniAppUi.nameWantsTo(app.name) else L.miniapps.miniAppUi.allowNameToUseThis(app.name), style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 d.names.forEach { name ->
@@ -246,7 +246,7 @@ private fun McpCallDialog(d: NativeDialog.McpCall) {
     AlertDialog(
         onDismissRequest = { d.result.complete(null) },
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = if (MiniAppMcpAccess.isSensitive(d.server)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) },
-        title = { Text(L.miniapps.miniAppUi.nameWantsToUseTool(d.app.name, d.tool)) },
+        title = { ai.antigem.ui.components.FilterObscuredTouches(); Text(L.miniapps.miniAppUi.nameWantsToUseTool(d.app.name, d.tool)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(L.miniapps.miniAppUi.antigemToolsServer(d.server), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -614,7 +614,7 @@ private fun McpTypedConfirmDialog(app: MiniApp, name: String, onResult: (Boolean
     AlertDialog(
         onDismissRequest = { onResult(false) },
         icon = { Icon(Icons.Outlined.WarningAmber, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(36.dp)) },
-        title = { Text(L.miniapps.miniAppUi.letNameUseWhat(app.name, what)) },
+        title = { ai.antigem.ui.components.FilterObscuredTouches(); Text(L.miniapps.miniAppUi.letNameUseWhat(app.name, what)) },
         text = {
             Column {
                 Text(

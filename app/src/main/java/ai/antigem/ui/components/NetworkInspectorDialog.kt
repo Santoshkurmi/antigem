@@ -1,7 +1,5 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -436,9 +434,8 @@ private fun NetworkLogDetailDialog(
     val context = LocalContext.current
 
     fun copyToClipboard(label: String, text: String) {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText(label, text)
-        clipboard.setPrimaryClip(clip)
+        // requests carry tokens and cookies: copied as sensitive
+        ai.antigem.data.security.SecretClipboard.copy(context, label, text)
         Toast.makeText(context, L.components.networkInspector.copiedLabelToClipboard(label), Toast.LENGTH_SHORT).show()
     }
 

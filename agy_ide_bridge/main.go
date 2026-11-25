@@ -50,6 +50,7 @@ Flags:
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
                             (without it: the one saved in ~/.antigem_bridge/csrf_token.txt, or a new one)
   --show-token              Print the full token in the banner even when the output is not a terminal
+  --no-proxy-headers        Never take the client address from X-Forwarded-For (for the phone: no reverse proxy there)
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
   --bind <address>          Address the IDE Server listens on (default: 127.0.0.1; use 0.0.0.0 only to reach it directly from other machines)
@@ -195,6 +196,8 @@ func main() {
 			}
 		case arg == "--show-token":
 			showToken = true
+		case arg == "--no-proxy-headers":
+			security.TrustProxyHeaders = false
 		case arg == "-f" || arg == "--f" || arg == "--force" || arg == "-force":
 			forceStart = true
 		case arg == "--no-hub" || arg == "-n" || arg == "--skip-hub":
@@ -582,12 +585,24 @@ func main() {
 		}
 
 		var reqPayload string
+		// JSON and other non-upload bodies: never more than 256 MB in memory (uploads stream to disk and keep no cap)
+		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") &&
+			!strings.HasPrefix(r.Header.Get("Content-Type"), "application/octet-stream") {
+			r.Body = http.MaxBytesReader(w, r.Body, 256<<20)
+		}
 		// raw uploads (Files screen) can be gigabytes: never read them into memory for logging
 		if r.Body != nil && !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") &&
 			!strings.HasPrefix(r.Header.Get("Content-Type"), "application/octet-stream") {
-			bodyBytes, err := io.ReadAll(r.Body)
+			// only the start is read for the log (this runs before the token check: an anonymous client must not
+			// make the bridge hold a huge body); the handler still gets the whole body, the start put back in front
+			bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+			if len(bodyBytes) > 0 {
+				r.Body = struct {
+					io.Reader
+					io.Closer
+				}{io.MultiReader(bytes.NewReader(bodyBytes), r.Body), r.Body}
+			}
 			if err == nil && len(bodyBytes) > 0 {
-				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 				trimmed := strings.TrimSpace(string(bodyBytes))
 				if len(trimmed) > 300 {
 					reqPayload = trimmed[:300] + "... (truncated)"

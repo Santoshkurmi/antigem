@@ -185,8 +185,8 @@ fun CloudPreviewDialog(conversationId: String, suggestedPorts: List<Int>, initia
                     Text(L.common.preview, fontSize = 16.sp, modifier = Modifier.weight(1f))
                     // the same page in the system browser (served on this phone through the hub)
                     IconButton(onClick = {
-                        val p = path.trim().ifBlank { "/" }.removePrefix("/")
-                        uriHandler.openUri(ai.antigem.data.agent.agy.CloudPreviewServer.urlFor(conversationId, port) + p)
+                        val p = path.trim().ifBlank { "/" }
+                        uriHandler.openUri(ai.antigem.data.agent.agy.CloudPreviewServer.urlFor(conversationId, port, p))
                     }) { Icon(Icons.Outlined.OpenInBrowser, L.cloud.preview.openInBrowser) }
                     IconButton(onClick = { reloadKey++; open() }) { Icon(Icons.Outlined.Refresh, L.common.reload) }
                 }

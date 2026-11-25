@@ -357,12 +357,15 @@ object BrowserCdp {
             sessions[tab.id]?.takeIf { !it.closed }?.let { return@withLock it }
             val opened = runCatching { connect(tab) }.onFailure { Log.w(TAG, "DevTools unavailable for tab ${tab.id}: ${it.message}") }.getOrNull()
             if (opened == null) failedAt[tab.id] = System.currentTimeMillis() else failedAt.remove(tab.id)
+            if (opened == null && sessions.isEmpty()) ai.antigem.ui.browser.WebDebug.drop("cdp")
             opened
         }
     }
 
     private suspend fun connect(tab: BrowserTabSession): CdpSession? {
         val manager = BrowserSessionManager.instance
+        // DevTools on before the socket is asked for (off again once no tab has a session: drop below)
+        withContext(Dispatchers.Main) { ai.antigem.ui.browser.WebDebug.hold("cdp") }
         repeat(2) {
             // The same tag the extension host uses to tell WebViews apart; a navigation can wipe it, hence the retry
             manager.evaluateJs(tab.id, "window.__antigemTabId=${JSONObject.quote(tab.id)};true").getOrElse { return null }
@@ -395,7 +398,10 @@ object BrowserCdp {
     private suspend fun attach(tabId: String, session: CdpSession) {
         val log = logs.getOrPut(tabId) { NetworkLog() }
         session.onEvent = { method, params -> if (method.startsWith("Network.")) log.onEvent(method, params) }
-        session.onClosed = { sessions.remove(tabId, session) }
+        session.onClosed = {
+            sessions.remove(tabId, session)
+            if (sessions.isEmpty()) ai.antigem.ui.browser.WebDebug.drop("cdp")
+        }
         sessions[tabId] = session
         runCatching { session.send("Network.enable", JSONObject().put("maxPostDataSize", 0), 5000) }
         // Lets background tabs keep keyboard focus, so typing still lands while the user is elsewhere in the app

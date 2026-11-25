@@ -125,6 +125,9 @@ AntiGem provides two distinct layers of security to prevent unauthorized access 
   ```
   This causes your reverse proxy to silently drop requests from strangers before they even reach the bridge or hub.
 
+### The phone's tools on the server (`GatewayPorts`)
+AntiGem opens `127.0.0.1:8767` on the server so the agents there can use this phone's tools (browser, Android, notes…). It asks sshd for the server's loopback only, but with `GatewayPorts yes` in `/etc/ssh/sshd_config` sshd opens it on every network interface, and anyone who can reach the server can try it (only the phone tools key stays in the way). Keep `GatewayPorts no` (the default) or `clientspecified`. When sshd opens it to the network anyway, the forwards list shows a warning.
+
 ---
 
 ## 🕹️ 7. Live Server Control & Logs

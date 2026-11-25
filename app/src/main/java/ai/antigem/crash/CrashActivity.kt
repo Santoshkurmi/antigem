@@ -88,8 +88,9 @@ class CrashActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // scrubbed before it is shown: what the user sees is exactly what a report, copy or share sends
         val report = runCatching { CrashHandler.reportFile(this).readText() }.getOrNull()
-            ?.takeIf { it.isNotBlank() } ?: L.crash.activity.noCrashReportWasSaved
+            ?.takeIf { it.isNotBlank() }?.let { CrashReportScrubber.scrub(this, it) } ?: L.crash.activity.noCrashReportWasSaved
         // The error line (like "java.lang.OutOfMemoryError: …") is the first line after the header block.
         val errorLine = report.substringAfter("\n\n", report).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
         setContent {

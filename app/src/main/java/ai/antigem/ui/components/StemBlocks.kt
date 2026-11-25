@@ -254,6 +254,10 @@ private fun StemWebView(
                     settings.displayZoomControls = false
                 }
                 webViewClient = RenderBundle.webViewClient(allowNetwork = false)
+                // WebRTC does not go through the request interceptor or CSP: gone in every frame before any code runs
+                if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, NO_WEBRTC, setOf("*"))
+                }
                 addJavascriptInterface(this.bridge, "AG")
                 if (interactive && !fill) {
                     // dragging a point / body moves it instead of scrolling the chat
@@ -438,8 +442,12 @@ internal object StemHtml {
 
     private fun shell(isDark: Boolean, head: String, body: String, script: String): String {
         val fg = if (isDark) "#ECECF1" else "#1A1A1A"
+        // connect-src: a block's code (run with new Function) can't fetch or open a WebSocket to anywhere but the
+        // render bundle itself; the bundle's interceptor already keeps every other load offline
         return """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{localStorage.clear();sessionStorage.clear()}catch(e){}${NO_WEBRTC}</script>
 <style>
 html,body{margin:0;padding:0;background:transparent;color:$fg;font:14px system-ui,-apple-system,sans-serif;overflow-x:hidden}
 #err{display:none;white-space:pre-wrap;color:#e5534b;font:12px/1.4 monospace;padding:8px 10px;margin:0}
@@ -598,8 +606,20 @@ new MutationObserver(function(){if(document.querySelector('#out img')){try{AG.er
 
     /** A compiled TikZ picture: only its SVG and the TeX fonts (no TeX engine). */
     fun tikzSvgPage(svg: String, isDark: Boolean): String =
-        shell(isDark, tikzStyle(isDark), """<div id="out">$svg</div>""", "")
+        shell(isDark, tikzStyle(isDark), """<div id="out">${safeSvg(svg)}</div>""", "")
             .replace("\$CODE", "\"\"").replace("\$FULL", "false")
+
+    /**
+     * The cached SVG is inlined into the page as markup: anything in it that could run (scripts, event handlers,
+     * javascript: links, foreignObject's HTML) is taken out first. A TikZ picture needs none of it.
+     */
+    private fun safeSvg(svg: String): String = svg
+        .replace(Regex("(?is)<script\\b.*?</script\\s*>"), "")
+        .replace(Regex("(?is)<script\\b[^>]*/?>"), "")
+        .replace(Regex("(?is)<foreignObject\\b.*?</foreignObject\\s*>"), "")
+        .replace(Regex("(?is)<foreignObject\\b[^>]*/?>"), "")
+        .replace(Regex("(?i)\\son[a-z]+\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)"), "")
+        .replace(Regex("(?i)(href\\s*=\\s*[\"']?)\\s*javascript:"), "$1#")
 }
 
 // ---------------------------------------------------------------------------------------------- fullscreen
@@ -639,3 +659,6 @@ private fun StemFullscreenDialog(kind: StemKind, code: String, html: String?, on
         }
     }
 }
+
+/** Removes WebRTC from a render page (render blocks run code: a peer connection could send data out). */
+internal const val NO_WEBRTC = "(function(){var n=['RTCPeerConnection','webkitRTCPeerConnection','RTCDataChannel','RTCSessionDescription','RTCIceCandidate'];for(var i=0;i<n.length;i++){try{Object.defineProperty(window,n[i],{value:undefined,writable:false,configurable:false})}catch(e){}}})();"

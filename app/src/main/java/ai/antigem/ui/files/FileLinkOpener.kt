@@ -76,7 +76,10 @@ class FileLinkOpener internal constructor(private val context: Context, private 
                 is FileProbe.Result.Unavailable -> toast(r.message)
                 is FileProbe.Result.Folder -> onShowFolder?.invoke(r.path) ?: toast(L.files.fileLinkOpener.nameIsAFolder(name))
                 is FileProbe.Result.Found -> {
+                    // a file in a hidden or private folder (keys, logins, app data) never goes to another app on a
+                    // remembered choice: the user picks each time
                     val remembered = ExplorerPrefs.rememberedChoice(FileKinds.extOf(r.name))
+                        ?.takeUnless { (it == OpenChoice.EXTERNAL || it == OpenChoice.SHARE) && isPrivatePath(r.path) }
                     when {
                         alwaysAsk -> sheet = SheetRequest(r)
                         r.textual -> openInIde(r, force = false)
@@ -86,6 +89,17 @@ class FileLinkOpener internal constructor(private val context: Context, private 
                 }
             }
         }
+    }
+
+    /** A hidden folder anywhere in the path (~/.ssh, ~/.claude, .git…), or AntiGem's own data outside the home folder. */
+    private fun isPrivatePath(path: String): Boolean {
+        val clean = path.removePrefix("file://").trimEnd('/')
+        if (clean.split('/').dropLast(1).any { it.startsWith(".") && it != "." && it != ".." }) return true
+        if (clean.substringAfterLast('/').startsWith(".")) return true
+        val data = runCatching { File(context.applicationInfo.dataDir).canonicalPath }.getOrNull() ?: return false
+        val home = runCatching { ai.antigem.data.local.LocalEnvironmentManager.getHomeDir(context).canonicalPath }.getOrNull() ?: return false
+        val canon = runCatching { File(clean).canonicalPath }.getOrDefault(clean)
+        return (canon == data || canon.startsWith("$data/")) && !(canon == home || canon.startsWith("$home/"))
     }
 
     /** Archive contents and extraction run on the bridge, which cannot see a file only this phone has. */

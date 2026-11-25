@@ -122,6 +122,10 @@ object BrowserMcp {
 
     fun tools(): JSONArray = JSONArray().apply {
         put(tool("browser_list_tabs", "List the in-app browser's tabs: id, URL, title, which is active, loading state and view mode.", emptyList()))
+        put(tool("browser_rea_connect",
+            "Switch on the DevTools bridge REA's website tools connect to (http://127.0.0.1:9222). It switches itself off after " +
+                "10 minutes without use, so call this first when REA's website tools can't connect. Works only while website " +
+                "analysis with REA is on in AntiGem (Settings → REA → Websites).", emptyList()))
         put(tool("browser_open_url",
             "Open a URL in the in-app browser and wait for it to load (up to 10 s), or move in a tab's history. Opens in the active " +
                 "tab unless new_tab=true or tab_id is given. Returns the tab id, final URL and title.",
@@ -291,7 +295,7 @@ object BrowserMcp {
         "browser_eval_js", "browser_upload_file")
 
     /** Tools that still work while a page dialog has the browser paused. */
-    private val dialogSafe = setOf("browser_list_tabs", "browser_handle_dialog", "browser_close_tab", "browser_switch_tab",
+    private val dialogSafe = setOf("browser_list_tabs", "browser_rea_connect", "browser_handle_dialog", "browser_close_tab", "browser_switch_tab",
         "browser_get_console_logs", "browser_batch")
 
     private suspend fun run(context: Context, name: String, args: JSONObject, batch: Batch?): JSONObject {
@@ -307,6 +311,15 @@ object BrowserMcp {
             } else null
             when (name) {
                 "browser_list_tabs" -> out.text(withContext(Dispatchers.Main) { manager.listTabsJson() }.toString(2))
+                "browser_rea_connect" -> {
+                    if (!ai.antigem.data.rea.ReaManager.isWebEnabled(context)) {
+                        out.text("Website analysis with REA is off in AntiGem (Settings → REA → Websites): ask the user to turn it on.")
+                    } else {
+                        ai.antigem.data.rea.ReaWebBridge.start(context)
+                        val st = ai.antigem.data.rea.ReaWebBridge.state.value
+                        out.text(if (st.running) "The DevTools bridge for REA is on at ${st.endpoint}." else "Could not start it: ${st.error}")
+                    }
+                }
                 "browser_open_url" -> openUrl(context, args, out)
                 "browser_switch_tab" -> {
                     val id = args.optString("tab_id")

@@ -133,6 +133,8 @@ object AdbConnectManager {
                 secureSettings = hasSecureSettings()
             )
         }
+        // AntiGem switched Wireless debugging on before the app last stopped: switch it off again after the idle time
+        if (prefs.getBoolean(WIRELESS_BY_ANTIGEM, false)) scheduleWirelessOff()
         // adbd picks a new port each time Wireless debugging turns on (also after Wi-Fi drops)
         runCatching {
             appContext.contentResolver.registerContentObserver(
@@ -140,6 +142,8 @@ object AdbConnectManager {
                 object : ContentObserver(Handler(Looper.getMainLooper())) {
                     override fun onChange(selfChange: Boolean) {
                         if (isWirelessDebuggingOn(appContext)) maybeAutoConnect()
+                        // off (by the user, Wi-Fi or us): a later "on" is AntiGem's only when AntiGem switches it on again
+                        else prefs.edit().putBoolean(WIRELESS_BY_ANTIGEM, false).apply()
                     }
                 }
             )
@@ -271,9 +275,37 @@ object AdbConnectManager {
             return false
         }
         return runCatching { Settings.Global.putInt(appContext.contentResolver, ADB_WIFI_ENABLED, 1) }
-            .onSuccess { Log.d(TAG, "Turned Wireless debugging on") }
+            .onSuccess {
+                Log.d(TAG, "Turned Wireless debugging on")
+                prefs.edit().putBoolean(WIRELESS_BY_ANTIGEM, true).apply()
+            }
             .onFailure { Log.w(TAG, "Turning Wireless debugging on failed: ${it.message}") }
             .isSuccess
+    }
+
+    private const val WIRELESS_BY_ANTIGEM = "wireless_turned_on_by_antigem"
+    /** Wireless debugging that AntiGem switched on goes off again after this long without a tool using adb. */
+    private const val WIRELESS_IDLE_OFF_MS = 10 * 60_000L
+    private var wirelessOffJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Wireless debugging stays reachable for everyone on the Wi-Fi (paired keys only, but a leaked adbkey is enough):
+     * when AntiGem switched it on, it switches it off again once tools have not used adb for a while. When the user
+     * switched it on themselves, it is left alone.
+     */
+    @Synchronized
+    private fun scheduleWirelessOff() {
+        wirelessOffJob?.cancel()
+        wirelessOffJob = scope.launch {
+            delay(WIRELESS_IDLE_OFF_MS)
+            if (!prefs.getBoolean(WIRELESS_BY_ANTIGEM, false)) return@launch
+            prefs.edit().putBoolean(WIRELESS_BY_ANTIGEM, false).apply()
+            if (isWirelessDebuggingOn(appContext) && hasSecureSettings()) {
+                runCatching { Settings.Global.putInt(appContext.contentResolver, ADB_WIFI_ENABLED, 0) }
+                    .onSuccess { Log.d(TAG, "Turned Wireless debugging off again (idle)") }
+                    .onFailure { Log.w(TAG, "Turning Wireless debugging off failed: ${it.message}") }
+            }
+        }
     }
 
     private fun report(message: String, isError: Boolean = false) =
@@ -490,12 +522,15 @@ object AdbConnectManager {
     /** The connected device, connecting first when it was paired and Wireless debugging is on. Null when adb isn't usable. */
     suspend fun ensureConnected(): Device? {
         if (!::appContext.isInitialized) return null
+        // each use of adb by a tool restarts the idle time of a Wireless debugging AntiGem switched on
+        if (prefs.getBoolean(WIRELESS_BY_ANTIGEM, false)) scheduleWirelessOff()
         refreshNow()
         _state.value.connectedDevice?.let { return it }
         if (_state.value.adbInstalled != true || !_state.value.pairedOnce) return null
         if (!isWirelessDebuggingOn(appContext)) {
             if (!maybeTurnOnWireless()) return null
             // adbd needs a moment to come up (and Android may still ask about this Wi-Fi network)
+            scheduleWirelessOff()
             withTimeoutOrNull(8_000) { while (!isWirelessDebuggingOn(appContext)) delay(250) } ?: return null
             delay(1500)
         }

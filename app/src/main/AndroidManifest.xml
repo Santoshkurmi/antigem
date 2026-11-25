@@ -49,7 +49,7 @@
 
     <application
         android:name=".AntiGemApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:largeHeap="true"
         android:hasFragileUserData="true"
         android:manageSpaceActivity="ai.antigem.ui.settings.ManageSpaceActivity"

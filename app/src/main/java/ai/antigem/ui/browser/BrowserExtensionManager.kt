@@ -55,7 +55,7 @@ data class BrowserExtension(
             toolCount = o.optInt("toolCount"), skillCount = o.optInt("skillCount"), folderName = o.optString("folderName"),
             permissions = o.optJSONArray("permissions")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(),
             isEnabled = o.optBoolean("isEnabled", true), dirPath = o.optString("dirPath"), iconPath = o.optString("iconPath"),
-            source = o.optJSONObject("source")?.let { PluginSource(it.optString("repo"), it.optString("ref"), it.optString("path")) },
+            source = o.optJSONObject("source")?.let { PluginSource(it.optString("repo"), it.optString("ref"), it.optString("path"), it.optString("commit")) },
             location = when (o.optString("location")) { "bundled" -> Location.BUNDLED; "user_folder" -> Location.USER_FOLDER; else -> Location.INSTALLED },
             skills = o.optJSONArray("skills")?.let { a ->
                 (0 until a.length()).map { i -> a.getJSONObject(i).let { ExtensionSkill(it.optString("name"), it.optString("title"), it.optString("description"), it.optString("path"), it.optString("detailDir").ifBlank { null }) } }
@@ -81,13 +81,14 @@ data class BrowserExtension(
 }
 
 /** Written as `.antigem-source.json` into plugins installed from a repository, so updates can be found later. */
-data class PluginSource(val repo: String, val ref: String, val path: String) {
+data class PluginSource(val repo: String, val ref: String, val path: String, val commit: String = "") {
     fun toJson(): JSONObject = JSONObject().put("repo", repo).put("ref", ref).put("path", path)
+        .apply { if (commit.isNotBlank()) put("commit", commit) }
 
     companion object {
         const val FILE = ".antigem-source.json"
         fun read(dir: File): PluginSource? = runCatching {
-            JSONObject(File(dir, FILE).readText()).let { PluginSource(it.getString("repo"), it.optString("ref"), it.getString("path")) }
+            JSONObject(File(dir, FILE).readText()).let { PluginSource(it.getString("repo"), it.optString("ref"), it.getString("path"), it.optString("commit")) }
         }.getOrNull()
     }
 }
@@ -408,6 +409,8 @@ class BrowserExtensionManager private constructor() {
             withContext(Dispatchers.IO) { scanLocal() }
         }
         withContext(Dispatchers.Main) { extensions.clear(); extensions.addAll(list) }
+        // the plugin host drives tabs through DevTools while any plugin is on
+        WebDebug.set("plugins", list.any { it.isEnabled })
         return list
     }
 
@@ -518,8 +521,51 @@ class BrowserExtensionManager private constructor() {
         activate(PluginBridge.draftInstall(projectId, zipPath, folderName.trim(), updateId).plugin, previous)
     } }
 
+    /** The sites the plugin's content scripts run on (its manifest, when its folder is on this phone). */
+    private fun contentScriptSites(p: BrowserExtension): List<String> = runCatching {
+        val manifest = JSONObject(File(p.dirPath, "manifest.json").readText())
+        val scripts = manifest.optJSONArray("content_scripts") ?: return@runCatching emptyList<String>()
+        (0 until scripts.length()).flatMap { i ->
+            val m = scripts.optJSONObject(i)?.optJSONArray("matches") ?: return@flatMap emptyList<String>()
+            (0 until m.length()).map { m.optString(it) }
+        }.filter { it.isNotBlank() }.distinct().take(12)
+    }.getOrDefault(emptyList())
+
     /** Loads a plugin the bridge just placed; if it fails to start, the bridge puts the previous files back. */
     private suspend fun activate(installed: BrowserExtension, previous: BrowserExtension?): BrowserExtension {
+        // every install and update (Settings, a repository, an agent through the developer MCP) says what the plugin
+        // gets and needs the user's OK before it loads: a plugin runs with AntiGem's full access. No: files put back.
+        val ctx = appContext
+        if (ctx != null) {
+            val perms = installed.permissions.joinToString(", ").ifBlank { L.browser.extensionManager.nothingExtra }
+            val message = buildString {
+                append(L.browser.extensionManager.nameVersionRunsCodeWithAntigems(installed.name, installed.version, perms))
+                // what an update changes: permissions it didn't have before
+                if (previous != null) {
+                    val added = installed.permissions.filter { it !in previous.permissions }
+                    if (added.isNotEmpty()) append("\n\n").append(L.browser.extensionManager.newPermissionsPermissions(added.joinToString(", ")))
+                }
+                contentScriptSites(installed).takeIf { it.isNotEmpty() }?.let {
+                    append("\n\n").append(L.browser.extensionManager.runsOnTheseSitesSites(it.joinToString(", ")))
+                }
+                installed.source?.commit?.takeIf { it.isNotBlank() }?.let {
+                    append("\n").append(L.browser.extensionManager.fromCommitCommit("${installed.source.repo}@${it.take(12)}"))
+                }
+            }
+            val ok = ai.antigem.data.security.UserConfirm.ask(
+                ctx,
+                if (previous != null && previous.version != installed.version)
+                    L.browser.extensionManager.updateNameFromFromToTo(installed.name, previous.version, installed.version)
+                else L.browser.extensionManager.installName(installed.name),
+                message,
+                L.common.install
+            )
+            if (!ok) {
+                runCatching { PluginBridge.restore(installed.folderName) }
+                publish()
+                error(L.browser.extensionManager.nameWasNotInstalled(installed.name))
+            }
+        }
         if (previous?.isEnabled == true) unloadIfLoaded(previous.id)
         if (installed.isEnabled) try {
             unloadIfLoaded(installed.id)

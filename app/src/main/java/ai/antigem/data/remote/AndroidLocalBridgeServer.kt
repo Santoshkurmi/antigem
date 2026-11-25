@@ -63,6 +63,9 @@ class AndroidLocalBridgeServer private constructor() {
     private val serverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // one thread per open request: Flow calls wait up to ~50 s each, so a fixed pool would make parallel calls queue
     private val clientThreadPool = Executors.newCachedThreadPool()
+    /** Times of the wrong-key requests in the last minute (see the key check in handleClient). */
+    private val authFailures = ArrayDeque<Long>()
+    private val AUTH_FAILURES_PER_MINUTE = 20
     private var appContext: Context? = null
     var boundPort: Int = DEFAULT_PORT
         private set
@@ -93,6 +96,7 @@ class AndroidLocalBridgeServer private constructor() {
                     }
                 }
                 serverSocket = socket ?: ServerSocket(0, 50, bindAddr).also { boundPort = it.localPort }
+                ai.antigem.data.security.LocalPorts.add(boundPort)
                 isRunning = true
                 Log.i(TAG, "Bridge MCP / REST Server running on http://127.0.0.1:$boundPort")
                 // a server (Remote mode) reaches this MCP server through an SSH reverse tunnel: point it at the bound port
@@ -242,6 +246,15 @@ class AndroidLocalBridgeServer private constructor() {
             val ctx = appContext
             if (ctx == null || !LocalServerAuth.matches(ctx, headers["x-device-id"])) {
                 Log.w(TAG, "Blocked unauthorized request to $path (missing or invalid X-Device-Id header)")
+                // every caller is 127.0.0.1, so the limit is for all of them together: after many wrong keys in a
+                // minute each further one waits, which makes guessing the key slow (right keys are never delayed)
+                val now = System.currentTimeMillis()
+                val recent = synchronized(authFailures) {
+                    authFailures.addLast(now)
+                    while (authFailures.isNotEmpty() && now - authFailures.first() > 60_000) authFailures.removeFirst()
+                    authFailures.size
+                }
+                if (recent > AUTH_FAILURES_PER_MINUTE) runCatching { Thread.sleep(1_000) }
                 sendResponse(out, 401, "application/json", "{\"error\": \"Unauthorized: Invalid or missing X-Device-Id header\"}")
                 return
             }
@@ -781,7 +794,8 @@ class AndroidLocalBridgeServer private constructor() {
             "devtools" -> {
                 val tab = withContext(Dispatchers.Main) {
                     val found = bManager.tabs.firstOrNull { it.id == bodyJson.optString("tab_id") } ?: throw IllegalArgumentException("Tab not found")
-                    android.webkit.WebView.setWebContentsDebuggingEnabled(true)
+                    // the plugin host asks for a tab's DevTools socket: plugins hold debugging on (WebDebug)
+                    ai.antigem.ui.browser.WebDebug.hold("plugins")
                     if (found.webView == null) bManager.ensureWebViewAttached(appContext!!, found, false)
                     found
                 }

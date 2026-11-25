@@ -565,7 +565,9 @@ fun NativeMathView(
     val cacheKey = texLatex.hashCode() * 31 + textColor * 7 + textSizePx.toInt()
     val jLatexDrawable = remember(texLatex, textColor, textSizePx, isDark) {
         mathDrawableCache.get(cacheKey) ?: run {
-            val built = try {
+            // Throwable, not Exception: a recursive \newcommand overflows the stack (StackOverflowError is an Error);
+            // the formula then shows as text instead of crashing the app each time the chat opens
+            val built = if (latexTooHeavy(texLatex)) null else try {
                 // First attempt: Colorized LaTeX formula with syntax highlighting (chemistry stays one colour)
                 val colorizedLatex = if (isChem) texLatex else colorizeLatexEquation(texLatex, isDark)
                 JLatexMathDrawable.builder(colorizedLatex)
@@ -573,7 +575,7 @@ fun NativeMathView(
                     .color(textColor)
                     .background(android.graphics.Color.TRANSPARENT)
                     .build()
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 try {
                     // Fallback: Standard monochrome native LaTeX
                     JLatexMathDrawable.builder(texLatex)
@@ -581,7 +583,7 @@ fun NativeMathView(
                         .color(textColor)
                         .background(android.graphics.Color.TRANSPARENT)
                         .build()
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                     null
                 }
             }
@@ -2460,10 +2462,15 @@ private fun buildRichAnnotatedString(
             } else if (isFile) {
                 val cleanPath = linkUrl.removePrefix("file://").substringBefore("#")
                 val fileName = java.io.File(cleanPath).name.ifBlank { cleanPath }
+                // the AI picks the title: the real place is always shown next to a title that isn't the file's name, so
+                // a link called "report.pdf" can't hide that it opens ~/.ssh/id_ed25519
+                val shortPath = cleanPath.trimEnd('/').split('/').filter { it.isNotEmpty() }.takeLast(2).joinToString("/").ifBlank { cleanPath }
                 val displayLabel = if (linkTitle.isBlank() || linkTitle.startsWith("file://", ignoreCase = true) || linkTitle.startsWith("/")) {
                     fileName
-                } else {
+                } else if (linkTitle == fileName) {
                     linkTitle
+                } else {
+                    "$linkTitle · $shortPath"
                 }
 
                 builder.pushLink(
@@ -2676,20 +2683,21 @@ private fun buildRichAnnotatedString(
             val texMath = if (ai.antigem.data.render.RenderBundle.isActive(ai.antigem.data.render.RenderComponent.CHEM))
                 ai.antigem.data.render.ChemNotation.expand(mathContent) else mathContent
             val colorizedMath = if (texMath != mathContent) texMath else colorizeLatexEquation(mathContent, isDark)
-            val drawable = try {
+            // Throwable: a recursive \newcommand overflows the stack (an Error), see above
+            val drawable = if (latexTooHeavy(texMath)) null else try {
                 JLatexMathDrawable.builder(colorizedMath)
                     .textSize(textSizePx)
                     .color(baseColor)
                     .background(android.graphics.Color.TRANSPARENT)
                     .build()
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 try {
                     JLatexMathDrawable.builder(texMath)
                         .textSize(textSizePx)
                         .color(baseColor)
                         .background(android.graphics.Color.TRANSPARENT)
                         .build()
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                     null
                 }
             }
@@ -3473,3 +3481,11 @@ private fun parseTable(lines: List<String>, startIndex: Int): Pair<MarkdownBlock
 
     return Pair(MarkdownBlock.Table(headers, rows, normalizedAlignments), currIndex)
 }
+
+/**
+ * A formula JLaTeXMath should not expand (it has no depth limit): very long, or defining many macros (macros that
+ * call each other can blow up). It shows as its source text instead.
+ */
+private val latexMacroDef = Regex("""\\(?:re)?newcommand|\\def\b|\\let\b""")
+internal fun latexTooHeavy(tex: String): Boolean =
+    tex.length > 8_000 || latexMacroDef.findAll(tex).take(9).count() > 8

@@ -8,6 +8,8 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
+import android.content.Intent
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -41,8 +43,12 @@ import ai.antigem.i18n.L
 
 class InteractiveUiJsBridge(
     private val context: Context,
+    /** The block's WebView: copying needs a tap on it first (a block can't fill the clipboard on its own). */
+    webView: android.view.View? = null,
     private val onToast: (String) -> Unit
 ) {
+    private val touch = TouchClock().also { c -> webView?.let { c.attach(it) } }
+
     @JavascriptInterface
     fun showToast(message: String) {
         onToast(message)
@@ -50,6 +56,7 @@ class InteractiveUiJsBridge(
 
     @JavascriptInterface
     fun copyToClipboard(text: String) {
+        if (!touch.recent()) return
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("Interactive UI", text)
         clipboard.setPrimaryClip(clip)
@@ -84,6 +91,11 @@ fun InteractiveUiView(
     val cardBgHex = if (isDark) "#2A2A2A" else "#FFFFFF"
     val borderHex = if (isDark) "#3A3A3A" else "#E5E5E5"
 
+    // each block its own origin (from its code: stable across reloads), so one chat's block can't read another's
+    // localStorage or cookies
+    val blockOrigin = remember(htmlCode) {
+        "https://b" + Integer.toHexString(htmlCode.hashCode()) + Integer.toHexString(htmlCode.length) + ".antigravity.local/"
+    }
     val fullHtml = remember(htmlCode, isDark, reloadKey) {
         if (htmlCode.trimStart().startsWith("<!DOCTYPE", ignoreCase = true) ||
             htmlCode.trimStart().startsWith("<html", ignoreCase = true)
@@ -257,19 +269,8 @@ fun InteractiveUiView(
                                         cacheMode = WebSettings.LOAD_NO_CACHE
                                     }
                                     webChromeClient = WebChromeClient()
-                                    webViewClient = object : WebViewClient() {
-                                        // a dead renderer would otherwise crash the app
-                                        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                                            ChatWebViewCache.onRendererGone(view)
-                                            return true
-                                        }
-                                    }
-                                    addJavascriptInterface(
-                                        InteractiveUiJsBridge(ctx) { msg ->
-                                            Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
-                                        },
-                                        "antiGemini"
-                                    )
+                                    webViewClient = blockClient(blockOrigin, kept = true)
+                                    installBlockBridge(this, ctx, blockOrigin)
                                 }
                             },
                             update = { view ->
@@ -277,7 +278,7 @@ fun InteractiveUiView(
                                 val pageKey = "$reloadKey:$isDark:${fullHtml.hashCode()}:${fullHtml.length}"
                                 if (view.tag != pageKey) {
                                     view.tag = pageKey
-                                    view.loadDataWithBaseURL("https://antigravity.local/", fullHtml, "text/html", "UTF-8", null)
+                                    view.loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
@@ -366,18 +367,13 @@ fun InteractiveUiView(
                                             cacheMode = WebSettings.LOAD_NO_CACHE
                                         }
                                         webChromeClient = WebChromeClient()
-                                        webViewClient = WebViewClient()
-                                        addJavascriptInterface(
-                                            InteractiveUiJsBridge(ctx) { msg ->
-                                                Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
-                                            },
-                                            "antiGemini"
-                                        )
-                                        loadDataWithBaseURL("https://antigravity.local/", fullHtml, "text/html", "UTF-8", null)
+                                        webViewClient = blockClient(blockOrigin, kept = false)
+                                        installBlockBridge(this, ctx, blockOrigin)
+                                        loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
                                     }
                                 },
                                 update = { view ->
-                                    view.loadDataWithBaseURL("https://antigravity.local/", fullHtml, "text/html", "UTF-8", null)
+                                    view.loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
                                 },
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -386,5 +382,62 @@ fun InteractiveUiView(
                 }
             }
         }
+    }
+}
+
+/**
+ * The block page stays the block page: it can't navigate itself (or be navigated by a script) to another site, where
+ * it would keep the antiGemini bridge. A web link the user taps opens in the browser; any other scheme is dropped.
+ * Frames inside the block load as before. [kept]: the chat's own view (a dead renderer is handed to the cache).
+ */
+private fun blockClient(origin: String, kept: Boolean): WebViewClient = object : WebViewClient() {
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+        if (!request.isForMainFrame) return false
+        val url = request.url
+        if (url.toString().startsWith(origin)) return false
+        val scheme = url.scheme?.lowercase()
+        if (request.hasGesture() && (scheme == "http" || scheme == "https")) {
+            runCatching {
+                view.context.startActivity(Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        return true
+    }
+
+    // the chat's view: a dead renderer would otherwise crash the app (the fullscreen view keeps WebView's default)
+    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        if (!kept) return super.onRenderProcessGone(view, detail)
+        ChatWebViewCache.onRendererGone(view)
+        return true
+    }
+}
+
+/**
+ * window.antiGemini (showToast, copyToClipboard) for the block's own page only. Where the WebView can, it is a message
+ * channel limited to the block's origin and its top frame, so iframes inside the block (other sites, or srcdoc) never
+ * get it; old WebViews fall back to the JavascriptInterface (every frame, but it only toasts, and copies after a tap).
+ */
+private fun installBlockBridge(view: WebView, context: Context, origin: String) {
+    val bridge = InteractiveUiJsBridge(context, view) { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
+    val rule = setOf(origin.trimEnd('/'))
+    if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER) &&
+        androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)
+    ) {
+        androidx.webkit.WebViewCompat.addWebMessageListener(view, "__agBlock", rule) { _, message, _, isMainFrame, _ ->
+            if (!isMainFrame) return@addWebMessageListener
+            val o = runCatching { org.json.JSONObject(message.data ?: "") }.getOrNull() ?: return@addWebMessageListener
+            when (o.optString("m")) {
+                "toast" -> bridge.showToast(o.optString("t"))
+                "copy" -> bridge.copyToClipboard(o.optString("t"))
+            }
+        }
+        androidx.webkit.WebViewCompat.addDocumentStartJavaScript(
+            view,
+            "window.antiGemini={showToast:function(t){__agBlock.postMessage(JSON.stringify({m:'toast',t:String(t)}))}," +
+                "copyToClipboard:function(t){__agBlock.postMessage(JSON.stringify({m:'copy',t:String(t)}))}};",
+            rule
+        )
+    } else {
+        view.addJavascriptInterface(bridge, "antiGemini")
     }
 }

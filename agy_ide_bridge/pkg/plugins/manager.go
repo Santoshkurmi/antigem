@@ -56,6 +56,8 @@ type Source struct {
 	Repo string `json:"repo"`
 	Ref  string `json:"ref"`
 	Path string `json:"path"`
+	// Commit is the commit the files were downloaded at (empty when it couldn't be resolved)
+	Commit string `json:"commit,omitempty"`
 }
 
 type root struct {

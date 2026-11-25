@@ -51,6 +51,7 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(AntiGemDocumentsProvider.isEnabled(context)) }
     var chrootShown by remember { mutableStateOf(AntiGemDocumentsProvider.isChrootShown(context)) }
+    var hiddenShown by remember { mutableStateOf(AntiGemDocumentsProvider.isHiddenShown(context)) }
     remember { runCatching { ChrootManager.init(context) } }
     val installs by ChrootManager.installs.collectAsState()
     val activePath by ChrootManager.activePath.collectAsState()
@@ -77,6 +78,10 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
             SwitchLine(L.files.filePickerSettings.showAntigemInTheFilePicker, null, enabled) {
                 enabled = it
                 AntiGemDocumentsProvider.setEnabled(context, it)
+            }
+            SwitchLine(L.files.filePickerSettings.showHiddenFolders, L.files.filePickerSettings.sshClaudeBashrcAndOtherDot, hiddenShown && enabled, enabled = enabled) {
+                hiddenShown = it
+                AntiGemDocumentsProvider.setHiddenShown(context, it)
             }
         }
 

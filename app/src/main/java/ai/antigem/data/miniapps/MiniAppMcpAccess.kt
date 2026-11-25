@@ -16,9 +16,29 @@ object MiniAppMcpAccess {
     /** Never reachable from a mini app: installing plugins, voice control, building and scripting other mini apps. */
     val BLOCKED = setOf("custom_plugin_developer_mcp", "webview_extension_developer_mcp", "jarvis_mcp", "mini_app_developer_mcp")
 
-    /** Servers that run commands, drive the phone or read what's in the browser. */
+    /**
+     * Servers that run commands, drive the phone or read what's in the browser. Every plugin server (extension_<id>)
+     * too: plugins run with AntiGem's full access (browser tabs, cookies, files), whatever their id says.
+     */
     fun isSensitive(server: String): Boolean = server == "terminal_mcp" || server == "android_automation_mcp" || server == "browser_mcp" ||
-        server == "google_flow_mcp" || listOf("terminal", "android", "browser", "shell").any { server.contains(it) }
+        server == "google_flow_mcp" || server.startsWith("extension_") ||
+        listOf("terminal", "android", "browser", "shell").any { server.contains(it) }
+
+    /** Servers whose reading tools are harmless but whose writing tools change what every chat, agent or app shows. */
+    private val WRITE_GUARDED = setOf("language_mcp", "theme_mcp", "notes_mcp")
+
+    /**
+     * Never offered to a mini app, whatever its manifest says: the AI reply language is put into every chat's context,
+     * so an app could plant instructions there.
+     */
+    private val NEVER_TOOLS = mapOf("language_mcp" to setOf("language_set_ai_reply"))
+
+    /**
+     * [tool] of [server] (null: the whole server) needs the typed confirmation and, by default, an OK before each call:
+     * a sensitive server, or a writing tool of language/theme/notes (a language can relabel "Allow" and "Deny").
+     */
+    fun isSensitiveTool(server: String, tool: String?): Boolean =
+        isSensitive(server) || (server in WRITE_GUARDED && (tool == null || tool !in READ_ONLY[server].orEmpty()))
 
     /** Built-in tools that only read (the built-in servers don't set readOnlyHint, and their schemas stay as agents know them). */
     private val READ_ONLY = mapOf(
@@ -51,6 +71,7 @@ object MiniAppMcpAccess {
 
     fun allows(context: Context, app: MiniApp, server: String, tool: JSONObject): Boolean {
         val name = tool.optString("name")
+        if (name in NEVER_TOOLS[server].orEmpty()) return false
         val perm = permissionFor(app, server, name) ?: return false
         if (!MiniAppPermissions.isGranted(context, app, perm)) return false
         return perm != "mcp:$server" || app.permissions[perm]?.optBoolean("readOnly") != true || isReadOnly(server, tool)
@@ -63,7 +84,7 @@ object MiniAppMcpAccess {
 
     /** The manifest's default for [server]: it asked for it ("ask"), or the server is sensitive. */
     fun askByDefault(app: MiniApp, server: String, tool: String? = null): Boolean {
-        if (isSensitive(server)) return true
+        if (isSensitiveTool(server, tool)) return true
         if (!app.mcpAsk.containsKey(server)) return false
         val only = app.mcpAsk[server] ?: return true // every tool
         return tool == null || tool in only

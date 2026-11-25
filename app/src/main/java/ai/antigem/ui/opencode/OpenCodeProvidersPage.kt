@@ -1,7 +1,5 @@
 package ai.antigem.ui.opencode
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -506,7 +504,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                                 Text(code, fontSize = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 2.sp,
                                     modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
                                 IconButton(onClick = {
-                                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Code", code))
+                                    ai.antigem.data.security.SecretClipboard.copy(context, "Code", code)
                                     toast(L.opencode.providers.codeCopied)
                                 }) { Icon(Icons.Outlined.ContentCopy, L.opencode.providers.copyCode, tint = OpenCodeAccent) }
                             }
@@ -518,7 +516,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                     }
                     Button(
                         onClick = {
-                            if (code != null) (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Code", code))
+                            if (code != null) ai.antigem.data.security.SecretClipboard.copy(context, "Code", code)
                             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(a.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                 .onFailure { toast(L.opencode.providers.noBrowserToOpenThePage, ok = false) }
                         },
@@ -627,7 +625,7 @@ private fun ProviderSignInSheet(backend: OpenCodeChatBackend, integ: OpenCodeAut
                                             attempt = a
                                             now = System.currentTimeMillis()
                                             // a device code or a browser page: open it right away (the code is copied first)
-                                            a.userCode?.let { c -> (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Code", c)) }
+                                            a.userCode?.let { c -> ai.antigem.data.security.SecretClipboard.copy(context, "Code", c) }
                                             if (a.url.isNotBlank() && a.userCode == null) {
                                                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(a.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                                             }

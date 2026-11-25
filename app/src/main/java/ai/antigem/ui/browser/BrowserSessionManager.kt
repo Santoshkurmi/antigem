@@ -48,6 +48,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import kotlin.coroutines.resume
 import ai.antigem.i18n.L
+import kotlinx.coroutines.launch
 
 /**
  * Diagnostic Console Log entry captured from a live WebView tab.
@@ -261,6 +262,19 @@ private const val MAX_IN_PAGE_UPLOAD_BYTES = 25L * 1024 * 1024
  * interaction dispatching, and console log aggregation.
  */
 class BrowserSessionManager private constructor() {
+    /** LAN hosts whose certificate the user accepted, as "host|fingerprint" (until the app restarts). */
+    private val acceptedLanCerts = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    private fun sslFingerprint(error: android.net.http.SslError?): String {
+        val cert = error?.certificate ?: return ""
+        if (android.os.Build.VERSION.SDK_INT >= 29) cert.x509Certificate?.let { x ->
+            return java.security.MessageDigest.getInstance("SHA-256").digest(x.encoded).joinToString("") { "%02x".format(it) }
+        }
+        return listOf(cert.issuedTo?.dName, cert.issuedBy?.dName, cert.validNotBeforeDate?.time, cert.validNotAfterDate?.time).joinToString("|")
+    }
+
+    /** Asks before a page opens another app (item 36). */
+    private val confirmScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
 
     companion object {
         private const val TAG = "BrowserSessionManager"
@@ -585,7 +599,8 @@ class BrowserSessionManager private constructor() {
 
     fun init(context: Context) {
         appContext = context.applicationContext
-        WebView.setWebContentsDebuggingEnabled(true)
+        // no longer on for good: only while plugins, browser_mcp or REA use DevTools (WebDebug); debug builds keep it on
+        if (ai.antigem.BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
         loadShortcutsIfNeeded(context)
     }
 
@@ -1103,12 +1118,39 @@ class BrowserSessionManager private constructor() {
                     // e.g. https://cdn.example/lib/10.0.2/x.js or ?r=localhost would skip TLS checks.
                     val host = try { Uri.parse(reqUrl).host?.lowercase() } catch (_: Exception) { null } ?: ""
                     val isIpv4 = host.matches(Regex("^\\d{1,3}(\\.\\d{1,3}){3}$"))
-                    val isLocal = host == "localhost" || host == "127.0.0.1" ||
-                        (isIpv4 && (host.startsWith("192.168.") || host.startsWith("10.0.")))
-                    
-                    // For local development on localhost/127.0.0.1, automatically bypass self-signed SSL errors so dev servers load seamlessly
-                    if (isLocal) {
+                    // loopback can't be intercepted from the network: local dev servers' self-signed certificates load
+                    if (host == "localhost" || host == "127.0.0.1") {
                         handler?.proceed()
+                        return
+                    }
+                    // a LAN address (router, NAS): the user decides, once per host and certificate, after seeing the problem
+                    val isLan = isIpv4 && (host.startsWith("192.168.") || host.startsWith("10.") ||
+                        Regex("^172\\.(1[6-9]|2\\d|3[01])\\.").containsMatchIn(host))
+                    if (isLan && handler != null) {
+                        val certKey = host + "|" + sslFingerprint(error)
+                        if (certKey in acceptedLanCerts) {
+                            handler.proceed()
+                            return
+                        }
+                        val problem = when (error?.primaryError) {
+                            android.net.http.SslError.SSL_UNTRUSTED -> L.browser.sessionManager.untrustedCertificateAuthoritySelfSigned
+                            android.net.http.SslError.SSL_EXPIRED -> L.browser.sessionManager.sslCertificateExpired
+                            android.net.http.SslError.SSL_IDMISMATCH -> L.browser.sessionManager.hostnameMismatch
+                            android.net.http.SslError.SSL_NOTYETVALID -> L.browser.sessionManager.certificateNotYetValid
+                            else -> L.browser.sessionManager.sslHandshakeSecurityFailure
+                        }
+                        confirmScope.launch {
+                            val ok = ai.antigem.data.security.UserConfirm.ask(
+                                context, L.browser.sessionManager.certificateProblemOnHost(host),
+                                L.browser.sessionManager.problemNNonYourOwnNetwork(problem), L.browser.sessionManager.continueToThisSite
+                            )
+                            if (ok) {
+                                acceptedLanCerts.add(certKey)
+                                handler.proceed()
+                            } else {
+                                handler.cancel()
+                            }
+                        }
                         return
                     }
 
@@ -1196,14 +1238,19 @@ class BrowserSessionManager private constructor() {
                         }
                         return false
                     }
-                    return try {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                        true
-                    } catch (_: Exception) {
-                        false
+                    // another app (tel:, market:, antigem-miniapp:, …) only from the page itself, on the user's tap (or a
+                    // redirect right after one), and after the user agrees: a page or an iframe can't launch apps alone
+                    if (!request.isForMainFrame || !(request.hasGesture() || request.isRedirect)) return true
+                    confirmScope.launch {
+                        val ok = ai.antigem.data.security.UserConfirm.ask(
+                            context, L.browser.sessionManager.openInAnotherApp,
+                            L.browser.sessionManager.thePageWantsToOpenThis(uri.toString().take(300)), L.common.open
+                        )
+                        if (ok) runCatching {
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
                     }
+                    return true
                 }
             }
 

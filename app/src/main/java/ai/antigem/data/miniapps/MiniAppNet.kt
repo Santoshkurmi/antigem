@@ -123,7 +123,9 @@ object MiniAppNet {
 
     private val streams = ConcurrentHashMap<String, PendingBody>()
     private val calls = ConcurrentHashMap<String, Pair<String, Call>>() // rid → (pageId, call)
-    private val sockets = ConcurrentHashMap<String, Pair<String, WebSocket>>() // sid → (pageId, socket)
+    // "<pageId>/<sid>" → (pageId, socket): the page picks the sid, so it is only unique within that page (another app's
+    // page could otherwise send on, close or replace this one's socket)
+    private val sockets = ConcurrentHashMap<String, Pair<String, WebSocket>>()
     private val clients = ConcurrentHashMap<String, OkHttpClient>()
     private var userAgent: String? = null
 
@@ -370,6 +372,8 @@ object MiniAppNet {
     /** p: {sid, url, protocols: []}. Events go to [emit] as ("ws", {sid, t: open|msg|close|error, ...}). */
     fun wsOpen(context: Context, app: MiniApp, pageId: String, p: JSONObject, emit: (JSONObject) -> Unit) {
         val sid = p.getString("sid")
+        val key = "$pageId/$sid"
+        if (sockets.containsKey(key)) throw MiniAppError("InvalidStateError", "WebSocket $sid is already open")
         val raw = p.optString("url")
         val httpUrl = raw.replaceFirst(Regex("^ws://", RegexOption.IGNORE_CASE), "http://").replaceFirst(Regex("^wss://", RegexOption.IGNORE_CASE), "https://").toHttpUrlOrNull()
             ?: throw MiniAppError("SyntaxError", "Invalid WebSocket URL: $raw")
@@ -389,25 +393,25 @@ object MiniAppNet {
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) = emit(JSONObject().put("sid", sid).put("t", "msg").put("b64", bytes.base64()))
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) { webSocket.close(code, null) }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                sockets.remove(sid); emit(JSONObject().put("sid", sid).put("t", "close").put("code", code).put("reason", reason).put("clean", true))
+                sockets.remove(key); emit(JSONObject().put("sid", sid).put("t", "close").put("code", code).put("reason", reason).put("clean", true))
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                sockets.remove(sid)
+                sockets.remove(key)
                 emit(JSONObject().put("sid", sid).put("t", "error").put("message", t.message.orEmpty()))
                 emit(JSONObject().put("sid", sid).put("t", "close").put("code", 1006).put("reason", "").put("clean", false))
             }
         })
-        sockets[sid] = pageId to ws
+        sockets[key] = pageId to ws
     }
 
-    fun wsSend(p: JSONObject) {
-        val ws = sockets[p.optString("sid")]?.second ?: throw MiniAppError("InvalidStateError", "WebSocket is not open")
+    fun wsSend(pageId: String, p: JSONObject) {
+        val ws = sockets["$pageId/${p.optString("sid")}"]?.second ?: throw MiniAppError("InvalidStateError", "WebSocket is not open")
         if (p.has("b64")) ws.send(Base64.decode(p.getString("b64"), Base64.DEFAULT).toByteString()) else ws.send(p.optString("text"))
     }
 
-    fun wsClose(p: JSONObject) {
+    fun wsClose(pageId: String, p: JSONObject) {
         val code = p.optInt("code", 1000)
-        sockets[p.optString("sid")]?.second?.close(if (code == 1000 || code in 3000..4999) code else 1000, p.optString("reason").take(120).ifEmpty { null })
+        sockets["$pageId/${p.optString("sid")}"]?.second?.close(if (code == 1000 || code in 3000..4999) code else 1000, p.optString("reason").take(120).ifEmpty { null })
     }
 
     /** A page closed: cancel its requests, unread bodies and sockets. */

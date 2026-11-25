@@ -10,6 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
@@ -37,15 +41,23 @@ fun UserConfirmHost() {
     AlertDialog(
         onDismissRequest = { UserConfirm.answer(r, false) },
         properties = DialogProperties(dismissOnClickOutside = false),
-        title = { Text(r.title) },
+        title = { FilterObscuredTouches(); Text(r.title) },
         text = { Text(r.message, modifier = Modifier.verticalScroll(rememberScrollState())) },
         confirmButton = {
             TextButton(onClick = { UserConfirm.answer(r, true) }) {
+                // fixed icons: a language can't make the buttons look swapped
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Check, null, tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(androidx.compose.ui.unit.Dp(16f)))
+                androidx.compose.foundation.layout.Spacer(Modifier.width(androidx.compose.ui.unit.Dp(4f)))
                 Text(r.confirmLabel, color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
-            TextButton(onClick = { UserConfirm.answer(r, false) }) { Text(L.components.userConfirmHost.dontAllow) }
+            TextButton(onClick = { UserConfirm.answer(r, false) }) {
+                androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.Close, null, modifier = Modifier.size(androidx.compose.ui.unit.Dp(16f)))
+                androidx.compose.foundation.layout.Spacer(Modifier.width(androidx.compose.ui.unit.Dp(4f)))
+                Text(L.components.userConfirmHost.dontAllow)
+            }
         }
     )
 }

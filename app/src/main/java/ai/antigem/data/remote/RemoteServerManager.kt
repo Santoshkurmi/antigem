@@ -170,13 +170,21 @@ object RemoteServerManager {
         _ssh.value = SshState(false, L.remote.serverManager.notConnected)
     }
 
-    internal fun friendly(e: Throwable): String {
+    /** A readable SSH error. [pc]: Connect to PC (a changed host key means pairing again, not Settings > Server). */
+    internal fun friendly(e: Throwable, pc: Boolean = AuthPreferences.pcOverride != null): String {
         val m = e.message.orEmpty()
         return when {
             m.contains("Auth fail", true) || m.contains("Auth cancel", true) ->
                 L.remote.serverManager.sshLoginFailedCheckTheUser
-            m.contains("HostKey has been changed", true) || m.contains("reject HostKey", true) ->
-                L.remote.serverManager.theServersSshHostKeyChanged
+            m.contains("HostKey has been changed", true) || m.contains("reject HostKey", true) -> {
+                val fp = SshSessionFactory.lastChangedFingerprint
+                when {
+                    pc && fp != null -> L.remote.serverManager.thePcsSshHostKeyChanged(fp)
+                    pc -> L.remote.serverManager.thePcsSshHostKeyChanged2
+                    fp != null -> L.remote.serverManager.theServersSshHostKeyChanged2(fp)
+                    else -> L.remote.serverManager.theServersSshHostKeyChanged
+                }
+            }
             m.contains("timeout", true) || m.contains("timed out", true) ->
                 L.remote.serverManager.sshConnectionTimedOutCheckThe
             m.contains("refused", true) -> L.remote.serverManager.sshConnectionRefusedIsSshdRunning
@@ -250,6 +258,8 @@ object RemoteServerManager {
         try {
             s.setPortForwardingR("127.0.0.1", remotePort, "127.0.0.1", localPort)
             active += "server 127.0.0.1:$remotePort → phone :$localPort (phone tools)"
+            // sshd with "GatewayPorts yes" binds it on every interface anyway: say so (only the phone tools key is left)
+            if (listensOnAllInterfaces(s, remotePort)) active += L.remote.serverManager.serverPortPortIsOpenTo(remotePort)
         } catch (e: Exception) {
             Log.w(TAG, "Reverse forward $remotePort failed: ${e.message}")
             active += "port $remotePort not forwarded (${e.message?.take(60)})"
@@ -267,6 +277,15 @@ object RemoteServerManager {
         }
         _tunnels.value = active
     }
+
+    /** Whether [port] on the server listens on 0.0.0.0 / [::] / * (not just loopback). False when it can't tell. */
+    private fun listensOnAllInterfaces(s: Session, port: Int): Boolean = runCatching {
+        val out = exec(s, "(ss -ltnH 2>/dev/null || netstat -ltn 2>/dev/null) | grep -E '[:.]$port[[:space:]]' ; true", 8_000).second
+        out.lines().any { line ->
+            val local = line.trim().split(Regex("\\s+")).firstOrNull { it.endsWith(":$port") || it.endsWith(".$port") } ?: return@any false
+            local.startsWith("0.0.0.0:") || local.startsWith("*:") || local.startsWith("[::]:") || local.startsWith(":::") || local == "*.$port"
+        }
+    }.getOrDefault(false)
 
     /** Re-opens the forwards, e.g. after the phone's MCP server rebound to another port. */
     fun resyncTunnels() {

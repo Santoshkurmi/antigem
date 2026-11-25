@@ -81,6 +81,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
 
         private const val PREFS = "file_picker"
         private const val KEY_SHOW_CHROOT = "show_chroot"
+        private const val KEY_SHOW_HIDDEN = "show_hidden"
 
         // AuthPreferences' plain SharedPreferences (read directly: creating an AuthPreferences reloads app-wide state)
         private const val SYNC_PREFS = "anti_gem_sync_prefs"
@@ -128,6 +129,18 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
 
         fun setChrootShown(context: Context, on: Boolean) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_SHOW_CHROOT, on).apply()
+            notifyRootsChanged(context)
+        }
+
+        /**
+         * Dot files and folders (~/.ssh, ~/.claude, ~/.bashrc…): off by default. Then they are not listed, can't be
+         * opened by id (an app with a folder grant could build one), and no new file may get a dot name.
+         */
+        fun isHiddenShown(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SHOW_HIDDEN, false)
+
+        fun setHiddenShown(context: Context, on: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_SHOW_HIDDEN, on).apply()
             notifyRootsChanged(context)
         }
 
@@ -339,8 +352,10 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                     val rel = localRel(id)
                     val dir = localFile(rel)
                     val children = dir.listFiles() ?: throw FileNotFoundException("Cannot open ${dir.name}")
+                    val hidden = isHiddenShown(context)
                     for (f in children) {
                         if (rel.isEmpty() && f.name == "storage") continue
+                        if (!hidden && f.name.startsWith(".")) continue
                         addLocalRow(c, join(rel, f.name), f)
                     }
                 }
@@ -348,7 +363,8 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                     val ch = chroot()
                     val dir = chrootPath(id, ch)
                     try {
-                        listRemote(ch, dir, cached = false).forEach { addRemoteRow(c, it, ch) }
+                        val hidden = isHiddenShown(context)
+                        listRemote(ch, dir, cached = false).forEach { if (hidden || !it.name.startsWith(".")) addRemoteRow(c, it, ch) }
                     } catch (e: FileNotFoundException) {
                         // the picker shows this text in place of the files
                         c.extras = Bundle().apply { putString(DocumentsContract.EXTRA_ERROR, e.message) }
@@ -497,6 +513,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                 val dir = localFile(rel)
                 if (!dir.isDirectory) throw FileNotFoundException("${dir.name} is not a folder")
                 val name = uniqueName(cleanName(displayName, mime), isDir) { File(dir, it).exists() || isLink(File(dir, it)) }
+                requireVisibleName(name)
                 val f = File(dir, name)
                 val ok = if (isDir) f.mkdir() else f.createNewFile()
                 if (!ok) throw IllegalStateException("Could not create $name")
@@ -507,6 +524,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                 val dir = chrootPath(parentId, ch)
                 val existing = listRemote(ch, dir, cached = false).map { it.name }.toSet()
                 val name = uniqueName(cleanName(displayName, mime), isDir) { it in existing }
+                requireVisibleName(name)
                 val o = bridgePost(ch, "/api/fs/new", JSONObject().put("dir", dir).put("name", name).put("isDir", isDir))
                 forget(dir)
                 "$ROOT_CHROOT:" + o.optString("path").ifBlank { "$dir/$name" }
@@ -526,6 +544,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                 val file = localFile(rel)
                 val name = cleanName(displayName, if (file.isDirectory) Document.MIME_TYPE_DIR else "application/octet-stream")
                 if (name == file.name) return@guard null
+                requireVisibleName(name)
                 val target = File(file.parentFile, name)
                 if ((target.exists() || isLink(target)) && !target.name.equals(file.name, ignoreCase = true)) {
                     throw IllegalStateException("\"$name\" already exists")
@@ -540,6 +559,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
                 if (path == ch.home) throw UnsupportedOperationException("The home folder cannot be renamed")
                 val name = (displayName ?: "").replace('/', '_').trim()
                 if (name.isEmpty() || name == path.substringAfterLast('/')) return@guard null
+                requireVisibleName(name)
                 val o = bridgePost(ch, "/api/fs/rename", JSONObject().put("path", path).put("newName", name))
                 forget(parentOf(path))
                 notifyChildren(context, "$ROOT_CHROOT:${parentOf(path)}")
@@ -646,9 +666,19 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
     }
 
     /** The path below the home folder ("" = the home folder itself); refuses anything that climbs out or into `storage`. */
+    private fun hiddenBlocked(parts: List<String>) = !isHiddenShown(ctx()) && parts.any { it.startsWith(".") }
+
+    /** A new name (create / rename) that is a dot file while those are switched off. */
+    private fun requireVisibleName(name: String) {
+        if (name.startsWith(".") && !isHiddenShown(ctx())) {
+            throw SecurityException("Dot files are off in AntiGem (Settings → Files in other apps → Show hidden folders)")
+        }
+    }
+
     private fun localRel(documentId: String): String {
         val parts = segments(documentId.substringAfter(':', "")) ?: throw FileNotFoundException("Bad path in $documentId")
         if (parts.firstOrNull() == "storage") throw FileNotFoundException("Not shown here")
+        if (hiddenBlocked(parts)) throw FileNotFoundException("Hidden files are not shown here")
         return parts.joinToString("/")
     }
 
@@ -798,6 +828,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
     /** The Linux path of a chroot document; only the home folder and what is below it. */
     private fun chrootPath(documentId: String, ch: Chroot): String {
         val parts = segments(documentId.substringAfter(':', "")) ?: throw FileNotFoundException("Bad path in $documentId")
+        if (hiddenBlocked(parts)) throw FileNotFoundException("Hidden files are not shown here")
         val path = parts.joinToString("/", prefix = "/")
         if (!inside(path, ch.home)) throw FileNotFoundException("$path is outside the Ubuntu home folder")
         return path

@@ -16,7 +16,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
-import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.PermissionRequest
@@ -99,7 +98,9 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
     private var legacy = false
     @Volatile private var devtools = false
     @Volatile private var destroyed = false
-    val webView: WebView = createWebView()
+    /** When the user last touched the page (clipboard writes need a tap). */
+    private val touch = ai.antigem.ui.components.TouchClock()
+    val webView: WebView = createWebView().also { touch.attach(it) }
 
     init { MiniAppRuntime.attach(ctx, app, this) }
 
@@ -137,8 +138,9 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
                 if (isMainFrame && mainProxy !== proxy && text.contains("\"m\":\"hello\"")) mainProxy = proxy
             }
         } else {
+            // an old WebView has no origin-locked bridge: addJavascriptInterface would hand the app's permissions to
+            // every frame (data:, sandboxed, other sites). No bridge: load() asks to update Android System WebView
             legacy = true
-            addJavascriptInterface(LegacyBridge(), "__antigemNativeLegacy")
         }
         applyDark(this, host.isDark)
     }
@@ -156,6 +158,11 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
 
     fun load() {
         logManifestWarnings()
+        if (legacy) {
+            val msg = L.miniapps.miniApp.miniAppsNeedANewerAndroid.replace("&", "&amp;").replace("<", "&lt;")
+            webView.loadDataWithBaseURL(null, "<!doctype html><meta name=viewport content='width=device-width'><body style='font:16px system-ui;padding:24px'><p>$msg</p>", "text/html", "utf-8", null)
+            return
+        }
         webView.loadUrl(app.origin + "/" + path.trimStart('/'))
     }
 
@@ -183,11 +190,6 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         } else runCatching {
             Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888).also { webView.draw(android.graphics.Canvas(it)) }
         }.getOrNull()
-    }
-
-    private inner class LegacyBridge {
-        @JavascriptInterface
-        fun postMessage(text: String) = main.post { onMessage(text, true) { json -> evalReply(json) } }
     }
 
     private fun evalReply(json: String) {
@@ -440,7 +442,9 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
     // ---------------------------------------------------------------- messages
 
     private fun onMessage(text: String, isMainFrame: Boolean, reply: (String) -> Unit) {
-        if (destroyed) return
+        // only the app's own page: an iframe (srcdoc / blob: of the same origin, e.g. untrusted HTML an app shows)
+        // never gets the app's permissions
+        if (destroyed || !isMainFrame) return
         val msg = runCatching { JSONObject(text) }.getOrNull() ?: return
         val id = msg.opt("i")?.takeIf { it != JSONObject.NULL }
         val method = msg.optString("m")
@@ -475,8 +479,8 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         "net.abort" -> { MiniAppNet.abort(p.optString("rid")); null }
         "net.drop" -> { MiniAppNet.cancelStream(p.optString("sid")); null }
         "ws.open" -> { MiniAppNet.wsOpen(ctx, app, pageId, p) { emit("ws", it) }; null }
-        "ws.send" -> { MiniAppNet.wsSend(p); null }
-        "ws.close" -> { MiniAppNet.wsClose(p); null }
+        "ws.send" -> { MiniAppNet.wsSend(pageId, p); null }
+        "ws.close" -> { MiniAppNet.wsClose(pageId, p); null }
         // ---- files
         "fs.read", "fs.write", "fs.list", "fs.stat", "fs.exists", "fs.mkdir", "fs.delete", "fs.move" -> withContext(Dispatchers.IO) { MiniAppFs.call(ctx, app, m, p) }
         "fs.pickFolder" -> pickFolder()
@@ -511,7 +515,14 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         // ---- device
         "device.haptic" -> { haptic(p.optString("kind")); null }
         "device.share" -> { share(p); null }
-        "device.copy" -> { clipboard().setPrimaryClip(ClipData.newPlainText(app.name, p.optString("text"))); null }
+        "device.copy" -> {
+            // only right after a tap, or with the clipboard permission: a page or background task that fills the
+            // clipboard on its own can plant a command the user pastes into the terminal later
+            if (!touch.recent() && MiniAppPermissions.state(ctx, app, "clipboard") != MiniAppPermissions.State.GRANTED) {
+                throw MiniAppError("NotAllowedError", "device.copy needs a tap by the user right before it (or the clipboard permission)")
+            }
+            clipboard().setPrimaryClip(ClipData.newPlainText(app.name, p.optString("text"))); null
+        }
         "device.paste" -> { require("clipboard"); clipboard().primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString().orEmpty() }
         "device.openUrl" -> { openUrl(p.optString("url")); null }
         "device.info" -> JSONObject().put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL).put("android", Build.VERSION.RELEASE)

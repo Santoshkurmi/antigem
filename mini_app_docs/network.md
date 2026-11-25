@@ -197,6 +197,7 @@ The app has one persistent cookie jar (see [storage](storage.md#cookies)):
 | `SharedArrayBuffer`, cross-origin isolation | Not available: Android WebView doesn't grant cross-origin isolation. See [threads](threads.md) |
 | Plain `http://` subresources (`<img>`, CSS, scripts) | Blocked by the page's policy; use `fetch` |
 | `<iframe>` of other sites, `<form action>` to other sites | Blocked: frames and form posts may only target the app itself |
+| `AntiGem.*` inside an `<iframe>` (also `srcdoc` / `blob:` frames of the app itself) | Never available: only the app's top page talks to AntiGem, so HTML the app shows in a frame (an email, a reader view) gets none of its permissions |
 | Navigating the page to another site | Blocked. A link the user taps opens in the system browser instead (after a confirmation if the app has no `network` permission) |
 | `navigator.geolocation` | Always denied |
 | Upload progress, request body streaming | Request bodies are sent in one piece |

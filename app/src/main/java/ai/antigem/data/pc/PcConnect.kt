@@ -413,7 +413,7 @@ object PcConnect {
             noteConnected(pc.id, address, token, probeShell(s))
             null
         } catch (e: Exception) {
-            ai.antigem.data.remote.RemoteServerManager.friendly(e)
+            ai.antigem.data.remote.RemoteServerManager.friendly(e, pc = true)
         } finally {
             runCatching { s?.disconnect() }
         }

@@ -1454,7 +1454,14 @@ object LocalTerminalManager {
         try {
             val session = ai.antigem.data.ssh.SshSessionFactory.open(user = user, host = host, port = port, pass = pass, connectTimeoutMs = 4000)
             try {
-                val dirArg = if (!workingDir.isNullOrBlank()) "-c \"$workingDir\" " else ""
+                // single-quoted: a folder name (from a cloned repo or an archive) like $(…) must never run on the server
+                val q = ai.antigem.data.remote.RemoteServerManager::q
+                val dirArg = when {
+                    workingDir.isNullOrBlank() -> ""
+                    workingDir == "~" -> "-c \"\$HOME\" "
+                    workingDir.startsWith("~/") -> "-c \"\$HOME\"${q(workingDir.substring(1))} "
+                    else -> "-c ${q(workingDir)} "
+                }
                 val cmd = UNIVERSAL_SSH_PATH +
                         "tmux set-option -g base-index 1 2>/dev/null; " +
                         "tmux set-option -g renumber-windows off 2>/dev/null; " +

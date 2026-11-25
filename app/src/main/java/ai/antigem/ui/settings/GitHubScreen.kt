@@ -206,7 +206,7 @@ private fun SignInCard(state: GitHubManager.State, cardBg: Color, cardBorder: Bo
                 }
                 Hint(L.settings.gitHub.n1TapTheButtonBelowThe)
                 Button(onClick = {
-                    clipboard.setText(AnnotatedString(login.code))
+                    ai.antigem.data.security.SecretClipboard.copy(context, "GitHub code", login.code)
                     openUrl(context, login.url)
                 }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Outlined.OpenInBrowser, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(L.settings.gitHub.copyCodeOpenGithub)
