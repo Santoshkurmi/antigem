@@ -18,6 +18,6 @@
 
 - "Dont do gralew install or any install relelated command(Only applies to gemini models)
 
-- Never ever try to compile or assemble for Standard Build, alwasy for termuxBuild only
+-  if need then just do compile checkS
 
 - If you are not 100% sure for someting how to do, never try to do, always ask user for direction this case without understanding what user want.

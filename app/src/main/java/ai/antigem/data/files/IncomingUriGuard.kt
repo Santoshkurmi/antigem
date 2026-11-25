@@ -36,8 +36,8 @@ object IncomingUriGuard {
         "file" -> {
             val canon = runCatching { File(uri.path ?: "").canonicalPath }.getOrNull()
             // shared storage only, and not AntiGem's own folder there (Android/data/<pkg>, closed to other apps on 11+)
-            val ownExternal = (context.externalCacheDirs.orEmpty() + context.getExternalFilesDirs(null).orEmpty())
-                .mapNotNull { d -> runCatching { d?.parentFile?.canonicalPath }.getOrNull() }
+            val dirs: List<File?> = context.externalCacheDirs.orEmpty().toList() + context.getExternalFilesDirs(null).orEmpty().toList()
+            val ownExternal = dirs.mapNotNull { d: File? -> runCatching { d?.parentFile?.canonicalPath }.getOrNull() }
             canon == null || SHARED.none { canon == it.trimEnd('/') || canon.startsWith(it) } ||
                 ownExternal.any { canon == it || canon.startsWith("$it/") }
         }
