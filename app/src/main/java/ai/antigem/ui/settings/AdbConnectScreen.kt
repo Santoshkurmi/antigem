@@ -279,6 +279,7 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
                     Text(L.settings.adbConnect.thePermissionIsGoneItIs,
                         fontSize = 12.sp, color = Amber)
                 }
+                if (state.autoWireless && state.secureSettings) WirelessIdleOffChoice(state.wirelessIdleOffMin)
             }
             if (state.devices.isNotEmpty()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
@@ -622,5 +623,24 @@ internal fun LogBox(lines: List<String>) {
             .background(ai.antigem.theme.AppColors.terminalBg).verticalScroll(scroll).padding(10.dp)
     ) {
         Text(lines.joinToString("\n"), fontFamily = FontFamily.Monospace, fontSize = 10.5.sp, color = ai.antigem.theme.AppColors.editorText, lineHeight = 14.sp)
+    }
+}
+
+/** Under "Turn Wireless debugging on by itself": how long Wireless debugging AntiGem switched on may go unused (Off: it stays on). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WirelessIdleOffChoice(minutes: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(L.settings.adbConnect.turnItOffWhenUnused, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+        Hint(L.settings.adbConnect.turnItOffWhenUnusedHint)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AdbConnectManager.WIRELESS_IDLE_OFF_CHOICES.forEach { m ->
+                FilterChip(
+                    selected = m == minutes,
+                    onClick = { AdbConnectManager.setWirelessIdleOff(m) },
+                    label = { Text(if (m == 0) L.common.off else L.settings.adbConnect.idleMinutes(m), fontSize = 12.5.sp) }
+                )
+            }
+        }
     }
 }

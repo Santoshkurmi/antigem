@@ -7653,7 +7653,10 @@
     "pets.lotl.eat": "Shrimp! Blub-licious 🦐",
     "pets.lotl.work": "Bubbling up ideas 🫧",
     "onboarding.gemmyIntro.changeInPets": "You can change this anytime in Settings → Pets, where 7 more pets are waiting.",
-    "settings.dialog.appearanceSubtitle": "Chat text size, agent steps, message stats, header icons and the app switcher"
+    "settings.dialog.appearanceSubtitle": "Chat text size, agent steps, message stats, header icons and the app switcher",
+    "settings.adbConnect.turnItOffWhenUnused": "Turn it off again when unused",
+    "settings.adbConnect.turnItOffWhenUnusedHint": "When AntiGem turned Wireless debugging on, it turns it off again after this long without agents using adb, so the phone doesn't stay open to adb on Wi-Fi. Off: it stays on. If you turned it on yourself, it's always left alone.",
+    "settings.adbConnect.idleMinutes": "{n} min"
   },
   "notes": {
     "settings.language.aiOff": "Segmented button: the agent picks its reply language",

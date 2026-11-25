@@ -102,6 +102,8 @@ object AdbConnectManager {
         val pairedOnce: Boolean = false,
         /** Turn Wireless debugging back on by itself (after a reboot or Wi-Fi drop); needs [secureSettings]. */
         val autoWireless: Boolean = false,
+        /** Minutes Wireless debugging that AntiGem switched on may go unused before AntiGem switches it off; 0 = never. */
+        val wirelessIdleOffMin: Int = AdbConnectManager.DEFAULT_WIRELESS_IDLE_OFF_MIN,
         /** AntiGem holds WRITE_SECURE_SETTINGS (granted once through adb, Shizuku or root). */
         val secureSettings: Boolean = false,
         val grantingSecureSettings: Boolean = false
@@ -130,6 +132,7 @@ object AdbConnectManager {
                 autoReconnect = prefs.getBoolean("auto_reconnect", true),
                 pairedOnce = prefs.getBoolean("paired_once", false),
                 autoWireless = prefs.getBoolean("auto_wireless", false),
+                wirelessIdleOffMin = prefs.getInt(WIRELESS_IDLE_OFF_KEY, DEFAULT_WIRELESS_IDLE_OFF_MIN),
                 secureSettings = hasSecureSettings()
             )
         }
@@ -278,15 +281,33 @@ object AdbConnectManager {
             .onSuccess {
                 Log.d(TAG, "Turned Wireless debugging on")
                 prefs.edit().putBoolean(WIRELESS_BY_ANTIGEM, true).apply()
+                scheduleWirelessOff() // also when nothing uses adb afterwards
             }
             .onFailure { Log.w(TAG, "Turning Wireless debugging on failed: ${it.message}") }
             .isSuccess
     }
 
     private const val WIRELESS_BY_ANTIGEM = "wireless_turned_on_by_antigem"
-    /** Wireless debugging that AntiGem switched on goes off again after this long without a tool using adb. */
-    private const val WIRELESS_IDLE_OFF_MS = 10 * 60_000L
+    /** Wireless debugging that AntiGem switched on goes off again after this many minutes without a tool using adb
+     *  (Settings → ADB Connect; 0 = it stays on). */
+    private const val WIRELESS_IDLE_OFF_KEY = "wireless_idle_off_min"
+    const val DEFAULT_WIRELESS_IDLE_OFF_MIN = 10
+    /** The choices offered in Settings → ADB Connect (0 = Off). */
+    val WIRELESS_IDLE_OFF_CHOICES = listOf(0, 5, 10, 15, 30, 60)
     private var wirelessOffJob: kotlinx.coroutines.Job? = null
+
+    /** Sets the minutes for the above (0 = never) and restarts the wait with the new time. */
+    fun setWirelessIdleOff(minutes: Int) {
+        prefs.edit().putInt(WIRELESS_IDLE_OFF_KEY, minutes).apply()
+        _state.update { it.copy(wirelessIdleOffMin = minutes) }
+        if (prefs.getBoolean(WIRELESS_BY_ANTIGEM, false)) scheduleWirelessOff() else cancelWirelessOff()
+    }
+
+    @Synchronized
+    private fun cancelWirelessOff() {
+        wirelessOffJob?.cancel()
+        wirelessOffJob = null
+    }
 
     /**
      * Wireless debugging stays reachable for everyone on the Wi-Fi (paired keys only, but a leaked adbkey is enough):
@@ -296,8 +317,11 @@ object AdbConnectManager {
     @Synchronized
     private fun scheduleWirelessOff() {
         wirelessOffJob?.cancel()
+        wirelessOffJob = null
+        val minutes = prefs.getInt(WIRELESS_IDLE_OFF_KEY, DEFAULT_WIRELESS_IDLE_OFF_MIN)
+        if (minutes <= 0) return // the user chose Off: it stays on
         wirelessOffJob = scope.launch {
-            delay(WIRELESS_IDLE_OFF_MS)
+            delay(minutes * 60_000L)
             if (!prefs.getBoolean(WIRELESS_BY_ANTIGEM, false)) return@launch
             prefs.edit().putBoolean(WIRELESS_BY_ANTIGEM, false).apply()
             if (isWirelessDebuggingOn(appContext) && hasSecureSettings()) {
