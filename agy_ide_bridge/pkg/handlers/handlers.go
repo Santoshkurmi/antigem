@@ -1606,7 +1606,7 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = os.MkdirAll(filepath.Dir(req.Path), 0755)
-	if err := writeFileAtomic(req.Path, []byte(req.Content)); err != nil {
+	if err := writeFileKeepMode(req.Path, []byte(req.Content)); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -1620,9 +1620,9 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// writeFileAtomic replaces a file through a temp file and a rename. A symlink is followed, so its target is written
+// writeFileKeepMode replaces a file through a temp file and a rename. A symlink is followed, so its target is written
 // and the link stays; the file keeps its permissions (a new file gets 0644).
-func writeFileAtomic(path string, data []byte) error {
+func writeFileKeepMode(path string, data []byte) error {
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		path = resolved
 	}
@@ -1685,7 +1685,7 @@ func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newContent := strings.Join(updated, "\n")
-	if err := writeFileAtomic(req.Path, []byte(newContent)); err != nil {
+	if err := writeFileKeepMode(req.Path, []byte(newContent)); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
