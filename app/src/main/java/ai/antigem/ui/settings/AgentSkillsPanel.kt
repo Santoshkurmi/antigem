@@ -43,6 +43,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -121,6 +124,21 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
         loading = false
     }
     LaunchedEffect(agent) { reload() }
+
+    // turn a skill off (the agent stops loading it) or on again, the agent's own way (the bridge knows it)
+    fun toggle(s: AgentSkillDto, on: Boolean) {
+        busy[s.id] = "toggle"
+        scope.launch {
+            AgentSkillsClient.setEnabled(agent, s.id, on)
+                .onSuccess {
+                    toast(if (on) L.settings.agentSkills.nameTurnedOnStartANew(s.name) else L.settings.agentSkills.nameTurnedOffNewChatsWont(s.name))
+                    reload()
+                    onChanged()
+                }
+                .onFailure { toast(it.message ?: L.settings.agentSkills.couldNotChangeName(s.name), ok = false) }
+            busy.remove(s.id)
+        }
+    }
 
     fun find() {
         val text = source.trim()
@@ -275,9 +293,21 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             val op = busy[s.id]
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+                val toggleLabel = L.settings.agentSkills.turnNameOnOrOff(s.name)
+                Checkbox(
+                    checked = s.enabled, onCheckedChange = { toggle(s, it) }, enabled = op == null,
+                    colors = CheckboxDefaults.colors(checkedColor = accent),
+                    modifier = Modifier.semantics { contentDescription = toggleLabel }
+                )
+                Column(Modifier.weight(1f).alpha(if (s.enabled) 1f else 0.55f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(s.name, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (!s.enabled) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)) {
+                                Text(L.common.off, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
+                            }
+                        }
                         if (s.kind == "plugin") {
                             Spacer(Modifier.width(6.dp))
                             Surface(shape = RoundedCornerShape(6.dp), color = accent.copy(alpha = 0.15f)) {
@@ -296,7 +326,7 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                 if (op != null) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = accent)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (op == "update") L.common.updating else L.common.removing, fontSize = 11.5.sp, color = accent)
+                    Text(when (op) { "update" -> L.common.updating; "remove" -> L.common.removing; else -> L.common.working }, fontSize = 11.5.sp, color = accent)
                 } else {
                     if (s.source != null) IconButton(onClick = {
                         busy[s.id] = "update"
@@ -312,6 +342,7 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
             }
         }
         Spacer(Modifier.height(8.dp))
+        if (!list.isNullOrEmpty()) PanelHint(L.settings.agentSkills.untickASkillToTurnIt, Modifier.padding(bottom = 4.dp))
         PanelHint(L.settings.agentSkills.theAgentReadsItsSkillsWhen)
     }
 

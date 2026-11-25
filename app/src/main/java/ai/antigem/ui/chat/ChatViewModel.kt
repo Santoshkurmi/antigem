@@ -1711,7 +1711,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             ai.antigem.data.skills.AgentSkillsClient.changes.collect { agent ->
                 when (agent) {
-                    AgentKind.CLAUDE -> claudeBackend.refreshInfo(force = true)
+                    AgentKind.CLAUDE -> {
+                        claudeBackend.refreshInfo(force = true)
+                        // turning a skill off or on writes Claude's settings.json: settings saved from the old copy would undo it
+                        claudeConfig.loadSettings()
+                    }
                     AgentKind.CODEX -> codexBackend.refreshSkills()
                     AgentKind.AGY -> ai.antigem.data.remote.SlashCommandsCache.refresh()
                     AgentKind.OPENCODE -> openCodeBackend.refreshSlashCommands()

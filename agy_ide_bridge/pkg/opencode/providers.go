@@ -180,7 +180,92 @@ func (m *Manager) writeConfig() error {
 	if servers, err := m.loadMcp(); err == nil && len(servers) > 0 {
 		cfg["mcp"] = map[string]interface{}{"servers": servers}
 	}
+	// skills and MCP servers turned off in the app: OpenCode's policies take a denied one out of every chat
+	var policies []map[string]string
+	for _, kind := range []string{"skill", "mcp"} {
+		for _, id := range m.loadTurnedOff(kind) {
+			policies = append(policies, map[string]string{"action": kind + ".use", "resource": id, "effect": "deny"})
+		}
+	}
+	if len(policies) > 0 {
+		cfg["policies"] = policies
+	}
 	return writePrivate(m.configPath(), cfg)
+}
+
+// Skills and MCP servers turned off in the app, kept in the bridge's config like the custom providers. OpenCode's
+// skill id is the skill's folder name; an MCP server is its name (the user's own config's servers too).
+
+func (m *Manager) turnedOffPath(kind string) string {
+	if kind == "mcp" {
+		return filepath.Join(m.dataDir(), "disabled_mcp.json")
+	}
+	return filepath.Join(m.dataDir(), "disabled_skills.json")
+}
+
+// loadTurnedOff reads the turned-off ids of [kind] (skill | mcp), sorted (the caller holds provMu).
+func (m *Manager) loadTurnedOff(kind string) []string {
+	data, err := os.ReadFile(m.turnedOffPath(kind))
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	if json.Unmarshal(data, &ids) != nil {
+		return nil
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func (m *Manager) turnedOff(kind string) map[string]bool {
+	m.provMu.Lock()
+	defer m.provMu.Unlock()
+	out := map[string]bool{}
+	for _, id := range m.loadTurnedOff(kind) {
+		out[id] = true
+	}
+	return out
+}
+
+// setTurnedOff turns [id] of [kind] off or on for every OpenCode chat; a running server reloads its config.
+func (m *Manager) setTurnedOff(ctx context.Context, kind, id string, off bool) error {
+	m.provMu.Lock()
+	set := map[string]bool{}
+	for _, s := range m.loadTurnedOff(kind) {
+		set[s] = true
+	}
+	if set[id] == off {
+		m.provMu.Unlock()
+		return nil
+	}
+	if off {
+		set[id] = true
+	} else {
+		delete(set, id)
+	}
+	ids := make([]string, 0, len(set))
+	for s := range set {
+		ids = append(ids, s)
+	}
+	sort.Strings(ids)
+	err := writePrivate(m.turnedOffPath(kind), ids)
+	m.provMu.Unlock()
+	if err != nil {
+		return err
+	}
+	if err := m.writeConfig(); err != nil {
+		return err
+	}
+	m.reloadQuietly(ctx)
+	return nil
+}
+
+// DisabledSkills is the set of skill ids turned off in the app.
+func (m *Manager) DisabledSkills() map[string]bool { return m.turnedOff("skill") }
+
+// SetSkillEnabled turns skill [id] off or on for every OpenCode chat.
+func (m *Manager) SetSkillEnabled(ctx context.Context, id string, enabled bool) error {
+	return m.setTurnedOff(ctx, "skill", id, !enabled)
 }
 
 // reasoningField is where an OpenAI-compatible endpoint streams a model's thinking: OpenRouter sends "reasoning",
@@ -585,8 +670,9 @@ func (m *Manager) loadMcp() (map[string]json.RawMessage, error) {
 
 var mcpNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 
-// handleMcp: GET /api/opencode/mcp (the saved servers and OpenCode's live status), PUT /api/opencode/mcp/{name}
-// {"type":"remote","url":…,"headers":{…}} or {"type":"local","command":[…]}, DELETE /api/opencode/mcp/{name}.
+// handleMcp: GET /api/opencode/mcp (the saved servers, OpenCode's live status and the "off" names), PUT
+// /api/opencode/mcp/{name} {"type":"remote","url":…,"headers":{…}} or {"type":"local","command":[…]}, PATCH
+// /api/opencode/mcp/{name} {"enabled":bool} (any server, the user's own config's too), DELETE /api/opencode/mcp/{name}.
 func (m *Manager) handleMcp(w http.ResponseWriter, r *http.Request, name string) {
 	m.provMu.Lock()
 	servers, err := m.loadMcp()
@@ -597,7 +683,13 @@ func (m *Manager) handleMcp(w http.ResponseWriter, r *http.Request, name string)
 	}
 	switch {
 	case name == "" && r.Method == http.MethodGet:
-		resp := map[string]interface{}{"success": true, "servers": servers}
+		off := []string{}
+		for n := range m.turnedOff("mcp") {
+			off = append(off, n)
+		}
+		sort.Strings(off)
+		// a turned-off server is left out of OpenCode's live list: "off" tells the app it is there, but off
+		resp := map[string]interface{}{"success": true, "servers": servers, "off": off}
 		if m.Running() {
 			var live json.RawMessage
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -607,6 +699,20 @@ func (m *Manager) handleMcp(w http.ResponseWriter, r *http.Request, name string)
 			}
 		}
 		writeJSON(w, http.StatusOK, resp)
+		return
+	case name != "" && r.Method == http.MethodPatch:
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "invalid JSON"})
+			return
+		}
+		if err := m.setTurnedOff(r.Context(), "mcp", name, !body.Enabled); err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 		return
 	case name != "" && r.Method == http.MethodPut:
 		if !mcpNameRe.MatchString(name) {
@@ -637,6 +743,11 @@ func (m *Manager) handleMcp(w http.ResponseWriter, r *http.Request, name string)
 		servers[name] = raw
 	case name != "" && r.Method == http.MethodDelete:
 		delete(servers, name)
+		// a removed server leaves no "off" behind
+		if err := m.setTurnedOff(r.Context(), "mcp", name, false); err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "method not allowed"})
 		return

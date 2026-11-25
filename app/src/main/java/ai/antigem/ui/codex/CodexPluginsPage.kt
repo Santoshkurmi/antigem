@@ -29,6 +29,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -223,7 +225,20 @@ fun CodexPluginsPage(backend: CodexChatBackend) {
                     if (installed.isEmpty()) item(key = "none") { Hint(L.codex.plugins.noPluginsInstalledFindSomeIn) }
                     items(installed.size, key = { "i_${installed[it].id}_$it" }) { i ->
                         val p = installed[i]
-                        PluginCard(p, ops[p.id]) {
+                        PluginCard(p, ops[p.id], onToggle = { on ->
+                            // off: Codex keeps it installed but loads it in no chat (`[plugins."<id>"] enabled = false`)
+                            ops[p.id] = "toggle"
+                            scope.launch {
+                                backend.setPluginEnabled(p.id, on)
+                                    .onSuccess {
+                                        toast(if (on) L.codex.plugins.titleTurnedOnStartANew(p.title) else L.codex.plugins.titleTurnedOffNewChatsWont(p.title))
+                                        reload()
+                                        backend.refreshSkills()
+                                    }
+                                    .onFailure { toast(friendly(it), ok = false) }
+                                ops.remove(p.id)
+                            }
+                        }) {
                             OutlinedButton(onClick = {
                                 run(p.id, "uninstall", "plugin/uninstall", buildJsonObject { put("pluginId", p.id) }) { "${p.title} uninstalled" }
                             }, enabled = ops[p.id] == null) { Text(L.common.uninstall, fontSize = 12.sp, color = QuotaRed) }
@@ -378,14 +393,18 @@ private fun Progress(action: String) {
 }
 
 @Composable
-private fun PluginCard(p: CxPlugin, op: String?, action: @Composable () -> Unit) {
+private fun PluginCard(p: CxPlugin, op: String?, onToggle: ((Boolean) -> Unit)? = null, action: @Composable () -> Unit) {
     ClaudeCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(p.title, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-                Hint(listOfNotNull(p.version?.let { "v$it" }, p.category, p.marketplace, if (p.installed && !p.enabled) "disabled" else null).joinToString(" · "))
+                Hint(listOfNotNull(p.version?.let { "v$it" }, p.category, p.marketplace, if (p.installed && !p.enabled) L.common.disabled else null).joinToString(" · "))
             }
             if (op != null) Progress(op)
+            else if (p.installed && onToggle != null) Switch(
+                checked = p.enabled, onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(checkedTrackColor = CodexAccent)
+            )
             else if (p.installed) Text(L.common.installed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = QuotaGreen)
         }
         if (p.description.isNotBlank()) Text(p.description, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,

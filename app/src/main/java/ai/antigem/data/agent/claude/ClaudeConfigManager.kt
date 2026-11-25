@@ -266,6 +266,23 @@ class ClaudeConfigManager(
         }
     }
 
+    /** Turns server [name] off or on for every new chat; the list is read again after. */
+    fun setMcpEnabled(name: String, enabled: Boolean, cwd: String?) {
+        scope.launch {
+            setMcpOp(name, if (enabled) L.agent.claudeConfigManager.turningOn else L.agent.claudeConfigManager.turningOff)
+            client.setMcpServerEnabled(name, enabled, cwd)
+                .onSuccess {
+                    if (it.success) _messages.tryEmit(if (enabled) L.agent.claudeConfigManager.nameTurnedOnNewChatsStart(name) else L.agent.claudeConfigManager.nameTurnedOffNewChatsWont(name))
+                    else _messages.tryEmit(L.agent.claudeConfigManager.couldNotChangeNameError(name, it.error.orEmpty()))
+                }
+                .onFailure { _messages.tryEmit(L.agent.claudeConfigManager.couldNotChangeNameError(name, it.message.orEmpty())) }
+            setMcpOp(name, null)
+            // the bridge changed settings.json: a later setting saved from the old copy would undo it
+            loadSettings()
+            loadMcpNow(cwd)
+        }
+    }
+
     private suspend fun loadMcpNow(cwd: String?) {
         _mcpLoading.value = true
         client.mcpServers(cwd)

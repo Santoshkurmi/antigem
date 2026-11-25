@@ -37,6 +37,11 @@ import ai.antigem.ui.components.MarkdownContent
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.AgyAccent
 import ai.antigem.i18n.L
+import ai.antigem.data.skills.AgentSkillDto
+import ai.antigem.data.skills.AgentSkillsClient
+import ai.antigem.ui.components.AppToastHelper
+import ai.antigem.ui.components.ChatToastType
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -248,6 +253,39 @@ private fun SkillsTabView(
     onRefresh: () -> Unit,
     onSkillClick: (SkillDefinitionDto) -> Unit
 ) {
+    // the user's own skills folder (from the bridge): which listed skills can be turned off, and the ones already off
+    // (Antigravity has no switch: a turned-off skill is moved aside, so Antigravity no longer lists it)
+    val scope = rememberCoroutineScope()
+    var userDir by remember { mutableStateOf("") }
+    var userSkills by remember { mutableStateOf<List<AgentSkillDto>>(emptyList()) }
+    var toggling by remember { mutableStateOf<String?>(null) }
+    suspend fun loadUserSkills() {
+        AgentSkillsClient.list(AgentKind.AGY).onSuccess { userDir = it.dir; userSkills = it.skills }
+    }
+    LaunchedEffect(skills) { loadUserSkills() }
+    val prefix = userDir.trimEnd('/').let { if (it.isBlank()) "" else "$it/" }
+    fun idOf(path: String): String? {
+        val p = path.removePrefix("file://")
+        return if (prefix.isNotEmpty() && p.startsWith(prefix)) p.removePrefix(prefix).substringBefore('/').takeIf { it.isNotBlank() } else null
+    }
+    val userIds = userSkills.map { it.id }.toSet()
+    val offIds = userSkills.filter { !it.enabled }.map { it.id }.toSet()
+    val shown = skills.filter { s -> idOf(s.path)?.let { it !in offIds } ?: true }
+    val offSkills = if (filterScope == "WORKSPACE") emptyList() else userSkills.filter { !it.enabled }
+    fun toggle(id: String, name: String, on: Boolean) {
+        toggling = id
+        scope.launch {
+            AgentSkillsClient.setEnabled(AgentKind.AGY, id, on)
+                .onSuccess {
+                    AppToastHelper.showToast(if (on) L.settings.skillsAndPlugins.nameTurnedOnStartANew(name) else L.settings.skillsAndPlugins.nameTurnedOffNewChatsWont(name), ChatToastType.SUCCESS)
+                }
+                .onFailure { AppToastHelper.showToast(L.settings.skillsAndPlugins.couldNotChangeNameError(name, it.message.orEmpty()), ChatToastType.ERROR) }
+            loadUserSkills()
+            toggling = null
+            onRefresh()
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -294,11 +332,11 @@ private fun SkillsTabView(
             }
         }
 
-        if (isLoading && skills.isEmpty()) {
+        if (isLoading && skills.isEmpty() && offSkills.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = GeminiBlue)
             }
-        } else if (skills.isEmpty()) {
+        } else if (shown.isEmpty() && offSkills.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
                     text = if (filterScope == "WORKSPACE") L.settings.skillsAndPlugins.noWorkspaceScopedSkillsAgentsSkills else L.settings.skillsAndPlugins.noSkillsDiscovered,
@@ -316,8 +354,21 @@ private fun SkillsTabView(
                 userScrollEnabled = bounce.userScrollEnabled,
                 overscrollEffect = bounce.overscrollEffect
             ) {
-                items(skills, key = { it.path.ifBlank { it.name } }) { skill ->
-                    SkillItemCard(skill = skill, onClick = { onSkillClick(skill) })
+                items(shown, key = { it.path.ifBlank { it.name } }) { skill ->
+                    // a skill of the user's own folder can be turned off
+                    val id = idOf(skill.path)?.takeIf { it in userIds }
+                    SkillItemCard(
+                        skill = skill, onClick = { onSkillClick(skill) },
+                        enabled = if (id != null) true else null, busy = id != null && toggling == id,
+                        onToggle = id?.let { i -> { on: Boolean -> toggle(i, skill.name, on) } }
+                    )
+                }
+                items(offSkills, key = { "off_" + it.id }) { s ->
+                    SkillItemCard(
+                        skill = SkillDefinitionDto(path = s.path + "/SKILL.md", name = s.id, displayName = s.name, description = s.description),
+                        onClick = {}, enabled = false, busy = toggling == s.id,
+                        onToggle = { on -> toggle(s.id, s.name, on) }
+                    )
                 }
             }
         }
@@ -327,7 +378,10 @@ private fun SkillsTabView(
 @Composable
 private fun SkillItemCard(
     skill: SkillDefinitionDto,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean? = null, // null: no switch (built-in, plugin and project skills)
+    busy: Boolean = false,
+    onToggle: ((Boolean) -> Unit)? = null
 ) {
     val categoryColor = when (skill.discoveryCategory) {
         "DISCOVERY_CATEGORY_BUILTIN" -> ClaudeTerracotta
@@ -427,7 +481,17 @@ private fun SkillItemCard(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
+                if (onToggle != null && enabled != null) {
+                    Spacer(Modifier.width(6.dp))
+                    if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = AgyAccent)
+                    else Switch(checked = enabled, onCheckedChange = onToggle, colors = SwitchDefaults.colors(checkedTrackColor = AgyAccent))
+                }
             }
+
+            if (enabled == false) Text(
+                L.settings.skillsAndPlugins.offKeptAsideAntigravityDoesntLoad,
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+            )
 
             Text(
                 text = skill.description.ifBlank { L.settings.skillsAndPlugins.agentCapabilityInstructionsAndWorkflows },
@@ -452,7 +516,7 @@ private fun SkillItemCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (enabled != false) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(L.settings.skillsAndPlugins.viewSkillMd, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                     Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                 }
@@ -472,6 +536,11 @@ private fun InstalledPluginsTabView(
     onDeletePlugin: (String, String) -> Unit,
     onSkillClick: (String) -> Unit
 ) {
+    // agy's plugin switches (~/.gemini/config/config.json, changed with `agy plugin enable|disable`)
+    val scope = rememberCoroutineScope()
+    var states by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var toggling by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(plugins) { AgentSkillsClient.agyPluginStates().onSuccess { states = it } }
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -515,11 +584,26 @@ private fun InstalledPluginsTabView(
                 overscrollEffect = bounce.overscrollEffect
             ) {
                 items(plugins, key = { it.name }) { plugin ->
+                    val title = plugin.displayName.ifBlank { plugin.name }
                     InstalledPluginCard(
                         plugin = plugin,
                         isDeleting = deletingPluginId == plugin.name,
-                        onDelete = { onDeletePlugin(plugin.name, plugin.displayName.ifBlank { plugin.name }) },
-                        onSkillClick = onSkillClick
+                        onDelete = { onDeletePlugin(plugin.name, title) },
+                        onSkillClick = onSkillClick,
+                        enabled = states[plugin.name] != false,
+                        toggling = toggling == plugin.name,
+                        onToggle = { on ->
+                            toggling = plugin.name
+                            scope.launch {
+                                AgentSkillsClient.setAgyPluginEnabled(plugin.name, on)
+                                    .onSuccess {
+                                        AppToastHelper.showToast(if (on) L.settings.skillsAndPlugins.nameTurnedOnStartANew(title) else L.settings.skillsAndPlugins.nameTurnedOffNewChatsWont(title), ChatToastType.SUCCESS)
+                                    }
+                                    .onFailure { AppToastHelper.showToast(L.settings.skillsAndPlugins.couldNotChangeNameError(title, it.message.orEmpty()), ChatToastType.ERROR) }
+                                AgentSkillsClient.agyPluginStates().onSuccess { states = it }
+                                toggling = null
+                            }
+                        }
                     )
                 }
             }
@@ -532,7 +616,10 @@ private fun InstalledPluginCard(
     plugin: InstalledPluginDto,
     isDeleting: Boolean,
     onDelete: () -> Unit,
-    onSkillClick: (String) -> Unit
+    onSkillClick: (String) -> Unit,
+    enabled: Boolean = true,
+    toggling: Boolean = false,
+    onToggle: ((Boolean) -> Unit)? = null
 ) {
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
@@ -649,6 +736,12 @@ private fun InstalledPluginCard(
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
+                }
+
+                // off: agy keeps it installed but loads it in no chat
+                if (onToggle != null) {
+                    if (toggling) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = AgyAccent)
+                    else Switch(checked = enabled, onCheckedChange = onToggle, enabled = !isDeleting, colors = SwitchDefaults.colors(checkedTrackColor = AgyAccent))
                 }
 
                 IconButton(

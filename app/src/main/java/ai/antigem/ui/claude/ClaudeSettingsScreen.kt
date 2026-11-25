@@ -726,8 +726,16 @@ private fun McpPage(deps: ClaudeSettingsDeps, onOpenRea: () -> Unit, onOpenReaGr
                 }
                 when {
                     op != null -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = ClaudeAccent)
-                    srv.scope in setOf("user", "project", "local") -> IconButton(onClick = { toDelete = srv }) {
-                        Icon(Icons.Outlined.Delete, L.common.remove, tint = QuotaRed.copy(alpha = 0.8f))
+                    else -> {
+                        // off: Claude neither starts nor lists it in any chat (the bridge lists it back as "disabled")
+                        if (srv.scope in setOf("user", "project", "local") || srv.status == "disabled") Switch(
+                            checked = srv.status != "disabled",
+                            onCheckedChange = { deps.config.setMcpEnabled(srv.name, it, cwd) },
+                            colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent)
+                        )
+                        if (srv.scope in setOf("user", "project", "local")) IconButton(onClick = { toDelete = srv }) {
+                            Icon(Icons.Outlined.Delete, L.common.remove, tint = QuotaRed.copy(alpha = 0.8f))
+                        }
                     }
                 }
             }

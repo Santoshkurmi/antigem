@@ -39,6 +39,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -126,6 +128,7 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend, onOpenRea: () -> Unit = {}, on
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf<McpDraft?>(null) }
+    var toggling by remember { mutableStateOf<String?>(null) } // server being turned off or on
     var choosePlugin by remember { mutableStateOf(false) }
     var showReaDialog by remember { mutableStateOf(false) }
 
@@ -261,6 +264,23 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend, onOpenRea: () -> Unit = {}, on
                     )
                     srv.error?.let { Text(it, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 }
+                // off: an OpenCode policy keeps it out of every chat (any server, also ones from the user's own config)
+                if (toggling == srv.name) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = OpenCodeAccent)
+                else Switch(
+                    checked = srv.status != "disabled",
+                    onCheckedChange = { on ->
+                        toggling = srv.name
+                        scope.launch {
+                            backend.client.setMcpEnabled(srv.name, on)
+                                .onSuccess { AppToastHelper.showToast(if (on) L.opencode.mcp.nameTurnedOnNewChatsStart(srv.name) else L.opencode.mcp.nameTurnedOffNewChatsWont(srv.name), ChatToastType.SUCCESS) }
+                                .onFailure { AppToastHelper.showToast(L.opencode.mcp.couldNotChangeNameError(srv.name, it.message.orEmpty()), ChatToastType.ERROR) }
+                            reload()
+                            toggling = null
+                        }
+                    },
+                    enabled = toggling == null,
+                    colors = SwitchDefaults.colors(checkedTrackColor = OpenCodeAccent)
+                )
                 if (srv.saved) {
                     TextButton(onClick = {
                         val c = srv.config

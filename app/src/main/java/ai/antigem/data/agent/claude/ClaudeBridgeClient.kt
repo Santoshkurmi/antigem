@@ -239,6 +239,15 @@ class ClaudeBridgeClient(
         return call(Request.Builder().url(url(q)).delete().build())
     }
 
+    /**
+     * Turns a server off (or on) for every chat (Claude's `deniedMcpServers` setting). [cwd]: the folder where Claude
+     * itself may have turned it off (/mcp disable), so turning it on there works too.
+     */
+    suspend fun setMcpServerEnabled(name: String, enabled: Boolean, cwd: String?): Result<ClaudeCommandOutput> {
+        val body = buildJsonObject { put("name", name); put("enabled", enabled); cwd?.let { put("cwd", it) } }.toString()
+        return call(Request.Builder().url(url("/mcp")).patch(body.toRequestBody(jsonType)).build(), slowClient)
+    }
+
     suspend fun plugins(): Result<ClaudePluginsResponse> = get("/plugins")
 
     /** action: install | uninstall | enable | disable | update | marketplace-add | marketplace-remove | marketplace-update */

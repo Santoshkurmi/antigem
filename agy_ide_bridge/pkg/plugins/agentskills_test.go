@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -237,13 +238,13 @@ func TestInstallListUpdateRemove(t *testing.T) {
 		t.Fatalf("replace: %v %v", replaced, err)
 	}
 
-	if err := a.remove("claude", "pdf"); err != nil {
+	if err := a.remove(context.Background(), "claude", "pdf"); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.remove("claude", "../x"); err == nil {
+	if err := a.remove(context.Background(), "claude", "../x"); err == nil {
 		t.Fatal("unsafe id accepted")
 	}
-	if err := a.remove("claude", "pdf"); err == nil {
+	if err := a.remove(context.Background(), "claude", "pdf"); err == nil {
 		t.Fatal("removed twice")
 	}
 }
@@ -280,7 +281,7 @@ func TestRemoveLinkedSkillKeepsTarget(t *testing.T) {
 	if got := a.list("codex", dir); len(got) != 1 || got[0].ID != "linked" {
 		t.Fatalf("list: %+v", got)
 	}
-	if err := a.remove("codex", "linked"); err != nil {
+	if err := a.remove(context.Background(), "codex", "linked"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(outside, skillFile)); err != nil {
@@ -320,5 +321,89 @@ func TestAgentSkillsHTTP(t *testing.T) {
 	}
 	if res := call("POST", "/agy-plugin", `{"source":"o/skills"}`); res["success"] != false || !strings.Contains(res["error"].(string), "not installed") {
 		t.Fatalf("agy-plugin without agy: %v", res)
+	}
+}
+
+func TestToggleClaudeAndAgySkills(t *testing.T) {
+	a, home := newTestSkills(t, nil)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	ctx := context.Background()
+	write := func(p, text string) {
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claudeDir := filepath.Join(home, ".claude", "skills")
+	write(filepath.Join(claudeDir, "pdf", skillFile), skillMD("pdf-tools", "PDF"))
+	write(filepath.Join(claudeDir, "myplug", ".claude-plugin", "plugin.json"), `{"name":"my-plug"}`)
+	settings := filepath.Join(home, ".claude", "settings.json")
+	write(settings, `{"model":"opus","skillOverrides":{"other":"user-invocable-only"}}`)
+
+	enabled := func(agent string) map[string]bool {
+		dir, _ := a.skillsDir(agent)
+		out := map[string]bool{}
+		for _, s := range a.withState(ctx, agent, a.list(agent, dir)) {
+			out[s.ID] = s.Enabled
+		}
+		return out
+	}
+	if got := enabled("claude"); !got["pdf"] || !got["myplug"] {
+		t.Fatalf("claude before: %v", got)
+	}
+	if err := a.setEnabled(ctx, "claude", "pdf", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.setEnabled(ctx, "claude", "myplug", false); err != nil {
+		t.Fatal(err)
+	}
+	st := readJSONObject(settings)
+	if st["model"] != "opus" || st["skillOverrides"].(map[string]interface{})["pdf"] != "off" ||
+		st["skillOverrides"].(map[string]interface{})["other"] != "user-invocable-only" ||
+		st["enabledPlugins"].(map[string]interface{})["my-plug@skills-dir"] != false {
+		t.Fatalf("claude settings: %v", st)
+	}
+	if got := enabled("claude"); got["pdf"] || got["myplug"] {
+		t.Fatalf("claude after off: %v", got)
+	}
+	_ = a.setEnabled(ctx, "claude", "pdf", true)
+	_ = a.setEnabled(ctx, "claude", "myplug", true)
+	st = readJSONObject(settings)
+	if _, ok := st["enabledPlugins"]; ok || st["skillOverrides"].(map[string]interface{})["pdf"] != nil {
+		t.Fatalf("claude settings after on: %v", st)
+	}
+
+	// Antigravity: the folder moves aside and back
+	agyDir := filepath.Join(home, ".gemini", "antigravity", "skills")
+	write(filepath.Join(agyDir, "notes", skillFile), skillMD("notes", "N"))
+	if err := a.setEnabled(ctx, "agy", "notes", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(agyDir, "notes")); err == nil {
+		t.Fatal("turned-off agy skill is still in the skills folder")
+	}
+	if got := enabled("agy"); got["notes"] || len(got) != 1 {
+		t.Fatalf("agy after off: %v", got)
+	}
+	if err := a.setEnabled(ctx, "agy", "notes", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := enabled("agy"); !got["notes"] {
+		t.Fatalf("agy after on: %v", got)
+	}
+	_ = a.setEnabled(ctx, "agy", "notes", false)
+	if err := a.remove(ctx, "agy", "notes"); err != nil {
+		t.Fatal(err)
+	}
+	if got := enabled("agy"); len(got) != 0 {
+		t.Fatalf("agy after remove: %v", got)
+	}
+
+	// Antigravity plugins without the agy CLI: agy's own config.json switch
+	if _, err := a.setAgyPluginEnabled("demo-plug", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.agyPluginStates(); got["demo-plug"] {
+		t.Fatalf("agy plugin: %v", got)
 	}
 }

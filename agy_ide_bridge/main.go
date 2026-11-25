@@ -413,14 +413,23 @@ func main() {
 	mux.Handle("/api/custom-plugins/", pluginMgr)
 
 	// Each agent's own skills folder (add from GitHub, update, remove) and Antigravity plugins from GitHub
-	mux.Handle("/api/agent-skills/", plugins.NewAgentSkills(pluginMgr, cfg.HomeDir, func() string {
+	agentSkills := plugins.NewAgentSkills(pluginMgr, cfg.HomeDir, func() string {
 		if hubMgr != nil {
 			if p := hubMgr.GetAgyBin(); p != "" {
 				return p
 			}
 		}
 		return hub.InstallerAgyPath()
-	}))
+	})
+	// turning skills off and on: Codex keeps it through its app-server, OpenCode in the bridge's OpenCode config
+	if codexMgr != nil {
+		agentSkills.Toggles.CodexCall = codexMgr.Call
+	}
+	if openCodeMgr != nil {
+		agentSkills.Toggles.OpenCodeDisabled = openCodeMgr.DisabledSkills
+		agentSkills.Toggles.OpenCodeSet = openCodeMgr.SetSkillEnabled
+	}
+	mux.Handle("/api/agent-skills/", agentSkills)
 
 	// REST Endpoints
 	mux.HandleFunc("/api/health", h.HealthHandler)

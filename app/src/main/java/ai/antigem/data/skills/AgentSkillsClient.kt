@@ -34,7 +34,9 @@ data class AgentSkillDto(
     val description: String = "",
     val path: String = "",
     val kind: String = "skill",
-    val source: SkillSourceDto? = null
+    val source: SkillSourceDto? = null,
+    /** false: turned off, the agent does not load it (a bridge from before the switch sends nothing: on). */
+    val enabled: Boolean = true
 )
 
 /** One skill found in a GitHub repository; [exists]: the agent already has a folder with this id. */
@@ -78,6 +80,9 @@ data class AgentSkillsInstallResponse(
 
 @Serializable
 private data class SimpleReply(val success: Boolean = false, val error: String? = null, val output: String? = null)
+
+@Serializable
+private data class AgyPluginStatesReply(val success: Boolean = false, val error: String? = null, val plugins: Map<String, Boolean> = emptyMap())
 
 /**
  * The bridge's `/api/agent-skills/` endpoints: each agent's own skills folder (add from GitHub, update, remove)
@@ -156,6 +161,30 @@ object AgentSkillsClient {
         val res: SimpleReply = post("/remove", buildJsonObject { put("agent", agentId(agent)); put("id", id) }, slow = false)
         if (!res.success) error(res.error ?: "Could not remove $id")
         _changes.tryEmit(agent)
+    }
+
+    /**
+     * Turns skill [id] off or on for every new chat, the agent's own way (Claude Code's settings, Codex's config,
+     * OpenCode's policies; Antigravity's skill folder is moved aside).
+     */
+    suspend fun setEnabled(agent: AgentKind, id: String, enabled: Boolean): Result<Unit> = runCatching {
+        val res: SimpleReply = post("/toggle", buildJsonObject { put("agent", agentId(agent)); put("id", id); put("enabled", enabled) }, slow = false)
+        if (!res.success) error(res.error ?: "Could not change $id")
+        _changes.tryEmit(agent)
+    }
+
+    /** Antigravity's plugin switches (plugin name → on); a plugin missing here is on. */
+    suspend fun agyPluginStates(): Result<Map<String, Boolean>> = runCatching {
+        val res: AgyPluginStatesReply = json.decodeFromString(send(Request.Builder().url(url("/agy-plugins")).get().build(), slow = false))
+        if (!res.success) error(res.error ?: "Could not read the plugin switches")
+        res.plugins
+    }
+
+    /** `agy plugin enable|disable <name>`. */
+    suspend fun setAgyPluginEnabled(name: String, enabled: Boolean): Result<Unit> = runCatching {
+        val res: SimpleReply = post("/agy-plugin-toggle", buildJsonObject { put("id", name); put("enabled", enabled) }, slow = false)
+        if (!res.success) error(listOfNotNull(res.error, res.output?.takeIf { it.isNotBlank() && res.error?.contains(it) != true }).joinToString("\n"))
+        _changes.tryEmit(AgentKind.AGY)
     }
 
     /** Downloads the repository and runs `agy plugin install <folder>`; returns agy's output. */

@@ -39,6 +39,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -129,6 +131,7 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
     var draft by remember { mutableStateOf<McpDraft?>(null) }
     var choosePlugin by remember { mutableStateOf(false) }
     var showReaDialog by remember { mutableStateOf(false) }
+    var toggling by remember { mutableStateOf<String?>(null) } // server being turned off or on
 
     suspend fun reload() {
         loading = true
@@ -264,6 +267,23 @@ fun CodexMcpPage(backend: CodexChatBackend, onOpenRea: () -> Unit = {}, onOpenRe
                         Text(label, fontSize = 11.sp, color = color)
                         srv.error?.let { Text(it, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                     }
+                    // off: Codex keeps it in its config but starts it in no chat (`enabled = false`)
+                    if (toggling == srv.name) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = CodexAccent)
+                    else Switch(
+                        checked = srv.status != "disabled",
+                        onCheckedChange = { on ->
+                            toggling = srv.name
+                            scope.launch {
+                                backend.setMcpEnabled(srv.name, on)
+                                    .onSuccess { AppToastHelper.showToast(if (on) L.codex.mcp.nameTurnedOnNewChatsStart(srv.name) else L.codex.mcp.nameTurnedOffNewChatsWont(srv.name), ChatToastType.SUCCESS) }
+                                    .onFailure { AppToastHelper.showToast(L.codex.mcp.couldNotChangeNameError(srv.name, it.message.orEmpty()), ChatToastType.ERROR) }
+                                reload()
+                                toggling = null
+                            }
+                        },
+                        enabled = toggling == null,
+                        colors = SwitchDefaults.colors(checkedTrackColor = CodexAccent)
+                    )
                     TextButton(onClick = {
                         draft = if (c.str("url") == null) McpDraft(
                             name = srv.name, remote = false,

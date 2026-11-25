@@ -6,6 +6,7 @@ import ai.antigem.data.agent.AgentChatBackend
 import ai.antigem.data.agent.ChatSessionStore
 import ai.antigem.data.agent.claude.isBridgeUnreachable
 import ai.antigem.data.agent.opencode.a
+import ai.antigem.data.agent.opencode.bool
 import ai.antigem.data.agent.opencode.dbl
 import ai.antigem.data.agent.opencode.long
 import ai.antigem.data.agent.opencode.o
@@ -1154,10 +1155,13 @@ class CodexChatBackend(
             .obj().a("data").orEmpty().mapNotNull { it.obj() }.associateBy { it.str("name").orEmpty() }
         cfg.keys.sorted().map { name ->
             val st = live[name]
+            val config = cfg[name].obj() ?: JsonObject(emptyMap())
             McpServer(
                 name = name,
-                config = cfg[name].obj() ?: JsonObject(emptyMap()),
-                status = st.str("runtimeStatus") ?: if (st != null && st.str("toolsError") == null) "connected" else if (st?.str("toolsError") != null) "failed" else null,
+                config = config,
+                // a turned-off server is still listed live, with no status and no error
+                status = if (config.bool("enabled") == false) "disabled"
+                    else st.str("runtimeStatus") ?: if (st != null && st.str("toolsError") == null) "connected" else if (st?.str("toolsError") != null) "failed" else null,
                 error = st.str("toolsError"),
                 toolCount = st.o("tools")?.size ?: 0
             )
@@ -1195,6 +1199,24 @@ class CodexChatBackend(
         })
 
     suspend fun removeMcp(name: String): Result<Unit> = writeMcp(name, JsonNull)
+
+    /** Turns server [name] off or on for every Codex chat (`enabled` of its entry in config.toml). */
+    suspend fun setMcpEnabled(name: String, enabled: Boolean): Result<Unit> = runCatching {
+        writeConfigValue("mcp_servers.$name.enabled", JsonPrimitive(enabled))
+        client.rpc("config/mcpServer/reload")
+    }
+
+    /** Turns installed plugin [pluginId] (name@marketplace) off or on: `[plugins."<id>"] enabled` in config.toml. */
+    suspend fun setPluginEnabled(pluginId: String, enabled: Boolean): Result<Unit> = runCatching {
+        writeConfigValue("plugins.$pluginId.enabled", JsonPrimitive(enabled))
+    }
+
+    private suspend fun writeConfigValue(keyPath: String, value: JsonElement) {
+        client.rpc("config/batchWrite", buildJsonObject {
+            put("edits", JsonArray(listOf(buildJsonObject { put("keyPath", keyPath); put("value", value); put("mergeStrategy", "replace") })))
+            put("reloadUserConfig", true)
+        }).getOrThrow()
+    }
 
     // ------------------------------------------------------------------ approvals & questions
 

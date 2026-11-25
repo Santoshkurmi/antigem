@@ -29,7 +29,10 @@ import (
 //	POST /install {agent, source, paths, replace} → {installed:[id], replaced:[id]}   (paths empty = every skill found)
 //	POST /update  {agent, id}                    → {id}   (downloads it again from where it came from)
 //	POST /remove  {agent, id}
+//	POST /toggle  {agent, id, enabled}           (turns a skill off or on for every chat, in the agent's own way)
 //	POST /agy-plugin {source}                    → {output}   (downloads the repository, then `agy plugin install <folder>`)
+//	GET  /agy-plugins                            → {plugins:{name: enabled}}   (~/.gemini/config/config.json)
+//	POST /agy-plugin-toggle {id, enabled}        (`agy plugin enable|disable <name>`)
 type AgentSkills struct {
 	m      *Manager
 	home   string
@@ -37,6 +40,18 @@ type AgentSkills struct {
 	mu     sync.Mutex // moves into the skills folders
 	// snapshot opens a repository (tests replace it with files in memory)
 	snapshot func(r Repo, tmp string) (repoSnapshot, error)
+	// Toggles reach the agents that keep a skill's on/off state in their own running servers
+	Toggles SkillToggles
+}
+
+// SkillToggles connects turning skills off and on to Codex and OpenCode (their managers live in other packages).
+// Claude Code's state is in its settings.json; Antigravity has none, so its turned-off skills are moved aside.
+type SkillToggles struct {
+	// CodexCall makes one Codex app-server request (skills/list, skills/config/write); nil when Codex is turned off
+	CodexCall func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
+	// OpenCodeDisabled / OpenCodeSet: the skills turned off in the bridge's OpenCode config; nil when OpenCode is off
+	OpenCodeDisabled func() map[string]bool
+	OpenCodeSet      func(ctx context.Context, id string, enabled bool) error
 }
 
 // NewAgentSkills shares [m]'s GitHub client and download limits; [agyBin] returns the agy binary in use.
@@ -66,6 +81,7 @@ type agentSkill struct {
 	Path        string       `json:"path"`
 	Kind        string       `json:"kind"` // skill | plugin (a Claude Code plugin folder, loaded as <name>@skills-dir)
 	Source      *SkillSource `json:"source,omitempty"`
+	Enabled     bool         `json:"enabled"` // false: turned off, the agent does not load it
 }
 
 type repoSkill struct {
@@ -110,7 +126,11 @@ func (a *AgentSkills) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			replyErr(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "dir": dir, "skills": a.list(agent, dir)})
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "dir": dir, "skills": a.withState(r.Context(), agent, a.list(agent, dir))})
+		return
+	}
+	if r.Method == http.MethodGet && route == "/agy-plugins" {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "plugins": a.agyPluginStates()})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -123,6 +143,7 @@ func (a *AgentSkills) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Paths   []string `json:"paths"`
 		Replace bool     `json:"replace"`
 		ID      string   `json:"id"`
+		Enabled bool     `json:"enabled"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		replyErr(w, errors.New("invalid JSON body"))
@@ -151,11 +172,24 @@ func (a *AgentSkills) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "id": body.ID})
 	case "/remove":
-		if err := a.remove(body.Agent, body.ID); err != nil {
+		if err := a.remove(r.Context(), body.Agent, body.ID); err != nil {
 			replyErr(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	case "/toggle":
+		if err := a.setEnabled(r.Context(), body.Agent, body.ID, body.Enabled); err != nil {
+			replyErr(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+	case "/agy-plugin-toggle":
+		out, err := a.setAgyPluginEnabled(body.ID, body.Enabled)
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error(), "output": out})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "output": out})
 	case "/agy-plugin":
 		out, err := a.installAgyPlugin(body.Source)
 		if err != nil {
@@ -189,7 +223,7 @@ func (a *AgentSkills) list(agent, dir string) []agentSkill {
 		if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
 			continue
 		}
-		s := agentSkill{ID: e.Name(), Name: e.Name(), Path: p, Kind: "skill", Source: readSkillSource(p)}
+		s := agentSkill{ID: e.Name(), Name: e.Name(), Path: p, Kind: "skill", Source: readSkillSource(p), Enabled: true}
 		if text, err := readSmall(filepath.Join(p, skillFile), 64<<10); err == nil {
 			name, desc := parseFrontmatter(text)
 			if name != "" {
@@ -241,7 +275,7 @@ func readSmall(p string, limit int64) (string, error) {
 	return string(data), err
 }
 
-func (a *AgentSkills) remove(agent, id string) error {
+func (a *AgentSkills) remove(ctx context.Context, agent, id string) error {
 	dir, err := a.skillsDir(agent)
 	if err != nil {
 		return err
@@ -249,26 +283,62 @@ func (a *AgentSkills) remove(agent, id string) error {
 	if !folderPattern.MatchString(id) {
 		return fmt.Errorf("Invalid skill name: %s", id)
 	}
+	var kind, name string
+	for _, s := range a.list(agent, dir) {
+		if s.ID == id {
+			kind, name = s.Kind, s.Name
+		}
+	}
 	target := filepath.Join(dir, id)
+	if agent == "agy" && a.agyOff(id) {
+		target = filepath.Join(a.offDir(agent), id) // a turned-off skill waits outside the skills folder
+	}
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	fi, err := os.Lstat(target)
 	if err != nil {
+		a.mu.Unlock()
 		return fmt.Errorf("%s is not installed", id)
 	}
 	if fi.Mode()&os.ModeSymlink != 0 {
-		return os.Remove(target) // a linked skill: only the link goes, never what it points to
+		err = os.Remove(target) // a linked skill: only the link goes, never what it points to
+	} else {
+		err = os.RemoveAll(target)
 	}
-	return os.RemoveAll(target)
+	a.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	// a removed skill leaves no "off" behind (one added later under this name starts turned on)
+	switch agent {
+	case "claude":
+		_ = a.setClaudeSkillOff(id, kind, name, false)
+	case "opencode":
+		if a.Toggles.OpenCodeSet != nil {
+			_ = a.Toggles.OpenCodeSet(ctx, id, true)
+		}
+	}
+	return nil
 }
 
-func (a *AgentSkills) update(agent, id string) error {
+func (a *AgentSkills) update(agent, id string) (err error) {
 	dir, err := a.skillsDir(agent)
 	if err != nil {
 		return err
 	}
 	if !folderPattern.MatchString(id) {
 		return fmt.Errorf("Invalid skill name: %s", id)
+	}
+	// a turned-off Antigravity skill is updated in the skills folder, then moved aside again
+	off := agent == "agy" && a.agyOff(id)
+	if off {
+		if err := a.moveAgySkill(id, true); err != nil {
+			return err
+		}
+		defer func() {
+			if err2 := a.moveAgySkill(id, false); err == nil {
+				err = err2
+			}
+		}()
 	}
 	src := readSkillSource(filepath.Join(dir, id))
 	if src == nil {
@@ -280,6 +350,375 @@ func (a *AgentSkills) update(agent, id string) error {
 	}
 	_, _, err = a.installDirs(agent, Repo{owner, name, src.Ref}, []string{src.Path}, map[string]string{src.Path: id}, true)
 	return err
+}
+
+// ---- turning skills off and on ----
+//
+// Each agent keeps it its own way (all checked against the real CLIs):
+//   - Claude Code: settings.json "skillOverrides": {"<folder name>": "off"}; a plugin folder kept in the skills
+//     folder (loaded as <name>@skills-dir) via "enabledPlugins": {"<name>@skills-dir": false}
+//   - Codex: app-server skills/config/write {path: <SKILL.md>, enabled} ([[skills.config]] in config.toml)
+//   - OpenCode: a "skill.use" deny policy in the bridge's OpenCode config (the skill id is its folder name)
+//   - Antigravity has no switch: a turned-off skill is moved to ~/.antigem/disabled-skills/agy/<id> and back
+
+// withState fills in Enabled of [skills] (all true from [list]) and adds Antigravity's turned-off skills.
+func (a *AgentSkills) withState(ctx context.Context, agent string, skills []agentSkill) []agentSkill {
+	switch agent {
+	case "claude":
+		st := readJSONObject(a.claudeSettingsPath())
+		overrides, _ := st["skillOverrides"].(map[string]interface{})
+		plugins, _ := st["enabledPlugins"].(map[string]interface{})
+		for i := range skills {
+			s := &skills[i]
+			if s.Kind == "plugin" {
+				if on, ok := plugins[s.Name+"@skills-dir"].(bool); ok && !on {
+					s.Enabled = false
+				}
+			} else if overrides[s.ID] == "off" {
+				s.Enabled = false
+			}
+		}
+	case "codex":
+		state := a.codexSkillStates(ctx)
+		for i := range skills {
+			if on, ok := state[cleanSkillPath(filepath.Join(skills[i].Path, skillFile))]; ok {
+				skills[i].Enabled = on
+			}
+		}
+	case "opencode":
+		if a.Toggles.OpenCodeDisabled != nil {
+			off := a.Toggles.OpenCodeDisabled()
+			for i := range skills {
+				if off[skills[i].ID] {
+					skills[i].Enabled = false
+				}
+			}
+		}
+	case "agy":
+		for _, s := range a.list(agent, a.offDir(agent)) {
+			s.Enabled = false
+			skills = append(skills, s)
+		}
+		sort.Slice(skills, func(i, j int) bool { return strings.ToLower(skills[i].Name) < strings.ToLower(skills[j].Name) })
+	}
+	return skills
+}
+
+func (a *AgentSkills) setEnabled(ctx context.Context, agent, id string, enabled bool) error {
+	dir, err := a.skillsDir(agent)
+	if err != nil {
+		return err
+	}
+	if !folderPattern.MatchString(id) {
+		return fmt.Errorf("Invalid skill name: %s", id)
+	}
+	switch agent {
+	case "claude":
+		for _, s := range a.list(agent, dir) {
+			if s.ID == id {
+				return a.setClaudeSkillOff(id, s.Kind, s.Name, !enabled)
+			}
+		}
+		return fmt.Errorf("%s is not installed", id)
+	case "codex":
+		if a.Toggles.CodexCall == nil {
+			return errors.New("Codex is turned off in the app")
+		}
+		file := filepath.Join(dir, id, skillFile)
+		if _, err := os.Stat(file); err != nil {
+			return fmt.Errorf("%s is not installed", id)
+		}
+		// Codex may know the skill by its resolved path: use the one it lists
+		want := cleanSkillPath(file)
+		for p := range a.codexSkillPaths(ctx) {
+			if cleanSkillPath(p) == want {
+				file = p
+				break
+			}
+		}
+		params, _ := json.Marshal(map[string]interface{}{"path": file, "enabled": enabled})
+		cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+		_, err := a.Toggles.CodexCall(cctx, "skills/config/write", params)
+		return err
+	case "opencode":
+		if a.Toggles.OpenCodeSet == nil {
+			return errors.New("OpenCode is turned off in the app")
+		}
+		if _, err := os.Stat(filepath.Join(dir, id)); err != nil {
+			return fmt.Errorf("%s is not installed", id)
+		}
+		return a.Toggles.OpenCodeSet(ctx, id, enabled)
+	case "agy":
+		return a.moveAgySkill(id, enabled)
+	}
+	return fmt.Errorf("Unknown agent %q", agent)
+}
+
+// claudeSettingsPath is Claude Code's user settings.json (next to its skills folder).
+func (a *AgentSkills) claudeSettingsPath() string {
+	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+		return filepath.Join(d, "settings.json")
+	}
+	return filepath.Join(a.home, ".claude", "settings.json")
+}
+
+// setClaudeSkillOff writes (off) or clears Claude Code's switch for one skill folder; other settings stay as they are.
+func (a *AgentSkills) setClaudeSkillOff(id, kind, name string, off bool) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	p := a.claudeSettingsPath()
+	st := map[string]interface{}{}
+	if data, err := os.ReadFile(p); err == nil && len(strings.TrimSpace(string(data))) > 0 {
+		if err := json.Unmarshal(data, &st); err != nil {
+			return fmt.Errorf("settings.json is not valid JSON: %w", err)
+		} else if st == nil {
+			st = map[string]interface{}{}
+		}
+	}
+	var changed bool
+	if kind == "plugin" {
+		var v interface{}
+		if off {
+			v = false
+		}
+		changed = setNested(st, "enabledPlugins", name+"@skills-dir", v)
+	} else {
+		var v interface{}
+		if off {
+			v = "off"
+		}
+		changed = setNested(st, "skillOverrides", id, v)
+	}
+	if !changed {
+		return nil
+	}
+	return writeJSONAtomic(p, st)
+}
+
+// setNested sets st[key][sub] = v (nil deletes it, and an emptied st[key]); reports whether anything changed.
+func setNested(st map[string]interface{}, key, sub string, v interface{}) bool {
+	m, _ := st[key].(map[string]interface{})
+	old, had := m[sub]
+	if v == nil {
+		if !had {
+			return false
+		}
+		delete(m, sub)
+	} else {
+		if had && old == v {
+			return false
+		}
+		if m == nil {
+			m = map[string]interface{}{}
+		}
+		m[sub] = v
+	}
+	if len(m) == 0 {
+		delete(st, key)
+	} else {
+		st[key] = m
+	}
+	return true
+}
+
+func readJSONObject(p string) map[string]interface{} {
+	out := map[string]interface{}{}
+	if data, err := os.ReadFile(p); err == nil {
+		_ = json.Unmarshal(data, &out)
+	}
+	if out == nil {
+		out = map[string]interface{}{}
+	}
+	return out
+}
+
+// writeJSONAtomic replaces a JSON file through a temporary file, keeping the old file's mode.
+func writeJSONAtomic(p string, v interface{}) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	mode := os.FileMode(0600)
+	if fi, err := os.Stat(p); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		return err
+	}
+	tmp := p + ".antigem-tmp"
+	if err := os.WriteFile(tmp, append(data, '\n'), mode); err != nil {
+		return err
+	}
+	return os.Rename(tmp, p)
+}
+
+func cleanSkillPath(p string) string {
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
+	}
+	return filepath.Clean(p)
+}
+
+// codexSkillPaths is every skill Codex lists (SKILL.md path → enabled), read fresh from disk; empty when Codex
+// can't be asked.
+func (a *AgentSkills) codexSkillPaths(ctx context.Context) map[string]bool {
+	out := map[string]bool{}
+	if a.Toggles.CodexCall == nil {
+		return out
+	}
+	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	raw, err := a.Toggles.CodexCall(cctx, "skills/list", json.RawMessage(`{"forceReload":true}`))
+	if err != nil {
+		return out
+	}
+	var res struct {
+		Data []struct {
+			Skills []struct {
+				Path    string `json:"path"`
+				Enabled *bool  `json:"enabled"`
+			} `json:"skills"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &res) != nil {
+		return out
+	}
+	for _, e := range res.Data {
+		for _, s := range e.Skills {
+			if s.Path != "" {
+				out[s.Path] = s.Enabled == nil || *s.Enabled
+			}
+		}
+	}
+	return out
+}
+
+// codexSkillStates is [codexSkillPaths] keyed by resolved path.
+func (a *AgentSkills) codexSkillStates(ctx context.Context) map[string]bool {
+	out := map[string]bool{}
+	for p, on := range a.codexSkillPaths(ctx) {
+		out[cleanSkillPath(p)] = on
+	}
+	return out
+}
+
+// offDir is where AntiGem keeps an agent's turned-off skills (only Antigravity, which has no switch of its own).
+func (a *AgentSkills) offDir(agent string) string {
+	return filepath.Join(a.home, ".antigem", "disabled-skills", agent)
+}
+
+func (a *AgentSkills) agyOff(id string) bool {
+	_, err := os.Lstat(filepath.Join(a.offDir("agy"), id))
+	return err == nil
+}
+
+// moveAgySkill moves an Antigravity skill folder out of its skills folder (off) or back (on).
+func (a *AgentSkills) moveAgySkill(id string, enabled bool) error {
+	dir, err := a.skillsDir("agy")
+	if err != nil {
+		return err
+	}
+	on, off := filepath.Join(dir, id), filepath.Join(a.offDir("agy"), id)
+	from, to := on, off
+	if enabled {
+		from, to = off, on
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, err := os.Lstat(from); err != nil {
+		if _, err := os.Lstat(to); err == nil {
+			return nil // already so
+		}
+		return fmt.Errorf("%s is not installed", id)
+	}
+	if _, err := os.Lstat(to); err == nil {
+		if enabled {
+			return fmt.Errorf("Another skill named %s was added meanwhile: remove one of them first", id)
+		}
+		// an older turned-off copy of this skill: the current one replaces it
+		if err := os.RemoveAll(to); err != nil {
+			return err
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0755); err != nil {
+		return err
+	}
+	return os.Rename(from, to)
+}
+
+// ---- Antigravity plugins: on and off ----
+
+// agyPluginStates reads agy's plugin switches (~/.gemini/config/config.json "plugins": {name: {enabled}}); a
+// plugin missing there is on.
+func (a *AgentSkills) agyPluginStates() map[string]bool {
+	out := map[string]bool{}
+	var cfg struct {
+		Plugins map[string]struct {
+			Enabled *bool `json:"enabled"`
+		} `json:"plugins"`
+	}
+	if data, err := os.ReadFile(a.agyConfigPath()); err == nil && json.Unmarshal(data, &cfg) == nil {
+		for name, p := range cfg.Plugins {
+			out[name] = p.Enabled == nil || *p.Enabled
+		}
+	}
+	return out
+}
+
+func (a *AgentSkills) agyConfigPath() string {
+	return filepath.Join(a.home, ".gemini", "config", "config.json")
+}
+
+var agyPluginName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@:-]{0,127}$`)
+
+// setAgyPluginEnabled runs `agy plugin enable|disable <name>`; without the agy CLI it writes the same switch
+// into agy's config.json itself.
+func (a *AgentSkills) setAgyPluginEnabled(name string, enabled bool) (string, error) {
+	if !agyPluginName.MatchString(name) {
+		return "", fmt.Errorf("Invalid plugin name: %s", name)
+	}
+	bin := ""
+	if a.agyBin != nil {
+		bin = a.agyBin()
+	}
+	if fi, err := os.Stat(bin); bin != "" && err == nil && !fi.IsDir() {
+		verb := "disable"
+		if enabled {
+			verb = "enable"
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, "plugin", verb, name)
+		cmd.Dir = a.home
+		cmd.Env = os.Environ()
+		out, err := cmd.CombinedOutput()
+		text := strings.TrimSpace(string(out))
+		if err != nil {
+			msg := lastLines(text, 6)
+			if msg == "" {
+				msg = err.Error()
+			}
+			return text, fmt.Errorf("agy could not %s it: %s", verb, msg)
+		}
+		return text, nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	p := a.agyConfigPath()
+	cfg := readJSONObject(p)
+	plugins, _ := cfg["plugins"].(map[string]interface{})
+	if plugins == nil {
+		plugins = map[string]interface{}{}
+	}
+	entry, _ := plugins[name].(map[string]interface{})
+	if entry == nil {
+		entry = map[string]interface{}{}
+	}
+	entry["enabled"] = enabled
+	plugins[name] = entry
+	cfg["plugins"] = plugins
+	return "", writeJSONAtomic(p, cfg)
 }
 
 // ---- GitHub sources ----

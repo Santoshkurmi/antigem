@@ -291,10 +291,21 @@ class OpenCodeBridgeClient(private val bridge: AgyBridgeService = AgyBridgeServi
         if (o.bool("success") == false) error(o.str("error") ?: "Could not list the MCP servers")
         val saved = o.o("servers") ?: JsonObject(emptyMap())
         val live = o.o("status").a("data").orEmpty().mapNotNull { it.obj() }.associateBy { it.str("name").orEmpty() }
-        (saved.keys + live.keys).filter { it.isNotBlank() }.distinct().sorted().map { name ->
+        // turned off in the app: OpenCode leaves them out of its live list, the bridge names them
+        val off = o.a("off").orEmpty().mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }.toSet()
+        (saved.keys + live.keys + off).filter { it.isNotBlank() }.distinct().sorted().map { name ->
             val st = live[name]?.o("status")
-            McpServer(name, name in saved.keys, saved[name]?.obj(), st.str("status"), st.str("error"))
+            if (name in off) McpServer(name, name in saved.keys, saved[name]?.obj(), "disabled", null)
+            else McpServer(name, name in saved.keys, saved[name]?.obj(), st.str("status"), st.str("error"))
         }
+    }
+
+    /** Turns server [name] off or on for every OpenCode chat (an OpenCode policy; works for the user's own config's servers too). */
+    suspend fun setMcpEnabled(name: String, enabled: Boolean): Result<Unit> = runCatching {
+        val body = kotlinx.serialization.json.buildJsonObject { put("enabled", kotlinx.serialization.json.JsonPrimitive(enabled)) }
+        val o = OpenCodeJson.parseToJsonElement(execute(Request.Builder().url(url("/mcp/" + java.net.URLEncoder.encode(name, "UTF-8").replace("+", "%20")))
+            .patch(OpenCodeJson.encodeToString(JsonElement.serializer(), body).toRequestBody(jsonType)).build())).obj()
+        if (o.bool("success") != true) error(o.str("error") ?: "Could not change the MCP server")
     }
 
     /** Adds (or replaces) a local MCP server (a command OpenCode starts) for every OpenCode chat. */

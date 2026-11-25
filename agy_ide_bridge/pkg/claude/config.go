@@ -278,14 +278,43 @@ func (m *Manager) handleMcp(w http.ResponseWriter, r *http.Request) {
 			McpServers json.RawMessage `json:"mcpServers"`
 		}
 		_ = json.Unmarshal(resps[0], &status)
-		if status.McpServers == nil {
-			status.McpServers = json.RawMessage("[]")
+		servers := []map[string]interface{}{}
+		_ = json.Unmarshal(status.McpServers, &servers)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "servers": m.withTurnedOffMcp(servers, q.Get("cwd"))})
+	case http.MethodPatch:
+		// turn a server off or on for every chat: {name, enabled}
+		var req struct {
+			Name    string `json:"name"`
+			Enabled bool   `json:"enabled"`
+			Cwd     string `json:"cwd"`
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "servers": status.McpServers})
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !safeNameRe.MatchString(req.Name) {
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "valid name required"})
+			return
+		}
+		wasOff := m.turnedOffMcp()[req.Name]
+		if err := m.setMcpTurnedOff(req.Name, !req.Enabled); err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+			return
+		}
+		// a server turned off in Claude itself (/mcp disable, kept for that project folder): Claude turns it on again
+		if req.Enabled && !wasOff && req.Cwd != "" {
+			if _, err := m.oneShot(req.Cwd, 60*time.Second, map[string]interface{}{"subtype": "mcp_toggle", "serverName": req.Name, "enabled": true}); err != nil {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
+				return
+			}
+		}
+		m.invalidateCaches()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 	case http.MethodPost:
 		var req mcpAddRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !safeNameRe.MatchString(req.Name) {
 			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "valid name required"})
+			return
+		}
+		// Claude refuses to add a name it is told to block: adding (or editing) a turned-off server turns it on again
+		if err := m.setMcpTurnedOff(req.Name, false); err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": err.Error()})
 			return
 		}
 		scope := req.Scope
@@ -329,10 +358,144 @@ func (m *Manager) handleMcp(w http.ResponseWriter, r *http.Request) {
 			args = append(args, "--scope", s)
 		}
 		args = append(args, "--", name)
-		m.runAndReply(w, q.Get("cwd"), 60*time.Second, args...)
+		out, err := m.runCLIIn(q.Get("cwd"), 60*time.Second, args...)
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"success": false, "error": strings.TrimSpace(string(out) + "\n" + err.Error()), "output": string(out)})
+			return
+		}
+		// a removed server leaves nothing behind (a server added later under this name starts turned on)
+		_ = m.setMcpTurnedOff(name, false)
+		m.invalidateCaches()
+		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "output": string(out)})
 	default:
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "GET, POST or DELETE"})
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"success": false, "error": "GET, PATCH, POST or DELETE"})
 	}
+}
+
+// Turning an MCP server off: Claude's own /mcp disable keeps the choice per project folder, so a server is turned
+// off for every chat with Claude's `deniedMcpServers` setting in ~/.claude/settings.json instead ([{serverName}]).
+// Claude then neither starts it nor lists it: [withTurnedOffMcp] adds those servers back to the list as "disabled".
+
+var mcpSettingsMu sync.Mutex
+
+// turnedOffMcp is the names in settings.json's deniedMcpServers.
+func (m *Manager) turnedOffMcp() map[string]bool {
+	out := map[string]bool{}
+	data, err := os.ReadFile(m.settingsPath())
+	if err != nil {
+		return out
+	}
+	var s struct {
+		Denied []struct {
+			ServerName string `json:"serverName"`
+		} `json:"deniedMcpServers"`
+	}
+	if json.Unmarshal(data, &s) != nil {
+		return out
+	}
+	for _, d := range s.Denied {
+		if d.ServerName != "" {
+			out[d.ServerName] = true
+		}
+	}
+	return out
+}
+
+// setMcpTurnedOff adds [name] to deniedMcpServers (off) or takes it out (on); other settings stay as they are.
+func (m *Manager) setMcpTurnedOff(name string, off bool) error {
+	mcpSettingsMu.Lock()
+	defer mcpSettingsMu.Unlock()
+	path := m.settingsPath()
+	settings := map[string]interface{}{}
+	if data, err := os.ReadFile(path); err == nil && len(bytes.TrimSpace(data)) > 0 {
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("settings.json is not valid JSON: %w", err)
+		} else if settings == nil {
+			settings = map[string]interface{}{}
+		}
+	}
+	old, _ := settings["deniedMcpServers"].([]interface{})
+	list := make([]interface{}, 0, len(old)+1)
+	found := false
+	for _, e := range old {
+		if o, ok := e.(map[string]interface{}); ok && o["serverName"] == name {
+			found = true
+			if !off {
+				continue
+			}
+		}
+		list = append(list, e)
+	}
+	if off == found {
+		return nil // already so
+	}
+	if off {
+		list = append(list, map[string]interface{}{"serverName": name})
+	}
+	if len(list) == 0 {
+		delete(settings, "deniedMcpServers")
+	} else {
+		settings["deniedMcpServers"] = list
+	}
+	return writeJSONFile(path, settings)
+}
+
+// withTurnedOffMcp adds the turned-off servers (which Claude leaves out) to [servers] with status "disabled" and
+// their config from ~/.claude.json (user, or local for [cwd]) or the project's .mcp.json.
+func (m *Manager) withTurnedOffMcp(servers []map[string]interface{}, cwd string) []map[string]interface{} {
+	off := m.turnedOffMcp()
+	if len(off) == 0 {
+		return servers
+	}
+	listed := map[string]bool{}
+	for _, s := range servers {
+		if n, _ := s["name"].(string); n != "" {
+			listed[n] = true
+		}
+	}
+	var global struct {
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
+		Projects   map[string]struct {
+			McpServers map[string]json.RawMessage `json:"mcpServers"`
+		} `json:"projects"`
+	}
+	if data, err := os.ReadFile(filepath.Join(m.HomeDir, ".claude.json")); err == nil {
+		_ = json.Unmarshal(data, &global)
+	}
+	var project struct {
+		McpServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if cwd != "" {
+		if data, err := os.ReadFile(filepath.Join(cwd, ".mcp.json")); err == nil {
+			_ = json.Unmarshal(data, &project)
+		}
+	}
+	names := make([]string, 0, len(off))
+	for n := range off {
+		if !listed[n] {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		entry := map[string]interface{}{"name": n, "status": "disabled"}
+		var cfg json.RawMessage
+		if c, ok := global.Projects[cwd].McpServers[n]; ok && cwd != "" {
+			cfg, entry["scope"] = c, "local"
+		} else if c, ok := project.McpServers[n]; ok {
+			cfg, entry["scope"] = c, "project"
+		} else if c, ok := global.McpServers[n]; ok {
+			cfg, entry["scope"] = c, "user"
+		}
+		if cfg != nil {
+			var c map[string]interface{}
+			if json.Unmarshal(cfg, &c) == nil {
+				entry["config"] = c
+			}
+		}
+		servers = append(servers, entry)
+	}
+	return servers
 }
 
 func sortedKeys(mp map[string]string) []string {
