@@ -43,6 +43,9 @@ class TermuxApiReceiver : BroadcastReceiver() {
         private const val TAG = "TermuxApiReceiver"
         private const val API_NOTIFICATION_CHANNEL_ID = "antigem_termux_api_notifications"
         private var ttsInstance: TextToSpeech? = null
+        private var ttsReady = false
+        // the latest text sent while the engine is still starting (QUEUE_FLUSH: a newer text replaces it)
+        private var ttsPendingText: String? = null
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -166,12 +169,22 @@ class TermuxApiReceiver : BroadcastReceiver() {
         val text = intent.getStringExtra("text") ?: intent.getStringExtra("message") ?: return
         Handler(Looper.getMainLooper()).post {
             if (ttsInstance == null) {
+                ttsPendingText = text
                 ttsInstance = TextToSpeech(context.applicationContext) { status ->
+                    val pending = ttsPendingText
+                    ttsPendingText = null
                     if (status == TextToSpeech.SUCCESS) {
+                        ttsReady = true
                         ttsInstance?.language = Locale.getDefault()
-                        ttsInstance?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "termux_tts")
+                        pending?.let { ttsInstance?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "termux_tts") }
+                    } else {
+                        // drop the failed engine so the next call starts a new one
+                        runCatching { ttsInstance?.shutdown() }
+                        ttsInstance = null
                     }
                 }
+            } else if (!ttsReady) {
+                ttsPendingText = text
             } else {
                 ttsInstance?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "termux_tts")
             }

@@ -89,6 +89,7 @@ class AppUpdateManager(private val context: Context) {
                     403 -> L.updater.appUpdateManager.githubRateLimitExceededOrAccess
                     else -> "Failed to fetch version info: HTTP ${response.code} (${response.message})"
                 }
+                response.close()
                 return@withContext Result.failure(Exception(errorMsg))
             }
 
@@ -219,6 +220,7 @@ class AppUpdateManager(private val context: Context) {
 
             val response = httpClient.newCall(request).execute()
             if (!response.isSuccessful) {
+                response.close()
                 return@withContext Result.failure(Exception("Download failed: HTTP ${response.code}"))
             }
 

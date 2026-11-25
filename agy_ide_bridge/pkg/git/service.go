@@ -768,11 +768,12 @@ func GetCommitDetails(projectDir, hash string) (*models.GitCommitDetails, error)
 		if line == "" {
 			continue
 		}
-		fields := strings.Fields(line)
+		// "<status>\t<path>", or "<R|C><score>\t<old>\t<new>" for renames/copies: the path is the last field
+		fields := strings.Split(line, "\t")
 		if len(fields) >= 2 {
 			changedFiles = append(changedFiles, models.GitCommitFileChange{
 				Status: fields[0],
-				Path:   unquotePath(fields[1]),
+				Path:   unquotePath(fields[len(fields)-1]),
 			})
 		}
 	}

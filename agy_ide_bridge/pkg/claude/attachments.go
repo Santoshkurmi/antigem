@@ -101,6 +101,9 @@ func cleanFileName(name string) string {
 	}
 	if len(base) > 120 {
 		ext := filepath.Ext(base)
+		if len(ext) > 16 {
+			ext = "" // not a real extension; keep the cut from going negative
+		}
 		base = base[:120-len(ext)] + ext
 	}
 	return base

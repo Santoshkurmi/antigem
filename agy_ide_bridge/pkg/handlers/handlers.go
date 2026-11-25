@@ -233,8 +233,8 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 							cleanPrompt := transcript.ExtractPromptText(step.Content)
 							if cleanPrompt != "" {
 								firstPrompt = cleanPrompt
-								if len(cleanPrompt) > 36 {
-									title = cleanPrompt[:36] + "..."
+								if runes := []rune(cleanPrompt); len(runes) > 36 {
+									title = string(runes[:36]) + "..."
 								} else {
 									title = cleanPrompt
 								}
@@ -508,8 +508,8 @@ func (h *Handler) ExportConversationArchiveHandler(w http.ResponseWriter, r *htt
 				if err := json.Unmarshal([]byte(line), &step); err == nil && step.Type == "USER_INPUT" && step.Content != "" {
 					cleanPrompt := transcript.ExtractPromptText(step.Content)
 					if cleanPrompt != "" {
-						if len(cleanPrompt) > 36 {
-							title = cleanPrompt[:36] + "..."
+						if runes := []rune(cleanPrompt); len(runes) > 36 {
+							title = string(runes[:36]) + "..."
 						} else {
 							title = cleanPrompt
 						}
@@ -819,8 +819,8 @@ func (h *Handler) RestoreConversationHandler(w http.ResponseWriter, r *http.Requ
 				if err := json.Unmarshal([]byte(line), &step); err == nil && step.Type == "USER_INPUT" && step.Content != "" {
 					cleanPrompt := transcript.ExtractPromptText(step.Content)
 					if cleanPrompt != "" {
-						if len(cleanPrompt) > 36 {
-							title = cleanPrompt[:36] + "..."
+						if runes := []rune(cleanPrompt); len(runes) > 36 {
+							title = string(runes[:36]) + "..."
 						} else {
 							title = cleanPrompt
 						}
@@ -1620,8 +1620,14 @@ func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {
 	if startIdx < 0 {
 		startIdx = 0
 	}
+	if startIdx > len(lines) {
+		startIdx = len(lines)
+	}
 	if endIdx > len(lines) {
 		endIdx = len(lines)
+	}
+	if endIdx < startIdx {
+		endIdx = startIdx // an empty range inserts the replacement without duplicating lines
 	}
 
 	var updated []string
@@ -1758,7 +1764,7 @@ func (h *Handler) FileSearchHandler(w http.ResponseWriter, r *http.Request) {
 		dir = h.Cfg.ProjectsBaseDir
 	}
 
-	cmd := exec.Command("rg", "-n", "--no-heading", query, dir)
+	cmd := exec.Command("rg", "-n", "--no-heading", "-e", query, "--", dir)
 	output, _ := cmd.Output()
 
 	var matches []models.SearchMatch
