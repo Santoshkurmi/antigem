@@ -90,12 +90,18 @@ class AgyConversationService {
                         val isRunning = status == CascadeRunStatus.CASCADE_RUN_STATUS_RUNNING
 
                         val metaObj = summaryObj.trajectory_metadata
-                        val parentCid = metaObj?.parent_conversation_id?.takeIf { it.isNotBlank() }
-                            ?: summaryObj.fork_parent_conversation_id.takeIf { it.isNotBlank() }
+                        val toolSource = metaObj?.source_metadata?.tool
+                        val parentCid = metaObj?.parent_conversation_id?.takeIf { it.isNotBlank() && it != cid }
+                            ?: toolSource?.conversation_id?.takeIf { it.isNotBlank() && it != cid }
+                            ?: summaryObj.fork_parent_conversation_id.takeIf { it.isNotBlank() && it != cid }
+                            ?: metaObj?.root_conversation_id?.takeIf { it.isNotBlank() && it != cid }
                         val subagentSpec = metaObj?.subagent_spec
                         val subagentRole = subagentSpec?.role?.takeIf { it.isNotBlank() }
+                            ?: toolSource?.label?.takeIf { it.isNotBlank() }
                         val subagentTypeName = subagentSpec?.type_name?.takeIf { it.isNotBlank() }
-                        val nestingDepth = metaObj?.nesting_depth ?: 0
+                            ?: toolSource?.tool_call?.name?.takeIf { it.isNotBlank() }
+                        val nestingDepth = metaObj?.nesting_depth?.takeIf { it > 0 }
+                            ?: if (parentCid != null) 1 else 0
 
                         val wsUri = metaObj?.workspace_uris?.firstOrNull { it.isNotBlank() }
                             ?: summaryObj.workspaces.firstOrNull()?.workspace_folder_absolute_uri?.takeIf { it.isNotBlank() }

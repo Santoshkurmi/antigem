@@ -229,16 +229,12 @@ fun ChatHistoryDrawer(
 
     var expandedParentIds by remember { mutableStateOf(setOf<String>()) }
 
-    // Auto expand all ancestor parents if current conversation is a nested subagent or parent with subagents
+    // Auto expand ancestor parents only when the current conversation is itself a nested subagent
     LaunchedEffect(currentConversationId) {
         if (!currentConversationId.isNullOrBlank()) {
             val toExpand = mutableSetOf<String>()
             val curr = conversations.find { it.id == currentConversationId }
             if (curr != null) {
-                // If current has subagents, expand it
-                if (conversations.any { it.parentConversationId == curr.id }) {
-                    toExpand.add(curr.id)
-                }
                 // Walk up the parent chain to expand all ancestors (nested parent of parent)
                 var pId = curr.parentConversationId
                 while (!pId.isNullOrBlank()) {
@@ -1091,9 +1087,6 @@ fun ChatHistoryDrawer(
                                             }
                                         } else null,
                                         onSelectConversation = {
-                                            if (item.subagents.isNotEmpty()) {
-                                                expandedParentIds = expandedParentIds + conv.id
-                                            }
                                             Log.d(
                                                 "CHAT_OPEN_DEBUG",
                                                 "📂 [Drawer] User clicked conversation: id=${conv.id}, title='${conv.title}'"
@@ -1213,9 +1206,6 @@ fun ChatHistoryDrawer(
                                                 }
                                             } else null,
                                             onSelectConversation = {
-                                                if (item.subagents.isNotEmpty()) {
-                                                    expandedParentIds = expandedParentIds + conv.id
-                                                }
                                                 Log.d(
                                                     "CHAT_OPEN_DEBUG",
                                                     "📂 [Drawer Compact] User clicked conversation: id=${conv.id}, title='${conv.title}'"
