@@ -33,6 +33,15 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Update
+import androidx.compose.material.icons.outlined.Upload
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.i18n.L
 import ai.antigem.i18n.LanguageManager
+import ai.antigem.i18n.LanguageRepo
 import ai.antigem.ui.components.bouncyVerticalScroll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,9 +77,35 @@ private fun toast(context: Context, text: String) = Toast.makeText(context, text
 
 private fun clipboard(context: Context) = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
+private fun openUrl(context: Context, url: String) {
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+/** What went wrong with the community list or a download, in the app's language. */
+private fun repoErrorText(e: Throwable?): String = when ((e as? LanguageRepo.RepoException)?.kind) {
+    LanguageRepo.Kind.NOT_PUBLISHED -> L.settings.language.errNotPublished
+    LanguageRepo.Kind.BAD_DATA -> L.settings.language.errBadData
+    LanguageRepo.Kind.NEWER_APP -> L.settings.language.errNewerApp
+    LanguageRepo.Kind.CHANGED -> L.settings.language.errChanged
+    LanguageRepo.Kind.TOO_BIG -> L.settings.language.errTooBig
+    else -> L.settings.language.errOffline
+}
+
+/** "by Sita, Ram +2". */
+private fun byLine(authors: List<LanguageManager.Author>): String? = authors.takeIf { it.isNotEmpty() }?.let { list ->
+    L.settings.language.byAuthors(list.take(3).joinToString(", ") { it.name } + if (list.size > 3) " +${list.size - 3}" else "")
+}
+
+private fun shortDate(day: String): String = runCatching {
+    val d = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(day) ?: return day
+    java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(d)
+}.getOrDefault(day)
+
 /**
- * Settings → Language: which language the app shows, the user's own languages (new, edit, import, export, share),
+ * Settings → Language: which language the app shows; community languages to download (and their updates) from the
+ * antigem_languages repository; the user's own languages (new, edit, import, export, share, send to the community);
  * the language agents reply in, and how to have an agent translate the app through language_mcp.
+ * Downloaded and built-in languages are read-only: duplicate one to change it, so an update never overwrites edits.
  */
 @Composable
 fun LanguageScreen(onOpenTexts: (String) -> Unit) {
@@ -85,12 +121,19 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
     var imported by remember { mutableStateOf<Pair<LanguageManager.Language?, LanguageManager.Report>?>(null) }
     var exportId by remember { mutableStateOf<String?>(null) }
     var importMenu by remember { mutableStateOf(false) }
+    var details by remember { mutableStateOf<LanguageDetails?>(null) }
+    var sending by remember { mutableStateOf<LanguageManager.Info?>(null) }
+    var ready by remember { mutableStateOf<LanguageManager.Language?>(null) }
 
     suspend fun refresh() {
         withContext(Dispatchers.IO) { runCatching { LanguageManager.refreshList() } }
         loading = false
     }
-    LaunchedEffect(Unit) { refresh() }
+    LaunchedEffect(Unit) {
+        launch { refresh() }
+        // the community list is fetched each time the page opens: that's when updates show up
+        LanguageRepo.refresh()
+    }
 
     fun select(id: String) {
         if (id == current || switching != null) return
@@ -99,6 +142,31 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
             val ok = withContext(Dispatchers.IO) { LanguageManager.apply(id) }
             switching = null
             if (!ok) toast(context, L.settings.language.couldNotLoad(languages.firstOrNull { it.id == id }?.name ?: id))
+        }
+    }
+
+    fun download(pack: LanguageRepo.Pack) {
+        val wasInstalled = LanguageRepo.stateOf(pack.id) != LanguageRepo.State.AVAILABLE
+        scope.launch {
+            LanguageRepo.install(pack)
+                .onSuccess { lang ->
+                    refresh()
+                    when {
+                        wasInstalled -> toast(context, L.settings.language.updatedToast(lang.label))
+                        LanguageManager.currentId != lang.id -> ready = lang
+                        else -> toast(context, L.settings.language.downloadedToast(lang.label))
+                    }
+                }
+                .onFailure { toast(context, repoErrorText(it)) }
+        }
+    }
+
+    fun updateAll() {
+        scope.launch {
+            var failed: Throwable? = null
+            LanguageRepo.updates().forEach { p -> LanguageRepo.install(p).onFailure { failed = it } }
+            refresh()
+            toast(context, failed?.let { repoErrorText(it) } ?: L.settings.language.allUpdated)
         }
     }
 
@@ -134,6 +202,11 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
         }
     }
 
+    fun saveFile(info: LanguageManager.Info) {
+        exportId = info.id
+        saveLauncher.launch(L.settings.language.antigemLanguageIdJson(info.id))
+    }
+
     fun share(info: LanguageManager.Info) {
         scope.launch {
             val uri = withContext(Dispatchers.IO) {
@@ -166,6 +239,16 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
         }
     }
 
+    fun duplicate(id: String) {
+        scope.launch {
+            val copy = withContext(Dispatchers.IO) { LanguageManager.duplicate(id) }
+            refresh()
+            copy?.let { onOpenTexts(it.id) }
+        }
+    }
+
+    val packs = LanguageRepo.packs
+    val states = LanguageRepo.states
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
@@ -178,23 +261,23 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
             Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp)) }
         }
         languages.forEach { info ->
+            val update = if (info.origin == LanguageManager.Origin.REPO && states[info.packId] == LanguageRepo.State.UPDATE)
+                packs.firstOrNull { it.id == info.packId } else null
             LanguageRow(
                 info = info,
                 selected = info.id == current,
-                busy = switching == info.id,
+                busy = switching == info.id || info.packId in LanguageRepo.downloading,
+                update = update,
                 onSelect = { select(info.id) },
+                onUpdate = { update?.let(::download) },
+                onAbout = { details = LanguageDetails(info = info, pack = packs.firstOrNull { it.id == info.packId && info.packId.isNotBlank() }) },
                 onOpenTexts = { onOpenTexts(info.id) },
-                onDuplicate = {
-                    scope.launch {
-                        val copy = withContext(Dispatchers.IO) { LanguageManager.duplicate(info.id) }
-                        refresh()
-                        copy?.let { onOpenTexts(it.id) }
-                    }
-                },
+                onDuplicate = { duplicate(info.id) },
                 onDetails = { editingInfo = info },
-                onSave = { exportId = info.id; saveLauncher.launch(L.settings.language.antigemLanguageIdJson(info.id)) },
+                onSave = { saveFile(info) },
                 onShare = { share(info) },
                 onCopy = { copyJson(info) },
+                onSend = { sending = info },
                 onDelete = { deleting = info }
             )
         }
@@ -230,6 +313,12 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
         }
 
         Spacer(Modifier.height(4.dp))
+        CommunityLanguages(
+            onDownload = ::download,
+            onUpdateAll = ::updateAll,
+            onUse = { p -> select(p.localId) },
+            onDetails = { p -> details = LanguageDetails(info = languages.firstOrNull { it.id == p.localId }, pack = p) }
+        )
         AiReplyCard()
         TranslateWithAiCard()
 
@@ -247,10 +336,10 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
             confirm = L.settings.language.create,
             languages = languages,
             onDismiss = { creating = false },
-            onConfirm = { code, name, native, rtl, from, _, _ ->
+            onConfirm = { r ->
                 creating = false
                 scope.launch {
-                    val lang = withContext(Dispatchers.IO) { LanguageManager.create(code, name, native, rtl, from) }
+                    val lang = withContext(Dispatchers.IO) { LanguageManager.create(r.code, r.name, r.nativeName, r.rtl, r.from, variant = r.variant) }
                     refresh()
                     onOpenTexts(lang.id)
                 }
@@ -264,27 +353,39 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
             languages = null,
             initial = info,
             onDismiss = { editingInfo = null },
-            onConfirm = { code, name, native, rtl, _, author, about ->
+            onConfirm = { r ->
                 editingInfo = null
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        LanguageManager.update(info.id, emptyMap(), name = name, nativeName = native, code = code, rtl = rtl, author = author, about = about)
+                        LanguageManager.update(
+                            info.id, emptyMap(), name = r.name, nativeName = r.nativeName, code = r.code, rtl = r.rtl,
+                            variant = r.variant, description = r.description, authors = r.authors
+                        )
                     }
                     refresh()
+                    // back to the send dialog when the names were added from there
+                    if (sending?.id == info.id) sending = LanguageManager.languages.firstOrNull { it.id == info.id }
                 }
             }
         )
     }
     deleting?.let { info ->
+        val community = info.origin == LanguageManager.Origin.REPO
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text(L.settings.language.deleteTitle(info.name)) },
-            text = { Text(L.settings.language.deleteText) },
+            title = { Text(if (community) L.settings.language.removeTitle(info.label) else L.settings.language.deleteTitle(info.name)) },
+            text = { Text(if (community) L.settings.language.removeText else L.settings.language.deleteText) },
             confirmButton = {
                 TextButton(onClick = {
                     deleting = null
-                    scope.launch { withContext(Dispatchers.IO) { LanguageManager.delete(info.id) }; refresh() }
-                }) { Text(L.common.delete, color = MaterialTheme.colorScheme.error) }
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            LanguageManager.delete(info.id)
+                            if (community) LanguageRepo.removed(info.packId)
+                        }
+                        refresh()
+                    }
+                }) { Text(if (community) L.common.remove else L.common.delete, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text(L.common.cancel) } }
         )
@@ -300,6 +401,43 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
             onDismiss = { imported = null }
         )
     }
+    ready?.let { lang ->
+        AlertDialog(
+            onDismissRequest = { ready = null },
+            icon = { Icon(Icons.Outlined.CheckCircle, null, tint = ai.antigem.theme.AppColors.success) },
+            title = { Text(L.settings.language.readyTitle(lang.label), fontWeight = FontWeight.SemiBold) },
+            text = { lang.authors.takeIf { it.isNotEmpty() }?.let { a -> Text(L.settings.language.readyThanks(a.joinToString(", ") { it.name }), fontSize = 13.5.sp) } },
+            confirmButton = { TextButton(onClick = { ready = null; select(lang.id) }) { Text(L.settings.language.useNow) } },
+            dismissButton = { TextButton(onClick = { ready = null }) { Text(L.settings.language.later) } }
+        )
+    }
+    details?.let { d ->
+        val info = d.info?.let { i -> languages.firstOrNull { it.id == i.id } ?: i }
+        LanguageDetailsSheet(
+            details = d.copy(info = info),
+            onDismiss = { details = null },
+            onDownload = { p -> download(p) },
+            onUse = { id -> details = null; select(id) },
+            onDuplicate = { id -> details = null; duplicate(id) },
+            onRemove = { i -> details = null; deleting = i },
+            onSend = { i -> details = null; sending = i }
+        )
+    }
+    // hidden while its "Add names" dialog is open, then back with the names
+    if (editingInfo == null) sending?.let { info ->
+        SendToCommunityDialog(
+            info = info,
+            basedOn = info.basedOn.takeIf { it.isNotBlank() }?.let { b -> packs.firstOrNull { it.id == b }?.label ?: b },
+            onAddNames = { editingInfo = info },
+            onSave = { saveFile(info) },
+            onShare = { share(info) },
+            onOpenForm = {
+                openUrl(context, LanguageRepo.SHARE_FORM + "&title=" + android.net.Uri.encode("Translation: ${LanguageManager.labelOf(info.name, info.nativeName, info.variant)} (${info.code})"))
+            },
+            onGuide = { openUrl(context, LanguageRepo.CONTRIBUTING) },
+            onDismiss = { sending = null }
+        )
+    }
 }
 
 @Composable
@@ -307,18 +445,23 @@ private fun LanguageRow(
     info: LanguageManager.Info,
     selected: Boolean,
     busy: Boolean,
+    update: LanguageRepo.Pack?,
     onSelect: () -> Unit,
+    onUpdate: () -> Unit,
+    onAbout: () -> Unit,
     onOpenTexts: () -> Unit,
     onDuplicate: () -> Unit,
     onDetails: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
     onCopy: () -> Unit,
+    onSend: () -> Unit,
     onDelete: () -> Unit
 ) {
     val primary = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val english = info.id == LanguageManager.ENGLISH
+    val community = info.origin == LanguageManager.Origin.REPO
     var menu by remember { mutableStateOf(false) }
     Surface(
         onClick = onSelect,
@@ -328,12 +471,7 @@ private fun LanguageRow(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(info.code.uppercase().take(5), fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = primary, maxLines = 1)
-            }
+            CodeBadge(info.code)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -345,11 +483,13 @@ private fun LanguageRow(
                 Text(
                     when {
                         english -> L.settings.language.englishSubtitle
-                        info.builtIn -> L.settings.language.builtInProgress(info.translated, info.total)
+                        community -> L.settings.language.communityProgress(info.translated, info.total)
+                        info.origin == LanguageManager.Origin.APP -> L.settings.language.builtInProgress(info.translated, info.total)
                         else -> L.settings.language.yoursProgress(info.translated, info.total)
                     },
                     fontSize = 12.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
+                byLine(info.authors)?.let { Text(it, fontSize = 11.5.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 if (!english) {
                     Spacer(Modifier.height(6.dp))
                     LinearProgressIndicator(
@@ -360,22 +500,37 @@ private fun LanguageRow(
                         drawStopIndicator = {}
                     )
                 }
-                if (info.outdated > 0) {
+                if (info.variant.isNotBlank() || info.outdated > 0 || update != null) {
                     Spacer(Modifier.height(6.dp))
-                    SmallChip(L.settings.language.outdatedCount(info.outdated), ai.antigem.theme.AppColors.warning)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (info.variant.isNotBlank()) SmallChip(info.variant, primary)
+                        if (info.outdated > 0) SmallChip(L.settings.language.outdatedCount(info.outdated), ai.antigem.theme.AppColors.warning)
+                        if (update != null) SmallChip(L.settings.language.updateAvailable, ai.antigem.theme.AppColors.info)
+                    }
                 }
             }
             Spacer(Modifier.width(6.dp))
             when {
                 busy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                update != null -> IconButton(onClick = onUpdate) { Icon(Icons.Outlined.Update, L.common.update, tint = ai.antigem.theme.AppColors.info) }
                 selected -> Icon(Icons.Outlined.CheckCircle, L.settings.language.onScreen, tint = primary)
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, L.settings.language.more) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    if (!english) DropdownMenuItem(
+                        text = { Text(L.settings.language.aboutLanguage) },
+                        leadingIcon = { Icon(Icons.Outlined.Info, null) },
+                        onClick = { menu = false; onAbout() }
+                    )
+                    if (update != null) DropdownMenuItem(
+                        text = { Text(L.common.update) },
+                        leadingIcon = { Icon(Icons.Outlined.Update, null) },
+                        onClick = { menu = false; onUpdate() }
+                    )
                     DropdownMenuItem(
-                        text = { Text(if (info.builtIn) L.settings.language.viewTexts else L.settings.language.editTexts) },
-                        leadingIcon = { Icon(if (info.builtIn) Icons.Outlined.Visibility else Icons.Outlined.Edit, null) },
+                        text = { Text(if (info.readOnly) L.settings.language.viewTexts else L.settings.language.editTexts) },
+                        leadingIcon = { Icon(if (info.readOnly) Icons.Outlined.Visibility else Icons.Outlined.Edit, null) },
                         onClick = { menu = false; onOpenTexts() }
                     )
                     if (!english) DropdownMenuItem(
@@ -383,12 +538,17 @@ private fun LanguageRow(
                         leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
                         onClick = { menu = false; onDuplicate() }
                     )
-                    if (!info.builtIn) DropdownMenuItem(
+                    if (!info.readOnly) DropdownMenuItem(
                         text = { Text(L.settings.language.nameAndDetails) },
                         leadingIcon = { Icon(Icons.Outlined.Translate, null) },
                         onClick = { menu = false; onDetails() }
                     )
                     HorizontalDivider()
+                    if (!info.readOnly) DropdownMenuItem(
+                        text = { Text(L.settings.language.sendToCommunity) },
+                        leadingIcon = { Icon(Icons.Outlined.Upload, null) },
+                        onClick = { menu = false; onSend() }
+                    )
                     DropdownMenuItem(
                         text = { Text(if (english) L.settings.language.saveTemplate else L.settings.language.saveToFile) },
                         leadingIcon = { Icon(Icons.Outlined.Save, null) },
@@ -404,10 +564,10 @@ private fun LanguageRow(
                         leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
                         onClick = { menu = false; onCopy() }
                     )
-                    if (!info.builtIn) {
+                    if (info.origin == LanguageManager.Origin.USER || community) {
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text(L.common.delete, color = MaterialTheme.colorScheme.error) },
+                            text = { Text(if (community) L.common.remove else L.common.delete, color = MaterialTheme.colorScheme.error) },
                             leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error) },
                             onClick = { menu = false; onDelete() }
                         )
@@ -416,6 +576,410 @@ private fun LanguageRow(
             }
         }
     }
+}
+
+@Composable
+private fun CodeBadge(code: String, size: androidx.compose.ui.unit.Dp = 42.dp) {
+    val primary = MaterialTheme.colorScheme.primary
+    Box(
+        Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(primary.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(code.uppercase().take(5), fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = primary, maxLines = 1)
+    }
+}
+
+// ============================================================ community languages
+
+/**
+ * "Get more languages": the packs in the community repository with Download / Update, a search when the list grows,
+ * and links to add a language. The list is fetched when the page opens ([LanguageRepo.refresh]).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CommunityLanguages(
+    onDownload: (LanguageRepo.Pack) -> Unit,
+    onUpdateAll: () -> Unit,
+    onUse: (LanguageRepo.Pack) -> Unit,
+    onDetails: (LanguageRepo.Pack) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val packs = LanguageRepo.packs
+    val states = LanguageRepo.states
+    val error = LanguageRepo.error
+    val loadingList = LanguageRepo.loading
+    val current = LanguageManager.currentId
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
+    var query by remember { mutableStateOf("") }
+    val updates = packs.count { states[it.id] == LanguageRepo.State.UPDATE }
+    val shown = remember(packs, query) {
+        val q = query.trim()
+        if (q.isEmpty()) packs else packs.filter { p ->
+            listOf(p.name, p.nativeName, p.code, p.variant).any { it.contains(q, true) } || p.authors.any { it.name.contains(q, true) || it.github.contains(q, true) }
+        }
+    }
+
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Public, null, tint = primary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(L.settings.language.getMore, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                if (loadingList) CircularProgressIndicator(Modifier.padding(10.dp).size(20.dp), strokeWidth = 2.dp)
+                else IconButton(onClick = { scope.launch { LanguageRepo.refresh() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
+            }
+            Text(L.settings.language.getMoreAbout, fontSize = 12.5.sp, lineHeight = 17.sp, color = muted)
+
+            if (error != null && !loadingList) {
+                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)) {
+                    Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            repoErrorText(error) + if (packs.isNotEmpty()) "\n" + L.settings.language.showingSaved else "",
+                            fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { scope.launch { LanguageRepo.refresh() } }) { Text(L.common.retry) }
+                    }
+                }
+            }
+
+            if (updates > 0) {
+                Surface(shape = RoundedCornerShape(12.dp), color = ai.antigem.theme.AppColors.info.copy(alpha = 0.12f)) {
+                    Row(Modifier.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Update, null, tint = ai.antigem.theme.AppColors.info, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(L.settings.language.updatesReady(updates), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = onUpdateAll, enabled = LanguageRepo.downloading.isEmpty()) { Text(L.settings.language.updateAll) }
+                    }
+                }
+            }
+
+            when {
+                packs.isEmpty() && loadingList -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(L.settings.language.checking, fontSize = 13.sp, color = muted)
+                }
+                packs.isEmpty() && error == null && LanguageRepo.fetchedAt > 0 ->
+                    Text(L.settings.language.noLanguagesYet, fontSize = 13.sp, lineHeight = 18.sp, color = muted)
+            }
+
+            if (packs.size > 6) {
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it }, singleLine = true,
+                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, null) } },
+                    placeholder = { Text(L.settings.language.searchLanguages) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (shown.isEmpty()) Text(L.settings.language.noMatch(query.trim()), fontSize = 13.sp, color = muted)
+            }
+
+            shown.forEach { p ->
+                PackRow(
+                    pack = p,
+                    state = states[p.id] ?: LanguageRepo.State.AVAILABLE,
+                    busy = p.id in LanguageRepo.downloading,
+                    onScreen = current == p.localId,
+                    onDownload = { onDownload(p) },
+                    onUse = { onUse(p) },
+                    onClick = { onDetails(p) }
+                )
+            }
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { openUrl(context, LanguageRepo.CONTRIBUTING) }) {
+                    Icon(Icons.Outlined.Translate, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(L.settings.language.addYourLanguage)
+                }
+                TextButton(onClick = { openUrl(context, LanguageRepo.REQUEST_FORM) }) {
+                    Text(L.settings.language.askForLanguage)
+                }
+                TextButton(onClick = { openUrl(context, LanguageRepo.PAGE) }) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(L.settings.language.viewOnGitHub)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PackRow(
+    pack: LanguageRepo.Pack,
+    state: LanguageRepo.State,
+    busy: Boolean,
+    onScreen: Boolean,
+    onDownload: () -> Unit,
+    onUse: () -> Unit,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            CodeBadge(pack.code, 38.dp)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(pack.name, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (pack.nativeName.isNotBlank() && pack.nativeName != pack.name) {
+                        Text("  ${pack.nativeName}", fontSize = 13.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (pack.variant.isNotBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    SmallChip(pack.variant, primary)
+                }
+                byLine(pack.authors)?.let { Text(it, fontSize = 11.5.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Spacer(Modifier.height(5.dp))
+                LinearProgressIndicator(
+                    progress = { pack.percent / 100f },
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
+                    color = if (pack.percent >= 100) ai.antigem.theme.AppColors.success else primary,
+                    trackColor = primary.copy(alpha = 0.12f),
+                    drawStopIndicator = {}
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    L.settings.language.percentAndSize(pack.percent, android.text.format.Formatter.formatShortFileSize(context, pack.size)),
+                    fontSize = 11.sp, color = muted, maxLines = 1
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            when {
+                busy -> CircularProgressIndicator(Modifier.padding(horizontal = 14.dp).size(22.dp), strokeWidth = 2.dp)
+                state == LanguageRepo.State.AVAILABLE -> FilledTonalButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                    Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(L.common.download, fontSize = 13.sp)
+                }
+                state == LanguageRepo.State.UPDATE -> FilledTonalButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                    Icon(Icons.Outlined.Update, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(L.common.update, fontSize = 13.sp)
+                }
+                onScreen -> Icon(Icons.Outlined.CheckCircle, L.settings.language.onScreen, tint = primary, modifier = Modifier.padding(horizontal = 12.dp))
+                else -> TextButton(onClick = onUse) { Text(L.settings.language.use) }
+            }
+        }
+    }
+}
+
+/** What the details sheet shows: an installed language ([info]), a pack of the repository ([pack]), or both. */
+private data class LanguageDetails(val info: LanguageManager.Info?, val pack: LanguageRepo.Pack?)
+
+/** Everything about a language and the people who made it, with what can be done with it. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun LanguageDetailsSheet(
+    details: LanguageDetails,
+    onDismiss: () -> Unit,
+    onDownload: (LanguageRepo.Pack) -> Unit,
+    onUse: (String) -> Unit,
+    onDuplicate: (String) -> Unit,
+    onRemove: (LanguageManager.Info) -> Unit,
+    onSend: (LanguageManager.Info) -> Unit
+) {
+    val context = LocalContext.current
+    val info = details.info
+    val pack = details.pack
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
+    val name = info?.name ?: pack?.name.orEmpty()
+    val nativeName = info?.nativeName ?: pack?.nativeName.orEmpty()
+    val variant = info?.variant ?: pack?.variant.orEmpty()
+    val code = info?.code ?: pack?.code.orEmpty()
+    val description = info?.description?.takeIf { it.isNotBlank() } ?: pack?.description.orEmpty()
+    val authors = info?.authors?.takeIf { it.isNotEmpty() } ?: pack?.authors.orEmpty()
+    val rtl = info?.rtl ?: pack?.rtl ?: false
+    val state = pack?.let { LanguageRepo.stateOf(it.id) }
+    val busy = pack != null && pack.id in LanguageRepo.downloading
+    val installed = info != null
+    val onScreen = info != null && info.id == LanguageManager.currentId
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().bouncyVerticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CodeBadge(code, 52.dp)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    if (nativeName.isNotBlank() && nativeName != name) Text(nativeName, fontSize = 15.sp, color = muted)
+                    Text(
+                        when (info?.origin) {
+                            LanguageManager.Origin.USER -> L.settings.language.originYours
+                            LanguageManager.Origin.APP -> L.settings.language.originBuiltIn
+                            else -> L.settings.language.originCommunity
+                        },
+                        fontSize = 12.sp, color = primary, fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (variant.isNotBlank()) SmallChip(variant, primary)
+                SmallChip(code, muted)
+                if (rtl) SmallChip(L.settings.language.rtl, muted)
+                if (state == LanguageRepo.State.UPDATE) SmallChip(L.settings.language.updateAvailable, ai.antigem.theme.AppColors.info)
+            }
+            if (description.isNotBlank()) Text(description, fontSize = 14.sp, lineHeight = 20.sp)
+
+            // progress: on the phone's English when installed, else the repository's count
+            val translated = info?.translated ?: pack?.translated ?: 0
+            val total = info?.total ?: pack?.total ?: 0
+            val outdated = info?.outdated ?: pack?.outdated ?: 0
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    L.settings.languageTexts.progress(translated, total) + if (outdated > 0) "  ·  " + L.settings.language.outdatedCount(outdated) else "",
+                    fontSize = 12.5.sp, color = muted
+                )
+                LinearProgressIndicator(
+                    progress = { if (total == 0) 0f else translated.toFloat() / total },
+                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                    color = if (total > 0 && translated >= total) ai.antigem.theme.AppColors.success else primary,
+                    trackColor = primary.copy(alpha = 0.12f),
+                    drawStopIndicator = {}
+                )
+                val facts = listOfNotNull(
+                    pack?.updated?.takeIf { it.isNotBlank() }?.let { L.settings.language.updatedOn(shortDate(it)) },
+                    (info?.appVersion?.takeIf { it.isNotBlank() } ?: pack?.appVersion?.takeIf { it.isNotBlank() })?.let { L.settings.language.forVersion(it) },
+                    pack?.let { android.text.format.Formatter.formatShortFileSize(context, it.size) }
+                )
+                if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), fontSize = 12.sp, color = muted)
+                val basedOn = info?.basedOn?.takeIf { it.isNotBlank() } ?: pack?.basedOn?.takeIf { it.isNotBlank() }
+                basedOn?.let { b ->
+                    Text(L.settings.language.basedOnPack(LanguageRepo.packs.firstOrNull { it.id == b }?.label ?: b), fontSize = 12.sp, color = muted)
+                }
+            }
+
+            HorizontalDivider()
+            Text(L.settings.language.authorLabel, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            if (authors.isEmpty()) Text(L.settings.language.noAuthors, fontSize = 13.sp, color = muted)
+            authors.forEach { a -> AuthorRow(a) }
+
+            HorizontalDivider()
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                when {
+                    busy -> CircularProgressIndicator(Modifier.padding(8.dp).size(24.dp), strokeWidth = 2.dp)
+                    pack != null && state == LanguageRepo.State.AVAILABLE -> Button(onClick = { onDownload(pack) }) {
+                        Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.common.download)
+                    }
+                    pack != null && state == LanguageRepo.State.UPDATE -> Button(onClick = { onDownload(pack) }) {
+                        Icon(Icons.Outlined.Update, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.common.update)
+                    }
+                }
+                if (installed && !onScreen && info != null) FilledTonalButton(onClick = { onUse(info.id) }) { Text(L.settings.language.use) }
+                if (info != null) OutlinedButton(onClick = { onDuplicate(info.id) }) {
+                    Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.duplicate)
+                }
+                if (info != null && info.origin == LanguageManager.Origin.USER) OutlinedButton(onClick = { onSend(info) }) {
+                    Icon(Icons.Outlined.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.sendToCommunity)
+                }
+            }
+            if (pack != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { openUrl(context, LanguageRepo.PROBLEM_FORM + "&title=" + android.net.Uri.encode("Translation problem: ${pack.label}")) }) {
+                    Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.reportProblem)
+                }
+                TextButton(onClick = { openUrl(context, pack.pageUrl) }) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.viewFile)
+                }
+            }
+            if (info != null && info.origin == LanguageManager.Origin.REPO) TextButton(onClick = { onRemove(info) }) {
+                Icon(Icons.Outlined.Delete, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.width(6.dp))
+                Text(L.common.remove, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthorRow(a: LanguageManager.Author) {
+    val context = LocalContext.current
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
+    val link = a.profileUrl
+    Surface(
+        onClick = { link?.let { openUrl(context, it) } },
+        enabled = link != null,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(17.dp)).background(primary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Text(a.name.trim().take(1).uppercase(), fontWeight = FontWeight.Bold, color = primary)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(a.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val sub = listOfNotNull(a.role.takeIf { it.isNotBlank() }, a.github.takeIf { it.isNotBlank() }?.let { "@$it" }).joinToString("  ·  ")
+                if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (link != null) Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp), tint = muted)
+        }
+    }
+}
+
+/** How to get a language of the user's into the community repository: names first, then the file and the GitHub form. */
+@Composable
+private fun SendToCommunityDialog(
+    info: LanguageManager.Info,
+    basedOn: String?,
+    onAddNames: () -> Unit,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+    onOpenForm: () -> Unit,
+    onGuide: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.Upload, null) },
+        title = { Text(L.settings.language.sendTitle(info.label), fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(Modifier.bouncyVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(L.settings.language.sendAbout, fontSize = 13.5.sp, lineHeight = 19.sp)
+                if (info.authors.isEmpty()) {
+                    Surface(shape = RoundedCornerShape(12.dp), color = ai.antigem.theme.AppColors.warning.copy(alpha = 0.12f)) {
+                        Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(L.settings.language.sendNoAuthors, fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f))
+                            TextButton(onClick = onAddNames) { Text(L.settings.language.addNames) }
+                        }
+                    }
+                } else {
+                    Text(byLine(info.authors).orEmpty(), fontSize = 12.5.sp, color = muted)
+                }
+                basedOn?.let { Text(L.settings.language.sendBasedOn(it), fontSize = 12.5.sp, lineHeight = 17.sp, color = muted) }
+                Text(L.settings.language.sendStep1, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(onClick = onSave) { Icon(Icons.Outlined.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.saveToFile) }
+                    OutlinedButton(onClick = onShare) { Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.share) }
+                }
+                Text(L.settings.language.sendStep2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                FilledTonalButton(onClick = onOpenForm) {
+                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.openForm)
+                }
+                Text(L.settings.language.sendGit(info.code), fontSize = 12.sp, lineHeight = 16.sp, color = muted)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(L.common.close) } },
+        dismissButton = { TextButton(onClick = onGuide) { Text(L.settings.language.howToTranslate) } }
+    )
 }
 
 @Composable
@@ -520,7 +1084,23 @@ private fun TranslateWithAiCard() {
     }
 }
 
-/** New language, or the name and details of one. [languages]: offer "start from" (new languages only). */
+/** What [LanguageInfoDialog] gives back. */
+private class LanguageInfoResult(
+    val code: String, val name: String, val nativeName: String, val rtl: Boolean, val from: String?,
+    val variant: String, val description: String, val authors: List<LanguageManager.Author>
+)
+
+/** One person being edited in [LanguageInfoDialog]. */
+private class AuthorDraft(name: String = "", github: String = "", role: String = "", val url: String = "") {
+    var name by mutableStateOf(name)
+    var github by mutableStateOf(github)
+    var role by mutableStateOf(role)
+}
+
+/**
+ * New language, or the name and details of one: names, code, direction, variant, description and the people who made
+ * it. [languages]: offer "start from" (new languages only).
+ */
 @Composable
 private fun LanguageInfoDialog(
     title: String,
@@ -528,16 +1108,20 @@ private fun LanguageInfoDialog(
     languages: List<LanguageManager.Info>?,
     initial: LanguageManager.Info? = null,
     onDismiss: () -> Unit,
-    onConfirm: (code: String, name: String, nativeName: String, rtl: Boolean, from: String?, author: String, about: String) -> Unit
+    onConfirm: (LanguageInfoResult) -> Unit
 ) {
     var name by remember { mutableStateOf(initial?.name.orEmpty()) }
     var native by remember { mutableStateOf(initial?.nativeName.orEmpty()) }
     var code by remember { mutableStateOf(initial?.code.orEmpty()) }
     var rtl by remember { mutableStateOf(initial?.rtl ?: false) }
-    var author by remember { mutableStateOf(initial?.author.orEmpty()) }
-    var about by remember { mutableStateOf(initial?.about.orEmpty()) }
+    var variant by remember { mutableStateOf(initial?.variant.orEmpty()) }
+    var description by remember { mutableStateOf(initial?.description.orEmpty()) }
+    val authors = remember {
+        mutableStateListOf<AuthorDraft>().apply { initial?.authors?.forEach { add(AuthorDraft(it.name, it.github, it.role, it.url)) } }
+    }
     var from by remember { mutableStateOf<LanguageManager.Info?>(null) }
     var fromMenu by remember { mutableStateOf(false) }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val valid = name.isNotBlank() && code.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -551,6 +1135,9 @@ private fun LanguageInfoDialog(
                 OutlinedTextField(code, { code = it.trim() }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     label = { Text(L.settings.language.codeLabel) }, placeholder = { Text(L.settings.language.codeHint) },
                     supportingText = { Text(L.settings.language.codeAbout) })
+                OutlinedTextField(variant, { variant = it.take(40) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(L.settings.language.variantLabel) }, placeholder = { Text(L.settings.language.variantHint) },
+                    supportingText = { Text(L.settings.language.variantAbout) })
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(L.settings.language.rtl, fontSize = 14.sp, modifier = Modifier.weight(1f))
                     Switch(checked = rtl, onCheckedChange = { rtl = it })
@@ -576,15 +1163,42 @@ private fun LanguageInfoDialog(
                         }
                     }
                 } else {
-                    OutlinedTextField(author, { author = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        label = { Text(L.settings.language.authorLabel) })
-                    OutlinedTextField(about, { about = it }, modifier = Modifier.fillMaxWidth(),
-                        label = { Text(L.settings.language.aboutLabel) })
+                    OutlinedTextField(description, { description = it.take(600) }, modifier = Modifier.fillMaxWidth(), minLines = 2,
+                        label = { Text(L.settings.language.aboutLabel) }, placeholder = { Text(L.settings.language.descriptionHint) })
+                    Text(L.settings.language.authorLabel, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.settings.language.authorsAbout, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
+                    authors.forEachIndexed { i, a ->
+                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                            Column(Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    OutlinedTextField(a.name, { a.name = it.take(80) }, singleLine = true, modifier = Modifier.weight(1f),
+                                        label = { Text(L.common.name) })
+                                    IconButton(onClick = { authors.removeAt(i) }) { Icon(Icons.Outlined.Close, L.common.remove) }
+                                }
+                                OutlinedTextField(a.github, { a.github = it.trim().removePrefix("@").take(39) }, singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().padding(end = 6.dp),
+                                    label = { Text(L.settings.language.githubLabel) }, prefix = { Text("@") })
+                                OutlinedTextField(a.role, { a.role = it.take(40) }, singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().padding(end = 6.dp),
+                                    label = { Text(L.settings.language.roleLabel) }, placeholder = { Text(L.settings.language.roleHint) })
+                            }
+                        }
+                    }
+                    TextButton(onClick = { authors.add(AuthorDraft()) }) {
+                        Icon(Icons.Outlined.PersonAdd, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(L.settings.language.addPerson)
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = { onConfirm(code.trim(), name.trim(), native.trim(), rtl, from?.id, author.trim(), about.trim()) }) { Text(confirm) }
+            TextButton(enabled = valid, onClick = {
+                onConfirm(LanguageInfoResult(
+                    code.trim(), name.trim(), native.trim(), rtl, from?.id, variant.trim(), description.trim(),
+                    authors.filter { it.name.isNotBlank() }.map { LanguageManager.Author(it.name.trim(), it.github.trim(), it.url, it.role.trim()) }
+                ))
+            }) { Text(confirm) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
@@ -702,7 +1316,7 @@ fun LanguageTextsScreen(id: String, onOpen: (String) -> Unit) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp)) }
         return
     }
-    val editable = !l.builtIn
+    val editable = !l.readOnly
     val english = l.id == LanguageManager.ENGLISH
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf(if (editable) TextFilter.MISSING else TextFilter.ALL) }
@@ -750,7 +1364,10 @@ fun LanguageTextsScreen(id: String, onOpen: (String) -> Unit) {
                 if (!editable && !english) {
                     Surface(shape = RoundedCornerShape(12.dp), color = ai.antigem.theme.AppColors.info.copy(alpha = 0.12f)) {
                         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(L.settings.languageTexts.builtInReadOnly(l.name), fontSize = 12.5.sp, modifier = Modifier.weight(1f))
+                            Text(
+                                if (l.origin == LanguageManager.Origin.REPO) L.settings.languageTexts.communityReadOnly(l.name) else L.settings.languageTexts.builtInReadOnly(l.name),
+                                fontSize = 12.5.sp, modifier = Modifier.weight(1f)
+                            )
                             TextButton(onClick = {
                                 scope.launch {
                                     val copy = withContext(Dispatchers.IO) { LanguageManager.duplicate(l.id) }

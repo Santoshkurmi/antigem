@@ -246,6 +246,12 @@ Use the agents running on your PC from your phone. [AntiGem for VS Code](https:/
 - Notes and to-do lists inside the app and in the floating bubble.
 - Agents can read and update them through the Notes MCP.
 
+### App languages
+- Every text in the app can be translated. The app ships only English: other languages are made by the community and downloaded in **Settings → Language → Get more languages** from the [AntiGem Languages](https://github.com/Santoshkurmi/antigem_languages) repository.
+- Downloaded languages show who made them and get an **Update** button when their translation improves. They're read-only: duplicate one to change it, and updates never touch your copy.
+- Make your own language in the app, or let an agent translate the app through the Language MCP while you watch it change. Then send it to the community so everyone can use it.
+- Right-to-left languages, plural rules per language, and a setting for the language agents reply in.
+
 ### Backups and updates
 - Back up and restore the Linux rootfs, projects and chat history to phone storage.
 - Data loss protection: an optional uninstall shield and a guard against **Clear data** in App info.
@@ -465,6 +471,7 @@ AntiGem comes in parts that link to each other:
 | **AntiGem** (Android app) | The coding agents, a Linux terminal, an editor and a browser on your phone. With **Connect to PC** it also uses the agents of a PC that runs AntiGem for VS Code. | [Santoshkurmi/antigem](https://github.com/Santoshkurmi/antigem) |
 | **AntiGem for VS Code** | The same agents and chat in a VS Code sidebar. Its **Connect phone** lets the app on your phone use them. | [Santoshkurmi/antigem_vscode_extension](https://github.com/Santoshkurmi/antigem_vscode_extension) · install: [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=santoshkurmi.antigem-vscode-extension), [Open VSX](https://open-vsx.org/extension/santoshkurmi/antigem-vscode-extension) |
 | **AntiGem Browser Bridge** (Chrome extension) | Lets agents in AntiGem for VS Code use your real Chrome. Not needed by the Android app, which has its own browser. | [Santoshkurmi/antigem-browser-extension](https://github.com/Santoshkurmi/antigem-browser-extension) · not in the Chrome Web Store yet: installed with *Load unpacked* from AntiGem for VS Code |
+| **AntiGem Languages** | The app's translations, made by the people who use it and downloaded from **Settings → Language → Get more languages** (the app ships only English). Also the step-by-step guide to adding or improving a language, the file format and the check every translation passes. | [Santoshkurmi/antigem_languages](https://github.com/Santoshkurmi/antigem_languages) |
 | **AntiGem mini apps** | The official mini apps (Habits, Pocket Notes, Sky, Gallery, Focus, Dev Toolbox, Explorer, Showcase), installed from **Mini Apps → Get apps**. Also the guide to building and publishing your own: real app sources using every SDK feature, signed `.agapp` packages, the catalog format and the `agapp.mjs publish` tool. | [Santoshkurmi/antigem_mini_apps](https://github.com/Santoshkurmi/antigem_mini_apps) |
 This is not polished app they are only for showcase only not for use and will be removed in future.
 
@@ -479,7 +486,7 @@ AntiGem not the right fit? These apps do similar things and might suit you bette
 
 ## Contributing
 
-Issues, ideas and pull requests are welcome. For help, join the [Discord server](https://discord.gg/pJvvTDTc6G) or the [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4).
+Issues, ideas and pull requests are welcome. **Translations** go to [AntiGem Languages](https://github.com/Santoshkurmi/antigem_languages): its README shows how to add or update a language, with or without git. For help, join the [Discord server](https://discord.gg/pJvvTDTc6G) or the [WhatsApp community](https://chat.whatsapp.com/IGQX8q9zSVV0RarG70sclV?s=cl&p=a&mlu=4&ilr=4).
 
 **Docs and guides:** the user guide lives on the [website](https://santoshkurmi.github.io/antigem/docs/): how to install and set up AntiGem, every screen and setting, the agents, MCP, plugins, mini apps, how-to guides and troubleshooting. Its source is a separate repository, [santoshkurmi/antigem_website](https://github.com/santoshkurmi/antigem_website). The docs are new and need improvement: if you figured something out, found a page that's wrong or unclear, or want to add a guide or screenshots, please contribute there (every docs page has an **Edit this page on GitHub** link).
 

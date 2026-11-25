@@ -16,28 +16,37 @@ import java.io.DataOutputStream
 import java.io.File
 
 /**
- * The app's languages: English (the texts in the code, keys in assets/i18n/en.json), the built-in translations
- * (assets/i18n/<id>.json) and the user's own (files/i18n/languages/<id>.json, made in Settings → Language or by a model
- * through language_mcp). All use the same file format, so a user's file can be shared and shipped as a built-in one.
+ * The app's languages ([Origin]): English (the texts in the code, keys in assets/i18n/en.json), languages shipped in
+ * the APK (assets/i18n/<id>.json; none today: English is the only one), community languages downloaded from the
+ * antigem_languages repository ([LanguageRepo], files/i18n/repo/<pack id>.json, id "repo.<pack id>") and the user's
+ * own (files/i18n/languages/<id>.json, made in Settings → Language or by a model through language_mcp). All use the
+ * same file format, so a user's file can be sent to the repository as it is. Only the user's own can be edited: the
+ * others are duplicated first, so an update of a downloaded language never overwrites anyone's changes.
  *
  * Performance: in English nothing is loaded. Another language is read once into [I18n.table] from a pre-indexed cache
  * (files/i18n/cache), rebuilt only when the language file, the app or its keys change. Switching bumps [version],
  * which GeminiTheme hands down as a static composition local, so every screen redraws once in the new language
  * without losing its state; reading a text is never observed on its own.
  *
- * A language file:
+ * A language file (format 2; format 1 had "author" and "about" strings instead of "authors" and "description"):
  * ```
- * { "format": "antigem-language", "format_version": 1, "code": "hi", "name": "Hindi", "native_name": "हिन्दी",
- *   "rtl": false, "author": "", "about": "", "app_version": "2.0.5",
+ * { "format": "antigem-language", "format_version": 2, "id": "hi", "code": "hi", "name": "Hindi", "native_name": "हिन्दी",
+ *   "variant": "", "rtl": false, "description": "…",
+ *   "authors": [ { "name": "Sita", "github": "sita", "role": "Translation" } ], "based_on": "", "app_version": "2.0.5",
  *   "strings": { "common.cancel": "रद्द करें", "files.list.count": { "one": "{count} फ़ाइल", "other": "{count} फ़ाइलें" } },
  *   "sources": { "common.cancel": "77f8c1d" } }
  * ```
- * "sources" remembers which English each text was translated from, so a text whose English changed later shows as
- * outdated. Keys the app doesn't know (from another app version) are kept in the file and ignored.
+ * "id" is the pack id in the repository (only written for community languages); "variant" tells packs of one language
+ * apart; "based_on" is the pack a copy started from. "sources" remembers which English each text was translated from,
+ * so a text whose English changed later shows as outdated. Keys the app doesn't know (from another app version) are
+ * kept in the file and ignored.
  */
 object LanguageManager {
     const val ENGLISH = "en"
     const val FORMAT = "antigem-language"
+    const val FORMAT_VERSION = 2
+    /** Community languages' ids: "repo." + their pack id (user ids never have a dot, see [freeId]). */
+    const val REPO_PREFIX = "repo."
     // "AGL2": tables cached by builds before the key index fix were empty, so they are not read again
     private const val CACHE_MAGIC = 0x41474C32
 
@@ -58,31 +67,49 @@ object LanguageManager {
         fun section(i: Int): String = sectionOf(keys[i])
     }
 
+    /** Where a language comes from. Only [USER] languages can be edited. */
+    enum class Origin { ENGLISH, APP, REPO, USER }
+
+    /** Someone who made a language: [github] is a username (no @), [url] an https link, [role] like "Translation". */
+    data class Author(val name: String, val github: String = "", val url: String = "", val role: String = "") {
+        val profileUrl: String? get() = github.takeIf { it.isNotBlank() }?.let { "https://github.com/$it" } ?: url.takeIf { it.startsWith("https://") }
+    }
+
     class Language(
         val id: String,
         val code: String,
         val name: String,
         val nativeName: String,
         val rtl: Boolean,
-        val builtIn: Boolean,
-        val author: String = "",
-        val about: String = "",
+        val origin: Origin,
+        val variant: String = "",
+        val description: String = "",
+        val authors: List<Author> = emptyList(),
+        /** The repository pack id: community languages' own; else "". */
+        val packId: String = "",
+        /** The repository pack this language was copied from, or "". */
+        val basedOn: String = "",
         val appVersion: String = "",
         /** key → String, or Map<String, String> of plural forms. */
         val strings: Map<String, Any> = emptyMap(),
         /** key → hash of the English the text was translated from. */
         val sources: Map<String, String> = emptyMap()
     ) {
-        val label: String get() = if (nativeName.isNotBlank() && nativeName != name) "$name · $nativeName" else name
+        val label: String get() = labelOf(name, nativeName, variant)
+        /** Can't be edited (English, shipped in the app, or downloaded): duplicate it to change texts. */
+        val readOnly: Boolean get() = origin != Origin.USER
     }
 
     /** One row of the language list. */
     data class Info(
-        val id: String, val code: String, val name: String, val nativeName: String, val rtl: Boolean, val builtIn: Boolean,
-        val translated: Int, val outdated: Int, val total: Int, val author: String, val about: String
+        val id: String, val code: String, val name: String, val nativeName: String, val rtl: Boolean, val origin: Origin,
+        val translated: Int, val outdated: Int, val total: Int,
+        val variant: String = "", val description: String = "", val authors: List<Author> = emptyList(),
+        val packId: String = "", val basedOn: String = "", val appVersion: String = ""
     ) {
-        val label: String get() = if (nativeName.isNotBlank() && nativeName != name) "$name · $nativeName" else name
+        val label: String get() = labelOf(name, nativeName, variant)
         val missing: Int get() = total - translated
+        val readOnly: Boolean get() = origin != Origin.USER
     }
 
     enum class Status { TRANSLATED, MISSING, OUTDATED }
@@ -144,7 +171,14 @@ object LanguageManager {
 
     private fun userDir() = File(ctx().filesDir, "i18n/languages").apply { mkdirs() }
     private fun cacheDir() = File(ctx().filesDir, "i18n/cache").apply { mkdirs() }
+    /** Downloaded community languages, each kept byte for byte as the repository has it (its SHA-256 tells updates). */
+    internal fun repoDir() = File(ctx().filesDir, "i18n/repo").apply { mkdirs() }
     private fun userFile(id: String) = File(userDir(), "$id.json")
+    /** The file of a community language: [id] is "repo.<pack id>". */
+    internal fun repoFile(id: String) = File(repoDir(), "${id.removePrefix(REPO_PREFIX)}.json")
+
+    fun isRepoId(id: String) = id.startsWith(REPO_PREFIX)
+    fun repoId(packId: String) = REPO_PREFIX + packId
 
     private fun builtInIds(): List<String> = runCatching {
         ctx().assets.list("i18n").orEmpty().filter { it.endsWith(".json") }.map { it.removeSuffix(".json") }.filter { it != ENGLISH }
@@ -152,6 +186,11 @@ object LanguageManager {
 
     private fun userIds(): List<String> =
         userDir().listFiles { f -> f.isFile && f.name.endsWith(".json") }.orEmpty().map { it.name.removeSuffix(".json") }.sorted()
+
+    /** Pack ids of the downloaded community languages. */
+    fun repoPackIds(): List<String> =
+        repoDir().listFiles { f -> f.isFile && f.name.endsWith(".json") && LanguageRepo.PACK_ID.matches(f.name.removeSuffix(".json")) }
+            .orEmpty().map { it.name.removeSuffix(".json") }.sorted()
 
     // ------------------------------------------------------------------ reading
 
@@ -187,24 +226,38 @@ object LanguageManager {
             ?: all.firstOrNull { it.name.contains(q, true) }
     }
 
-    fun english() = Language(ENGLISH, ENGLISH, "English", "English", rtl = false, builtIn = true)
+    fun english() = Language(ENGLISH, ENGLISH, "English", "English", rtl = false, origin = Origin.ENGLISH)
 
-    private fun allIds(): List<String> = (builtInIds() + userIds()).distinct()
+    private fun allIds(): List<String> = (builtInIds() + repoPackIds().map(::repoId) + userIds()).distinct()
 
     /** Parses a language file (cached until it changes). A user file wins over a built-in one with the same id. */
     fun load(id: String): Language? = synchronized(lock) {
         if (id == ENGLISH) return english()
         parsed[id]?.let { return it }
-        val file = userFile(id)
         val lang = runCatching {
-            if (file.exists()) parse(JSONObject(file.readText()), id, builtIn = false)
-            else if (id in builtInIds()) parse(JSONObject(ctx().assets.open("i18n/$id.json").bufferedReader().use { it.readText() }), id, builtIn = true)
-            else null
+            if (isRepoId(id)) repoFile(id).takeIf { it.exists() }?.let { parse(JSONObject(it.readText()), id, Origin.REPO) }
+            else {
+                val file = userFile(id)
+                if (file.exists()) parse(JSONObject(file.readText()), id, Origin.USER)
+                else if (id in builtInIds()) parse(JSONObject(ctx().assets.open("i18n/$id.json").bufferedReader().use { it.readText() }), id, Origin.APP)
+                else null
+            }
         }.onFailure { android.util.Log.w("LanguageManager", "can't read language $id", it) }.getOrNull()
         lang?.also { parsed[id] = it }
     }
 
-    private fun parse(o: JSONObject, id: String, builtIn: Boolean): Language {
+    /** "authors" (format 2), or format 1's "author" text as one person. */
+    private fun authorsOf(o: JSONObject): List<Author> {
+        o.optJSONArray("authors")?.let { a ->
+            return (0 until a.length()).mapNotNull { a.optJSONObject(it) }.mapNotNull { p ->
+                val name = p.optString("name").trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                Author(name, p.optString("github").trim().removePrefix("@"), p.optString("url").trim(), p.optString("role").trim())
+            }
+        }
+        return o.optString("author").trim().takeIf { it.isNotEmpty() }?.let { listOf(Author(it)) } ?: emptyList()
+    }
+
+    private fun parse(o: JSONObject, id: String, origin: Origin): Language {
         val strings = LinkedHashMap<String, Any>()
         o.optJSONObject("strings")?.let { s ->
             s.keys().forEach { k ->
@@ -216,14 +269,19 @@ object LanguageManager {
         }
         val sources = HashMap<String, String>()
         o.optJSONObject("sources")?.let { s -> s.keys().forEach { sources[it] = s.optString(it) } }
-        val code = o.optString("code").ifBlank { id }
+        val code = o.optString("code").ifBlank { id.removePrefix(REPO_PREFIX) }
         return Language(
             id = id, code = code,
             name = o.optString("name").ifBlank { code },
             nativeName = o.optString("native_name"),
             rtl = o.optBoolean("rtl", false),
-            builtIn = builtIn,
-            author = o.optString("author"), about = o.optString("about"), appVersion = o.optString("app_version"),
+            origin = origin,
+            variant = o.optString("variant").trim(),
+            description = o.optString("description").ifBlank { o.optString("about") }.trim(),
+            authors = authorsOf(o),
+            packId = if (origin == Origin.REPO) id.removePrefix(REPO_PREFIX) else if (origin == Origin.APP) o.optString("id").trim() else "",
+            basedOn = o.optString("based_on").trim(),
+            appVersion = o.optString("app_version"),
             strings = strings, sources = sources
         )
     }
@@ -253,14 +311,17 @@ object LanguageManager {
             Status.OUTDATED -> { translated++; outdated++ }
             Status.MISSING -> {}
         }
-        return Info(lang.id, lang.code, lang.name, lang.nativeName, lang.rtl, lang.builtIn, translated, outdated, src.keys.size, lang.author, lang.about)
+        return Info(
+            lang.id, lang.code, lang.name, lang.nativeName, lang.rtl, lang.origin, translated, outdated, src.keys.size,
+            lang.variant, lang.description, lang.authors, lang.packId, lang.basedOn, lang.appVersion
+        )
     }
 
     /** Reads every language and its progress into [languages]. Call off the main thread. */
     fun refreshList(): List<Info> {
         val src = source()
         val list = listOf(info(english(), src)) + allIds().mapNotNull { load(it) }.map { info(it, src) }
-            .sortedWith(compareBy<Info>({ !it.builtIn }, { it.name.lowercase() }))
+            .sortedWith(compareBy<Info>({ it.origin.ordinal }, { it.name.lowercase() }, { it.variant.lowercase() }))
         languages = list
         return list
     }
@@ -310,6 +371,8 @@ object LanguageManager {
         val t = arrayOfNulls<Any?>(L.COUNT)
         lang.strings.forEach { (k, v) ->
             val i = src.index[k] ?: return@forEach
+            // a file from elsewhere (downloaded, built for another app version) can have a text that doesn't fit: English shows
+            if (lang.readOnly && checkText(src, i, v) != null) return@forEach
             slot(src, i, v)?.let { t[i] = it }
         }
         return t
@@ -351,6 +414,7 @@ object LanguageManager {
     // ------------------------------------------------------------------ cache
 
     private fun stampOf(id: String): String {
+        if (isRepoId(id)) return repoFile(id).let { "r:${it.length()}:${it.lastModified()}" }
         val f = userFile(id)
         if (f.exists()) return "u:${f.length()}:${f.lastModified()}"
         val updated = runCatching { ctx().packageManager.getPackageInfo(ctx().packageName, 0).lastUpdateTime }.getOrDefault(0L)
@@ -434,13 +498,14 @@ object LanguageManager {
         nativeName: String? = null,
         code: String? = null,
         rtl: Boolean? = null,
-        author: String? = null,
-        about: String? = null,
+        variant: String? = null,
+        description: String? = null,
+        authors: List<Author>? = null,
         /** false: don't redraw the screens yet (the editor, while typing); [flushRedraw] does it later. */
         redraw: Boolean = true
     ): Report = synchronized(lock) {
         val lang = load(id) ?: return Report(problems = listOf("No language \"$id\""))
-        if (lang.builtIn) return Report(problems = listOf("${lang.name} is built in and can't be changed: duplicate it first"))
+        if (lang.readOnly) return Report(problems = listOf(readOnlyReason(lang)))
         val src = source()
         val strings = LinkedHashMap(lang.strings)
         val sources = HashMap(lang.sources)
@@ -478,9 +543,11 @@ object LanguageManager {
             name = name?.trim()?.takeIf { it.isNotEmpty() } ?: lang.name,
             nativeName = nativeName?.trim() ?: lang.nativeName,
             rtl = rtl ?: lang.rtl,
-            builtIn = false,
-            author = author?.trim() ?: lang.author,
-            about = about?.trim() ?: lang.about,
+            origin = Origin.USER,
+            variant = variant?.trim() ?: lang.variant,
+            description = description?.trim() ?: lang.description,
+            authors = authors?.let(::cleanAuthors) ?: lang.authors,
+            basedOn = lang.basedOn,
             appVersion = ai.antigem.BuildConfig.VERSION_NAME,
             strings = strings, sources = sources
         )
@@ -511,35 +578,87 @@ object LanguageManager {
     fun missingPlaceholders(src: Source, i: Int, value: Any): Set<String> =
         src.placeholders(i) - placeholdersOf(value) - (if (src.isPlural(i)) setOf("count") else emptySet())
 
-    /** A new, empty user language (English shows until texts are added), or a copy of [from]'s texts. */
-    fun create(code: String, name: String, nativeName: String = "", rtl: Boolean = false, from: String? = null, author: String = "", about: String = ""): Language =
-        synchronized(lock) {
-            val base = from?.let { load(it) }?.takeIf { it.id != ENGLISH }
-            val id = freeId(name.ifBlank { code })
-            val lang = Language(
-                id = id, code = code.trim().ifBlank { "xx" }, name = name.trim().ifBlank { code.trim() }, nativeName = nativeName.trim(),
-                rtl = rtl, builtIn = false, author = author, about = about, appVersion = ai.antigem.BuildConfig.VERSION_NAME,
-                strings = base?.strings ?: emptyMap(), sources = base?.sources ?: emptyMap()
-            )
-            save(lang)
-            lang
-        }
+    /**
+     * A new, empty user language (English shows until texts are added), or a copy of [from]'s texts. A copy keeps the
+     * people who made [from] (their work is in it) and remembers the community pack it started from.
+     */
+    fun create(
+        code: String, name: String, nativeName: String = "", rtl: Boolean = false, from: String? = null,
+        variant: String = "", description: String = "", authors: List<Author> = emptyList()
+    ): Language = synchronized(lock) {
+        val base = from?.let { load(it) }?.takeIf { it.id != ENGLISH }
+        val id = freeId(name.ifBlank { code })
+        val lang = Language(
+            id = id, code = code.trim().ifBlank { "xx" }, name = name.trim().ifBlank { code.trim() }, nativeName = nativeName.trim(),
+            rtl = rtl, origin = Origin.USER, variant = variant.trim(),
+            description = description.trim().ifBlank { base?.description.orEmpty() },
+            authors = cleanAuthors(authors.ifEmpty { base?.authors.orEmpty() }),
+            basedOn = base?.let { it.packId.ifBlank { it.basedOn } }.orEmpty(),
+            appVersion = ai.antigem.BuildConfig.VERSION_NAME,
+            strings = base?.strings ?: emptyMap(), sources = base?.sources ?: emptyMap()
+        )
+        save(lang)
+        lang
+    }
 
     fun duplicate(id: String, name: String? = null): Language? = synchronized(lock) {
         val lang = load(id)?.takeIf { it.id != ENGLISH } ?: return null
-        create(lang.code, name?.takeIf { it.isNotBlank() } ?: "${lang.name} (copy)", lang.nativeName, lang.rtl, from = lang.id, author = lang.author, about = lang.about)
+        create(lang.code, name?.takeIf { it.isNotBlank() } ?: "${lang.name} (copy)", lang.nativeName, lang.rtl, from = lang.id, variant = lang.variant)
     }
 
-    /** Deletes a user language; the app goes back to English if it was on screen. */
+    /**
+     * Deletes a user language, or removes a downloaded one (it can be downloaded again). Languages shipped in the app
+     * can't be deleted. The app goes back to English if it was on screen.
+     */
     fun delete(id: String): Boolean = synchronized(lock) {
         val lang = load(id) ?: return false
-        if (lang.builtIn) return false
-        userFile(id).delete()
+        when (lang.origin) {
+            Origin.USER -> userFile(id).delete()
+            Origin.REPO -> repoFile(id).delete()
+            else -> return false
+        }
         parsed.remove(id)
         dropCache(id)
+        languages = languages.filter { it.id != id }
         if (currentId == id) apply(ENGLISH)
         true
     }
+
+    /** Why [lang] can't be edited (for tools and the editor). */
+    fun readOnlyReason(lang: Language): String = when (lang.origin) {
+        Origin.ENGLISH -> "English is the source and can't be changed: create a language"
+        Origin.REPO -> "${lang.label} is a downloaded community language and can't be changed (an update would overwrite it): duplicate it first, then edit the copy"
+        else -> "${lang.label} is built into the app and can't be changed: duplicate it first"
+    }
+
+    // ------------------------------------------------------------------ community languages
+
+    /**
+     * Saves a community language downloaded from the repository ([LanguageRepo] checked its SHA-256), keeping its bytes
+     * as they are. Replaces the installed one (an update): if it's on screen, the app redraws in the new texts.
+     */
+    fun installRepoPack(packId: String, bytes: ByteArray): Language = synchronized(lock) {
+        require(LanguageRepo.PACK_ID.matches(packId)) { "bad pack id $packId" }
+        val o = JSONObject(String(bytes, Charsets.UTF_8).removePrefix("\uFEFF"))
+        require(o.optString("format") == FORMAT && o.optJSONObject("strings") != null) { "not a language file" }
+        val id = repoId(packId)
+        val f = repoFile(id)
+        val tmp = File(f.parentFile, "${f.name}.tmp")
+        tmp.writeBytes(bytes)
+        if (!tmp.renameTo(f)) { f.delete(); check(tmp.renameTo(f)) { "can't save ${f.name}" } }
+        parsed.remove(id)
+        dropCache(id)
+        val lang = load(id) ?: error("can't read the downloaded file")
+        languages = languages.map { if (it.id == id) info(lang) else it }.let { list -> if (list.any { it.id == id }) list else list + info(lang) }
+        if (currentId == id) { activate(id); refreshNow() }
+        lang
+    }
+
+    private fun cleanAuthors(list: List<Author>): List<Author> = list.mapNotNull { a ->
+        val name = a.name.trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+        Author(name.take(80), a.github.trim().removePrefix("@").removePrefix("https://github.com/").trim('/').take(39),
+            a.url.trim().takeIf { it.startsWith("https://") }.orEmpty().take(300), a.role.trim().take(40))
+    }.distinctBy { it.name.lowercase() to it.github.lowercase() }.take(50)
 
     private fun freeId(name: String): String {
         val base = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').ifBlank { "language" }.take(40)
@@ -565,7 +684,7 @@ object LanguageManager {
 
     // ------------------------------------------------------------------ files
 
-    /** The language as a file (to share, keep, or ship as a built-in language: assets/i18n/<code>.json). */
+    /** The language as a file (to share, keep, or send to the community repository as languages/<code>/<id>.json). */
     fun export(id: String): String? {
         val lang = load(id) ?: return null
         return toJson(if (lang.id == ENGLISH) englishAsLanguage() else lang, source())
@@ -574,20 +693,20 @@ object LanguageManager {
     /** English as a language file: a template with every key, for translating outside the app. */
     private fun englishAsLanguage(): Language {
         val src = source()
-        return Language(ENGLISH, ENGLISH, "English", "English", false, true, appVersion = ai.antigem.BuildConfig.VERSION_NAME,
+        return Language(ENGLISH, ENGLISH, "English", "English", false, Origin.ENGLISH, appVersion = ai.antigem.BuildConfig.VERSION_NAME,
             strings = src.keys.indices.associate { src.keys[it] to src.values[it] })
     }
 
     /**
-     * Adds a language from a file made by [export] (or by hand). It becomes a user language; [replaceId] overwrites
-     * that user language instead. Texts that don't fit (see [checkText]) are left out and listed.
+     * Adds a language from a file made by [export] (or by hand, or downloaded). It becomes a user language; [replaceId]
+     * overwrites that user language instead. Texts that don't fit (see [checkText]) are left out and listed.
      */
     fun import(json: String, replaceId: String? = null): Pair<Language?, Report> = synchronized(lock) {
         val o = runCatching { JSONObject(json.trim().removePrefix("﻿")) }.getOrElse {
             return null to Report(problems = listOf("Not a language file: ${it.message}"))
         }
         if (o.optJSONObject("strings") == null) return null to Report(problems = listOf("Not a language file: it has no \"strings\""))
-        val read = parse(o, "import", builtIn = false)
+        val read = parse(o, "import", Origin.USER)
         val src = source()
         val strings = LinkedHashMap<String, Any>()
         val problems = ArrayList<String>()
@@ -598,10 +717,16 @@ object LanguageManager {
             val why = checkText(src, i, v)
             if (why != null) problems += "$k: $why" else strings[k] = v
         }
-        val target = replaceId?.let { load(it) }?.takeIf { !it.builtIn }
+        val target = replaceId?.let { load(it) }?.takeIf { !it.readOnly }
         val id = target?.id ?: freeId(read.name.ifBlank { read.code })
-        val lang = Language(id, read.code, read.name, read.nativeName, read.rtl, false, read.author, read.about,
-            read.appVersion.ifBlank { ai.antigem.BuildConfig.VERSION_NAME }, strings, read.sources.filterKeys { it in strings })
+        val lang = Language(
+            id, read.code, read.name, read.nativeName, read.rtl, Origin.USER,
+            variant = read.variant, description = read.description, authors = cleanAuthors(read.authors),
+            // a community pack's file names its id: the copy remembers it, so improvements can go back to that pack
+            basedOn = read.basedOn.ifBlank { o.optString("id").trim().takeIf { LanguageRepo.PACK_ID.matches(it) }.orEmpty() },
+            appVersion = read.appVersion.ifBlank { ai.antigem.BuildConfig.VERSION_NAME },
+            strings = strings, sources = read.sources.filterKeys { it in strings }
+        )
         save(lang)
         if (currentId == id) activate(id).also { refreshNow() }
         lang to Report(saved = strings.size - unknown.size, problems = problems, unknownKeys = unknown)
@@ -638,13 +763,25 @@ object LanguageManager {
             } else q(v.toString())
         }
         sb.append("{\n")
-        sb.append("  \"format\": \"$FORMAT\",\n  \"format_version\": 1,\n")
+        sb.append("  \"format\": \"$FORMAT\",\n  \"format_version\": $FORMAT_VERSION,\n")
+        if (lang.packId.isNotBlank()) { sb.append("  \"id\": "); q(lang.packId); sb.append(",\n") }
         sb.append("  \"code\": "); q(lang.code); sb.append(",\n")
         sb.append("  \"name\": "); q(lang.name); sb.append(",\n")
         sb.append("  \"native_name\": "); q(lang.nativeName); sb.append(",\n")
+        sb.append("  \"variant\": "); q(lang.variant); sb.append(",\n")
         sb.append("  \"rtl\": ${lang.rtl},\n")
-        sb.append("  \"author\": "); q(lang.author); sb.append(",\n")
-        sb.append("  \"about\": "); q(lang.about); sb.append(",\n")
+        sb.append("  \"description\": "); q(lang.description); sb.append(",\n")
+        sb.append("  \"authors\": [")
+        lang.authors.forEachIndexed { n, a ->
+            sb.append(if (n == 0) "\n    { " else ",\n    { ")
+            q("name"); sb.append(": "); q(a.name)
+            if (a.github.isNotBlank()) { sb.append(", "); q("github"); sb.append(": "); q(a.github) }
+            if (a.url.isNotBlank()) { sb.append(", "); q("url"); sb.append(": "); q(a.url) }
+            if (a.role.isNotBlank()) { sb.append(", "); q("role"); sb.append(": "); q(a.role) }
+            sb.append(" }")
+        }
+        sb.append(if (lang.authors.isEmpty()) "],\n" else "\n  ],\n")
+        sb.append("  \"based_on\": "); q(lang.basedOn); sb.append(",\n")
         sb.append("  \"app_version\": "); q(lang.appVersion.ifBlank { ai.antigem.BuildConfig.VERSION_NAME }); sb.append(",\n")
         val ordered = lang.strings.keys.sortedBy { src.index[it] ?: Int.MAX_VALUE }
         sb.append("  \"strings\": {")
@@ -705,4 +842,11 @@ object LanguageManager {
     )
 
     fun sectionOf(key: String): String = key.substringBeforeLast('.', key)
+
+    /** "Nepali · नेपाली · Formal". */
+    fun labelOf(name: String, nativeName: String, variant: String = ""): String = buildString {
+        append(name)
+        if (nativeName.isNotBlank() && nativeName != name) append(" · ").append(nativeName)
+        if (variant.isNotBlank()) append(" · ").append(variant)
+    }
 }
