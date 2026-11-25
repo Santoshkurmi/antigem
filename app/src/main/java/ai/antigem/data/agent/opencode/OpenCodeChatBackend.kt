@@ -896,11 +896,23 @@ class OpenCodeChatBackend(
         }
     }
 
-    /** Messages of a chat that is not open (export / share from the sidebar). */
+    /**
+     * Messages of a chat that is not open (export / share from the sidebar). Paged like [reload]: OpenCode rejects a
+     * `limit` above 200. Throws when OpenCode can not be reached or refuses, so callers show the real error.
+     */
     suspend fun loadMessages(id: String): List<ChatMessage> {
-        val res = client.get("/session/$id/message?limit=500&order=desc").getOrNull() ?: return emptyList()
+        val items = mutableListOf<JsonObject>()
+        var body = client.get("/session/$id/message?limit=200&order=desc").getOrThrow().obj()
+        var pages = 0
+        while (true) {
+            val page = body.a("data").orEmpty().mapNotNull { it.obj() }
+            items.addAll(page)
+            val next = body.o("cursor").str("next")
+            if (page.isEmpty() || next.isNullOrBlank() || ++pages >= 10) break
+            body = client.get("/session/$id/message?limit=200&cursor=${java.net.URLEncoder.encode(next, "UTF-8")}").getOrThrow().obj()
+        }
         val t = OpenCodeTranscript(id)
-        t.loadHistory(res.obj().a("data").orEmpty().mapNotNull { it.obj() }, active = false)
+        t.loadHistory(items, active = false)
         return t.toChatMessages(id)
     }
 

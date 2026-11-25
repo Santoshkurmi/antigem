@@ -1982,7 +1982,7 @@ private fun ChatHistoryItemRow(
                                 context = context,
                                 conversationId = conv.id,
                                 title = conv.title,
-                                activeMessages = if (isAgentConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
+                                loadAgentMessages = claudeActions?.takeIf { isAgentConv }?.let { a -> suspend { a.loadMessages(conv.id) } },
                                 format = ConversationExportHelper.ExportFormat.MARKDOWN,
                                 snackbarHostState = snackbarHostState
                             )
@@ -2007,7 +2007,7 @@ private fun ChatHistoryItemRow(
                                 context = context,
                                 conversationId = conv.id,
                                 title = conv.title,
-                                activeMessages = if (isAgentConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
+                                loadAgentMessages = claudeActions?.takeIf { isAgentConv }?.let { a -> suspend { a.loadMessages(conv.id) } },
                                 format = ConversationExportHelper.ExportFormat.HTML,
                                 snackbarHostState = snackbarHostState
                             )
@@ -2032,7 +2032,7 @@ private fun ChatHistoryItemRow(
                                 context = context,
                                 conversationId = conv.id,
                                 title = conv.title,
-                                activeMessages = if (isAgentConv) claudeActions?.loadMessages?.invoke(conv.id) else null,
+                                loadAgentMessages = claudeActions?.takeIf { isAgentConv }?.let { a -> suspend { a.loadMessages(conv.id) } },
                                 snackbarHostState = snackbarHostState
                             )
                         }

@@ -39,19 +39,21 @@ object ConversationExportHelper {
 
     /**
      * Exports a conversation by ID, saving it to Downloads/AntiGem/Exports and opening it.
+     * [loadAgentMessages]: set for a Claude / OpenCode / Codex chat, which loads its messages from that agent (its
+     * errors are shown as they are); null for an Antigravity chat, which loads from the hub.
      */
     suspend fun exportConversation(
         context: Context,
         conversationId: String,
         title: String,
         format: ExportFormat,
-        activeMessages: List<ChatMessage>? = null,
+        loadAgentMessages: (suspend () -> List<ChatMessage>)? = null,
         agyHubClient: AgyHubClient = AgyHubClient(),
         snackbarHostState: SnackbarHostState? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            val messages: List<ChatMessage> = if (!activeMessages.isNullOrEmpty()) {
-                activeMessages
+            val messages: List<ChatMessage> = if (loadAgentMessages != null) {
+                loadAgentMessages()
             } else {
                 // Fetch trajectory steps from hub and parse
                 val stepsRes = agyHubClient.getCascadeTrajectorySteps(conversationId)

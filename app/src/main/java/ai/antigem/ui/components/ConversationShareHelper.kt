@@ -48,7 +48,8 @@ object ConversationShareHelper {
         context: Context,
         conversationId: String,
         title: String,
-        activeMessages: List<ChatMessage>? = null,
+        /** Set for a Claude / OpenCode / Codex chat (loads from that agent); null for Antigravity (loads from the hub). */
+        loadAgentMessages: (suspend () -> List<ChatMessage>)? = null,
         agyHubClient: AgyHubClient = AgyHubClient(),
         snackbarHostState: SnackbarHostState? = null
     ) = withContext(Dispatchers.IO) {
@@ -61,8 +62,8 @@ object ConversationShareHelper {
             } else {
                 // Fallback to client-side trajectory assembly if bridge server is unreachable
                 var rawSteps: List<Step>? = null
-                val messages: List<ChatMessage> = if (!activeMessages.isNullOrEmpty()) {
-                    activeMessages
+                val messages: List<ChatMessage> = if (loadAgentMessages != null) {
+                    loadAgentMessages()
                 } else {
                     val stepsRes = agyHubClient.getCascadeTrajectorySteps(conversationId)
                     if (stepsRes.isSuccess) {
