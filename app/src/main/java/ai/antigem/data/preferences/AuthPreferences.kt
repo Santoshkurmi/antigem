@@ -111,6 +111,7 @@ class AuthPreferences(private val context: Context) {
         val HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_terminal_launcher_onboarding")
         val IS_GEMMY_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_gemmy_enabled")
         val HAS_SEEN_GEMMY_INTRO = androidx.datastore.preferences.core.booleanPreferencesKey("has_seen_gemmy_intro")
+        val PET_SETTINGS_JSON = stringPreferencesKey("pet_settings_json")
         val TERMINAL_LAUNCHER_STYLE = stringPreferencesKey("terminal_launcher_style") // "ANTITERM" or "TERMUX"
         val IS_TERMINAL_LAUNCHER_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_terminal_launcher_enabled")
         val ENVIRONMENT_TYPE = stringPreferencesKey("environment_type") // "TERMUX" or "UBUNTU_CHROOT"
@@ -1377,7 +1378,7 @@ class AuthPreferences(private val context: Context) {
         context.dataStore.edit { it[HAS_SEEN_TERMINAL_LAUNCHER_ONBOARDING] = seen }
     }
 
-    /** Gemmy, the floating cartoon buddy: on by default (Settings → Appearance). */
+    /** The floating pet (Gemmy and friends): on by default (Settings → Pets). */
     val isGemmyEnabled: Flow<Boolean> = context.dataStore.data.map { it[IS_GEMMY_ENABLED] ?: true }
 
     suspend fun setGemmyEnabled(enabled: Boolean) {
@@ -1389,6 +1390,14 @@ class AuthPreferences(private val context: Context) {
 
     suspend fun setHasSeenGemmyIntro(seen: Boolean) {
         context.dataStore.edit { it[HAS_SEEN_GEMMY_INTRO] = seen }
+    }
+
+    /** Settings → Pets as JSON (ui.components.pet.PetSettings); "" = all defaults. */
+    val petSettingsJson: Flow<String> = context.dataStore.data.map { it[PET_SETTINGS_JSON] ?: "" }
+
+    /** Changes the pet settings in one atomic edit: [transform] gets the saved JSON ("" when none) and returns the new one. */
+    suspend fun updatePetSettingsJson(transform: (String) -> String) {
+        context.dataStore.edit { it[PET_SETTINGS_JSON] = transform(it[PET_SETTINGS_JSON] ?: "") }
     }
 
     val terminalLauncherStyle: Flow<String> = context.dataStore.data.map {

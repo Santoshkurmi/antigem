@@ -91,7 +91,10 @@ enum class SettingsSection(private val titleText: () -> String, private val subt
     LANGUAGE({ L.common.language }, { L.settings.dialog.theAppsLanguageYourOwnTranslations }),
     /** The texts of one language (which one: the dialog's languageTextsId). */
     LANGUAGE_TEXTS({ L.settings.dialog.languageTexts }, { L.settings.dialog.everyTextOfTheAppWith }),
-    APPEARANCE({ L.settings.dialog.appearance }, { L.settings.dialog.chatTextSizeAgentStepsMessage }),
+    APPEARANCE({ L.settings.dialog.appearance }, { L.settings.dialog.appearanceSubtitle }),
+    PETS({ L.pets.settings.title }, { L.pets.settings.subtitle }),
+    /** One pet's page (which one: the dialog's petEditId). */
+    PET_EDIT({ L.pets.settings.editTitle }, { L.pets.settings.editSubtitle }),
     HOME_SCREEN({ L.settings.dialog.homeScreen }, { L.settings.dialog.widgetsShortcutsToChatsAndPages }),
     FILE_PICKER({ L.settings.dialog.filesInOtherApps }, { L.settings.dialog.antigemsAndUbuntusHomeFoldersIn }),
     STEM_RENDERING({ L.settings.dialog.stemDiagrams }, { L.settings.dialog.chemistryGraphsGeometrySimulations }),
@@ -185,6 +188,7 @@ enum class SettingsSection(private val titleText: () -> String, private val subt
         AGENT_HISTORY -> AGENT_MEMORY
         CHANGELOG -> ABOUT
         LANGUAGE_TEXTS -> LANGUAGE
+        PET_EDIT -> PETS
         else -> if (jarvisPage != null) JARVIS else MAIN
     }
 }
@@ -360,6 +364,7 @@ fun SettingsDialog(
     var claudePage by remember { mutableStateOf(initialClaudePage ?: ai.antigem.ui.claude.ClaudeSettingsPage.ACCOUNT) }
     // Settings → Language → the texts of this language
     var languageTextsId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ai.antigem.i18n.LanguageManager.currentId) }
+    var petEditId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ai.antigem.ui.components.pet.PetKind.GEMMY.id) }
     var openCodePage by remember { mutableStateOf(initialOpenCodePage ?: ai.antigem.ui.opencode.OpenCodeSettingsPage.SERVER) }
     LaunchedEffect(initialOpenCodePage) {
         if (initialOpenCodePage != null && openCode != null) {
@@ -525,6 +530,8 @@ fun SettingsDialog(
 
                     SettingsSection.LANGUAGE -> LanguageScreen(onOpenTexts = { languageTextsId = it; currentSection = SettingsSection.LANGUAGE_TEXTS })
                     SettingsSection.LANGUAGE_TEXTS -> LanguageTextsScreen(languageTextsId, onOpen = { languageTextsId = it })
+                    SettingsSection.PETS -> PetsSettingsScreen(onEditPet = { petEditId = it.id; currentSection = SettingsSection.PET_EDIT })
+                    SettingsSection.PET_EDIT -> PetEditScreen(ai.antigem.ui.components.pet.PetKind.of(petEditId))
 
                     SettingsSection.THEMES -> ThemesSubScreen(
                         themeMode = themeMode,
@@ -974,6 +981,13 @@ private fun MainSettingsMenu(
         claudeColor = state.dotColor
     }
 
+    // Pets row: the chosen pet's name, or Off
+    val petContext = LocalContext.current
+    val petPrefs = remember(petContext) { ai.antigem.data.preferences.AuthPreferences(petContext) }
+    val petOn by petPrefs.isGemmyEnabled.collectAsState(initial = true)
+    val petJson by petPrefs.petSettingsJson.collectAsState(initial = "")
+    val petValue = if (!petOn) L.common.off else ai.antigem.ui.components.pet.PetSettings.fromJson(petJson).let { it.look().name(it.kind) }
+
     SettingsRowList(
         scrollState = scrollState,
         cardBg = cardBg,
@@ -983,6 +997,7 @@ private fun MainSettingsMenu(
                 row(SettingsSection.LANGUAGE, Icons.Outlined.Translate, c.accentTeal,
                     ai.antigem.i18n.LanguageManager.currentId.let { id -> ai.antigem.i18n.LanguageManager.languages.firstOrNull { it.id == id }?.name ?: if (id == ai.antigem.i18n.LanguageManager.ENGLISH) L.settings.dialog.english else id }),
                 row(SettingsSection.APPEARANCE, Icons.Outlined.Tune, c.accentAlt),
+                row(SettingsSection.PETS, Icons.Outlined.Pets, c.accentPink, petValue),
                 row(SettingsSection.HOME_SCREEN, Icons.Outlined.Widgets, c.accentTeal),
                 row(SettingsSection.FILE_PICKER, Icons.Outlined.FolderShared, c.warning, if (filePickerOn) L.common.on else L.common.off),
                 stemRow,
@@ -2202,57 +2217,6 @@ private fun AppearanceSubScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(L.settings.dialog.resetScreenPositionToRightCenter, fontSize = 12.sp)
                 }
-            }
-        }
-
-        // Gemmy: the floating cartoon buddy (on by default; first offered by the one-time "Meet Gemmy" dialog)
-        val gemmyContext = LocalContext.current
-        val gemmyPrefs = remember(gemmyContext) { ai.antigem.data.preferences.AuthPreferences(gemmyContext) }
-        val isGemmyEnabled by gemmyPrefs.isGemmyEnabled.collectAsState(initial = true)
-        val gemmyScope = rememberCoroutineScope()
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = cardBg,
-            border = cardBorder,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ai.antigem.ui.components.GemmyPreview(
-                    zoom = 0.85f,
-                    modifier = Modifier.alpha(if (isGemmyEnabled) 1f else 0.4f)
-                )
-                Column(modifier = Modifier.weight(1f).padding(start = 4.dp, end = 12.dp)) {
-                    Text(
-                        text = L.settings.dialog.gemmy,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = L.settings.dialog.aFloatingCartoonBuddyAcrossThe,
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                Switch(
-                    checked = isGemmyEnabled,
-                    onCheckedChange = { enable ->
-                        gemmyScope.launch {
-                            gemmyPrefs.setGemmyEnabled(enable)
-                            gemmyPrefs.setHasSeenGemmyIntro(true) // decided here: no need for the intro dialog anymore
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = ClaudeTerracotta
-                    )
-                )
             }
         }
 

@@ -44,7 +44,7 @@ import ai.antigem.i18n.L
 /**
  * One-time "Meet Gemmy" dialog, shown in chat once the first-launch setup is done. The switch starts on (Gemmy is on
  * by default), so the user sees it exists and can turn it off right here; it is never asked again (Settings →
- * Appearance has the switch). Back counts as confirming the current choice; tapping outside does nothing.
+ * Pets has the switch, and the other pets). Back counts as confirming the current choice; tapping outside does nothing.
  */
 @Composable
 fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
@@ -152,7 +152,7 @@ fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = L.onboarding.gemmyIntro.youCanChangeThisAnytimeIn,
+                    text = L.onboarding.gemmyIntro.changeInPets,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
