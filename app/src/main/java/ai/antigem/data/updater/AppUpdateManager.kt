@@ -227,7 +227,9 @@ class AppUpdateManager(private val context: Context) {
             val body = response.body ?: return@withContext Result.failure(Exception("Empty download body"))
             val totalBytes = body.contentLength()
 
-            val targetDir = context.externalCacheDir ?: context.cacheDir
+            // private cache, not externalCacheDir: on Android 10 and older other apps could swap the file there before
+            // the installer opens it (it reaches the installer through the FileProvider either way)
+            val targetDir = context.cacheDir
             // the APK, and Android's installer copies it once more while it installs
             if (totalBytes > 0) {
                 StorageSpace.shortage(targetDir, totalBytes * 2 + StorageSpace.MARGIN_BYTES, L.updater.appUpdateManager.theUpdate)?.let {

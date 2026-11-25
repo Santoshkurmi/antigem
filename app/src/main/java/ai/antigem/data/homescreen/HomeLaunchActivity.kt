@@ -4,9 +4,12 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import ai.antigem.MainActivity
 import ai.antigem.TerminalActivity
 import ai.antigem.data.jarvis.JarvisLauncher
+import ai.antigem.data.security.AppIntentKey
+import ai.antigem.i18n.L
 import ai.antigem.data.jarvis.JarvisTalkActivity
 import ai.antigem.data.voice.VoiceCallLaunchActivity
 import ai.antigem.data.voice.VoiceCallLauncher
@@ -33,22 +36,30 @@ class HomeLaunchActivity : Activity() {
 
     private fun open(intent: Intent) {
         val target = HomeLinks.parse(intent.data)
+        // only the app's own shortcuts and widgets carry its signature of the link: another app (or a link from a web
+        // page) can't start the microphone, the call or a script through here, it only opens the app
+        val trusted = HomeLinks.isTrusted(this, intent)
+        if (!trusted && HomeLinks.isOldLink(this, intent)) {
+            Toast.makeText(this, L.homescreen.homeLaunchActivity.thisShortcutIsFromAnOlder, Toast.LENGTH_LONG).show()
+        }
         when (target) {
             null -> openApp(intent)
             HomeLinks.Target.VoiceCall ->
-                startActivity(Intent(this, VoiceCallLaunchActivity::class.java).setAction(VoiceCallLauncher.ACTION_CALL))
+                if (!trusted) openApp(intent)
+                else startActivity(Intent(this, VoiceCallLaunchActivity::class.java).setAction(VoiceCallLauncher.ACTION_CALL))
             HomeLinks.Target.Jarvis ->
-                startActivity(Intent(this, JarvisTalkActivity::class.java).setAction(JarvisLauncher.ACTION_TALK))
+                if (!trusted) openApp(intent)
+                else startActivity(Intent(this, JarvisTalkActivity::class.java).setAction(JarvisLauncher.ACTION_TALK))
             HomeLinks.Target.TerminalWindow ->
                 startActivity(Intent(this, TerminalActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             HomeLinks.Target.MiniApps ->
                 startActivity(Intent(this, MiniAppsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            HomeLinks.Target.FloatingChat -> if (appRunning()) openFloating() else openApp(intent)
+            HomeLinks.Target.FloatingChat -> if (trusted && appRunning()) openFloating() else openApp(intent)
             is HomeLinks.Target.Reply -> {
                 // the floating window shows the chat on screen: open this one first (the app opens it instead when it
                 // is not running yet: the floating chat needs its server)
                 val vm = ChatViewModelHolder.peek()
-                if (vm != null && appRunning()) {
+                if (trusted && vm != null && appRunning()) {
                     vm.openChatFromOutside(target.id, target.agent)
                     HomeSnapshot.markSeen(target.id)
                     openFloating()
@@ -58,7 +69,7 @@ class HomeLaunchActivity : Activity() {
             }
             is HomeLinks.Target.Script ->
                 if (!target.background) openApp(intent)
-                else if (HomeLinks.isTrusted(this, intent)) HomeScripts.runInBackground(this, File(target.path))
+                else if (trusted) HomeScripts.runInBackground(this, File(target.path))
             else -> openApp(intent)
         }
     }
@@ -74,13 +85,13 @@ class HomeLaunchActivity : Activity() {
         )
     }
 
-    /** The app, showing the link (MainActivity checks the key again for scripts). */
+    /** The app, showing the link (MainActivity checks the signature again for scripts and web pages). */
     private fun openApp(from: Intent) {
         val i = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         if (from.data != null) {
             i.setAction(HomeLinks.ACTION_SHOW).setData(from.data)
-            from.getStringExtra(HomeLinks.EXTRA_KEY)?.let { i.putExtra(HomeLinks.EXTRA_KEY, it) }
+            from.getStringExtra(AppIntentKey.EXTRA_SIG)?.let { i.putExtra(AppIntentKey.EXTRA_SIG, it) }
         }
         startActivity(i)
     }

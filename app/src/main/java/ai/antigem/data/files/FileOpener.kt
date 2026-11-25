@@ -57,10 +57,14 @@ object FileOpener {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             clipData = ClipData.newRawUri(name, uri)
             // a mini app package: straight to AntiGem's own installer, the way a file manager hands an .apk to Android's
-            if (mime == ai.antigem.data.miniapps.MiniAppSigning.MIME && !forceChooser) setClassName(context, "ai.antigem.ui.miniapps.MiniAppInstallActivity")
+            // (signed: the installer opens AntiGem's own files only for AntiGem)
+            if (mime == ai.antigem.data.miniapps.MiniAppSigning.MIME && !forceChooser) {
+                setClassName(context, "ai.antigem.ui.miniapps.MiniAppInstallActivity")
+                IncomingUriGuard.signOwn(context, this)
+            }
         }
         return try {
-            val start = if (forceChooser) Intent.createChooser(intent, L.files.fileOpener.openNameWith(name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) else intent
+            val start = if (forceChooser) IncomingUriGuard.chooser(context, intent, L.files.fileOpener.openNameWith(name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) else intent
             context.startActivity(start)
             null
         } catch (_: ActivityNotFoundException) {
@@ -70,7 +74,7 @@ object FileOpener {
                     setDataAndType(uri, "*/*")
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(Intent.createChooser(generic, L.files.fileOpener.openNameWith(name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                context.startActivity(IncomingUriGuard.chooser(context, generic, L.files.fileOpener.openNameWith(name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 null
             } catch (_: Exception) {
                 L.files.fileOpener.noAppOnThisPhoneCan(name)
@@ -99,7 +103,7 @@ object FileOpener {
             clipData = ClipData.newRawUri(uris.first().second, uris.first().first).also { c -> uris.drop(1).forEach { c.addItem(ClipData.Item(it.first)) } }
         }
         return try {
-            context.startActivity(Intent.createChooser(intent, if (uris.size == 1) L.files.fileOpener.shareValue(uris.first().second) else L.files.fileOpener.shareUriscountFiles(uris.size)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(IncomingUriGuard.chooser(context, intent, if (uris.size == 1) L.files.fileOpener.shareValue(uris.first().second) else L.files.fileOpener.shareUriscountFiles(uris.size)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             null
         } catch (e: Exception) {
             e.message ?: L.files.fileOpener.couldNotShare

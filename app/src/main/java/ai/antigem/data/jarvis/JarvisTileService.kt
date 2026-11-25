@@ -47,6 +47,8 @@ class JarvisTileService : TileService() {
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_TALK, JarvisPreferences.enabled.value)
+        // MainActivity is exported: it starts listening only for an intent the app signed
+        ai.antigem.data.security.AppIntentKey.sign(this, intent, ai.antigem.data.security.AppIntentKey.JARVIS_TALK)
         open(intent, 77)
     }
 

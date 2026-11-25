@@ -3,9 +3,12 @@ package ai.antigem.data.homescreen
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import ai.antigem.data.security.AppIntentKey
 import ai.antigem.domain.model.AgentKind
 import java.security.MessageDigest
-import java.security.SecureRandom
 import ai.antigem.i18n.L
 
 /**
@@ -14,14 +17,17 @@ import ai.antigem.i18n.L
  * `antigem://page/terminal`, … Home-screen shortcuts, the app icon's long-press menu and the widgets all open
  * [HomeLaunchActivity] with such a link; it hands the link to the right screen.
  *
- * Running a script needs the app's own key in the intent ([EXTRA_KEY]): the launcher screen is exported (launchers of
- * Android 7 start shortcuts as themselves), and no other app may run the user's scripts through it.
+ * Each link's intent carries the app's signature of exactly that link ([AppIntentKey], purpose = the link's URI): the
+ * launcher screen is exported (launchers of Android 7 start shortcuts as themselves), and no other app may run the
+ * user's scripts, start Jarvis or the voice call, or open web pages through it. A leaked shortcut (Android 7 hands
+ * pinned shortcuts to every app in a broadcast) unlocks only its own link.
  */
 object HomeLinks {
     /** [HomeLaunchActivity]: open the link in the intent's data. */
     const val ACTION_OPEN = "ai.antigem.action.HOME_OPEN"
     /** MainActivity: show the link (forwarded by [HomeLaunchActivity]). */
     const val ACTION_SHOW = "ai.antigem.action.HOME_SHOW"
+    /** The shared key links carried before they were signed one by one: only recognized, to ask for the link again. */
     const val EXTRA_KEY = "ai.antigem.extra.HOME_KEY"
     private const val SCHEME = "antigem"
 
@@ -112,29 +118,65 @@ object HomeLinks {
      * The intent a shortcut or widget starts for [target]. Each link has its own data, so the widgets' list items and
      * the pending intents of different links never replace each other.
      */
-    fun intent(context: Context, target: Target): Intent =
-        Intent(context, HomeLaunchActivity::class.java)
-            .setAction(ACTION_OPEN)
-            .setData(uri(target))
-            .putExtra(EXTRA_KEY, key(context))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    fun intent(context: Context, target: Target): Intent = intentFor(context, uri(target))
 
-    /** The intent carries the app's own key (only the app's shortcuts and widgets have it). */
+    /** The launch intent of the link [uri], signed for exactly that link. */
+    fun intentFor(context: Context, uri: Uri): Intent =
+        AppIntentKey.sign(
+            context,
+            Intent(context, HomeLaunchActivity::class.java)
+                .setAction(ACTION_OPEN)
+                .setData(uri)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            uri.toString()
+        )
+
+    /** The intent carries the app's signature of its own link (only the app's shortcuts and widgets have it). */
     fun isTrusted(context: Context, intent: Intent?): Boolean {
-        val given = intent?.getStringExtra(EXTRA_KEY) ?: return false
-        return MessageDigest.isEqual(given.toByteArray(), key(context).toByteArray())
+        val data = intent?.data ?: return false
+        return AppIntentKey.isTrusted(context, intent, data.toString())
     }
 
-    @Volatile private var cachedKey: String? = null
+    /** A shortcut made before links were signed (it carries the old shared key): it has to be added again. */
+    fun isOldLink(context: Context, intent: Intent?): Boolean {
+        val given = intent?.getStringExtra(EXTRA_KEY) ?: return false
+        return MessageDigest.isEqual(given.toByteArray(), AppIntentKey.key(context).toByteArray())
+    }
 
-    @Synchronized
-    private fun key(context: Context): String {
-        cachedKey?.let { return it }
+    private const val SIGNED_FLAG = "links_signed_v1"
+
+    /** Once after the update that signs links one by one: [resignAll]. */
+    fun resignOnce(context: Context) {
         val p = context.applicationContext.getSharedPreferences("home_links", Context.MODE_PRIVATE)
-        val k = p.getString("key", null) ?: ByteArray(16).also { SecureRandom().nextBytes(it) }
-            .joinToString("") { "%02x".format(it) }
-            .also { p.edit().putString("key", it).apply() }
-        cachedKey = k
-        return k
+        if (p.getBoolean(SIGNED_FLAG, false)) return
+        resignAll(context)
+        p.edit().putBoolean(SIGNED_FLAG, true).apply()
+    }
+
+    /**
+     * Signs every shortcut that opens a link again: the pinned ones and the app icon's menu, then the widgets (after
+     * the update, and after [AppIntentKey.rotate]). Shortcuts pinned on Android 7 are not in Android's shortcut list
+     * and can't be changed: tapping one asks to add it again.
+     */
+    fun resignAll(context: Context) {
+        runCatching {
+            val all = ShortcutManagerCompat.getShortcuts(
+                context, ShortcutManagerCompat.FLAG_MATCH_PINNED or ShortcutManagerCompat.FLAG_MATCH_DYNAMIC
+            )
+            val updated = all.filter { it.isEnabled }.mapNotNull { s ->
+                val old = s.intent
+                val data = old.data ?: return@mapNotNull null
+                if (old.component?.className != HomeLaunchActivity::class.java.name) return@mapNotNull null
+                ShortcutInfoCompat.Builder(s).setIntent(intentFor(context, data)).build()
+            }.distinctBy { it.id }
+            if (updated.isNotEmpty()) ShortcutManagerCompat.updateShortcuts(context, updated)
+        }.onFailure { Log.w("HomeLinks", "re-signing shortcuts: ${it.message}") }
+        runCatching { ai.antigem.ui.homescreen.HomeWidgets.refreshAll(context) }
+    }
+
+    /** Settings: a new key, and every shortcut and widget signed with it (for "I think a shortcut leaked"). */
+    fun resetKey(context: Context) {
+        AppIntentKey.rotate(context)
+        resignAll(context)
     }
 }

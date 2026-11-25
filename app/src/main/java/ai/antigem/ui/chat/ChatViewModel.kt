@@ -1818,13 +1818,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private var sharedConversationLoadJob: Job? = null
 
-    fun loadSharedConversationFromUri(context: Context, uri: Uri) {
+    /**
+     * A chat file another app opened or shared with AntiGem. It is imported only after the user agrees (a planted chat
+     * is a prompt injection waiting for "continue"), and replaces a chat with the same id only after a second yes.
+     */
+    fun loadSharedConversationFromUri(context: Context, uri: Uri, name: String? = null) {
         sharedConversationLoadJob?.cancel()
         _isSharedConversationLoading.value = true
         sharedConversationLoadJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null && bytes.isNotEmpty()) {
+                    val shownTitle = sharedArchiveTitle(bytes) ?: name ?: "chat"
+                    val notImported = suspend {
+                        withContext(Dispatchers.Main) {
+                            ai.antigem.ui.components.AppToastHelper.showToast(L.chat.viewModel.theChatWasNotImported, ai.antigem.ui.components.ChatToastType.INFO)
+                        }
+                    }
+                    if (!ai.antigem.data.security.UserConfirm.ask(context, L.chat.viewModel.importThisChat,
+                            L.chat.viewModel.titleWasOpenedInAntigemFrom(shownTitle), L.chat.viewModel.importChat)
+                    ) {
+                        notImported()
+                        return@launch
+                    }
                     // The restore is done by the local server (bridge) alone, but at app launch it may not be up yet:
                     // retry while it is unreachable. An HTTP answer (e.g. not an archive) is final.
                     var restoreRes = agyBridgeService.restoreConversationArchive(bytes)
@@ -1841,6 +1857,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         delay(1_500)
                         restoreRes = agyBridgeService.restoreConversationArchive(bytes)
+                    }
+                    // the chat is here already: replace it only when the user says so
+                    if (restoreRes.exceptionOrNull()?.message?.startsWith("HTTP 409") == true) {
+                        if (!ai.antigem.data.security.UserConfirm.ask(context, L.chat.viewModel.replaceTheExistingChat,
+                                L.chat.viewModel.thisChatTitleIsAlreadyIn(shownTitle), L.common.replace)
+                        ) {
+                            notImported()
+                            return@launch
+                        }
+                        restoreRes = agyBridgeService.restoreConversationArchive(bytes, replace = true)
                     }
                     if (restoreRes.isSuccess) {
                         val restored = restoreRes.getOrThrow()
@@ -1884,6 +1910,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    /** The title in a `.antigem` archive's manifest.json, for the import question (null: none). */
+    private fun sharedArchiveTitle(bytes: ByteArray): String? = runCatching {
+        java.util.zip.ZipInputStream(bytes.inputStream()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.name == "manifest.json") {
+                    return@runCatching org.json.JSONObject(zip.readBytes().toString(Charsets.UTF_8)).optString("title").trim().take(80).ifBlank { null }
+                }
+            }
+            null
+        }
+    }.getOrNull()
 
     /**
      * A restored Antigravity chat can only be shown once the hub is up (its steps come from the hub): open it then.

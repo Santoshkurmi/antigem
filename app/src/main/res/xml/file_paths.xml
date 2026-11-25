@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What AntiGem's FileProvider can hand to other apps. Not the whole file system: the app's private data folders
+  (shared_prefs, databases, app_webview with its cookies, …) are never shareable. AntiGem's files and home
+  (files/), its cache, shared storage (also SD cards under /storage) and the Ubuntu chroot's folders.
+-->
 <paths>
-    <root-path name="root" path="." />
-    <external-path name="external_files" path="." />
-    <cache-path name="cache" path="." />
-    <external-cache-path name="external_cache" path="." />
     <files-path name="files" path="." />
+    <cache-path name="cache" path="." />
+    <external-path name="external_files" path="." />
+    <external-cache-path name="external_cache" path="." />
+    <root-path name="storage" path="storage" />
+    <root-path name="chroot" path="data/local/antigem" />
 </paths>

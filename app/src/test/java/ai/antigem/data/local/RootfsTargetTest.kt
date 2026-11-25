@@ -38,6 +38,15 @@ class RootfsTargetTest {
     }
 
     @Test
+    fun parentFolderEntriesAreNeverExtracted() {
+        assertNull(t("home/../shared_prefs/auth.xml"))
+        assertNull(t("usr/../../databases/x.db"))
+        assertNull(t("data/data/x/files/home/../../shared_prefs/auth.xml"))
+        assertNull(t("bin/../../cache/x"))
+        assertEquals("/f/home/a..b/c", t("home/a..b/c"))
+    }
+
+    @Test
     fun bootstrapLayoutIsRelativeToUsr() {
         assertEquals("/f/usr/bin/apt", t("bin/apt"))
         assertEquals("/f/usr/lib/apt/methods/http", t("./lib/apt/methods/http"))

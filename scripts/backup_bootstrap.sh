@@ -53,7 +53,8 @@ echo "Timestamp  : $TIMESTAMP"
 if [ "$INCLUDE_SECRETS" = 1 ]; then
     echo "Secrets    : INCLUDED (SSH keys, sign-ins, shell history)"
 else
-    echo "Secrets    : left out"
+    echo "Secrets    : left out (SSH and GPG keys, agent and cloud logins, AntiGem's keys and tokens, agent MCP"
+    echo "             configs, bridge logs, shell history). Make the backup with secrets to keep them."
 fi
 echo "========================================"
 
@@ -84,22 +85,56 @@ EXCLUDE_PATTERNS=(
     "*/.cache/*"
     "usr/tmp/*"
 )
-# Left out unless --include-secrets: whoever has them can sign in as the user
+# Left out unless --include-secrets: whoever has them can sign in as the user, or reach this phone's tools.
+# Patterns starting with */ also match the homes inside proot-distro rootfs (usr/var/lib/proot-distro/...).
 if [ "$INCLUDE_SECRETS" != 1 ]; then
     EXCLUDE_PATTERNS+=(
-        "home/.ssh/*"
+        # logins and keys
+        "*/.ssh/*"
         "usr/etc/ssh/ssh_host_*"
         "home/.gemini/jetski-standalone-oauth-token*"
         "home/.gemini/*oauth*"
         "home/.gemini/*token*"
-        "home/.claude/.credentials.json"
-        "home/.codex/auth.json"
-        "home/.local/share/opencode/auth.json"
-        "home/.config/gh/hosts.yml"
-        "home/.git-credentials"
-        "home/.netrc"
-        "home/.bash_history"
-        "home/.zsh_history"
+        "*/.claude/.credentials.json"
+        "*/.codex/auth.json"
+        "*/.local/share/opencode/auth.json"
+        "*/.local/share/opencode/mcp-auth.json"
+        "*/.config/gh/hosts.yml"
+        "*/.git-credentials"
+        "*/.netrc"
+        "*/.npmrc"
+        "*/.pypirc"
+        "*/.gnupg/*"
+        "*/.docker/config.json"
+        "*/.aws/*"
+        "*/.config/gcloud/*"
+        "*/.kube/config"
+        # AntiGem's own keys: ADB key, bridge token, root-exec key, provider API keys
+        "home/.android/adbkey"
+        "home/.android/adbkey.pub"
+        "home/.antigem_bridge/csrf_token.txt"
+        "home/.antigem_bridge/phone_tools_key.txt"
+        "home/.antigem_bridge/opencode/custom_providers.json"
+        "home/.antigem_bridge/opencode/opencode.json"
+        "home/.config/antigem/device-access"
+        "home/.claude/agy_providers*.json"
+        "home/.claude/agy_providers/*.settings.json"
+        # agent configs with this phone's tools key (X-Device-Id) in their MCP entries
+        "home/.claude.json"
+        "home/.gemini/config/mcp_config.json"
+        "home/.gemini/antigravity/mcp_config.json"
+        "home/.codex/config.toml"
+        # bridge logs print the bridge token and the secret header
+        "home/logs/agy-ide-bridge_*.log"
+        # shell and REPL history (commands often hold tokens)
+        "*/.bash_history"
+        "*/.zsh_history"
+        "*/.python_history"
+        "*/.node_repl_history"
+        "*/.psql_history"
+        "*/.mysql_history"
+        "*/.sqlite_history"
+        "*/.local/share/fish/fish_history"
     )
 fi
 

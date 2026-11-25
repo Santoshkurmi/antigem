@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
         // chat list they show is kept up to date from here on
         if (savedInstanceState == null) ai.antigem.data.homescreen.HomeRouter.handle(this, chatViewModel, intent)
         ai.antigem.data.homescreen.HomeSnapshot.start(application, chatViewModel)
+        // links are signed one by one now: shortcuts and widgets made before get their signature once
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { ai.antigem.data.homescreen.HomeLinks.resignOnce(applicationContext) }
         ai.antigem.ui.homescreen.HomeWidgets.publishPreviews(this)
         // Voice call tile / shortcut: the floating call window stays away while this screen is up; the long-press menu
         // of the app icon gets "Voice call"
@@ -904,19 +906,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** The Jarvis Quick Settings tile opened the app: start listening once the window is in front. */
+    /**
+     * The Jarvis Quick Settings tile opened the app: start listening once the window is in front. Only for an intent
+     * the app signed: this screen is exported, and another app must not switch the microphone on.
+     */
     private fun handleJarvisIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(ai.antigem.data.jarvis.JarvisTileService.EXTRA_TALK, false) != true) return
         intent.removeExtra(ai.antigem.data.jarvis.JarvisTileService.EXTRA_TALK)
+        if (!ai.antigem.data.security.AppIntentKey.isTrusted(this, intent, ai.antigem.data.security.AppIntentKey.JARVIS_TALK)) return
         window.decorView.postDelayed({
             if (ai.antigem.data.jarvis.JarvisController.isAttached) ai.antigem.data.jarvis.JarvisController.startListening()
         }, 700)
     }
 
-    /** The Voice call tile or shortcut opened the app: the chat screen starts the call once the server is up. */
+    /** The Voice call tile or shortcut opened the app: the chat screen starts the call once the server is up (signed only). */
     private fun handleVoiceCallIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(ai.antigem.data.voice.VoiceCallLauncher.EXTRA_START_CALL, false) != true) return
         intent.removeExtra(ai.antigem.data.voice.VoiceCallLauncher.EXTRA_START_CALL)
+        if (!ai.antigem.data.security.AppIntentKey.isTrusted(this, intent, ai.antigem.data.security.AppIntentKey.VOICE_CALL)) return
         ai.antigem.data.voice.VoiceCallLauncher.requestStart()
     }
 
@@ -930,7 +937,11 @@ class MainActivity : ComponentActivity() {
         if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
         val share = ai.antigem.data.files.IncomingShare
         // links (OAuth callbacks, web pages) are not files
-        val uris = share.urisOf(intent).filter { it.scheme == "content" || it.scheme == "file" }
+        val fileUris = share.urisOf(intent).filter { it.scheme == "content" || it.scheme == "file" }
+        // another app can't make AntiGem open AntiGem's own private files (logins, keys, settings) for it
+        val uris = fileUris.filter { ai.antigem.data.files.IncomingUriGuard.allowed(this, intent, it) }
+        if (uris.size < fileUris.size) ai.antigem.data.files.IncomingUriGuard.toastRefused(this)
+        if (fileUris.isNotEmpty() && uris.isEmpty()) return
         if (uris.isEmpty()) {
             if (action == Intent.ACTION_SEND) {
                 val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
@@ -943,13 +954,16 @@ class MainActivity : ComponentActivity() {
             val item = items.first()
             val lower = item.name.lowercase()
             if (lower.endsWith(".antigem")) {
-                chatViewModel.loadSharedConversationFromUri(this, item.uri!!)
+                chatViewModel.loadSharedConversationFromUri(this, item.uri!!, item.name)
                 return
             }
             // a mini app package opened with / shared to "AntiGem" instead of "Mini app installer": install it
             if (lower.endsWith(".agapp") || intent.type == ai.antigem.data.miniapps.MiniAppSigning.MIME) {
-                startActivity(Intent(this, ai.antigem.ui.miniapps.MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW)
-                    .setDataAndType(item.uri, ai.antigem.data.miniapps.MiniAppSigning.MIME).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                val install = Intent(this, ai.antigem.ui.miniapps.MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW)
+                    .setDataAndType(item.uri, ai.antigem.data.miniapps.MiniAppSigning.MIME).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // a private uri got here only from AntiGem itself (checked above): the installer may open it too
+                if (ai.antigem.data.files.IncomingUriGuard.isAntiGemPrivate(this, item.uri!!)) ai.antigem.data.files.IncomingUriGuard.signOwn(this, install)
+                startActivity(install)
                 return
             }
             // exported trajectories can arrive without the .antigem name: peek at the header
@@ -967,7 +981,7 @@ class MainActivity : ComponentActivity() {
                     ""
                 }
                 if (header.contains("\"antigem_trajectory\"")) {
-                    chatViewModel.loadSharedConversationFromUri(this, item.uri!!)
+                    chatViewModel.loadSharedConversationFromUri(this, item.uri!!, item.name)
                     return
                 }
             }

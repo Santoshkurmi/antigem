@@ -3,43 +3,48 @@ package ai.antigem.ui.browser
 import android.webkit.WebView
 
 /**
- * Helper to inject and manage Eruda Mobile DevTools within Android WebViews via CDN.
+ * Helper to inject and manage Eruda Mobile DevTools within Android WebViews.
  * Eruda provides live Console, DOM Elements inspector, Network monitor,
  * Resources/Storage editor, and Sources viewer directly inside the WebView.
+ *
+ * Eruda is bundled in the app (assets/eruda, a fixed version), never loaded from a CDN: it runs with the page's full
+ * rights (a mini app's bridge too), so a changed npm release or CDN must not reach it.
  */
 object ErudaHelper {
 
-    private const val CDN_URL = "https://cdn.jsdelivr.net/npm/eruda"
+    private const val ASSET = "eruda/eruda.js"
+
+    @Volatile
+    private var source: String? = null
+
+    private fun source(webView: WebView): String? = source ?: runCatching {
+        webView.context.assets.open(ASSET).use { it.readBytes().toString(Charsets.UTF_8) }
+    }.getOrNull()?.also { source = it }
 
     /**
-     * Injects Eruda into the WebView from CDN and initializes the floating entry icon.
+     * Injects the bundled Eruda into the WebView and initializes the floating entry icon.
      */
     fun inject(webView: WebView?, showImmediately: Boolean = true) {
         if (webView == null) return
+        val eruda = source(webView) ?: return
 
+        // module/exports/define are shadowed so Eruda's UMD wrapper always sets window.eruda, also on pages with AMD
         val scriptJs = """
             (function() {
                 try {
-                    if (typeof window.eruda !== 'undefined') {
-                        if (!window.__eruda_inited) {
-                            window.eruda.init();
-                            window.__eruda_inited = true;
-                        }
-                        ${if (showImmediately) "window.eruda.show();" else ""}
-                        return;
+                    if (typeof window.eruda === 'undefined') {
+                        (function() { var module, exports, define;
+                            $eruda
+                        }).call(window);
                     }
-                    var s = document.createElement('script');
-                    s.src = '$CDN_URL';
-                    s.onload = function() {
-                        if (typeof window.eruda !== 'undefined') {
-                            window.eruda.init();
-                            window.__eruda_inited = true;
-                            ${if (showImmediately) "window.eruda.show();" else ""}
-                        }
-                    };
-                    (document.head || document.documentElement || document.body).appendChild(s);
+                    if (typeof window.eruda === 'undefined') return;
+                    if (!window.__eruda_inited) {
+                        window.eruda.init();
+                        window.__eruda_inited = true;
+                    }
+                    ${if (showImmediately) "window.eruda.show();" else ""}
                 } catch(e) {
-                    console.error("Eruda CDN injection error:", e);
+                    console.error("Eruda injection error:", e);
                 }
             })();
         """.trimIndent()
@@ -88,7 +93,7 @@ object ErudaHelper {
         webView.post {
             webView.evaluateJavascript(toggleJs) { result ->
                 if (result == "false" || result == "null") {
-                    // Not loaded yet, inject from CDN
+                    // Not loaded yet: inject the bundled copy
                     inject(webView, showImmediately = true)
                 }
             }

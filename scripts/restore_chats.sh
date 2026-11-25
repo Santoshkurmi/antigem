@@ -72,34 +72,55 @@ fi
 
 cd "$HOME_DIR"
 
-# 3. Extract the archive
-echo "[3/5] Extracting archive..."
-UNZIP_CMD=(unzip -o -q)
-if [ -n "$PASSWORD" ]; then
-    UNZIP_CMD+=(-P "$PASSWORD")
-fi
-UNZIP_CMD+=("$INPUT_ZIP" -d "$HOME_DIR")
-
-if ! "${UNZIP_CMD[@]}"; then
-    echo "❌ Failed to extract archive!"
+rollback() {
     if [ -d "$GEMINI_BAK" ] && [ ! -d "$GEMINI_DIR" ]; then
         echo "      Rolling back: Restoring previous .gemini from .gemini.bak..."
         mv "$GEMINI_BAK" "$GEMINI_DIR"
     fi
+}
+
+# 3. Extract the archive into a private staging folder: only its .gemini reaches the home folder, so an archive can't
+#    drop other files there (.bashrc, .ssh, ...)
+echo "[3/5] Extracting archive..."
+STAGE_DIR="${HOME_DIR}/.antigem_restore_chats.$$"
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR"
+chmod 700 "$STAGE_DIR"
+trap 'rm -rf "$STAGE_DIR"' EXIT
+UNZIP_CMD=(unzip -o -q)
+if [ -n "$PASSWORD" ]; then
+    UNZIP_CMD+=(-P "$PASSWORD")
+fi
+UNZIP_CMD+=("$INPUT_ZIP" -d "$STAGE_DIR")
+
+if ! "${UNZIP_CMD[@]}"; then
+    echo "❌ Failed to extract archive!"
+    rollback
     exit 1
 fi
 
-# 4. Handle structure (if archive was zipped inside a subfolder or root)
-if [ ! -d "$GEMINI_DIR" ]; then
-    # If unzipped into current dir without .gemini prefix, check if files are in a subdir
-    POSSIBLE_SUBDIR=$(find "$HOME_DIR" -maxdepth 2 -name "conversations" -o -name "conversation_summaries.db" 2>/dev/null | head -n 1)
-    if [ -n "$POSSIBLE_SUBDIR" ]; then
-        PARENT_DIR=$(dirname "$POSSIBLE_SUBDIR")
-        if [ "$PARENT_DIR" != "$GEMINI_DIR" ] && [ -d "$PARENT_DIR" ]; then
-            mv "$PARENT_DIR" "$GEMINI_DIR"
-        fi
-    fi
+# 4. Find the .gemini folder in the archive (also an archive zipped from inside .gemini)
+SRC_DIR=""
+if [ -d "$STAGE_DIR/.gemini" ]; then
+    SRC_DIR="$STAGE_DIR/.gemini"
+else
+    POSSIBLE_SUBDIR=$(find "$STAGE_DIR" -maxdepth 2 \( -name "conversations" -o -name "conversation_summaries.db" \) 2>/dev/null | head -n 1)
+    [ -n "$POSSIBLE_SUBDIR" ] && SRC_DIR=$(dirname "$POSSIBLE_SUBDIR")
 fi
+if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
+    echo "❌ This archive has no AGY chats (.gemini) in it!"
+    rollback
+    exit 1
+fi
+# links that lead out of .gemini are dropped: writing to one later would change a file elsewhere (.bashrc, ...)
+find "$SRC_DIR" -type l 2>/dev/null | while IFS= read -r link; do
+    target=$(readlink -m "$link" 2>/dev/null || true)
+    case "$target" in
+        "$SRC_DIR"|"$SRC_DIR"/*|"$GEMINI_DIR"|"$GEMINI_DIR"/*) ;;
+        *) rm -f "$link"; echo "      ⚠️ Left out a link that leads outside .gemini: ${link#"$SRC_DIR"/}" ;;
+    esac
+done
+mv "$SRC_DIR" "$GEMINI_DIR"
 
 # 5. Fix permissions
 echo "[4/5] Securing restored file permissions..."

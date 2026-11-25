@@ -134,12 +134,17 @@ object MiniAppNotify {
     fun show(context: Context, app: MiniApp, title: String, body: String, tag: String) =
         show(context, app, JSONObject().put("id", tag).put("title", title).put("body", body))
 
+    // signed: MiniAppLaunchActivity is exported (links from websites too), and only a real tap may be a notification event
     private fun launchIntent(context: Context, app: MiniApp, tag: String, action: String) =
-        Intent(context, MiniAppLaunchActivity::class.java)
-            .setAction(Intent.ACTION_VIEW)
-            .setData(Uri.parse("antigem-notif://${Uri.encode(app.id)}/${Uri.encode(tag)}/${Uri.encode(action)}"))
-            .putExtra(EXTRA_APP, app.id).putExtra(EXTRA_NOTIF, tag).putExtra(EXTRA_ACTION, action)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        ai.antigem.data.security.AppIntentKey.sign(
+            context,
+            Intent(context, MiniAppLaunchActivity::class.java)
+                .setAction(Intent.ACTION_VIEW)
+                .setData(Uri.parse("antigem-notif://${Uri.encode(app.id)}/${Uri.encode(tag)}/${Uri.encode(action)}"))
+                .putExtra(EXTRA_APP, app.id).putExtra(EXTRA_NOTIF, tag).putExtra(EXTRA_ACTION, action)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            ai.antigem.data.security.AppIntentKey.miniAppNotification(app.id, tag, action)
+        )
 
     private fun broadcastIntent(context: Context, app: MiniApp, tag: String, action: String) =
         Intent(context, MiniAppNotificationReceiver::class.java)

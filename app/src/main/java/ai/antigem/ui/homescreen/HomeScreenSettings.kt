@@ -17,9 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.AppShortcut
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Terminal
@@ -56,6 +61,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.antigem.data.homescreen.HomeAction
 import ai.antigem.data.homescreen.HomeChat
+import ai.antigem.data.homescreen.HomeLinks
 import ai.antigem.data.homescreen.HomePrefs
 import ai.antigem.data.homescreen.HomeScripts
 import ai.antigem.data.homescreen.HomeShortcuts
@@ -100,6 +106,8 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
     }
     // "widget" or "shortcut": the chat picker is open for that
     var picking by remember { mutableStateOf<String?>(null) }
+    var askNewKey by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val canPinWidgets = HomeWidgets.canPin(context)
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -238,6 +246,30 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                 Switch(checked = hideTitles, onCheckedChange = { HomePrefs.setHideTitles(it); HomeWidgets.refreshAll(context) })
             }
         }
+
+        Section(Icons.Outlined.Key, L.homescreen.settings.linkKey) {
+            Hint(L.homescreen.settings.shortcutsAndWidgetsCarryAKey)
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { askNewKey = true }) { Text(L.homescreen.settings.newKey) }
+        }
+    }
+
+    if (askNewKey) {
+        AlertDialog(
+            onDismissRequest = { askNewKey = false },
+            title = { Text(L.homescreen.settings.makeANewKeyForHome, fontSize = 18.sp) },
+            text = { Text(L.homescreen.settings.shortcutsAndWidgetsOnAndroid8) },
+            confirmButton = {
+                TextButton(onClick = {
+                    askNewKey = false
+                    scope.launch {
+                        withContext(Dispatchers.IO) { HomeLinks.resetKey(context.applicationContext) }
+                        AppToastHelper.showToast(L.homescreen.settings.newKeyMadeShortcutsAndWidgets, ChatToastType.SUCCESS)
+                    }
+                }) { Text(L.homescreen.settings.newKey) }
+            },
+            dismissButton = { TextButton(onClick = { askNewKey = false }) { Text(L.common.cancel) } }
+        )
     }
 
     picking?.let { mode ->

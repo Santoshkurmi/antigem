@@ -102,7 +102,10 @@ object VoiceCallLauncher {
     private fun openApp(activity: Activity, startCall: Boolean) {
         val intent = Intent(activity, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        if (startCall) intent.putExtra(EXTRA_START_CALL, true)
+        if (startCall) {
+            intent.putExtra(EXTRA_START_CALL, true)
+            ai.antigem.data.security.AppIntentKey.sign(activity, intent, ai.antigem.data.security.AppIntentKey.VOICE_CALL)
+        }
         runCatching { activity.startActivity(intent) }.onFailure { Log.w(TAG, "open app: ${it.message}") }
     }
 

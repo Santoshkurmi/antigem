@@ -135,10 +135,18 @@ object ChrootInstaller {
     private class InstallError(message: String) : Exception(message)
 
     fun prebuiltAsset(): String = "ubuntu-24.04-antigem-${if (ChrootManager.defaultArch() == "x86_64") "amd64" else "arm64"}.tar.xz"
+
+    /**
+     * sha256 of each published prebuilt image, by asset name. The image is only offered once its hash is here: the
+     * `.sha256` next to it on the release would come from the same account, so it only catches a broken download.
+     * Add the line when the image is published (GitHub shows the digest on the release page).
+     */
+    private val PREBUILT_SHA256: Map<String, String> = mapOf()
     fun prebuiltUrl(): String = "https://github.com/$PREBUILT_REPO/releases/download/$PREBUILT_TAG/${prebuiltAsset()}"
 
     /** Whether AntiGem's prebuilt image is published for this CPU (null: no answer). */
     suspend fun prebuiltAvailable(): Boolean? = withContext(Dispatchers.IO) {
+        if (PREBUILT_SHA256[prebuiltAsset()] == null) return@withContext false
         try {
             http.newCall(Request.Builder().url(prebuiltUrl()).head().build()).execute().use { it.isSuccessful }
         } catch (_: Exception) {
@@ -243,11 +251,18 @@ object ChrootInstaller {
         val (url, sha) = when (source) {
             is ChrootSource.Official -> resolveOfficial(source.release)
             is ChrootSource.Prebuilt -> {
-                val shaText = httpText("${prebuiltUrl()}.sha256")
+                val pinned = PREBUILT_SHA256[prebuiltAsset()]
                     ?: throw InstallError(L.local.chrootInstaller.antigemsPrebuiltUbuntuIsNotPublished(PREBUILT_PAGE))
-                prebuiltUrl() to shaText.trim().split(Regex("\\s+")).firstOrNull()
+                prebuiltUrl() to pinned
             }
-            is ChrootSource.Url -> source.url to source.sha256?.trim()?.lowercase()?.takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }
+            is ChrootSource.Url -> {
+                val pinned = source.sha256?.trim()?.lowercase()?.takeIf { it.matches(Regex("^[0-9a-f]{64}$")) }
+                // the rootfs runs as root: a plain http:// download is only taken with a hash the user got elsewhere
+                if (!source.url.startsWith("https://", ignoreCase = true) && pinned == null) {
+                    throw InstallError(L.local.chrootInstaller.aPlainHttpLinkNeedsIts)
+                }
+                source.url to pinned
+            }
             is ChrootSource.LocalFile -> error("no download for a local file")
         }
         log("Source: $url")

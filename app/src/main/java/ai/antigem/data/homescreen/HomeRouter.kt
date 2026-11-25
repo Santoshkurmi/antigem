@@ -23,6 +23,7 @@ object HomeRouter {
         val trusted = HomeLinks.isTrusted(activity, intent)
         intent.action = Intent.ACTION_MAIN
         intent.data = null
+        intent.removeExtra(ai.antigem.data.security.AppIntentKey.EXTRA_SIG)
         intent.removeExtra(HomeLinks.EXTRA_KEY)
         target ?: return
         when (target) {
@@ -37,8 +38,13 @@ object HomeRouter {
                 else -> vm.requestViewMode(target.page.viewMode)
             }
             is HomeLinks.Target.Web -> {
-                runCatching { BrowserSessionManager.instance.openUrl(target.url, newTab = true) }
-                vm.requestViewMode("BROWSER")
+                // only the app's own web shortcuts, and only web pages (no intent:, javascript:, file: ...): the
+                // in-app browser shares the app's cookies and agents read its pages
+                val scheme = runCatching { android.net.Uri.parse(target.url).scheme?.lowercase() }.getOrNull()
+                if (trusted && (scheme == "http" || scheme == "https")) {
+                    runCatching { BrowserSessionManager.instance.openUrl(target.url, newTab = true) }
+                    vm.requestViewMode("BROWSER")
+                }
             }
             is HomeLinks.Target.Script -> {
                 if (!trusted) return

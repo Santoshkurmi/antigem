@@ -535,7 +535,7 @@
         </activity>
         <activity
             android:name="ai.antigem.ui.miniapps.MiniAppActivity"
-            android:exported="true"
+            android:exported="false"
             android:documentLaunchMode="intoExisting"
             android:theme="@style/Theme.AntiGem.MiniApp"
             android:windowSoftInputMode="stateHidden|adjustResize"

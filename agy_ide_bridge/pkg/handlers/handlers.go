@@ -718,73 +718,85 @@ func (h *Handler) RestoreConversationHandler(w http.ResponseWriter, r *http.Requ
 	_ = os.MkdirAll(targetBrainDir, 0755)
 	_ = os.MkdirAll(targetAnnDir, 0755)
 
+	// 1. Which conversation the archive holds (its manifest, else the first conversations/<id>.db or brain/<id>/), before
+	//    anything is written: one archive restores one conversation, never others
 	var detectedConvID string
 	var manifestTitle string
+	for _, file := range zipReader.File {
+		if filepath.ToSlash(filepath.Clean(file.Name)) != "manifest.json" {
+			continue
+		}
+		if rc, err := file.Open(); err == nil {
+			var mf struct {
+				ConversationID string `json:"conversation_id"`
+				Title          string `json:"title"`
+			}
+			_ = json.NewDecoder(io.LimitReader(rc, 1<<20)).Decode(&mf)
+			rc.Close()
+			detectedConvID = mf.ConversationID
+			manifestTitle = mf.Title
+		}
+		break
+	}
+	if detectedConvID == "" {
+		for _, file := range zipReader.File {
+			cleanName := filepath.ToSlash(filepath.Clean(file.Name))
+			if strings.HasPrefix(cleanName, "conversations/") && strings.HasSuffix(cleanName, ".db") {
+				detectedConvID = strings.TrimSuffix(filepath.Base(cleanName), ".db")
+				break
+			}
+			if strings.HasPrefix(cleanName, "brain/") {
+				if parts := strings.Split(cleanName, "/"); len(parts) >= 2 && parts[1] != "" {
+					detectedConvID = parts[1]
+					break
+				}
+			}
+		}
+	}
+	if !validConvID(detectedConvID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "No valid conversation found in archive"})
+		return
+	}
 
-	// Unpack files safely
+	// 2. An existing chat is only replaced when the app asked for it (the user confirmed): an archive another app sent
+	//    must not silently overwrite a chat whose id it knows
+	_, dbErr := os.Stat(filepath.Join(targetConvsDir, detectedConvID+".db"))
+	_, brainErr := os.Stat(filepath.Join(targetBrainDir, detectedConvID))
+	if (dbErr == nil || brainErr == nil) && r.URL.Query().Get("replace") != "1" {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "conversation_exists", "id": detectedConvID, "title": manifestTitle})
+		return
+	}
+
+	// 3. Unpack that conversation's files only
+	ownsPath := func(rel string) bool {
+		return rel == detectedConvID || strings.HasPrefix(rel, detectedConvID+".") || strings.HasPrefix(rel, detectedConvID+"/")
+	}
 	for _, file := range zipReader.File {
 		cleanName := filepath.Clean(file.Name)
 		if strings.HasPrefix(cleanName, "..") || strings.HasPrefix(cleanName, "/") || strings.HasPrefix(cleanName, "\\") {
 			continue
 		}
-
-		if cleanName == "manifest.json" {
-			rc, err := file.Open()
-			if err == nil {
-				var mf struct {
-					ConversationID string `json:"conversation_id"`
-					Title          string `json:"title"`
-				}
-				_ = json.NewDecoder(rc).Decode(&mf)
-				rc.Close()
-				if mf.ConversationID != "" {
-					detectedConvID = mf.ConversationID
-				}
-				if mf.Title != "" {
-					manifestTitle = mf.Title
-				}
-			}
-			continue
-		}
-
-		if detectedConvID == "" {
-			if strings.HasPrefix(cleanName, "conversations/") && strings.HasSuffix(cleanName, ".db") {
-				base := filepath.Base(cleanName)
-				detectedConvID = strings.TrimSuffix(base, ".db")
-			} else if strings.HasPrefix(cleanName, "brain/") {
-				parts := strings.Split(cleanName, "/")
-				if len(parts) >= 2 && parts[1] != "" {
-					detectedConvID = parts[1]
-				}
-			}
-		}
-
+		cleanName = filepath.ToSlash(cleanName)
 		var destPath string
-		if strings.HasPrefix(cleanName, "conversations/") {
-			rel := strings.TrimPrefix(cleanName, "conversations/")
+		if rel := strings.TrimPrefix(cleanName, "conversations/"); rel != cleanName && ownsPath(rel) {
 			destPath = filepath.Join(targetConvsDir, rel)
-		} else if strings.HasPrefix(cleanName, "brain/") {
-			rel := strings.TrimPrefix(cleanName, "brain/")
+		} else if rel := strings.TrimPrefix(cleanName, "brain/"); rel != cleanName && ownsPath(rel) {
 			destPath = filepath.Join(targetBrainDir, rel)
-		} else if strings.HasPrefix(cleanName, "annotations/") {
-			rel := strings.TrimPrefix(cleanName, "annotations/")
+		} else if rel := strings.TrimPrefix(cleanName, "annotations/"); rel != cleanName && ownsPath(rel) {
 			destPath = filepath.Join(targetAnnDir, rel)
 		} else {
 			continue
 		}
-
 		if file.FileInfo().IsDir() {
 			_ = os.MkdirAll(destPath, 0755)
 			continue
 		}
-
 		_ = os.MkdirAll(filepath.Dir(destPath), 0755)
 		rc, err := file.Open()
 		if err != nil {
 			continue
 		}
-
-		mode := file.Mode()
+		mode := file.Mode().Perm()
 		if mode == 0 {
 			mode = 0644
 		}
@@ -794,11 +806,6 @@ func (h *Handler) RestoreConversationHandler(w http.ResponseWriter, r *http.Requ
 			outFile.Close()
 		}
 		rc.Close()
-	}
-
-	if detectedConvID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "No valid conversation found in archive"})
-		return
 	}
 
 	now := time.Now().UTC()

@@ -31,6 +31,11 @@ if getent passwd _apt >/dev/null 2>&1; then usermod -a -G aid_inet _apt 2>/dev/n
 mkdir -p /etc/apt/apt.conf.d
 echo 'APT::Sandbox::User "root";' > /etc/apt/apt.conf.d/01-antigem-sandbox
 [ -f /etc/default/locale ] || echo 'LANG=C.UTF-8' > /etc/default/locale
+# a clean image (the prebuilt) has an empty machine-id: this install gets its own (dbus and the desktops need one)
+if [ ! -s /etc/machine-id ]; then od -An -tx1 -N16 /dev/urandom | tr -d ' \n' > /etc/machine-id && echo >> /etc/machine-id; fi
+if [ -f /var/lib/dbus/machine-id ] && [ ! -L /var/lib/dbus/machine-id ] && [ ! -s /var/lib/dbus/machine-id ]; then
+    ln -sf /etc/machine-id /var/lib/dbus/machine-id
+fi
 
 echo "== User ${'$'}U (uid ${'$'}NEW_UID)"
 OTHER=${'$'}(getent passwd "${'$'}NEW_UID" | cut -d: -f1 || true)

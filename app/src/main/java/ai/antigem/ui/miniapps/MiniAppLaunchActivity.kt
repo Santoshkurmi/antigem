@@ -30,8 +30,13 @@ class MiniAppLaunchActivity : Activity() {
         val app = appId?.let { MiniApps.find(this, it) }
         if (app != null) {
             val notif = intent.getStringExtra(MiniAppNotify.EXTRA_NOTIF)
-            if (notif != null) {
-                val event = JSONObject().put("id", notif).put("action", intent.getStringExtra(MiniAppNotify.EXTRA_ACTION) ?: "tap")
+            val notifAction = intent.getStringExtra(MiniAppNotify.EXTRA_ACTION) ?: "tap"
+            // a notification event only from the app's own notification (signed for this app, tag and action): an
+            // intent:// link on a website reaches this screen too, and must not press the app's buttons
+            if (notif != null && ai.antigem.data.security.AppIntentKey.isTrusted(
+                    this, intent, ai.antigem.data.security.AppIntentKey.miniAppNotification(app.id, notif, notifAction))
+            ) {
+                val event = JSONObject().put("id", notif).put("action", notifAction)
                 // the app is coming forward: the event waits for its page to be on screen
                 MiniAppRuntime.deliverNotificationEvent(this, app, event, preferBackground = false)
             }

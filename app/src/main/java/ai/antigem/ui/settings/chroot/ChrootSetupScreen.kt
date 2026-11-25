@@ -500,6 +500,8 @@ fun ChrootSetupScreen(
                     val problem = when {
                         probe?.rootOk != true -> L.settings.chrootSetup.rootAccessIsNeededCheckAbove
                         src == null -> if (source == SourceChoice.FILE) L.settings.chrootSetup.chooseAFile2 else "Enter an http(s) URL."
+                        src is ChrootSource.Url && !src.url.startsWith("https://", ignoreCase = true) &&
+                            src.sha256?.trim()?.matches(Regex("^[0-9a-fA-F]{64}$")) != true -> L.settings.chrootSetup.aPlainHttpLinkNeedsIts
                         ChrootManager.validateRootPath(path) != null -> ChrootManager.validateRootPath(path)
                         location != LocationChoice.CUSTOM && !ChrootManager.isInstallName(name) -> L.settings.chrootSetup.checkTheName
                         installs.any { it.path == path } -> L.settings.chrootSetup.thatFolderIsAlreadyAnInstall

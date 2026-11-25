@@ -80,6 +80,13 @@ object LocalEnvironmentManager {
     val HARDCODED_ROOTFS_ASSET: String = if (IS_X86_64) "bootrapz_x86_64_2026-11-20.zip" else "bootrapz_2026-11-19.zip"
     val HARDCODED_ROOTFS_URL: String = "https://github.com/Santoshkurmi/antigem/releases/download/$HARDCODED_ROOTFS_TAG/$HARDCODED_ROOTFS_ASSET"
     val HARDCODED_ROOTFS_SIZE_BYTES: Long = if (IS_X86_64) 419_473_812L else 400_054_861L
+    /**
+     * sha256 of [HARDCODED_ROOTFS_ASSET] (GitHub's digest of the release asset; the Hugging Face copy is the same file).
+     * A download that differs is refused: TLS alone would trust whoever controls either account.
+     */
+    val HARDCODED_ROOTFS_SHA256: String =
+        if (IS_X86_64) "efa5a6a098548444e7bc33e5e78bafa4389c27e923a4b9546c7ed5f119890e3b"
+        else "1fbf9c908375184a8c33c1ea6defbe9f74291488efee74f2760a08604a6f354b"
     /** The download size the installers show for "Full environment". */
     val ROOTFS_SIZE_LABEL: String = if (IS_X86_64) "~400 MB" else "~350 MB"
     /** The mirrors that host this CPU's rootfs: the x86_64 one is only on GitHub. */
@@ -835,12 +842,14 @@ object LocalEnvironmentManager {
                             val startTime = System.currentTimeMillis()
 
                             val buffer = ByteArray(64 * 1024)
+                            val sha256 = java.security.MessageDigest.getInstance("SHA-256")
                             FileOutputStream(tempZipFile).use { outStream ->
                                 body.byteStream().use { inStream ->
                                     var read: Int
                                     var lastUpdate = System.currentTimeMillis()
                                     while (inStream.read(buffer).also { read = it } != -1) {
                                         outStream.write(buffer, 0, read)
+                                        sha256.update(buffer, 0, read)
                                         bytesReadTotal += read
 
                                         val now = System.currentTimeMillis()
@@ -866,6 +875,15 @@ object LocalEnvironmentManager {
                             }
 
                             finalDownloadedSize = tempZipFile.length()
+                            val gotSha = sha256.digest().joinToString("") { "%02x".format(it) }
+                            if (!gotSha.equals(HARDCODED_ROOTFS_SHA256, ignoreCase = true)) {
+                                Log.w(TAG, "Rootfs sha256 mismatch from $targetUrl: $gotSha (${finalDownloadedSize} bytes)")
+                                tempZipFile.delete()
+                                val errorMsg = L.local.environmentManager.theDownloadedEnvironmentIsNotThe
+                                updateInstallNotification(appContext, L.local.environmentManager.installationFailed, errorMsg, -2, ongoing = false, force = true)
+                                _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                return@withContext false
+                            }
                             if (finalDownloadedSize >= MIN_BOOTSTRAP_SIZE_BYTES && validateArchiveIntegrity(tempZipFile)) {
                                 downloadSucceeded = true
                             } else {
@@ -991,6 +1009,13 @@ object LocalEnvironmentManager {
                         _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
                         return@withContext false
                     }
+                    // a plain http:// rootfs can be swapped by anyone on the network: the environment would run it
+                    if (!customUrl.startsWith("https://", ignoreCase = true)) {
+                        val errorMsg = L.local.environmentManager.onlyHttpsDownloadLinksAreAccepted
+                        updateInstallNotification(appContext, L.local.environmentManager.installationFailed, errorMsg, -2, ongoing = false, force = true)
+                        _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                        return@withContext false
+                    }
 
                     _installerState.value = LocalInstallerState.Downloading(
                         bytesDownloaded = 0L,
@@ -1028,12 +1053,14 @@ object LocalEnvironmentManager {
                             val startTime = System.currentTimeMillis()
 
                             val buffer = ByteArray(64 * 1024)
+                            val sha256 = java.security.MessageDigest.getInstance("SHA-256")
                             FileOutputStream(tempZipFile).use { outStream ->
                                 body.byteStream().use { inStream ->
                                     var read: Int
                                     var lastUpdate = System.currentTimeMillis()
                                     while (inStream.read(buffer).also { read = it } != -1) {
                                         outStream.write(buffer, 0, read)
+                                        sha256.update(buffer, 0, read)
                                         bytesReadTotal += read
 
                                         val now = System.currentTimeMillis()
@@ -1058,6 +1085,18 @@ object LocalEnvironmentManager {
                                 }
                             }
                             finalDownloadedSize = tempZipFile.length()
+                            // AntiGem's own rootfs through this path gets the same pinned check as Auto
+                            if (customUrl == HARDCODED_ROOTFS_URL || customUrl == HUGGINGFACE_ROOTFS_URL) {
+                                val gotSha = sha256.digest().joinToString("") { "%02x".format(it) }
+                                if (!gotSha.equals(HARDCODED_ROOTFS_SHA256, ignoreCase = true)) {
+                                    Log.w(TAG, "Rootfs sha256 mismatch from $customUrl: $gotSha")
+                                    tempZipFile.delete()
+                                    val errorMsg = L.local.environmentManager.theDownloadedEnvironmentIsNotThe
+                                    updateInstallNotification(appContext, L.local.environmentManager.installationFailed, errorMsg, -2, ongoing = false, force = true)
+                                    _installerState.value = LocalInstallerState.Error(errorMessage = errorMsg, canRetry = true)
+                                    return@withContext false
+                                }
+                            }
                             if (finalDownloadedSize < MIN_BOOTSTRAP_SIZE_BYTES) {
                                 val errorMsg = L.local.environmentManager.downloadedFileFromUrlIsOnly(formatFileSize(finalDownloadedSize))
                                 tempZipFile.delete()
@@ -1272,6 +1311,7 @@ object LocalEnvironmentManager {
                 } else {
                     GzipCompressorInputStream(rawStream)
                 }
+                val roots = writeRoots(prefixDir, homeDir)
                 TarArchiveInputStream(compressedStream).use { tarIn ->
                     var entry: TarArchiveEntry? = tarIn.nextEntry
                     while (entry != null) {
@@ -1279,6 +1319,7 @@ object LocalEnvironmentManager {
                         val cleanPath = rawName.removePrefix("./").removePrefix("/")
                         if (cleanPath.isNotEmpty()) {
                             val targetFile = rootfsTarget(cleanPath, prefixDir, homeDir)
+                                ?.takeIf { writableTarget(it, roots, entry.isDirectory) }
 
                             if (targetFile != null) {
                                 targetFile.parentFile?.let { p ->
@@ -1355,6 +1396,7 @@ object LocalEnvironmentManager {
                 val destDir = prefixDir
                 log("Extracting rootfs files from ZIP into ${destDir.absolutePath}...")
                 val symlinksFromTxt = mutableListOf<Pair<String, String>>()
+                val roots = writeRoots(prefixDir, homeDir)
                 CommonsZipFile(archiveToExtract).use { zip ->
                     val entriesList = zip.entries.toList()
                     val totalEntries = entriesList.size
@@ -1383,6 +1425,7 @@ object LocalEnvironmentManager {
 
                         val cleanPath = rawName.removePrefix("./")
                         val targetFile = rootfsTarget(cleanPath, prefixDir, homeDir)
+                            ?.takeIf { writableTarget(it, roots, entry.isDirectory) }
 
                         if (targetFile != null) {
                             val unixMode = entry.unixMode
@@ -1482,6 +1525,7 @@ object LocalEnvironmentManager {
                             try {
                                 val cleanRel = linkRelPath.removePrefix("./")
                                 val linkFile = rootfsTarget(cleanRel, prefixDir, homeDir)
+                                    ?.takeIf { writableTarget(it, roots, false) }
 
                                 if (linkFile != null) {
                                     linkFile.parentFile?.let { p ->
@@ -1743,12 +1787,42 @@ object LocalEnvironmentManager {
             p = p.replaceFirst(ROOTFS_FILES_PREFIX, "")
         }
         p = p.trimEnd('/')
+        // "../" would leave usr/ and home/ (another app folder, shared_prefs, ...): such an entry is never extracted
+        if (p.split('/').any { it == ".." }) return null
         return when {
             p.isEmpty() || p == "usr" || p == "home" -> null
             p.startsWith("home/") -> File(homeDir, p.removePrefix("home/"))
             p.startsWith("usr/") -> File(prefixDir, p.removePrefix("usr/"))
             else -> File(prefixDir, p)
         }
+    }
+
+    /** [prefixDir] and [homeDir] with every link resolved: the only places a rootfs or backup archive may write to. */
+    private fun writeRoots(prefixDir: File, homeDir: File): List<File> =
+        listOf(prefixDir, homeDir).mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
+
+    private fun insideRoots(file: File, roots: List<File>): Boolean =
+        roots.any { r -> file == r || file.path.startsWith(r.path + File.separator) }
+
+    /**
+     * Whether an archive entry may be written at [target]: its folder, with every link on the way followed, is still
+     * in usr/ or home/. A link an earlier entry made (or one that was already there) can't take a later entry
+     * anywhere else. A folder entry on a link that leads out has the link removed (a chmod would follow it).
+     */
+    private fun writableTarget(target: File, roots: List<File>, isDirectory: Boolean): Boolean {
+        val parent = runCatching { target.parentFile?.canonicalFile }.getOrNull() ?: return false
+        if (!insideRoots(parent, roots)) {
+            Log.w(TAG, "Not extracting ${target.path}: its folder leads outside the environment ($parent)")
+            return false
+        }
+        if (isDirectory && isSymlink(target)) {
+            val resolved = runCatching { target.canonicalFile }.getOrNull()
+            if (resolved == null || !insideRoots(resolved, roots)) {
+                Log.w(TAG, "Removing the link ${target.path}: it leads outside the environment ($resolved)")
+                runCatching { target.delete() }
+            }
+        }
+        return true
     }
 
     /** "data/data/<pkg>/files/", "data/user/0/<pkg>/files/" or any other folder path ending in files/, before usr/ or home/. */

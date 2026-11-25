@@ -149,6 +149,9 @@ object JarvisLauncher {
         JarvisController.quickSettingsOpen.value = false
         val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         extras?.extras?.let { intent.putExtras(it) }
+        if (intent.getBooleanExtra(JarvisTileService.EXTRA_TALK, false)) {
+            ai.antigem.data.security.AppIntentKey.sign(context, intent, ai.antigem.data.security.AppIntentKey.JARVIS_TALK)
+        }
         runCatching { context.startActivity(intent) }.onFailure { Log.w(TAG, "open app: ${it.message}") }
     }
 

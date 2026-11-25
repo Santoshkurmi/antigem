@@ -640,14 +640,16 @@ class AgyBridgeService(
         }
     }
 
+    /** Restores a `.antigem` archive. An existing chat with its id answers HTTP 409 unless [replace] (the user agreed). */
     suspend fun restoreConversationArchive(
         archiveBytes: ByteArray,
-        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl
+        httpBaseUrl: String = AuthPreferences.currentBridgeHttpUrl,
+        replace: Boolean = false
     ): Result<AgyConversationSummary> = withContext(Dispatchers.IO) {
         try {
             val body = archiveBytes.toRequestBody("application/octet-stream".toMediaType())
             val request = Request.Builder()
-                .url("$httpBaseUrl/api/conversations/restore")
+                .url("$httpBaseUrl/api/conversations/restore" + if (replace) "?replace=1" else "")
                 .post(body)
                 .build()
 

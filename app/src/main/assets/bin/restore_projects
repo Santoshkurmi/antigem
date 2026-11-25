@@ -112,14 +112,34 @@ if not projects:
     print("❌ No projects listed in manifest!")
     sys.exit(1)
 
+home_real = os.path.realpath(os.path.expanduser("~"))
+stage_real = os.path.realpath(stage_dir)
+
+def inside(path, root):
+    return path == root or path.startswith(root + os.sep)
+
+def allowed_dest(path):
+    """A project goes into the home folder (never the home itself or a hidden folder such as ~/.ssh, ~/.claude,
+    ~/.gemini: their files are logins or configs that run commands) or into shared storage."""
+    rp = os.path.realpath(path)
+    if inside(rp, home_real):
+        rel = os.path.relpath(rp, home_real)
+        return rel != "." and not any(part.startswith(".") for part in rel.split(os.sep))
+    for root in ("/sdcard", "/storage"):
+        r = os.path.realpath(root)
+        if inside(rp, r) and rp != r:
+            return True
+    return False
+
 # Sort projects so parents are restored before children
 sorted_projects = sorted(projects, key=lambda x: (len(x.get("original_path", "").split(os.sep)), x.get("name", "")))
 restored_roots = []
 
 for idx, proj in enumerate(sorted_projects, 1):
-    name = proj.get("name", f"project_{idx}")
-    orig_path = proj.get("original_path", "")
-    subpath = proj.get("backup_subpath", "")
+    # the manifest comes from the archive: a name is only a folder name, never a path
+    name = os.path.basename(str(proj.get("name") or "").strip().rstrip("/")).lstrip(".") or f"project_{idx}"
+    orig_path = str(proj.get("original_path") or "")
+    subpath = str(proj.get("backup_subpath") or "")
 
     # Determine destination path
     if custom_root:
@@ -130,6 +150,10 @@ for idx, proj in enumerate(sorted_projects, 1):
         dest_path = os.path.expanduser(f"~/{name}")
 
     dest_path = os.path.abspath(dest_path)
+    if not custom_root and not allowed_dest(dest_path):
+        safe_dest = os.path.join(home_real, f"restored_projects_{timestamp}", name)
+        print(f"  ⚠️ '{name}': '{dest_path}' is not a project folder (hidden or outside home and shared storage): restoring it to '{safe_dest}' instead")
+        dest_path = safe_dest
 
     # Check if dest_path is already inside an already restored parent
     is_under_restored_parent = False
@@ -143,7 +167,11 @@ for idx, proj in enumerate(sorted_projects, 1):
         print(f"RESTORED_PROJECT:{dest_path}:{name}")
         continue
 
-    source_path = os.path.join(stage_dir, subpath)
+    source_path = os.path.realpath(os.path.join(stage_dir, subpath))
+    # only files from this archive: an absolute or ../ path would copy any folder (e.g. ~/.ssh) out to the destination
+    if not subpath or os.path.isabs(subpath) or not inside(source_path, stage_real) or source_path == stage_real:
+        print(f"⚠️ Skipping {name}: its folder in the archive ('{subpath}') is outside the archive")
+        continue
     if not os.path.exists(source_path):
         print(f"⚠️ Source directory for {name} missing in archive: {source_path}")
         continue

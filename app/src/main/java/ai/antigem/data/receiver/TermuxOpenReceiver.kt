@@ -112,7 +112,8 @@ open class TermuxOpenReceiver : BroadcastReceiver() {
             }
 
             val finalIntent = if (useChooser) {
-                Intent.createChooser(openIntent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // AntiGem's own screens would refuse its own file from a chooser: they are left out
+                ai.antigem.data.files.IncomingUriGuard.chooser(context, openIntent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             } else {
                 openIntent
             }

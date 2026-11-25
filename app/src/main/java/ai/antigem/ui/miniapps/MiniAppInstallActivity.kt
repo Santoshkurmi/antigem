@@ -44,15 +44,14 @@ class MiniAppInstallActivity : ComponentActivity() {
             Intent.ACTION_SEND -> i.getParcelableExtra(Intent.EXTRA_STREAM)
             else -> null
         }
-        return uri?.takeIf { it.scheme == "content" || it.scheme == "file" && !isPrivate(it) }?.let { InstallSource.FromUri(it) }
+        if (uri == null || (uri.scheme != "content" && uri.scheme != "file")) return null
+        // another app can't point the installer at AntiGem's own private files (file:// or AntiGem's own providers)
+        if (!ai.antigem.data.files.IncomingUriGuard.allowed(this, i, uri)) {
+            ai.antigem.data.files.IncomingUriGuard.toastRefused(this)
+            return null
+        }
+        return InstallSource.FromUri(uri)
     }
-
-    /** Another app can't point the installer at AntiGem's own private files with a file:// path. */
-    private fun isPrivate(uri: Uri): Boolean = runCatching {
-        val path = java.io.File(uri.path ?: return true).canonicalPath
-        val own = java.io.File(applicationInfo.dataDir).canonicalPath
-        path == own || path.startsWith(own + "/")
-    }.getOrDefault(true)
 
     override fun finish() {
         super.finish()

@@ -297,6 +297,7 @@ dependencies {
 
   // Pure Java/Kotlin SSH Client (Persistent Termux SSH connection pool)
   implementation("com.github.mwiede:jsch:0.2.20")
+  implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 
   // HTML Parser & Web Content Scraper (Free Web Search & Webpage Reader)
   implementation("org.jsoup:jsoup:1.18.3")

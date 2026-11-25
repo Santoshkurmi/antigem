@@ -34,13 +34,21 @@ class MiniAppShareActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         val stream: Uri? = if (intent.action == Intent.ACTION_SEND_MULTIPLE) intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.firstOrNull()
             else intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        // AntiGem's own private files are never copied into a mini app for another app
+        if (stream != null && !ai.antigem.data.files.IncomingUriGuard.allowed(this, intent, stream)) {
+            ai.antigem.data.files.IncomingUriGuard.toastRefused(this)
+            finish()
+            return
+        }
         // a mini app package (by type, name or contents): that's an install, not something for an app
         if (stream != null && intent.action == Intent.ACTION_SEND) {
             lifecycleScope.launch {
                 if (isPackage(stream, type)) {
-                    startActivity(Intent(this@MiniAppShareActivity, MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW)
+                    val install = Intent(this@MiniAppShareActivity, MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW)
                         .setDataAndType(stream, ai.antigem.data.miniapps.MiniAppSigning.MIME)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (ai.antigem.data.files.IncomingUriGuard.isAntiGemPrivate(this@MiniAppShareActivity, stream)) ai.antigem.data.files.IncomingUriGuard.signOwn(this@MiniAppShareActivity, install)
+                    startActivity(install)
                     finish()
                 } else showTargets(type, text, subject, stream)
             }

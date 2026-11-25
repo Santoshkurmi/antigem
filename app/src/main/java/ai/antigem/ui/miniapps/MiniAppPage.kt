@@ -337,7 +337,11 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
         // the WebView asks for a favicon on its own: not the app's mistake, so no console noise
         if (path == "/favicon.ico") return text("text/plain", 404, "Not Found", "")  // i18n: keep (HTTP reason phrase: ASCII only)
         log("warn", "404 $path")
-        return text("text/html", 404, "Not Found", "<!doctype html><meta name=viewport content='width=device-width'><body style='font:16px system-ui;padding:24px'><h3>Not found</h3><p>$path</p>")  // i18n: keep (HTTP reason phrase: ASCII only)
+        // the path comes from the URL (an exported link can carry any text): escaped, and the page may run no script
+        val safePath = path.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+        val body = "<!doctype html><meta name=viewport content='width=device-width'><body style='font:16px system-ui;padding:24px'><h3>Not found</h3><p>$safePath</p>"  // i18n: keep (HTTP reason phrase: ASCII only)
+        return WebResourceResponse("text/html", "utf-8", 404, "Not Found",  // i18n: keep (HTTP reason phrase: ASCII only)
+            headers(mapOf("Content-Security-Policy" to "default-src 'none'; style-src 'unsafe-inline'")), ByteArrayInputStream(body.toByteArray()))
     }
 
     private val headRe = Regex("<head(\\s[^>]*)?>", RegexOption.IGNORE_CASE)

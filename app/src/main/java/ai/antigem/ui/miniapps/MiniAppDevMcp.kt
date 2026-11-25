@@ -701,8 +701,9 @@ object MiniAppDevMcp {
         val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", f)
         val startedAt = System.currentTimeMillis()
         withContext(Dispatchers.Main) {
-            context.startActivity(Intent(context, MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW).setDataAndType(uri, MiniAppSigning.MIME)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            context.startActivity(ai.antigem.data.files.IncomingUriGuard.signOwn(context,
+                Intent(context, MiniAppInstallActivity::class.java).setAction(Intent.ACTION_VIEW).setDataAndType(uri, MiniAppSigning.MIME)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)))
         }
         val verb = when (plan.kind) { MiniAppInstaller.Kind.NEW -> "Install"; MiniAppInstaller.Kind.UPDATE -> "Update"; MiniAppInstaller.Kind.REINSTALL -> "Reinstall"; MiniAppInstaller.Kind.DOWNGRADE -> "Downgrade" }
         verdict.put("opened", "The install screen is on the phone: the user taps $verb to confirm.")

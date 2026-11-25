@@ -352,7 +352,8 @@ object X11DesktopManager {
         val url = FORK_APK_URL
         appendLog(L.x11.desktopManager.downloadingAntigemsTermuxX11Build)
         appendLog(url)
-        val dir = File(appContext.externalCacheDir ?: appContext.cacheDir, "x11").apply { mkdirs() }
+        // private cache: on Android 10 and older other apps could swap a file in externalCacheDir before it installs
+        val dir = File(appContext.cacheDir, "x11").apply { mkdirs() }
         val apk = File(dir, "termux-x11.apk")
         download(url, apk) { pct -> _state.update { it.copy(progress = L.x11.desktopManager.downloadingTermuxX11Pct(pct)) } }
         appendLog(L.x11.desktopManager.downloadedValueKb(apk.length() / 1024))

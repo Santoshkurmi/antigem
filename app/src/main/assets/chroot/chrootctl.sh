@@ -809,6 +809,69 @@ cmd_backup() {
     # private mode: the chroot's mounts are not in this namespace, so tar sees plain empty folders even while it runs.
     # Mounts visible here (global mode, an older launcher's leftovers) would take tar into /sdcard, /proc, ...
     [ -z "$(mounts_quick)" ] || die "the chroot is mounted in Android's namespace (global mode, or mounts left by an older launcher): stop it first, then back up"
+    if [ "$CLEAN" = 1 ]; then
+        [ -n "$UNSHARE" ] || die "a clean image needs unshare (busybox of Magisk / KernelSU / APatch, or toybox)"
+        exec $UNSHARE -m /system/bin/sh "$SELF" _clean_backup --root "$ROOT" --clean
+    fi
+    backup_tar
+}
+
+# --clean: the image everyone downloads (the prebuilt). It runs in a mount namespace of its own, where scrubbed copies of
+# the account files and machine-id are bind-mounted over the real ones, so tar reads those. The running chroot and the
+# rest of the phone see no change, and the mounts end with this process.
+cmd__clean_backup() {
+    read_conf
+    # toybox' unshare keeps the propagation: a bind mount here must never reach init's namespace (or the chroot's)
+    $MOUNT --make-rprivate / 2>/dev/null || $MOUNT -o rprivate / 2>/dev/null
+    grep -q ' shared:' /proc/self/mountinfo && die "could not make a private mount namespace for the clean image: nothing was exported"
+    AWK=$(tool awk)
+    [ -n "$AWK" ] || die "a clean image needs awk (busybox of Magisk / KernelSU / APatch)"
+    cl="$BASE_DIR/.clean.$$"
+    rm -rf "$cl"
+    mkdir -p "$cl" && chmod 700 "$cl" || die "cannot create $cl"
+    trap 'rm -rf "$cl"' EXIT
+    clean_accounts "$cl"
+    backup_tar
+}
+
+# The people's accounts (uid 1000-65533: the user this phone made, with its password hash and sudo membership) are left
+# out, every other password is locked ("!"), machine-id is empty. Setup adds the new owner's account and a machine-id.
+clean_accounts() {
+    cl=$1
+    e="$ROOT/etc"
+    [ -f "$e/passwd" ] && [ ! -L "$e/passwd" ] || die "$e/passwd is missing"
+    users=$($AWK -F: '$3 + 0 >= 1000 && $3 + 0 < 65534 { print $1 }' "$e/passwd")
+    for f in passwd shadow group gshadow subuid subgid; do
+        src="$e/$f"
+        [ -f "$src" ] && [ ! -L "$src" ] || continue
+        # a copy keeps the owner and mode tar records (shadow is root:shadow 0640)
+        cp -p "$src" "$cl/$f" || die "cannot copy $src"
+        $AWK -F: -v OFS=: -v f="$f" -v users="$users" '
+            function strip(list,    m, k, i, o) {
+                k = split(list, m, ","); o = ""
+                for (i = 1; i <= k; i++) if (m[i] != "" && !(m[i] in u)) o = o (o == "" ? "" : ",") m[i]
+                return o
+            }
+            BEGIN { n = split(users, a, "\n"); for (i = 1; i <= n; i++) if (a[i] != "") u[a[i]] = 1 }
+            ($1 in u) { next }
+            f == "shadow" && $2 != "*" { $2 = "!" }
+            f == "group" { $4 = strip($4) }
+            f == "gshadow" { if ($2 != "*") $2 = "!"; $3 = strip($3); $4 = strip($4) }
+            { print }' "$src" > "$cl/$f.new" || die "cannot clean $src"
+        cat "$cl/$f.new" > "$cl/$f" && rm -f "$cl/$f.new" || die "cannot clean $src"
+        $MOUNT -o bind "$cl/$f" "$src" || die "cannot cover $src"
+    done
+    i=0
+    for f in "$e/machine-id" "$ROOT/var/lib/dbus/machine-id"; do
+        [ -f "$f" ] && [ ! -L "$f" ] || continue
+        i=$((i + 1))
+        cp -p "$f" "$cl/machine-id.$i" && : > "$cl/machine-id.$i" || die "cannot copy $f"
+        $MOUNT -o bind "$cl/machine-id.$i" "$f" || die "cannot cover $f"
+    done
+    [ -z "$users" ] || echo "clean image: accounts left out: $(echo $users)" >&2
+}
+
+backup_tar() {
     systar=$(command -v tar 2>/dev/null)
     [ -n "$systar" ] && $systar --help 2>&1 | grep -q -- '--numeric-owner' || die "this phone's tar cannot keep numeric owners"
     # the exclude list lives outside the rootfs
@@ -832,15 +895,22 @@ cmd_backup() {
         if [ "$CLEAN" = 1 ]; then
             echo "./.antigem"
             echo "./home/*"
-            for f in .bash_history .lesshst .viminfo .python_history .node_repl_history .wget-hsts .sudo_as_admin_successful \
+            for f in .bash_history .zsh_history .zhistory .lesshst .viminfo .python_history .node_repl_history .wget-hsts \
+                .mysql_history .psql_history .sqlite_history .sudo_as_admin_successful \
                 .cache .local .config .npm .ssh .gnupg .claude .claude.json .codex .gemini .opencode .antigem .agy; do echo "./root/$f"; done
             echo "./var/lib/apt/lists/*"
             echo "./var/cache/apt/*"
             echo "./var/log/*.log"
+            # login records (who logged in, from where) and rotated logs
+            for f in wtmp btmp lastlog faillog; do echo "./var/log/$f"; done
+            echo "./var/log/*.gz"
+            echo "./var/log/*.[0-9]"
             echo "./var/log/apt/*"
             echo "./var/log/journal/*"
             echo "./etc/sudoers.d/90-antigem"
             echo "./etc/ssh/ssh_host_*"
+            # the "-" copies tools leave hold the old account files (password hashes)
+            for f in passwd shadow group gshadow subuid subgid; do echo "./etc/$f-"; done
         fi
     } > "$ex"
     cd "$ROOT" || die "cannot enter $ROOT"
@@ -952,6 +1022,7 @@ case "$CMD" in
             kill) cmd_kill;;
             delete) cmd_delete;;
             _holder) cmd__holder;;
+            _clean_backup) require_rootfs; cmd__clean_backup;;
             _mount) cmd__mount;;
             x11-bind) require_rootfs; cmd_x11_bind;;
             _x11_mount) cmd__x11_mount;;
