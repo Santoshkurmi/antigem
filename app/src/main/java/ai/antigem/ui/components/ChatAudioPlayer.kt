@@ -71,14 +71,16 @@ fun ChatAudioPlayer(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var isPlaying by remember { mutableStateOf(false) }
-    var isBuffering by remember { mutableStateOf(false) }
-    var currentPositionMs by remember { mutableStateOf(0) }
-    var durationMs by remember { mutableStateOf((attachment.durationSeconds * 1000).coerceAtLeast(1000)) }
-    var isPrepared by remember { mutableStateOf(false) }
-    var hasError by remember { mutableStateOf(false) }
+    // keyed on the attachment: the DisposableEffect below releases the player when the id changes, so a new
+    // attachment in this slot gets a new player and fresh state
+    var isPlaying by remember(attachment.id) { mutableStateOf(false) }
+    var isBuffering by remember(attachment.id) { mutableStateOf(false) }
+    var currentPositionMs by remember(attachment.id) { mutableStateOf(0) }
+    var durationMs by remember(attachment.id) { mutableStateOf((attachment.durationSeconds * 1000).coerceAtLeast(1000)) }
+    var isPrepared by remember(attachment.id) { mutableStateOf(false) }
+    var hasError by remember(attachment.id) { mutableStateOf(false) }
 
-    val mediaPlayer = remember {
+    val mediaPlayer = remember(attachment.id) {
         MediaPlayer().apply {
             setOnCompletionListener {
                 isPlaying = false

@@ -145,7 +145,8 @@ func ParseTranscript(transcriptPath, convID string, port string) ([]models.ChatM
 				}
 			}
 			if hasGenerateImage {
-				convBrain := filepath.Dir(filepath.Dir(transcriptPath))
+				// <brain>/<id>/.system_generated/logs/transcript.jsonl -> <brain>/<id>
+				convBrain := filepath.Dir(filepath.Dir(filepath.Dir(transcriptPath)))
 				if entries, err := os.ReadDir(convBrain); err == nil {
 					for _, e := range entries {
 						if !e.IsDir() && (strings.HasSuffix(e.Name(), ".jpg") || strings.HasSuffix(e.Name(), ".png") || strings.HasSuffix(e.Name(), ".webp")) {

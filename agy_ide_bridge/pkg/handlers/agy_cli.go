@@ -248,8 +248,10 @@ func (h *Handler) runAgyJob(w http.ResponseWriter, kind string, cmd *exec.Cmd, d
 	agyJob = job
 	agyJobMu.Unlock()
 
-	home, _ := os.UserHomeDir()
-	cmd.Dir = home
+	if cmd.Dir == "" {
+		home, _ := os.UserHomeDir()
+		cmd.Dir = home
+	}
 	cmd.Env = os.Environ()
 	cmd.Stdout = job
 	cmd.Stderr = job

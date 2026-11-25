@@ -89,6 +89,7 @@ class AgyAudioTranscriptionManager(
 
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "AudioRecord not initialized")
+            record.release()
             onError("Microphone not available")
             return
         }

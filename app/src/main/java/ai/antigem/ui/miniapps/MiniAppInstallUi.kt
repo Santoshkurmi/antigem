@@ -397,7 +397,7 @@ fun DeveloperKeyDialog(onDismiss: () -> Unit, pickKeyFile: (onPicked: (Uri?) -> 
             if (pw != null && uri != null) scope.launch {
                 withContext(Dispatchers.IO) {
                     runCatching {
-                        MiniAppSigning.importKey(context, JSONObject(context.contentResolver.openInputStream(uri)!!.bufferedReader().readText()), pw)
+                        MiniAppSigning.importKey(context, JSONObject(context.contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() }), pw)
                         ai.antigem.data.miniapps.MiniAppKeyBackup.markImported(context)
                     }
                 }.onSuccess { info = MiniAppSigning.keyInfo(context); backup = ai.antigem.data.miniapps.MiniAppKeyBackup.info(context); toast(L.miniapps.miniAppInstallUi.keyImported) }

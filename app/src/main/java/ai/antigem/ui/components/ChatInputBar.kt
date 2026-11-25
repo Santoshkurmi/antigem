@@ -249,6 +249,8 @@ fun ChatInputBar(
             return
         }
 
+        // set until the recorder has started, so a failed prepare()/start() releases it
+        var unstartedRecorder: MediaRecorder? = null
         try {
             val audioFile = File(context.cacheDir, "voice_note_${System.currentTimeMillis()}.m4a")
             currentRecordingFile = audioFile
@@ -259,6 +261,7 @@ fun ChatInputBar(
                 @Suppress("DEPRECATION")
                 MediaRecorder()
             }
+            unstartedRecorder = recorder
 
             recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -268,6 +271,7 @@ fun ChatInputBar(
             recorder.setOutputFile(audioFile.absolutePath)
             recorder.prepare()
             recorder.start()
+            unstartedRecorder = null
 
             mediaRecorder = recorder
             isRecordingAudio = true
@@ -309,6 +313,7 @@ fun ChatInputBar(
             }
         } catch (e: Exception) {
             Log.e("ChatInputBar", "Failed to start recording: ${e.message}")
+            unstartedRecorder?.let { runCatching { it.release() } }
             Toast.makeText(context, L.components.chatInputBar.couldNotStartAudioRecording, Toast.LENGTH_SHORT).show()
         }
     }
