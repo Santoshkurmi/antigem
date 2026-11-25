@@ -304,6 +304,10 @@ fun IdeScreen(
     val isImageFile = activeExt in IdeFileLauncher.VIEWER_IMAGE_EXTS
     val isSvgFile = activeExt == "svg"
     var showSvgSource by remember(activeTabPath) { mutableStateOf(false) }
+    // a Markdown tab opens as source; the top bar's eye button switches it to the rendered preview and back
+    val isMarkdownFile = activeTab != null && FileKinds.of(activeTab.name) == ai.antigem.data.files.FileKind.MARKDOWN
+    var showMarkdownPreview by remember(activeTabPath) { mutableStateOf(false) }
+    val isMarkdownPreview = isMarkdownFile && showMarkdownPreview
     var binaryWarningDialog by remember { mutableStateOf<BinaryWarningTab?>(null) }
     var tooLargeDialog by remember { mutableStateOf<TooLargeFile?>(null) }
 
@@ -468,9 +472,27 @@ fun IdeScreen(
                         )
                     },
                     actions = {
-                        val isTextFile = activeTab != null && (!isImageFile || (isSvgFile && showSvgSource))
+                        val isTextFile = activeTab != null && (!isImageFile || (isSvgFile && showSvgSource)) && !isMarkdownPreview
                         val isTextEditable = isTextFile && !activeTab.isReadOnly
                         var showMoreOptionsMenu by remember { mutableStateOf(false) }
+
+                        // Markdown Source / Rendered Preview Toggle
+                        if (isMarkdownFile) {
+                            IconButton(
+                                onClick = {
+                                    if (!showMarkdownPreview) showFindBar = false
+                                    showMarkdownPreview = !showMarkdownPreview
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (showMarkdownPreview) Icons.Default.Code else Icons.Default.Visibility,
+                                    contentDescription = if (showMarkdownPreview) L.ide.screen.editMarkdownSource else L.ide.screen.previewMarkdown,
+                                    tint = if (showMarkdownPreview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
 
                         // Three-Dot More Options Menu (Word Wrap, Find in file, SVG toggle)
                         if (isTextFile) {
@@ -1033,7 +1055,7 @@ fun IdeScreen(
                 }
 
                 // Interactive Find in File Bar
-                if (showFindBar && activeTab != null && !isImageFile && !(isSvgFile && !showSvgSource)) {
+                if (showFindBar && activeTab != null && !isImageFile && !(isSvgFile && !showSvgSource) && !isMarkdownPreview) {
                     LaunchedEffect(Unit) {
                         currentEditorView?.editor?.clearFocus()
                         currentEditorView?.clearFocus()
@@ -1393,6 +1415,22 @@ fun IdeScreen(
                                 .weight(1f),
                             onToggleXmlSource = if (isSvgFile) { { showSvgSource = true } } else null
                         )
+                    } else if (isMarkdownPreview) {
+                        // the same renderer as the Markdown viewer, fed the tab's current text (unsaved edits included)
+                        val mdBlocks = remember(activeTab.content) { ai.antigem.ui.components.parseMarkdownBlocks(activeTab.content) }
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            items(mdBlocks) { block ->
+                                ai.antigem.ui.components.MarkdownBlockView(
+                                    block = block,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                        }
                     } else {
                         // the editor follows the app theme's IDE colors (re-applied when the theme changes)
                         val editorThemeColors = ai.antigem.ui.ide.EditorThemeColors.fromAppTheme()

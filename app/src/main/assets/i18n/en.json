@@ -3312,6 +3312,8 @@
     "ide.screen.findInFile": "Find in File",
     "ide.screen.previewSvgGraphic": "Preview SVG Graphic",
     "ide.screen.editSvgXmlSource": "Edit SVG XML Source",
+    "ide.screen.previewMarkdown": "Preview Markdown",
+    "ide.screen.editMarkdownSource": "Edit Markdown Source",
     "ide.screen.redo": "Redo",
     "ide.screen.saved": "Saved",
     "ide.screen.saveErrorMessage": "Save Error: {message}",
