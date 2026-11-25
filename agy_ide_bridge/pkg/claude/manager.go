@@ -443,15 +443,19 @@ func (s *Session) spawnLocked() error {
 	if err != nil {
 		return err
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
+	// Output goes through io.Pipes, not StdoutPipe/StderrPipe: then cmd.Wait returns only after the output is copied,
+	// and wait() can let the readers finish before it reads stderrTail (StdoutPipe's read end is closed by Wait, which
+	// can drop the last stderr and the final result line). WaitDelay keeps a child that holds the output open from
+	// holding Wait up.
+	stdoutR, stdoutW := io.Pipe()
+	stderrR, stderrW := io.Pipe()
+	cmd.Stdout = stdoutW
+	cmd.Stderr = stderrW
+	cmd.WaitDelay = 2 * time.Second
 	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdoutW.Close()
+		_ = stderrW.Close()
 		return fmt.Errorf("start claude: %w", err)
 	}
 	log.Printf("[claude] spawned session %s (pid %d) in %s: %s", s.ID, cmd.Process.Pid, cwd, strings.Join(args, " "))
@@ -472,9 +476,15 @@ func (s *Session) spawnLocked() error {
 	}
 	gen := s.generation
 
-	go s.readStderr(stderr)
-	go s.readStdout(stdout, gen)
-	go s.wait(cmd, gen)
+	readers := &sync.WaitGroup{}
+	readers.Add(2)
+	go func() { defer readers.Done(); s.readStderr(stderrR) }()
+	go func() { defer readers.Done(); s.readStdout(stdoutR, gen) }()
+	go s.wait(cmd, gen, func() {
+		_ = stdoutW.Close()
+		_ = stderrW.Close()
+		readers.Wait()
+	})
 
 	s.broadcastLocked(stateMessage(s.stateLocked(), "spawned", nil, ""))
 	return nil
@@ -577,8 +587,13 @@ func (s *Session) readStderr(r io.Reader) {
 	}
 }
 
-func (s *Session) wait(cmd *exec.Cmd, gen int) {
+// wait reports the process's exit. drain closes the output pipes and waits until the readers have handled all of it.
+func (s *Session) wait(cmd *exec.Cmd, gen int, drain func()) {
 	err := cmd.Wait()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		err = nil // the process exited cleanly; only a child kept the output open
+	}
+	drain()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if gen != s.generation {

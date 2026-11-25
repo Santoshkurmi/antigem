@@ -32,6 +32,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.theme.GeminiBlue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,7 +66,8 @@ data class FileDetailsInfo(
     val isMarkdown: Boolean
 )
 
-fun extractFileDetails(rawPath: String): FileDetailsInfo {
+/** [countLines] reads the whole file (up to 5 MB): call it with true off the main thread. */
+fun extractFileDetails(rawPath: String, countLines: Boolean = true): FileDetailsInfo {
     val cleanPath = rawPath.removePrefix("file://").substringBefore("#")
     val file = File(cleanPath)
     val name = file.name.ifBlank { cleanPath.substringAfterLast('/') }
@@ -79,7 +82,7 @@ fun extractFileDetails(rawPath: String): FileDetailsInfo {
     if (exists) {
         size = file.length()
         try {
-            if (file.isFile && size < 5 * 1024 * 1024) {
+            if (countLines && file.isFile && size < 5 * 1024 * 1024) {
                 lineCount = file.readLines().size
             }
             val sdf = SimpleDateFormat("MMM dd, yyyy HH:mm:ss", Locale.getDefault())
@@ -110,7 +113,11 @@ fun FileDetailsDialog(
     onOpenWith: (path: String) -> Unit = onOpenInIde
 ) {
     val context = LocalContext.current
-    val details = remember(filePath) { extractFileDetails(filePath) }
+    // the dialog opens with the quick details; the line count (which reads the file) follows from the IO thread
+    val quickDetails = remember(filePath) { extractFileDetails(filePath, countLines = false) }
+    val details by produceState(quickDetails, filePath) {
+        value = withContext(Dispatchers.IO) { extractFileDetails(filePath) }
+    }
     val kind = remember(details.name) { ai.antigem.data.files.FileKinds.of(details.name) }
     // only text belongs in the editor; videos, PDFs, archives… get the app chooser
     val opensInIde = kind.isTextual

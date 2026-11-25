@@ -1696,13 +1696,16 @@ object LocalTerminalManager {
     fun closeAll() {
         Log.d(TAG, "[Manager] closeAll requested")
         val current = _sessions.value
-        val firstSsh = current.firstOrNull { it.isSsh }
-        if (firstSsh != null) {
-            val host = firstSsh.sshHost
-            val port = firstSsh.sshPort
-            val user = firstSsh.sshUser
-            val pass = firstSsh.sshPass
-            val windowIndices = current.mapNotNull { it.tmuxWindowIndex }
+        // one kill command per SSH server, with only that server's tmux windows
+        val sshServers = current.filter { it.isSsh && it.tmuxWindowIndex != null }
+            .groupBy { Triple(it.sshHost, it.sshPort, it.sshUser) }
+        for (serverSessions in sshServers.values) {
+            val first = serverSessions.first()
+            val host = first.sshHost
+            val port = first.sshPort
+            val user = first.sshUser
+            val pass = first.sshPass
+            val windowIndices = serverSessions.mapNotNull { it.tmuxWindowIndex }
             managerScope.launch(Dispatchers.IO) {
                 try {
                     val session = ai.antigem.data.ssh.SshSessionFactory.open(user = user, host = host, port = port, pass = pass, connectTimeoutMs = 4000)
