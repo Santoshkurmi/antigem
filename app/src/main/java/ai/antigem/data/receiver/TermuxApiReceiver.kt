@@ -170,7 +170,8 @@ class TermuxApiReceiver : BroadcastReceiver() {
         Handler(Looper.getMainLooper()).post {
             if (ttsInstance == null) {
                 ttsPendingText = text
-                ttsInstance = TextToSpeech(context.applicationContext) { status ->
+                var initFailed = false
+                val engine = TextToSpeech(context.applicationContext) { status ->
                     val pending = ttsPendingText
                     ttsPendingText = null
                     if (status == TextToSpeech.SUCCESS) {
@@ -178,11 +179,15 @@ class TermuxApiReceiver : BroadcastReceiver() {
                         ttsInstance?.language = Locale.getDefault()
                         pending?.let { ttsInstance?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "termux_tts") }
                     } else {
+                        initFailed = true
                         // drop the failed engine so the next call starts a new one
                         runCatching { ttsInstance?.shutdown() }
                         ttsInstance = null
                     }
                 }
+                // with no TTS engine installed, onInit(ERROR) runs inside the constructor, before ttsInstance is set:
+                // shut that engine down here instead of keeping a dead instance
+                if (initFailed) runCatching { engine.shutdown() } else ttsInstance = engine
             } else if (!ttsReady) {
                 ttsPendingText = text
             } else {
