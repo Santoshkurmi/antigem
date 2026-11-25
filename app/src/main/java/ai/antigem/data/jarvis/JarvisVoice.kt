@@ -426,6 +426,43 @@ object JarvisVoice {
         }
     }
 
+    private var holdRequest: AudioFocusRequest? = null
+
+    /**
+     * While the user answers an approval question, other audio (music, videos, the browser) pauses instead of only
+     * getting quieter, so it can't answer for them. [on] = false gives the focus back.
+     */
+    fun holdMedia(on: Boolean) {
+        if (!inited) return
+        val am = app.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (on) {
+                    if (holdRequest != null) return
+                    val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                        .setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                        .build()
+                    holdRequest = req
+                    am.requestAudioFocus(req)
+                } else {
+                    holdRequest?.let { am.abandonAudioFocusRequest(it) }
+                    holdRequest = null
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                if (on) am.requestAudioFocus(holdListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                else am.abandonAudioFocus(holdListener)
+            }
+        }
+    }
+
+    private val holdListener = AudioManager.OnAudioFocusChangeListener { }
+
     private fun abandonFocus() {
         val am = app.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
         if (Build.VERSION.SDK_INT >= 26) {

@@ -657,11 +657,10 @@ fun MermaidDiagramView(
         }
     }
 
+    // the diagram source as a JS string literal: it goes into the page as text (textContent), never as HTML, so a
+    // block with </div><script>… in it can't run anything. "<" is escaped too, so no "</script>" ends the script early.
     val safeCode = remember(code) {
-        code.trim()
-            .replace("\\", "\\\\")
-            .replace("`", "\\`")
-            .replace("$", "\\$")
+        org.json.JSONObject.quote(code.trim()).replace("<", "\\u003c")
     }
 
     val mermaidTheme = if (isDark) "dark" else "default"
@@ -704,18 +703,18 @@ fun MermaidDiagramView(
             </style>
         </head>
         <body>
-            <div class="mermaid">
-                $safeCode
-            </div>
+            <div class="mermaid" id="diagram"></div>
             <script>
+                var source = $safeCode;
+                document.getElementById('diagram').textContent = source;
                 try {
                     mermaid.initialize({
                         startOnLoad: true,
                         theme: '$mermaidTheme',
-                        securityLevel: 'loose'
+                        securityLevel: 'strict'
                     });
                 } catch (e) {
-                    document.body.innerText = '$safeCode';
+                    document.body.textContent = source;
                 }
             </script>
         </body>
@@ -869,7 +868,7 @@ fun MermaidDiagramView(
                                 settings.useWideViewPort = true
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
-                                webViewClient = ai.antigem.data.render.RenderBundle.webViewClient(allowNetwork = true)
+                                webViewClient = ai.antigem.data.render.RenderBundle.webViewClient(allowNetwork = true, navigate = false)
                                 tag = htmlContent
                                 loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
                             }
@@ -1102,7 +1101,7 @@ fun MermaidFullscreenDialog(
                                     settings.setSupportZoom(true)
                                     settings.builtInZoomControls = true
                                     settings.displayZoomControls = false
-                                    webViewClient = ai.antigem.data.render.RenderBundle.webViewClient(allowNetwork = true)
+                                    webViewClient = ai.antigem.data.render.RenderBundle.webViewClient(allowNetwork = true, navigate = false)
                                     webViewRef = this
                                     loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
                                 }

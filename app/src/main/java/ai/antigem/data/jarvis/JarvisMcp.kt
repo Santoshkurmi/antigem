@@ -1,6 +1,7 @@
 package ai.antigem.data.jarvis
 
 import android.content.Context
+import ai.antigem.i18n.L
 import ai.antigem.data.agent.ChatCompletionMonitor
 import ai.antigem.data.daemon.IdeApiClient
 import ai.antigem.data.daemon.ProjectItem
@@ -49,6 +50,12 @@ object JarvisMcp {
         "jarvis_send_to_chat", "jarvis_new_chat", "jarvis_stop_all", "jarvis_stop_chat", "jarvis_new_session", "jarvis_delete_chat",
         "jarvis_set_model"
     )
+
+    /** What the voice chat may still do while the phone is locked: talk, nothing else. */
+    private val TALK_ONLY = setOf("jarvis_speak", "jarvis_ask", "jarvis_status", "jarvis_ignore", "jarvis_help")
+
+    private const val LOCKED = "The phone is locked, so right now Jarvis can only talk: nothing was done. Whoever is speaking may not be " +
+        "the user. Tell them to unlock the phone first, then ask again."
 
     private const val NO_WAIT_NOTE = "Do not wait, sleep or poll. Start any other independent tasks now, tell the user briefly, then END YOUR TURN: " +
         "results come back to you as a <jarvis_events> message."
@@ -383,6 +390,8 @@ object JarvisMcp {
         }
         val caller = who.key
         val textChat = caller != JarvisManagers.VOICE
+        // the voice chat only talks while the phone is locked (anyone holding it can talk to Jarvis)
+        if (!textChat && name !in TALK_ONLY && JarvisController.phoneLocked()) return error(LOCKED)
         friendlyStatus(name, args)?.let { if (textChat) JarvisManagers.setStatus(caller, it) else JarvisController.postStatus(it, explicit = false) }
         return try {
             when (name) {
@@ -554,6 +563,11 @@ object JarvisMcp {
                     val b = claudeOnScreen() ?: return error("The chat on screen is not a Claude Code chat.")
                     val mode = args.optString("mode")
                     if (mode !in listOf("default", "acceptEdits", "plan", "auto", "dontAsk")) return error("Unknown mode $mode")
+                    // Jarvis may make the chat stricter on its own; asking less needs the user's tap
+                    if (mode != "default" && mode != "plan" &&
+                        !ai.antigem.data.security.UserConfirm.ask(context, L.jarvis.mcp.letJarvisAskYouLess, L.jarvis.mcp.jarvisWantsToSwitchTheClaude(mode))) {
+                        return error("The user did not allow it, so the permission mode was not changed.")
+                    }
                     b.setPermissionMode(mode)
                     text("Permission mode is now $mode.")
                 }
@@ -1504,7 +1518,14 @@ object JarvisMcp {
             textS("jarvis_wake_phrase", "Wake phrase(s), comma separated", true, { P.wakePhrase.value }, { P.wakePhrase.set(it.lowercase()) }),
             choice("jarvis_wake_match", "Whole phrase, or the name alone wakes Jarvis", true, listOf("phrase", "name"), { P.wakeMatch.value }, { P.wakeMatch.set(it) }),
             bool("jarvis_headset_button", "Headset button talks and stops (hands-free)", true, { P.headsetButton.value }, { P.headsetButton.set(it) }),
-            bool("jarvis_hands_free", "Hands-free mode (mic service, works with the screen off)", true, { P.handsFree.value }, { JarvisController.setHandsFree(it) }),
+            // Jarvis may turn hands-free off, never on: only the user decides that the microphone listens with the screen off
+            Setting("jarvis_hands_free", "Hands-free mode (mic service, works with the screen off). Jarvis can only turn it off; the user turns it on in Settings → Jarvis.",
+                "true|false", true, get = { P.handsFree.value },
+                set = { v -> when (parseBool(v)) {
+                    true -> if (P.handsFree.value) null else "Only the user can turn hands-free on (Settings → Jarvis). Nothing was changed."
+                    false -> { JarvisController.setHandsFree(false); null }
+                    null -> "Use true or false."
+                } }),
             choice("jarvis_busy_behavior", "Speaking while Jarvis works: wait (queue), interrupt, or only on the user's interrupt phrases (smart)", true, listOf("queue", "interrupt", "smart"), { P.busyBehavior.value }, { P.busyBehavior.set(it) }),
             choice("jarvis_keep_screen_on", "Keep the screen on", true, listOf("off", "active", "always"), { P.keepScreenOn.value }, { P.keepScreenOn.set(it) }),
             choice("jarvis_idle_orb", "Orb size while idle", true, listOf("tiny", "small", "normal", "hidden"), { P.orbSize.value }, { P.orbSize.set(it) }),

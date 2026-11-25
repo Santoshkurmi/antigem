@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -12,14 +14,25 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins (Android app & webview)
-	},
+	CheckOrigin: checkOrigin,
+}
+
+// checkOrigin lets in the app (OkHttp sends no Origin) and pages served by the bridge itself (same host), never a
+// website or a WebView page from somewhere else.
+func checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	return err == nil && strings.EqualFold(u.Host, r.Host)
 }
 
 type ClientConn struct {
 	ws *websocket.Conn
 	mu sync.Mutex
+	// wantsCSRF: the client asked for the hub's CSRF value (?hub_csrf=1); everyone else gets hub_status without it
+	wantsCSRF bool
 }
 
 func (c *ClientConn) SendJSON(v interface{}) error {
@@ -56,15 +69,27 @@ func (h *Hub) Broadcast(msg interface{}) {
 	}
 }
 
+// hubStatusMessage is the hub_status message; the CSRF value only for a client that asked for it.
+func hubStatusMessage(status, port, csrfToken, errorMsg string, logs []string, withCSRF bool) map[string]interface{} {
+	msg := map[string]interface{}{
+		"type":   "hub_status",
+		"status": status,
+		"port":   port,
+		"error":  errorMsg,
+		"logs":   logs,
+	}
+	if withCSRF {
+		msg["csrf_token"] = csrfToken
+	}
+	return msg
+}
+
 func (h *Hub) BroadcastHubStatus(status string, port string, csrfToken string, errorMsg string, logs []string) {
-	h.Broadcast(map[string]interface{}{
-		"type":       "hub_status",
-		"status":     status,
-		"port":       port,
-		"csrf_token": csrfToken,
-		"error":      errorMsg,
-		"logs":       logs,
-	})
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for client := range h.clients {
+		_ = client.SendJSON(hubStatusMessage(status, port, csrfToken, errorMsg, logs, client.wantsCSRF))
+	}
 }
 
 // Close disconnects all active WebSocket clients cleanly.
@@ -91,7 +116,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[WS] Upgrade error: %v\n", err)
 		return
 	}
-	client := &ClientConn{ws: rawConn}
+	client := &ClientConn{ws: rawConn, wantsCSRF: r.URL.Query().Get("hub_csrf") == "1"}
 
 	h.mu.Lock()
 	h.clients[client] = true
@@ -102,14 +127,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// Send initial hub status immediately on connection
 	if prov != nil {
 		st, csrf, errMsg, logs := prov.GetStatusInfo()
-		_ = client.SendJSON(map[string]interface{}{
-			"type":       "hub_status",
-			"status":     st,
-			"port":       port,
-			"csrf_token": csrf,
-			"error":      errMsg,
-			"logs":       logs,
-		})
+		_ = client.SendJSON(hubStatusMessage(st, port, csrf, errMsg, logs, client.wantsCSRF))
 	}
 
 	defer func() {

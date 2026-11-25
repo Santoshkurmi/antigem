@@ -87,6 +87,44 @@ fun isPreviewableCode(code: String, language: String): Boolean {
 /**
  * Builds standard responsive HTML wrapper for previewing code artifacts.
  */
+/**
+ * The HTML preview's WebViewClient: the page can't leave the preview by itself. Only http(s) is followed at all (no
+ * intent:, app or file links), and when the page (a link or a script) wants to go to another page, [onLink] shows the
+ * URL, which opens outside AntiGem only after a tap. Frames inside the page load normally.
+ */
+private class PreviewWebViewClient(private val onLink: (String) -> Unit) : android.webkit.WebViewClient() {
+    override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+        val scheme = request.url.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return true
+        if (request.isForMainFrame) { onLink(request.url.toString()); return true }
+        return false
+    }
+}
+
+/** Asks before a preview's link opens outside AntiGem, with the full URL shown. */
+@Composable
+private fun PreviewLinkDialog(url: String?, onDismiss: () -> Unit) {
+    if (url == null) return
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(L.components.codeBlock.openLink) },
+        text = { Text(url, fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+        confirmButton = {
+            TextButton(onClick = {
+                onDismiss()
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+            }) { Text(L.common.open) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
+    )
+}
+
 fun prepareHtmlForPreview(rawCode: String, isDark: Boolean): String {
     val trimmed = rawCode.trim()
     val isRawSvg = trimmed.startsWith("<svg", ignoreCase = true)
@@ -406,6 +444,7 @@ fun CodeBlock(
                     val previewHtml = remember(code) {
                         prepareHtmlForPreview(code, isDark = false)
                     }
+                    var previewLink by remember { mutableStateOf<String?>(null) }
                     AndroidView(
                         factory = { ctx ->
                             WebView(ctx).apply {
@@ -419,11 +458,13 @@ fun CodeBlock(
                                 settings.useWideViewPort = true
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
+                                webViewClient = PreviewWebViewClient { previewLink = it }
                                 loadDataWithBaseURL("https://localhost", previewHtml, "text/html", "UTF-8", null)
                             }
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+                    PreviewLinkDialog(previewLink) { previewLink = null }
                 }
             }
         } else {
@@ -619,6 +660,7 @@ fun CodeBlock(
                                 val previewHtml = remember(code) {
                                     prepareHtmlForPreview(code, isDark = false)
                                 }
+                                var previewLink by remember { mutableStateOf<String?>(null) }
                                 AndroidView(
                                     factory = { ctx ->
                                         WebView(ctx).apply {
@@ -632,11 +674,13 @@ fun CodeBlock(
                                             settings.useWideViewPort = true
                                             settings.builtInZoomControls = true
                                             settings.displayZoomControls = false
+                                            webViewClient = PreviewWebViewClient { previewLink = it }
                                             loadDataWithBaseURL("https://localhost", previewHtml, "text/html", "UTF-8", null)
                                         }
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
+                                PreviewLinkDialog(previewLink) { previewLink = null }
                             }
                         }
                     } else {

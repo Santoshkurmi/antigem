@@ -20,6 +20,7 @@ import (
 //	POST /restore {folder}    undo the last install (the app calls this when the new version fails to load)
 //	POST /remove {id, delete_data}
 //	POST /set-enabled {id, enabled}
+//	POST /approve {id}         the user approved the plugin's current files (home folders only run approved plugins)
 //	POST /rename {id, folder}
 //	GET  /export?id=          → plugin ZIP
 //	POST /repo/list {repo}    → listing
@@ -188,6 +189,19 @@ func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		m.mu.Lock()
 		p, err := m.setEnabled(req.ID, req.Enabled)
+		m.mu.Unlock()
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"plugin": p})
+	case "/approve":
+		var req struct{ ID string }
+		if !decode(w, r, &req) {
+			return
+		}
+		m.mu.Lock()
+		p, err := m.approve(req.ID)
 		m.mu.Unlock()
 		if err != nil {
 			fail(w, err)

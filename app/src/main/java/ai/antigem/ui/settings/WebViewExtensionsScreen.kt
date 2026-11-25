@@ -112,6 +112,7 @@ fun WebViewExtensionsScreen(onChanged: () -> Unit) {
                             Text(extension.folderName, style = MaterialTheme.typography.titleMedium)
                             Text(L.settings.webViewExtensions.nameLabelToolcountMcpToolsValue(extension.name, PluginVersions.label(extension.version), extension.toolCount, (if (extension.skillCount > 0) " · ${extension.skillCount} skills" else "")), style = MaterialTheme.typography.bodySmall)
                             extension.source?.let { Text(L.settings.webViewExtensions.fromRepoValue(it.repo, (if (it.ref.isNotBlank()) "@${it.ref}" else "")), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if (extension.needsApproval) Text(L.settings.webViewExtensions.notApprovedNewInThisFolder, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                         }
                         if (exporting == extension.id) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp) }
                         else IconButton(enabled = exporting == null, onClick = {

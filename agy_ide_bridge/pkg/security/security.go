@@ -323,9 +323,10 @@ func AuthMiddleware(token string, next http.Handler) http.Handler {
 	rawHeaderName := BuildFramedHeader(token)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow health/ping endpoints without auth
+		// Allow health/ping endpoints without auth: exact paths only, and never a WebSocket upgrade (a WebSocket on an
+		// exempt path would skip the token)
 		path := r.URL.Path
-		if path == "/api/health" || path == "/health" || path == "/ping" {
+		if (path == "/api/health" || path == "/health" || path == "/ping") && r.Header.Get("Upgrade") == "" {
 			next.ServeHTTP(w, r)
 			return
 		}

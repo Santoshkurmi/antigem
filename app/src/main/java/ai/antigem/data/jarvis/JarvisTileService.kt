@@ -11,8 +11,9 @@ import ai.antigem.i18n.L
 
 /**
  * The "Jarvis" Quick Settings tile: one tap talks to Jarvis from anywhere. While hands-free mode runs it starts
- * listening right away (screen off works); while AntiGem runs in the background it listens without opening the app
- * ([JarvisTalkActivity]); otherwise it opens the app and starts listening there.
+ * listening right away; while AntiGem runs in the background it listens without opening the app
+ * ([JarvisTalkActivity]); otherwise it opens the app and starts listening there. On the lock screen the phone is
+ * unlocked first.
  */
 class JarvisTileService : TileService() {
 
@@ -32,7 +33,9 @@ class JarvisTileService : TileService() {
         super.onClick()
         JarvisPreferences.init(this)
         if (JarvisController.isAttached && JarvisPreferences.enabled.value && JarvisPreferences.handsFree.value) {
-            runCatching { startService(Intent(this, JarvisService::class.java).setAction(JarvisService.ACTION_TALK)) }
+            val talk = { runCatching { startService(Intent(this, JarvisService::class.java).setAction(JarvisService.ACTION_TALK)) }; Unit }
+            // from the lock screen only after unlocking: whoever holds a locked phone must not talk to Jarvis
+            if (isLocked) unlockAndRun { talk() } else talk()
             return
         }
         if (JarvisController.isAttached && JarvisPreferences.enabled.value && JarvisPreferences.voiceAssistant.value) {

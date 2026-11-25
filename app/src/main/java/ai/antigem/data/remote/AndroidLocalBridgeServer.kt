@@ -625,7 +625,7 @@ class AndroidLocalBridgeServer private constructor() {
         if (toolName.startsWith("notes_")) return ai.antigem.data.notes.NotesMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("jarvis_")) return ai.antigem.data.jarvis.JarvisMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("theme_")) return ai.antigem.theme.ThemeMcp.call(toolName, args)
-        if (toolName.startsWith("language_")) return ai.antigem.i18n.LanguageMcp.call(toolName, args)
+        if (toolName.startsWith("language_")) return ai.antigem.i18n.LanguageMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("miniapp_")) return ai.antigem.ui.miniapps.MiniAppDevMcp.call(appContext!!, toolName, args)
         if (toolName.startsWith("browser_")) return ai.antigem.ui.browser.mcp.BrowserMcp.call(appContext!!, toolName, args)
 

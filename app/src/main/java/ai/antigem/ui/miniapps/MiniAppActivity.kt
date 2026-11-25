@@ -509,6 +509,8 @@ open class MiniAppActivity : ComponentActivity(), MiniAppHost {
                 if (devMode && !app.signed) DevBubble()
 
                 dialogs.lastOrNull()?.let { d -> NativeDialogHost(d) }
+                // an agent's / Jarvis' / a mini app's question that only the user may answer (UserConfirm)
+                ai.antigem.ui.components.UserConfirmHost()
                 if (consoleOpen) ConsoleSheet(app.id, onEval = { code, done -> page.evaluate(code, done) }, onDevtools = { consoleOpen = false; page.openDevtools() }, onDismiss = { consoleOpen = false })
                 if (devMenuOpen) DevMenu()
                 if (infoOpen) AppInfoSheet(app, onDismiss = { infoOpen = false; page.pushPermissions(); if (!isPushed) loadIfAllowed() }, onClearData = { page.reload() })

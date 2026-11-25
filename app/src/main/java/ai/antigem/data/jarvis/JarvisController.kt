@@ -309,6 +309,14 @@ object JarvisController {
     fun hasMic(): Boolean =
         ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
+    /** The lock screen is up (locked, or the swipe screen): nobody unlocked the phone. */
+    fun phoneLocked(): Boolean =
+        runCatching { app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked }.getOrDefault(true)
+
+    /** Screen on and unlocked: someone is at the phone. Voice approvals need it (other audio can't answer for the user). */
+    fun userPresent(): Boolean =
+        !phoneLocked() && runCatching { app.getSystemService(android.os.PowerManager::class.java).isInteractive }.getOrDefault(false)
+
     fun clearNotice() { _notice.value = null }
 
     /** Shows [text] on the Jarvis notice chip. */
@@ -2265,12 +2273,16 @@ object JarvisController {
         return out.values.toList()
     }
 
+    /** Requests Jarvis would ask about by voice, waiting until someone unlocks the phone ([waitForUnlock]). */
+    private val waitingUnlock: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet<String>())
+
     private fun collectPermissions() {
         val live = allPending()
         val liveKeys = live.map { it.key }.toSet()
         handledPermissions.retainAll(liveKeys)
+        if (waitingUnlock.isNotEmpty()) { if (userPresent()) waitingUnlock.clear() else waitingUnlock.retainAll(liveKeys) }
         for (p in live) {
-            if (p.key in handledPermissions) continue
+            if (p.key in handledPermissions || p.key in waitingUnlock) continue
             // the chat on screen is only handled when hands-free is on; chats Jarvis runs always are
             if (p.source == "screen" && !JarvisPreferences.handsFree.value) continue
             handledPermissions += p.key
@@ -2293,33 +2305,47 @@ object JarvisController {
                     continue
                 }
                 val policy = JarvisPreferences.permissionPolicy.value
-                val auto = isJarvisTool(p.tool) ||
+                // Jarvis' own chat gets nothing approved on its own while the phone is locked: someone else may be talking to it
+                val lockedJarvis = (p.source == "jarvis" || p.source == "ops") && phoneLocked()
+                val auto = isJarvisTool(p.tool) || (!lockedJarvis && (
                     policy == "auto_all" ||
-                    (policy == "auto_except_risky" && p.risk != Risk.RISKY) ||
-                    (policy == "auto_readonly" && p.risk == Risk.READ)
+                        (policy == "auto_except_risky" && p.risk != Risk.RISKY) ||
+                        (policy == "auto_readonly" && p.risk == Risk.READ)))
                 if (auto) { p.approve(); continue }
                 val task = if (p.source == "task") JarvisTasks.find(p.chatId) else null
                 val owner = task?.let { JarvisManagers.ownerOrVoice(it.owner) }
-                // the manager decides: a Jarvis text chat always, the voice chat when "Jarvis decides" is on
+                // the manager decides: a Jarvis text chat always, the voice chat when "Jarvis decides" is on. A risky
+                // request of the voice chat's task is never left to the model (it can't approve it): the user is asked below.
                 if (task != null && owner != null && (owner != JarvisManagers.VOICE ||
-                        (JarvisPreferences.taskApprovals.value == "jarvis" && JarvisPreferences.eventRouting.value == "model"))) {
+                        (JarvisPreferences.taskApprovals.value == "jarvis" && JarvisPreferences.eventRouting.value == "model" && p.risk != Risk.RISKY))) {
                     JarvisEvents.post(owner, JarvisEvents.Event(
                         kind = "task_approval", taskId = task.id, title = task.title, agent = task.agent.name.lowercase(),
                         team = task.team, goal = task.goal, body = p.summary, key = p.key, risk = p.risk.name.lowercase()
                     ))
+                    // a Jarvis text chat can't approve a risky request either: the user approves it in the task's chat
+                    if (p.risk == Risk.RISKY) showNotice(L.jarvis.controller.titleIsWaitingForYourApproval(task.title.take(40), p.summary.take(90)), "chat:${task.id}")
                     continue
                 }
+                // voice approvals only from someone at the phone: screen on and unlocked
+                if (!userPresent()) { waitForUnlock(p); continue }
                 val who = if (p.source == "task") JarvisTasks.find(p.chatId)?.title?.let { L.jarvis.controller.theTaskValue(it) } ?: L.jarvis.controller.it else L.jarvis.controller.it
-                val prefix = if (p.risk == Risk.RISKY) L.jarvis.controller.carefulThisLooksRisky else ""
-                val answer = ask(L.jarvis.controller.prefixWhoWantsToSummaryApprove(prefix, who, p.summary))
-                when (parseYesNo(answer)) {
-                    Decision.YES_ALL -> {
+                val risky = p.risk == Risk.RISKY
+                val prefix = if (risky) L.jarvis.controller.carefulThisLooksRisky else ""
+                val question = L.jarvis.controller.prefixWhoWantsToSummaryApprove(prefix, who, p.summary) +
+                    (if (risky) L.jarvis.controller.toApproveItSayYesRunIt else "")
+                // music and videos pause while the user answers, so they can't answer for them
+                JarvisVoice.holdMedia(true)
+                val answer = try { ask(question) } finally { JarvisVoice.holdMedia(false) }
+                // the screen went off or locked meanwhile: the answer may not be the user's
+                if (answer != null && !userPresent()) { waitForUnlock(p); continue }
+                when (JarvisYesNo.parse(answer, risky)) {
+                    JarvisYesNo.Decision.YES_ALL -> {
                         p.approve()
                         allPending().filter { it.key != p.key && it.risk != Risk.RISKY }.forEach { it.approve() }
                     }
-                    Decision.YES -> p.approve()
-                    Decision.NO -> { p.reject("The user said no by voice."); speakOut(L.jarvis.controller.rejected) }
-                    Decision.UNCLEAR -> {
+                    JarvisYesNo.Decision.YES -> p.approve()
+                    JarvisYesNo.Decision.NO -> { p.reject("The user said no by voice."); speakOut(L.jarvis.controller.rejected) }
+                    JarvisYesNo.Decision.UNCLEAR -> {
                         if (answer != null) { p.reject("The user's answer was unclear, so nothing was approved."); speakOut(L.jarvis.controller.iDidntGetThatSoI) }
                         else { handledPermissions.remove(p.key) /* ask again on the next look */; delay(20_000) }
                     }
@@ -2330,22 +2356,27 @@ object JarvisController {
         }
     }
 
-    enum class Decision { YES, YES_ALL, NO, UNCLEAR }
-
-    private fun parseYesNo(text: String?): Decision {
-        val t = text?.lowercase()?.trim().orEmpty()
-        if (t.isEmpty()) return Decision.UNCLEAR
-        val no = Regex("\\b(no|nope|reject|deny|don'?t|do not|stop|cancel|negative|decline)\\b")
-        val yes = Regex("\\b(yes|yeah|yep|yup|approve|allow|go ahead|do it|ok|okay|sure|accept|proceed|confirm|affirmative)\\b")
-        return when {
-            no.containsMatchIn(t) -> Decision.NO
-            yes.containsMatchIn(t) && Regex("\\b(all|everything|always)\\b").containsMatchIn(t) -> Decision.YES_ALL
-            yes.containsMatchIn(t) -> Decision.YES
-            else -> Decision.UNCLEAR
+    /**
+     * [p] would be asked by voice, but nobody is at the phone (screen off or locked): it waits, and Jarvis asks again
+     * once the phone is unlocked ([collectPermissions]). Said once for all requests that wait together.
+     */
+    private suspend fun waitForUnlock(p: Perm) {
+        handledPermissions.remove(p.key)
+        val first = synchronized(waitingUnlock) { waitingUnlock.isEmpty().also { waitingUnlock.add(p.key) } }
+        if (first) {
+            val text = L.jarvis.controller.unlockThePhoneToApproveValue(p.summary.take(90))
+            showNotice(text)
+            speakOut(text)
         }
     }
 
-    /** Resolves a waiting permission from a tool call. */
+    private fun plural(n: Int) = "$n request${if (n == 1) "" else "s"}"
+
+    /**
+     * Resolves a waiting permission from a tool call (the Jarvis model). Rejecting always works. The model approves only
+     * its own work's requests that are not risky, never the user's own chat on screen; the voice chat only while
+     * someone is at the phone. Everything it approves is shown to the user ([noteApproved]).
+     */
     fun resolve(key: String?, approve: Boolean, all: Boolean, reason: String?, caller: String = JarvisManagers.VOICE): String {
         val every = allPending()
         // each Jarvis chat answers only for its own work
@@ -2355,9 +2386,64 @@ object JarvisController {
         }
         val targets = if (all || key.isNullOrBlank()) list else list.filter { it.key == key }
         if (targets.isEmpty()) return "Nothing of yours is waiting for approval."
-        targets.forEach { if (approve) it.approve() else it.reject(reason) }
-        return "${if (approve) "Approved" else "Rejected"} ${targets.size} request${if (targets.size == 1) "" else "s"}."
+        if (!approve) {
+            targets.forEach { it.reject(reason) }
+            return "Rejected ${plural(targets.size)}."
+        }
+        if (caller == JarvisManagers.VOICE && !userPresent()) {
+            // they come back (to the user, or as a new event to you) once the phone is unlocked
+            targets.forEach { handledPermissions.remove(it.key); waitingUnlock.add(it.key) }
+            return "Nothing was approved: the phone is locked or its screen is off, so approvals wait until the user unlocks it. " +
+                "The app brings them back then; don't retry now."
+        }
+        val (mine, userOnly) = targets.partition { it.risk != Risk.RISKY && it.source != "screen" }
+        mine.forEach { it.approve(); noteApproved(it) }
+        val out = mutableListOf<String>()
+        if (mine.isNotEmpty()) out += "Approved ${plural(mine.size)}."
+        if (userOnly.isNotEmpty()) out += "Not approved: ${plural(userOnly.size)} only the user can approve (risky actions, and the " +
+            "requests of the chat on screen). Don't approve them for the user: they tap Approve in that chat, or answer when the app asks them by voice."
+        return out.joinToString(" ")
     }
+
+    private val approvedLines = ArrayDeque<String>()
+
+    /** "Jarvis approved: …" in Jarvis' conversation, on its notice chip and in a notification, so no approval goes unseen. */
+    private fun noteApproved(p: Perm) {
+        val text = L.jarvis.controller.jarvisApprovedValue(p.summary.take(140))
+        addLog("Jarvis", text)
+        showNotice(text)
+        runCatching {
+            val nm = androidx.core.app.NotificationManagerCompat.from(app)
+            if (!nm.areNotificationsEnabled()) return@runCatching
+            if (Build.VERSION.SDK_INT >= 26) {
+                val sys = app.getSystemService(android.app.NotificationManager::class.java)
+                if (sys.getNotificationChannel(APPROVALS_CHANNEL) == null) {
+                    sys.createNotificationChannel(android.app.NotificationChannel(APPROVALS_CHANNEL, L.jarvis.controller.jarvisApprovals,
+                        android.app.NotificationManager.IMPORTANCE_LOW).apply { description = L.jarvis.controller.whatJarvisApprovedForYouSo })
+                }
+            }
+            val lines = synchronized(approvedLines) {
+                approvedLines.addLast(text)
+                while (approvedLines.size > 5) approvedLines.removeFirst()
+                approvedLines.joinToString("\n")
+            }
+            val open = android.app.PendingIntent.getActivity(app, APPROVALS_NOTIF_ID,
+                android.content.Intent(app, ai.antigem.MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+            val n = androidx.core.app.NotificationCompat.Builder(app, APPROVALS_CHANNEL)
+                .setSmallIcon(ai.antigem.R.drawable.ic_jarvis_mic)
+                .setContentTitle(L.jarvis.controller.jarvisApprovals)
+                .setContentText(text)
+                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(lines))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(APPROVALS_NOTIF_ID, n)
+        }
+    }
+
+    private const val APPROVALS_CHANNEL = "jarvis_approvals"
+    private const val APPROVALS_NOTIF_ID = 7741
 
     /** What [caller] may answer of what is waiting (each Jarvis chat answers only for its own work). */
     fun pendingFor(caller: String): List<Perm> = allPending().filter { canResolve(it, caller) }

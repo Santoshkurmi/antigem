@@ -47,6 +47,8 @@ type Plugin struct {
 	Source      *Source  `json:"source,omitempty"`
 	Location    string   `json:"location"`
 	Skills      []Skill  `json:"skills"`
+	// NeedsApproval: a plugin in a home folder the user hasn't approved (or whose files changed since): it stays off
+	NeedsApproval bool `json:"needsApproval,omitempty"`
 }
 
 // Source is written as .antigem-source.json into repository installs so updates can be found later.
@@ -59,6 +61,7 @@ type Source struct {
 type root struct {
 	dir      string
 	location string // installed | bundled | user_folder
+	approval bool   // plugins here run only once the user approved their files (see approvals.go)
 }
 
 type Manager struct {
@@ -69,6 +72,7 @@ type Manager struct {
 	draftsMu sync.Mutex // developer drafts
 	client   *http.Client
 	installs sync.Map // target folder → *progressTracker of a running repository install
+	approved *approvals
 }
 
 // NewManager uses the same plugin folders, in the same order, as the app: the app's private files
@@ -83,14 +87,14 @@ func NewManager(home string) *Manager {
 	return &Manager{
 		home:     home,
 		stateDir: filepath.Join(files, "browser-extensions", ".antigem-state"),
+		// ~/extensions (every install goes there) and the app's built-in plugins, nothing else: no folder in shared
+		// storage (any app with storage access could put a plugin there)
 		roots: []root{
-			{filepath.Join(home, "extensions"), "installed"},
-			{filepath.Join(home, "projects", "antiGem", "extensions"), "user_folder"},
-			{filepath.Join(files, "extensions"), "installed"},
-			{filepath.Join(files, "browser-extensions"), "bundled"},
-			{"/sdcard/antiGem/extensions", "user_folder"},
+			{filepath.Join(home, "extensions"), "installed", true},
+			{filepath.Join(files, "browser-extensions"), "bundled", false},
 		},
-		client: &http.Client{Timeout: 2 * time.Minute},
+		client:   &http.Client{Timeout: 2 * time.Minute},
+		approved: newApprovals(filepath.Join(files, "plugin-approvals.json")),
 	}
 }
 
@@ -99,6 +103,7 @@ func (m *Manager) managedRoot() string { return m.roots[0].dir }
 // ---- discovery ----
 
 func (m *Manager) scan() []Plugin {
+	m.approved.migrate(m.roots)
 	var out []Plugin
 	seen := map[string]bool{}
 	for _, r := range m.roots {
@@ -134,6 +139,10 @@ func (m *Manager) scan() []Plugin {
 			}
 			if p.Name == "" {
 				p.Name = e.Name()
+			}
+			if r.approval && !m.approved.isApproved(id, dir) {
+				p.NeedsApproval = true
+				p.IsEnabled = false
 			}
 			out = append(out, p)
 		}
@@ -354,6 +363,10 @@ func (m *Manager) install(pkg, folder, updateID string, asNew bool, source *Sour
 	if err := setDisabled(managed, id, !enabled); err != nil {
 		return Plugin{}, err
 	}
+	// installed through the app: the user chose these files (the previous version's approval stays for restore)
+	if err := m.approved.approve(id, target); err != nil {
+		return Plugin{}, fmt.Errorf("cannot approve the installed plugin: %w", err)
+	}
 	p, _ := m.find(id)
 	return p, nil
 }
@@ -408,6 +421,7 @@ func (m *Manager) remove(id string, deleteData bool) error {
 	if deleteData && idPattern.MatchString(id) {
 		_ = os.Remove(filepath.Join(m.stateDir, id+".json"))
 	}
+	m.approved.forget(id)
 	return nil
 }
 
@@ -416,11 +430,30 @@ func (m *Manager) setEnabled(id string, enabled bool) (Plugin, error) {
 	if !ok {
 		return Plugin{}, errors.New("Extension not found")
 	}
+	if enabled && p.NeedsApproval {
+		return Plugin{}, errors.New("This plugin is not approved yet (new, or its files changed): approve it first")
+	}
 	if err := setDisabled(filepath.Dir(p.DirPath), id, !enabled); err != nil {
 		return Plugin{}, err
 	}
 	p.IsEnabled = enabled
 	return p, nil
+}
+
+// approve records the plugin's current files as approved by the user (the app asked them first).
+func (m *Manager) approve(id string) (Plugin, error) {
+	p, ok := m.find(id)
+	if !ok {
+		return Plugin{}, errors.New("Extension not found")
+	}
+	if !p.NeedsApproval {
+		return p, nil
+	}
+	if err := m.approved.approve(id, p.DirPath); err != nil {
+		return Plugin{}, err
+	}
+	np, _ := m.find(id)
+	return np, nil
 }
 
 // rename moves a plugin into the managed folder under a new name, keeping its ID; one from another root is copied.
@@ -459,6 +492,10 @@ func (m *Manager) rename(id, folder string) (Plugin, error) {
 	}
 	if err == nil {
 		err = setDisabled(managed, id, !p.IsEnabled)
+	}
+	// the same files under a new name (the manifest was rewritten): still approved, unless they never were
+	if err == nil && !p.NeedsApproval {
+		err = m.approved.approve(id, target)
 	}
 	if err != nil {
 		return Plugin{}, err

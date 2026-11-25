@@ -310,12 +310,15 @@ object RenderBundle {
         }
     }
 
-    /** A WebViewClient that serves the bundle; [allowNetwork] false blocks everything else, and page navigation. */
-    fun webViewClient(allowNetwork: Boolean): WebViewClient = object : WebViewClient() {
+    /**
+     * A WebViewClient that serves the bundle; [allowNetwork] false blocks everything else. [navigate] false keeps the
+     * page where it is: no link, redirect or intent: URL leaves it (off by default without network).
+     */
+    fun webViewClient(allowNetwork: Boolean, navigate: Boolean = allowNetwork): WebViewClient = object : WebViewClient() {
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
             intercept(request, allowNetwork)
 
-        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = !allowNetwork
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = !navigate
 
         // the renderer died (crash, or killed for memory): drop this view instead of letting the app crash
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {

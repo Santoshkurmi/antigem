@@ -523,14 +523,10 @@ func main() {
 	mux.Handle("/artifacts/", h.ArtifactsFileServer())
 	mux.Handle("/attachments/", h.AttachmentsFileServer())
 
-	// WebSocket Endpoint
+	// WebSocket Endpoint: the only path that upgrades (the catch-all below never does)
 	mux.HandleFunc("/ws", wsHub.ServeWS)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
-			wsHub.ServeWS(w, r)
-			return
-		}
 		if r.URL.Path == "/" {
 			w.Header().Set("Content-Type", "text/plain")
 			_, _ = w.Write([]byte(fmt.Sprintf("antiGem IDE Server running on :%s\n", cfg.Port)))

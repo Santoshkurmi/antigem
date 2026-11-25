@@ -24,13 +24,14 @@ Do not depend on unlisted manifest keys. CRX signatures, extension-store updates
 
 The app owns and supplies the extension runtime. Extension authors do not need to distribute, import or edit its implementation files.
 
-The bundled Flow package comes from `extensions/google-flow/`. Installed ZIPs go to local terminal home `~/extensions/<folder>`. Directory discovery order is:
+The bundled Flow package comes from `extensions/google-flow/`. Installed ZIPs go to local terminal home `~/extensions/<folder>`. There are two plugin folders, in this order:
 
-1. `~/extensions`
-2. `<projects>/antiGem/extensions` when present
-3. private `files/extensions`
-4. bundled private `files/browser-extensions`
-5. `/sdcard/antiGem/extensions` when present
+1. `~/extensions` (every install goes here)
+2. bundled private `files/browser-extensions` (the app's built-in plugins, refreshed from the APK)
+
+Shared storage (`/sdcard/antiGem/extensions`) is not a plugin folder: any app with storage access could write there.
+
+Plugins in `~/extensions` run only after the user approved their files: installs through the app are approved, a folder that appears there by other means (or a plugin whose files changed) is listed as not approved and stays off until the user turns it on and confirms. The approvals (plugin ID + a hash of its files) are kept outside the plugin folders.
 
 The first manifest with a given ID wins. A home package can override a bundled package without modifying the APK. The per-root `extensions.json` file stores disabled IDs. The host's private `.antigem-state/<ID>.json` stores `local`, locally persisted `sync`, version and alarms. Folder renaming does not change the ID or state filename.
 

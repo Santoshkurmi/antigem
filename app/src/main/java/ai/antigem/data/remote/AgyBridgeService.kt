@@ -127,6 +127,16 @@ class AgyBridgeService(
     companion object {
         const val TAG = "AgyBridgeService"
         val instance by lazy { AgyBridgeService() }
+
+        /**
+         * The bridge's WebSocket endpoint for [base] (the bridge's ws:// address): /ws, the only path the bridge upgrades
+         * (bridges before that also serve /ws). [hubCsrf]: also send the AGY hub's CSRF value in hub_status.
+         */
+        fun wsEndpoint(base: String, hubCsrf: Boolean = false): String {
+            val root = base.substringBefore('?').trimEnd('/')
+            val url = if (root.endsWith("/ws")) root else "$root/ws"
+            return if (hubCsrf) "$url?hub_csrf=1" else url
+        }
     }
 
     // Fast-failing client for health/status checks: 500ms on this phone, a network-grade budget for a remote server
@@ -473,7 +483,7 @@ class AgyBridgeService(
         }
 
     fun monitorHubStatus(wsUrl: String = AuthPreferences.currentBridgeWsUrl): Flow<AgyHubStatus> = callbackFlow {
-        val request = Request.Builder().url(wsUrl).build()
+        val request = Request.Builder().url(wsEndpoint(wsUrl, hubCsrf = true)).build()
         val wsListener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 isBridgeConnected = true
@@ -1008,7 +1018,7 @@ class AgyBridgeService(
             return@callbackFlow
         }
         _connectionState.value = BridgeConnectionState.CONNECTING
-        val request = Request.Builder().url(wsUrl).build()
+        val request = Request.Builder().url(wsEndpoint(wsUrl)).build()
 
         var assignedConversationId = conversationId
         val activeToolsMap = mutableMapOf<String, ToolCall>()
@@ -1274,7 +1284,7 @@ class AgyBridgeService(
             return@callbackFlow
         }
         _connectionState.value = BridgeConnectionState.CONNECTING
-        val request = Request.Builder().url(wsUrl).build()
+        val request = Request.Builder().url(wsEndpoint(wsUrl)).build()
         val activeToolsMap = mutableMapOf<String, ToolCall>()
 
         val wsListener = object : WebSocketListener() {

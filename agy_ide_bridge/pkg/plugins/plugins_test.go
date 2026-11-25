@@ -308,3 +308,39 @@ func TestDraftsCreateWritePackageInstall(t *testing.T) {
 		t.Fatalf("installed a ZIP outside home: %s", resp.Status)
 	}
 }
+
+func TestHomePluginsNeedApproval(t *testing.T) {
+	m := newTestManager(t)
+	// already there before the update: approved by the one-time migration, keeps working
+	writeFiles(t, filepath.Join(m.managedRoot(), "old"), map[string]string{"manifest.json": `{"manifest_version":3,"name":"Old","id":"old"}`})
+	if p, _ := m.find("old"); p.NeedsApproval || !p.IsEnabled {
+		t.Fatalf("a plugin from before the update must stay on: %+v", p)
+	}
+	// planted later (a mini app, an agent): listed, but off until the user approves it
+	planted := filepath.Join(m.managedRoot(), "planted")
+	writeFiles(t, planted, map[string]string{"manifest.json": `{"manifest_version":3,"name":"P","id":"planted"}`, "bg.js": "1"})
+	p, _ := m.find("planted")
+	if !p.NeedsApproval || p.IsEnabled {
+		t.Fatalf("a new plugin in the home folder must wait for approval: %+v", p)
+	}
+	if _, err := m.setEnabled("planted", true); err == nil {
+		t.Fatal("switched on an unapproved plugin")
+	}
+	if p, err := m.approve("planted"); err != nil || p.NeedsApproval || !p.IsEnabled {
+		t.Fatalf("approve: %+v %v", p, err)
+	}
+	// a changed file needs a new approval
+	writeFiles(t, planted, map[string]string{"bg.js": "changed"})
+	if p, _ := m.find("planted"); !p.NeedsApproval || p.IsEnabled {
+		t.Fatalf("changed files must be approved again: %+v", p)
+	}
+	// installs through the app are approved
+	if p, err := installZip(t, m, zipOf(t, map[string]string{"manifest.json": skillsManifest, "skills/a.md": "# A"}), "yt", "", false); err != nil || p.NeedsApproval || !p.IsEnabled {
+		t.Fatalf("install: %+v %v", p, err)
+	}
+	// the approvals live outside every plugin folder, readable only by the user
+	fi, err := os.Stat(m.approved.path)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("approvals file: %v %v", fi, err)
+	}
+}

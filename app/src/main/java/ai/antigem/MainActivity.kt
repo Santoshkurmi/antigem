@@ -821,6 +821,9 @@ class MainActivity : ComponentActivity() {
                                 // Jarvis: voice orb (only when Jarvis is turned on in Settings)
                                 ai.antigem.ui.jarvis.JarvisOverlay()
 
+                                // questions only the user may answer (Jarvis' looser approval modes, the AI reply language…)
+                                ai.antigem.ui.components.UserConfirmHost()
+
                                 // Real-time floating live diagnostics overlay (JVM Threads, OkHttp queues, connections, lag)
                                 if (isFloatingDiagnosticsEnabled) {
                                     ai.antigem.ui.components.FloatingDiagnosticsOverlay(

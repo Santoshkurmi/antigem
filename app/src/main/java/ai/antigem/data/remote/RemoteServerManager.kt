@@ -853,17 +853,13 @@ object RemoteServerManager {
             return@withContext
         }
 
-        // plugin folders that exist now (the bridge puts installs in ~/extensions)
-        val roots = exec(
-            s,
-            "for d in \"\$HOME/extensions\" \"\$HOME/projects/antiGem/extensions\" \"\$HOME/.antigem/extensions\"; do [ -d \"\$d\" ] && echo \"\$d\"; done; true"
-        ).second.lines().filter { it.startsWith("/") }
+        // only the built-in plugins (--root) load as a whole at start; ~/extensions' plugins load one by one once the
+        // bridge says the user approved them (refreshExtensions)
         val log = "$base/extension-host.log"
         val core = buildString {
             append(q(node)).append(" --experimental-vm-modules ").append(q("$runtimeDir/extension-host.mjs"))
             append(" --serve --port ").append(hostPort)
             append(" --root ").append(q(rootDir))
-            roots.forEach { append(" --extra-root ").append(q(it)) }
             append(" --device-id ").append(q(deviceId))
             append(" --bridge-url http://127.0.0.1:").append(mcpPort)
         }

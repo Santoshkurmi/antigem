@@ -199,8 +199,15 @@ class JarvisService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-        if (phase == JarvisController.Phase.LISTENING) b.addAction(0, L.common.send, action(ACTION_SEND, 3))
-        else b.addAction(0, L.jarvis.service.talk, action(ACTION_TALK, 1))
+        // Talk and Send only after unlocking (Android 12+): whoever holds a locked phone must not talk to Jarvis. Before
+        // Android 12, Talk opens Jarvis' invisible screen, which Android also unlocks the phone for. Stop works locked.
+        fun locked(label: String, pi: PendingIntent) =
+            NotificationCompat.Action.Builder(0, label, pi).setAuthenticationRequired(true).build()
+        val talk = if (Build.VERSION.SDK_INT >= 31) action(ACTION_TALK, 1)
+        else PendingIntent.getActivity(this, 1, Intent(this, JarvisTalkActivity::class.java).setAction(JarvisLauncher.ACTION_TALK)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
+        if (phase == JarvisController.Phase.LISTENING) b.addAction(locked(L.common.send, action(ACTION_SEND, 3)))
+        else b.addAction(locked(L.jarvis.service.talk, talk))
         b.addAction(0, L.common.stop, action(ACTION_STOP, 2))
         return b.build()
     }

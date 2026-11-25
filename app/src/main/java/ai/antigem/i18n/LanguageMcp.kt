@@ -220,7 +220,7 @@ object LanguageMcp {
         return m
     }
 
-    fun call(name: String, args: JSONObject): JSONObject = try {
+    suspend fun call(context: android.content.Context, name: String, args: JSONObject): JSONObject = try {
         when (name) {
             "language_list" -> {
                 LanguageRepo.loadCached() // the saved community list: tells which downloaded languages have an update
@@ -394,7 +394,18 @@ object LanguageMcp {
                 when (args.optString("mode").lowercase()) {
                     "off" -> LanguageManager.chooseAiReply("")
                     "app" -> LanguageManager.chooseAiReply(LanguageManager.AI_REPLY_APP)
-                    "language" -> LanguageManager.chooseAiReply(args.optString("language").trim().ifBlank { return error("Give the language name.") })
+                    "language" -> {
+                        val lang = args.optString("language").trim().ifBlank { return error("Give the language name.") }
+                        if (!LanguageManager.isValidAiReplyLanguage(lang)) {
+                            return error("Use a plain language name (letters, spaces and -, at most 40 characters), e.g. Nepali.")
+                        }
+                        // every chat's context gets this text: only the user decides it
+                        if (!ai.antigem.data.security.UserConfirm.ask(context, L.i18n.languageMcp.changeTheAiReplyLanguage,
+                                L.i18n.languageMcp.anAgentOrAppWantsEvery(lang))) {
+                            return error("The user did not allow it: the reply language was not changed.")
+                        }
+                        LanguageManager.chooseAiReply(lang)
+                    }
                     else -> return error("mode is off, app or language")
                 }
                 text(LanguageManager.aiReplyLanguage()?.let { "Agents now reply in $it (from the next message's context)." } ?: "Agents choose their reply language.")

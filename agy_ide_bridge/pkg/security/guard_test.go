@@ -45,3 +45,28 @@ func TestAuthMiddlewareIgnoresTokenInURL(t *testing.T) {
 		t.Fatalf("the header must still authenticate, got %d", rec.Code)
 	}
 }
+
+func TestAuthMiddlewareHealthNeverUpgrades(t *testing.T) {
+	token := "abcdef123456"
+	h := AuthMiddleware(token, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	for _, path := range []string{"/api/health", "/health", "/ping"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 200 {
+			t.Fatalf("%s must work without the token, got %d", path, rec.Code)
+		}
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("a WebSocket on %s must need the token, got %d", path, rec.Code)
+		}
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/ping/x", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("only the exact health paths are open, got %d", rec.Code)
+	}
+}

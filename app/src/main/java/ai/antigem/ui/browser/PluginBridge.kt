@@ -86,6 +86,11 @@ object PluginBridge {
     suspend fun remove(id: String, deleteData: Boolean) = withContext(Dispatchers.IO) { post("remove", JSONObject().put("id", id).put("delete_data", deleteData)); Unit }
     suspend fun setEnabled(id: String, enabled: Boolean) = withContext(Dispatchers.IO) { post("set-enabled", JSONObject().put("id", id).put("enabled", enabled)); Unit }
 
+    /** The user approved the plugin's current files (only after they confirmed it on screen). */
+    suspend fun approve(id: String): BrowserExtension = withContext(Dispatchers.IO) {
+        BrowserExtension.fromJson(post("approve", JSONObject().put("id", id)).getJSONObject("plugin"))
+    }
+
     suspend fun rename(id: String, folder: String): BrowserExtension = withContext(Dispatchers.IO) {
         BrowserExtension.fromJson(post("rename", JSONObject().put("id", id).put("folder", folder)).getJSONObject("plugin"))
     }

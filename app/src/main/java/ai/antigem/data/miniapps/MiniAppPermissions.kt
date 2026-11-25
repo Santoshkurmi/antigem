@@ -270,11 +270,28 @@ object MiniAppPermissions {
      */
     fun isProtected(context: Context, f: File, allowDot: Boolean = false): Boolean {
         val home = MiniApps.home(context).canonicalFile
+        if (isStartupPath(home, f)) return true
         if (within(f, MiniApps.dataRoot(context).canonicalFile)) return true
         if (within(f, File(home, ".antigem").canonicalFile)) return true
         if (within(f, MiniApps.appsDir(context).canonicalFile)) return true
         if (!allowDot && isHomeDotPath(context, f)) return true
         return !within(f, home) && !within(f, sharedRoot)
+    }
+
+    /** Shell start files in home: they run as AntiGem in every new terminal. */
+    private val STARTUP_FILES = listOf(".bashrc", ".bash_profile", ".bash_login", ".profile", ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".inputrc")
+
+    /** Folders whose contents run as AntiGem later: plugins, Termux:Widget shortcuts, Termux settings and boot scripts. */
+    private val STARTUP_DIRS = listOf("extensions", ".shortcuts", ".termux", ".termux/boot")
+
+    /**
+     * Code that runs as AntiGem later (plugins, shortcuts, shell start files): never reachable by a mini app, whatever it
+     * was granted ("all files" and folders declared in the manifest too), so a folder grant can't plant something that
+     * runs on the next start.
+     */
+    private fun isStartupPath(home: File, f: File): Boolean {
+        if (STARTUP_DIRS.any { within(f, File(home, it).canonicalFile) }) return true
+        return STARTUP_FILES.any { f.path == File(home, it).canonicalPath }
     }
 
     /** A folder declared in the manifest (not "all files", not picked) that lies in a hidden home folder: it may open that part of it. */

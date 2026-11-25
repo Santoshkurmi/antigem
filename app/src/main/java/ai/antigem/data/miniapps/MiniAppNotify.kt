@@ -304,7 +304,8 @@ object MiniAppNotify {
                 val pi = if (reply != null && reply != false || !a.optBoolean("open", true))
                     PendingIntent.getBroadcast(context, actionReq, broadcastIntent(context, app, tag, aid), flags(mutable = reply != null && reply != false))
                 else PendingIntent.getActivity(context, actionReq, launchIntent(context, app, tag, aid), flags())
-                val builder = NotificationCompat.Action.Builder(0, label, pi)
+                // buttons and replies run the app's code: from the lock screen only after unlocking (Android 12+)
+                val builder = NotificationCompat.Action.Builder(0, label, pi).setAuthenticationRequired(true)
                 if (reply != null && reply != false) {
                     builder.addRemoteInput(RemoteInput.Builder(REPLY_KEY).setLabel((reply as? JSONObject)?.optString("placeholder")?.ifBlank { null } ?: label).build())
                     builder.setAllowGeneratedReplies(true)
