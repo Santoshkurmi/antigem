@@ -1907,12 +1907,16 @@ func (h *Handler) McpConfigHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		saveContent := injectTermuxEnvIfNeeded(req.Content)
 
-		// Write to both primary (~/.gemini/config/mcp_config.json) and legacy (~/.gemini/antigravity/mcp_config.json)
+		// Write to both primary (~/.gemini/config/mcp_config.json) and legacy (~/.gemini/antigravity/mcp_config.json).
+		// 0600: the entries carry secret headers (X-Device-Id = the phone tools key). WriteFile keeps the mode of a
+		// file that already exists, so chmod after.
 		_ = os.MkdirAll(filepath.Dir(primaryConfigPath), 0755)
-		errPrimary := os.WriteFile(primaryConfigPath, []byte(saveContent), 0644)
+		errPrimary := os.WriteFile(primaryConfigPath, []byte(saveContent), 0600)
+		_ = os.Chmod(primaryConfigPath, 0600)
 
 		_ = os.MkdirAll(filepath.Dir(legacyConfigPath), 0755)
-		errLegacy := os.WriteFile(legacyConfigPath, []byte(saveContent), 0644)
+		errLegacy := os.WriteFile(legacyConfigPath, []byte(saveContent), 0600)
+		_ = os.Chmod(legacyConfigPath, 0600)
 
 		if errPrimary != nil && errLegacy != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": errPrimary.Error()})

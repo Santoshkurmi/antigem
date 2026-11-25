@@ -119,6 +119,7 @@ func writeJSONFile(path string, v interface{}) error {
 	}
 	if old, err := os.ReadFile(path); err == nil {
 		_ = os.WriteFile(path+".bak", old, 0600)
+		_ = os.Chmod(path+".bak", 0600) // an existing .bak keeps its old mode otherwise
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, append(data, '\n'), 0600); err != nil {

@@ -456,7 +456,9 @@ object RemoteServerManager {
         val claudeEnabled = ai.antigem.domain.model.AgentKind.CLAUDE in enabledAgents
         val agyEnabled = ai.antigem.domain.model.AgentKind.AGY in enabledAgents
         val core = buildString {
-            append(q(bin)).append(" -f --token ").append(AuthPreferences.currentSecurityToken)
+            // no --token: other users on the server would see it with `ps`. The bridge reads it from the 0600 file
+            // startInternal writes first (~/.antigem_bridge/csrf_token.txt)
+            append(q(bin)).append(" -f")
             append(" -p ").append(p.bridgePort)
             append(" --hub-port ").append(p.hubPort)
             append(" --bind ").append(q(p.bind))
@@ -469,10 +471,20 @@ object RemoteServerManager {
         }
         val log = "$installDir/bridge.log"
         val pathExport = "export PATH=\"\$HOME/.local/bin:\$HOME/.gemini/bin:\$HOME/.antigravity/bin:/usr/local/bin:\$PATH\"; "
+        // Files with secrets (log: hub output; agent configs: X-Device-Id headers) readable only by the SSH user. Also
+        // fixes the modes older versions left. Only these files: the bridge and the agents keep the server's umask.
+        val privateFiles = listOf(
+            ".gemini/config/mcp_config.json", ".gemini/antigravity/mcp_config.json", ".claude.json",
+            ".codex/config.toml", ".config/opencode/opencode.json", ".config/opencode/opencode.jsonc",
+            ".config/opencode/config.json"
+        ).joinToString(" ") { "\"${'$'}HOME/$it\"" }
         return """
             export PATH="${'$'}HOME/.local/bin:${'$'}HOME/.gemini/bin:${'$'}HOME/.antigravity/bin:/usr/local/bin:${'$'}PATH"
             mkdir -p ${q(installDir)}
-            : > ${q(log)}
+            ( umask 077; : > ${q(log)} )
+            chmod 600 ${q(log)}
+            chmod 700 "${'$'}HOME/.antigem_bridge" 2>/dev/null
+            for f in $privateFiles; do [ -f "${'$'}f" ] && chmod 600 "${'$'}f" 2>/dev/null; done
             cd "${'$'}HOME"
             tmux kill-session -t $TMUX_SESSION 2>/dev/null
             if command -v tmux >/dev/null 2>&1; then
@@ -531,10 +543,13 @@ object RemoteServerManager {
         stopInternal()
     }
 
-    /** `[a]gy_ide_bridge.* -f --token`: matches the running bridge but not the shell that runs pgrep. */
+    /**
+     * `[a]gy_ide_bridge.* -f( |$)`: matches the running bridge but not the shell that runs pgrep. Also a bridge an older
+     * version started with `-f --token …`.
+     */
     private fun bridgePattern(context: Context): String {
         val name = effectiveBridgeBin(AuthPreferences(context)).substringAfterLast('/').ifBlank { "agy_ide_bridge" }
-        return "[" + name.first() + "]" + name.drop(1) + ".* -f --token"
+        return "[" + name.first() + "]" + name.drop(1) + ".* -f( |$)"
     }
 
     private fun bridgeProcessAlive(s: Session, context: Context): Boolean =
@@ -584,6 +599,8 @@ object RemoteServerManager {
                 val claudePath = agentPathOrNull(s, expandHome(effectiveClaudeBin(prefs), home))
                 val openCodePath = agentPathOrNull(s, expandHome(effectiveOpenCodeBin(prefs), home))
                 val codexPath = agentPathOrNull(s, expandHome(effectiveCodexBin(prefs), home))
+                // the token goes to the bridge in a 0600 file, not on its command line (launchScript)
+                writePrivateFile(s, tokenDir(home), TOKEN_FILE, AuthPreferences.currentSecurityToken.toByteArray())
 
                 // Never launch over an old copy: graceful on a restart, only leftovers on a plain start
                 _detail.value = if (force) L.remote.serverManager.stoppingTheOldBridge else L.remote.serverManager.startingTheBridge
@@ -789,10 +806,45 @@ object RemoteServerManager {
         }
     }
 
-    private fun extensionHostHealthy(s: Session, node: String, port: Int, deviceId: String): Boolean {
-        val script = "fetch('http://127.0.0.1:$port/health',{method:'POST',headers:{'x-device-id':'$deviceId','content-type':'application/json'},body:'{}'})" +
+    /**
+     * Writes a secret file on the server that only the SSH user can read: folder 0700, file 0600. The content goes
+     * through stdin, never on a command line (other users on the server see command lines with `ps`).
+     */
+    private fun writePrivateFile(s: Session, dir: String, name: String, bytes: ByteArray) {
+        val path = "$dir/$name"
+        val tmp = "$path.tmp"
+        val ch = s.openChannel("exec") as ChannelExec
+        ch.setCommand("sh -c ${q("umask 077 && mkdir -p ${q(dir)} && chmod 700 ${q(dir)} && cat > ${q(tmp)} && chmod 600 ${q(tmp)} && mv -f ${q(tmp)} ${q(path)}")} 2>&1")
+        val output = ch.inputStream
+        val stdin = ch.outputStream
+        ch.connect(15_000)
+        try {
+            stdin.write(bytes); stdin.flush(); stdin.close()
+            var waited = 0
+            while (!ch.isClosed && waited < 20_000) { Thread.sleep(50); waited += 50 }
+            if (!ch.isClosed) throw IllegalStateException("Could not write $path on the server (timed out).")
+            if (ch.exitStatus != 0) {
+                val msg = runCatching { output.readBytes().toString(Charsets.UTF_8).trim() }.getOrDefault("")
+                throw IllegalStateException("Could not write $path on the server. $msg".trim())
+            }
+        } finally {
+            ch.disconnect()
+        }
+    }
+
+    /** The bridge reads its token from here when started without --token (`security.ResolveToken`). */
+    private fun tokenDir(home: String) = "$home/.antigem_bridge"
+    private const val TOKEN_FILE = "csrf_token.txt"
+    /** The phone tools key for the plugin host on the server (next to the token, in the same 0700 folder). */
+    private const val DEVICE_KEY_FILE = "phone_tools_key.txt"
+
+    /** `AGY_DEVICE_ID="$(cat file)" `: the shell reads the key, so it never appears in a command line. */
+    private fun deviceKeyEnv(keyFile: String) = "AGY_DEVICE_ID=\"\$(cat ${q(keyFile)})\" "
+
+    private fun extensionHostHealthy(s: Session, node: String, port: Int, keyFile: String): Boolean {
+        val script = "fetch('http://127.0.0.1:$port/health',{method:'POST',headers:{'x-device-id':process.env.AGY_DEVICE_ID||'','content-type':'application/json'},body:'{}'})" +
             ".then(r=>r.text()).then(t=>console.log(t)).catch(()=>{})"
-        val (_, out) = exec(s, "${q(node)} -e ${q(script)}", 10_000)
+        val (_, out) = exec(s, "${deviceKeyEnv(keyFile)}${q(node)} -e ${q(script)}", 10_000)
         return out.replace(" ", "").contains("\"ready\":true")
     }
 
@@ -810,7 +862,6 @@ object RemoteServerManager {
         appContext = context.applicationContext
         val hostPort = ai.antigem.ui.browser.BrowserExtensionManager.instance.hostPort()
         val mcpPort = AndroidLocalBridgeServer.DEFAULT_PORT
-        val deviceId = LocalServerAuth.key(context)
         val s = session()
 
         // Node.js: PATH of a non-interactive SSH login is short, so look in the usual places too
@@ -833,6 +884,11 @@ object RemoteServerManager {
         val rootDir = "$base/browser-extensions"
         exec(s, "mkdir -p ${q(runtimeDir)} ${q(rootDir)}")
 
+        // the phone tools key goes to a 0600 file (written every time: it may have been renewed in Settings); the host
+        // gets it in AGY_DEVICE_ID, so it is never in a command line other users on the server can see
+        writePrivateFile(s, tokenDir(home), DEVICE_KEY_FILE, LocalServerAuth.key(context).toByteArray())
+        val keyFile = "${tokenDir(home)}/$DEVICE_KEY_FILE"
+
         // runtime files: upload what differs
         _detail.value = L.remote.serverManager.installingTheBrowserPluginHost
         val remoteHashes = exec(s, "cd ${q(runtimeDir)} 2>/dev/null && sha256sum *.mjs 2>/dev/null").second.lines()
@@ -846,7 +902,10 @@ object RemoteServerManager {
             }
         }
 
-        if (!changed && extensionHostHealthy(s, node, hostPort, deviceId)) {
+        // a host started by an older version has the key in its command line (--device-id): start it again
+        val oldArgv = exec(s, "pgrep -f ${q("[e]xtension-host.mjs --serve --port $hostPort .*--device-id")} >/dev/null 2>&1 && echo yes || echo no", 8_000)
+            .second.trim().endsWith("yes")
+        if (!changed && !oldArgv && extensionHostHealthy(s, node, hostPort, keyFile)) {
             _detail.value = ""
             syncTunnels(s)
             extensionHostReady = true
@@ -860,7 +919,6 @@ object RemoteServerManager {
             append(q(node)).append(" --experimental-vm-modules ").append(q("$runtimeDir/extension-host.mjs"))
             append(" --serve --port ").append(hostPort)
             append(" --root ").append(q(rootDir))
-            append(" --device-id ").append(q(deviceId))
             append(" --bridge-url http://127.0.0.1:").append(mcpPort)
         }
         _detail.value = L.remote.serverManager.startingTheBrowserPluginHost
@@ -870,9 +928,9 @@ object RemoteServerManager {
             [ "${'$'}(wc -c < ${q(log)} 2>/dev/null || echo 0)" -gt 2000000 ] && : > ${q(log)}
             cd "${'$'}HOME"
             if command -v tmux >/dev/null 2>&1; then
-              tmux new-session -d -s $EXT_TMUX ${q("$core 2>&1 | tee -a ${q(log)}")}
+              tmux new-session -d -s $EXT_TMUX ${q("sh -c " + q("${deviceKeyEnv(keyFile)}$core 2>&1 | tee -a ${q(log)}"))}
             else
-              nohup setsid $core >> ${q(log)} 2>&1 < /dev/null &
+              ${deviceKeyEnv(keyFile)}nohup setsid $core >> ${q(log)} 2>&1 < /dev/null &
             fi
             true
         """.trimIndent()
@@ -881,7 +939,7 @@ object RemoteServerManager {
 
         var up = false
         for (i in 0 until 60) {
-            if (extensionHostHealthy(s, node, hostPort, deviceId)) { up = true; break }
+            if (extensionHostHealthy(s, node, hostPort, keyFile)) { up = true; break }
             delay(500)
         }
         _detail.value = ""

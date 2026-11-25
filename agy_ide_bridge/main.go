@@ -48,6 +48,8 @@ Flags:
   --opencode-bin <path>     Custom path to the OpenCode CLI (default: opencode on PATH or ~/.opencode/bin)
   --codex-bin <path>        Custom path to the Codex CLI (default: codex on PATH or ~/.local/bin)
   -t, --token <token>       12-character security token for API & AGY CSRF obfuscation
+                            (without it: the one saved in ~/.antigem_bridge/csrf_token.txt, or a new one)
+  --show-token              Print the full token in the banner even when the output is not a terminal
   -f, --force, --f          Force start AGY Hub automatically without prompting
   -p, --port <port>         Port for the Go IDE Server (default: 1234)
   --bind <address>          Address the IDE Server listens on (default: 127.0.0.1; use 0.0.0.0 only to reach it directly from other machines)
@@ -133,6 +135,12 @@ func formatHumanCrash(p interface{}, rawStack []byte) (reason string, location s
 	return reason, "Unknown internal code location"
 }
 
+// stdoutIsTerminal: true when the bridge prints to a terminal (a person runs it), false for a pipe or a file.
+func stdoutIsTerminal() bool {
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
 func main() {
 	// `agy_ide_bridge relocate-debs …`: AntiGem's apt hook and dpkg wrapper rewrite Termux .debs with it (see
 	// pkg/relocate); nothing of the bridge itself starts
@@ -153,6 +161,7 @@ func main() {
 	var forceStart bool
 	var skipHub bool
 	var cliToken string
+	var showToken bool
 	var tzOffsetSec int
 	var tzName string
 	hubPort := "1235"
@@ -184,6 +193,8 @@ func main() {
 				cliToken = os.Args[i+1]
 				i++
 			}
+		case arg == "--show-token":
+			showToken = true
 		case arg == "-f" || arg == "--f" || arg == "--force" || arg == "-force":
 			forceStart = true
 		case arg == "--no-hub" || arg == "-n" || arg == "--skip-hub":
@@ -313,6 +324,13 @@ func main() {
 		fmt.Printf(" \033[31m[!] AGY Discovery Warning:\033[0m %v\n", err)
 	}
 
+	// The full token only on a terminal (someone started the bridge by hand) or with --show-token. The app runs the
+	// bridge through `| tee` into a log file, which gets the masked form. Checked before the run log replaces stdout.
+	shownToken, shownHeader := security.MaskSecret(secToken), security.MaskSecret(framedHeader)
+	if showToken || stdoutIsTerminal() {
+		shownToken, shownHeader = secToken, framedHeader
+	}
+
 	// everything printed from here on also goes to ~/logs/agy-ide-bridge_<date>_<time>.log (one file per start)
 	runLogFile := runlog.Start(cfg.HomeDir)
 
@@ -326,8 +344,8 @@ func main() {
 	if resolvedAgyBin != "" {
 		fmt.Printf("  \033[1m• AGY Binary:\033[0m       %s\n", resolvedAgyBin)
 	}
-	fmt.Printf("  \033[1;33m• Security Token:\033[0m   %s\n", secToken)
-	fmt.Printf("  \033[1;36m• Framed Header:\033[0m    %s\n", framedHeader)
+	fmt.Printf("  \033[1;33m• Security Token:\033[0m   %s\n", shownToken)
+	fmt.Printf("  \033[1;36m• Framed Header:\033[0m    %s\n", shownHeader)
 	fmt.Printf("  \033[1m• Local Time:\033[0m       %s\n", time.Now().Format("2006-01-02 15:04:05 MST"))
 	if runLogFile != nil {
 		fmt.Printf("  \033[1m• Log File:\033[0m         %s\n", runLogFile.Path)

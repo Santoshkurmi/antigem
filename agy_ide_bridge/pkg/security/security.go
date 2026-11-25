@@ -65,9 +65,12 @@ func ResolveToken(cliToken string) string {
 	cliToken = strings.TrimSpace(cliToken)
 	tokenFile := getTokenFilePath()
 
+	// the folder holds the token: only the owner may list or enter it (also fixes one made 0755 by older versions)
+	_ = os.MkdirAll(filepath.Dir(tokenFile), 0700)
+	_ = os.Chmod(filepath.Dir(tokenFile), 0700)
+
 	if len(cliToken) == TokenLen {
-		_ = os.MkdirAll(filepath.Dir(tokenFile), 0755)
-		_ = os.WriteFile(tokenFile, []byte(cliToken), 0600)
+		writeTokenFile(tokenFile, cliToken)
 		return cliToken
 	}
 
@@ -81,9 +84,22 @@ func ResolveToken(cliToken string) string {
 
 	// Generate and persist new token
 	newToken := GenerateToken()
-	_ = os.MkdirAll(filepath.Dir(tokenFile), 0755)
-	_ = os.WriteFile(tokenFile, []byte(newToken), 0600)
+	writeTokenFile(tokenFile, newToken)
 	return newToken
+}
+
+// writeTokenFile saves the token 0600. os.WriteFile keeps the mode of a file that already exists, so chmod after.
+func writeTokenFile(path, token string) {
+	_ = os.WriteFile(path, []byte(token), 0600)
+	_ = os.Chmod(path, 0600)
+}
+
+// MaskSecret shows only the start of a secret ("abcd…"), for logs other people may read.
+func MaskSecret(s string) string {
+	if len(s) <= 4 {
+		return "…"
+	}
+	return s[:4] + "…"
 }
 
 // PatchAgyHeader rotates the CSRF header in the target binary in-place to the 20-byte framed header.
