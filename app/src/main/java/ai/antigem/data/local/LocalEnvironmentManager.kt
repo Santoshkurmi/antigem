@@ -25,8 +25,6 @@ import org.apache.commons.compress.archivers.ar.ArArchiveEntry
 import org.apache.commons.compress.archivers.ar.ArArchiveInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
-import org.apache.commons.compress.archivers.zip.ZipFile as CommonsZipFile
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 import java.io.*
@@ -1397,8 +1395,11 @@ object LocalEnvironmentManager {
                 log("Extracting rootfs files from ZIP into ${destDir.absolutePath}...")
                 val symlinksFromTxt = mutableListOf<Pair<String, String>>()
                 val roots = writeRoots(prefixDir, homeDir)
-                CommonsZipFile(archiveToExtract).use { zip ->
-                    val entriesList = zip.entries.toList()
+                // java.util.zip, not commons-compress ZipFile: its ZipArchiveEntry calls ZipEntry.getLastAccessTime()
+                // (API 26+, not desugared), which crashes on Android 7. Unix modes come from the central directory.
+                val unixModes = readZipUnixModes(archiveToExtract)
+                java.util.zip.ZipFile(archiveToExtract).use { zip ->
+                    val entriesList = zip.entries().toList()
                     val totalEntries = entriesList.size
 
                     for (entry in entriesList) {
@@ -1428,9 +1429,9 @@ object LocalEnvironmentManager {
                             ?.takeIf { writableTarget(it, roots, entry.isDirectory) }
 
                         if (targetFile != null) {
-                            val unixMode = entry.unixMode
+                            val unixMode = unixModes[rawName] ?: 0
 
-                            if (entry.isUnixSymlink) {
+                            if ((unixMode and 0xF000) == 0xA000) { // S_IFLNK: a symlink stored in the ZIP
                                 try {
                                     targetFile.parentFile?.let { p ->
                                         if (!p.exists()) {
@@ -1442,7 +1443,7 @@ object LocalEnvironmentManager {
                                         targetFile.setWritable(true, true)
                                         try { targetFile.delete() } catch (_: Exception) {}
                                     }
-                                    val symlinkTarget = zip.getUnixSymlink(entry)
+                                    val symlinkTarget = zip.getInputStream(entry).use { it.readBytes().toString(Charsets.UTF_8) }
                                     if (!symlinkTarget.isNullOrBlank()) {
                                         Os.symlink(symlinkTarget, targetFile.absolutePath)
                                     }
@@ -1725,6 +1726,50 @@ object LocalEnvironmentManager {
             Log.w(TAG, "Archive integrity error: ${e.message}", e)
             false
         }
+    }
+
+    /**
+     * Unix mode (file type + permission bits) of each ZIP entry made on Unix, by entry name, read from the ZIP's
+     * central directory: the same value commons-compress ZipArchiveEntry.unixMode gives, which java.util.zip does not
+     * expose. Empty if the central directory can't be read (e.g. ZIP64), so callers use their default modes.
+     */
+    private fun readZipUnixModes(file: File): Map<String, Int> = try {
+        RandomAccessFile(file, "r").use { raf ->
+            val len = raf.length()
+            // End of central directory record: 22 bytes plus a comment of up to 65535 bytes, at the end of the file
+            val tailLen = minOf(len, 22L + 65535L).toInt()
+            val tail = ByteArray(tailLen)
+            raf.seek(len - tailLen)
+            raf.readFully(tail)
+            val t = java.nio.ByteBuffer.wrap(tail).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val eocd = (tailLen - 22 downTo 0).firstOrNull { t.getInt(it) == 0x06054b50 }
+                ?: return@use emptyMap<String, Int>()
+            val cdSize = t.getInt(eocd + 12).toLong() and 0xFFFFFFFFL
+            val cdOffset = t.getInt(eocd + 16).toLong() and 0xFFFFFFFFL
+            if (cdSize == 0xFFFFFFFFL || cdOffset == 0xFFFFFFFFL || cdOffset + cdSize > len) return@use emptyMap<String, Int>()
+            val cd = ByteArray(cdSize.toInt())
+            raf.seek(cdOffset)
+            raf.readFully(cd)
+            val c = java.nio.ByteBuffer.wrap(cd).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            val modes = HashMap<String, Int>()
+            var p = 0
+            // Central directory file headers: 46 fixed bytes, then name, extra field and comment
+            while (p + 46 <= cd.size && c.getInt(p) == 0x02014b50) {
+                val madeBy = c.getShort(p + 4).toInt() and 0xFFFF
+                val nameLen = c.getShort(p + 28).toInt() and 0xFFFF
+                val extraLen = c.getShort(p + 30).toInt() and 0xFFFF
+                val commentLen = c.getShort(p + 32).toInt() and 0xFFFF
+                val externalAttrs = c.getInt(p + 38)
+                if (p + 46 + nameLen > cd.size) break
+                // Host system 3 = Unix: the high 16 bits of the external attributes are st_mode
+                if (madeBy shr 8 == 3) modes[String(cd, p + 46, nameLen, Charsets.UTF_8)] = (externalAttrs ushr 16) and 0xFFFF
+                p += 46 + nameLen + extraLen + commentLen
+            }
+            modes
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "Reading ZIP unix modes failed: ${e.message}")
+        emptyMap()
     }
 
     /**
@@ -2350,7 +2395,7 @@ All files created here persist inside the application.
                 pb.environment()["HOME"] = homeDir.absolutePath
                 pb.environment()["PATH"] = "${binDir.absolutePath}:/system/bin"
                 val process = pb.start()
-                process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+                process.waitForCompat(5, java.util.concurrent.TimeUnit.SECONDS)
                 log("Generated fresh OpenSSH host keys via ssh-keygen -A")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to run ssh-keygen -A: ${e.message}")
@@ -2440,11 +2485,11 @@ All files created here persist inside the application.
                 onOutputLine?.invoke(line!!)
             }
 
-            val exited = process.waitFor(timeoutSeconds, TimeUnit.SECONDS)
+            val exited = process.waitForCompat(timeoutSeconds, TimeUnit.SECONDS)
             val durationMs = System.currentTimeMillis() - startTime
 
             if (!exited) {
-                process.destroyForcibly()
+                process.destroyForciblyCompat()
                 outputBuilder.append("\n[Process timed out after ${timeoutSeconds}s]")
                 LocalCommandResult(exitCode = 124, output = outputBuilder.toString().trim(), durationMs = durationMs)
             } else {
@@ -2611,9 +2656,9 @@ All files created here persist inside the application.
                 durationMs = System.currentTimeMillis() - startTime
             )
         } finally {
-            if (process.isAlive) {
+            if (process.isAliveCompat) {
                 try {
-                    process.destroyForcibly()
+                    process.destroyForciblyCompat()
                 } catch (_: Exception) {}
             }
         }
@@ -2688,9 +2733,9 @@ All files created here persist inside the application.
             withContext(Dispatchers.Main) { onLogLine(msg) }
             LocalCommandResult(1, msg, System.currentTimeMillis() - startTime)
         } finally {
-            if (process.isAlive) {
+            if (process.isAliveCompat) {
                 try {
-                    process.destroyForcibly()
+                    process.destroyForciblyCompat()
                 } catch (_: Exception) {}
             }
         }

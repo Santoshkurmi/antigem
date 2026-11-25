@@ -12,6 +12,7 @@ import java.io.OutputStream
 import java.io.SequenceInputStream
 import java.util.concurrent.TimeUnit
 import ai.antigem.i18n.L
+import ai.antigem.data.local.waitForCompat
 
 /**
  * Root mode: commands run as root through the phone's own `su` (Magisk, KernelSU, APatch). The first `su` makes the
@@ -44,7 +45,7 @@ object RootShell {
             val p = ProcessBuilder("su", "-c", "id -u").redirectErrorStream(true).start()
             p.outputStream.close()
             // the root manager's dialog waits for the user (Magisk: 10 s by default)
-            val finished = p.waitFor(60, TimeUnit.SECONDS)
+            val finished = p.waitForCompat(60, TimeUnit.SECONDS)
             val out = p.inputStream.bufferedReader().readText().trim()
             if (!finished) { p.destroy(); State(Check.DENIED, L.adb.rootShell.noAnswerFromSuTheRoot) }
             else if (p.exitValue() == 0 && out.lineSequence().lastOrNull()?.trim() == "0") State(Check.GRANTED)
@@ -96,7 +97,7 @@ object RootShell {
             override fun waitFor(): Int = runCatching { process.waitFor() }.getOrDefault(-1)
             override fun kill() {
                 if (pid > 0) runCatching {
-                    ProcessBuilder("su", "-c", "pkill -9 -P $pid; kill -9 $pid").redirectErrorStream(true).start().waitFor(10, TimeUnit.SECONDS)
+                    ProcessBuilder("su", "-c", "pkill -9 -P $pid; kill -9 $pid").redirectErrorStream(true).start().waitForCompat(10, TimeUnit.SECONDS)
                 }
                 runCatching { process.destroy() }
             }

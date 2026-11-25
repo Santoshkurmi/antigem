@@ -20,6 +20,8 @@ import (
 
 	// DNS for Android (no /etc/resolv.conf there); a package so `go build main.go` includes it too
 	_ "gemini-server/pkg/androiddns"
+	// Let's Encrypt roots for Android 7.0 (its system store has none); see pkg/androidcerts
+	_ "gemini-server/pkg/androidcerts"
 	"gemini-server/pkg/checkpoint"
 	"gemini-server/pkg/claude"
 	"gemini-server/pkg/codex"

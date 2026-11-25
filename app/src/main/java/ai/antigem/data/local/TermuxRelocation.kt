@@ -350,8 +350,8 @@ object TermuxRelocation {
         }
         val proc = pb.start()
         val output = proc.inputStream.bufferedReader().readText()
-        val done = proc.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
-        if (!done) proc.destroyForcibly()
+        val done = proc.waitForCompat(30, java.util.concurrent.TimeUnit.SECONDS)
+        if (!done) proc.destroyForciblyCompat()
         val ok = done && proc.exitValue() == 0 && isDiverted(prefixDir, prefix, path)
         if (!ok) Log.w(TAG, "dpkg-divert $path failed: ${output.trim()}")
         return ok

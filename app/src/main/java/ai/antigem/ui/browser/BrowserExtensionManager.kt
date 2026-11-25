@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import ai.antigem.data.local.LocalEnvironmentManager
+import ai.antigem.data.local.isAliveCompat
 import ai.antigem.data.preferences.AuthPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
@@ -220,7 +221,7 @@ class BrowserExtensionManager private constructor() {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 throw IllegalStateException(e.message ?: "The browser-plugin host could not start on the server", e)
             }
-        } else if (hostProcess?.isAlive != true) {
+        } else if (hostProcess?.isAliveCompat != true) {
             val node = File(LocalEnvironmentManager.getBinDir(context), "node")
             if (!node.canExecute()) throw IllegalStateException("Node.js is required in the local terminal to run browser extensions")
             // the local server key goes in the environment (AGY_DEVICE_ID), never on the command line
@@ -261,7 +262,7 @@ class BrowserExtensionManager private constructor() {
         }
         repeat(80) {
             if (runCatching { JSONObject(hostRequest("/health")).optBoolean("ready") }.getOrDefault(false)) { lastError = null; return@withLock }
-            if (!AuthPreferences.currentRemoteMode && hostProcess?.isAlive != true) {
+            if (!AuthPreferences.currentRemoteMode && hostProcess?.isAliveCompat != true) {
                 delay(150) // let the reader coroutine capture the final output and exit code
                 val tail = synchronized(hostTail) { hostTail.takeLast(8).joinToString("\n") }
                 val logPath = File(LocalEnvironmentManager.getHomeDir(context), "extension-host.log").absolutePath
@@ -283,7 +284,7 @@ class BrowserExtensionManager private constructor() {
             hostMutex.withLock {
                 hostProcess?.let { process ->
                     process.destroy()
-                    repeat(30) { if (process.isAlive) delay(100) } // the new host needs the port
+                    repeat(30) { if (process.isAliveCompat) delay(100) } // the new host needs the port
                 }
                 hostProcess = null
             }
@@ -313,7 +314,7 @@ class BrowserExtensionManager private constructor() {
         request("/tab/prepare", JSONObject().put("nativeId", tab.id))
     }
 
-    fun isHostRunning() = if (AuthPreferences.currentRemoteMode) ai.antigem.data.remote.RemoteServerManager.extensionHostReady else hostProcess?.isAlive == true
+    fun isHostRunning() = if (AuthPreferences.currentRemoteMode) ai.antigem.data.remote.RemoteServerManager.extensionHostReady else hostProcess?.isAliveCompat == true
 
     /**
      * Closes the host's DevTools session for [tab] (Google sign-in must load without one), then runs

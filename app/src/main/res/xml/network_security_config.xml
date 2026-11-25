@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 7.0 (API 24) has no Let's Encrypt root (ISRG Root X1 came in 7.1.1), so HTTPS to Let's Encrypt sites fails
+  there with "Trust anchor for certification path not found". GitHub release downloads redirect to
+  release-assets.githubusercontent.com, which uses a Let's Encrypt certificate (rootfs, updates, plugins). The app
+  trusts the system roots plus the two ISRG roots it ships (res/raw). X2 is the root of Let's Encrypt's ECDSA chains.
+  cleartextTrafficPermitted: with this file the manifest's usesCleartextTraffic is ignored, so it is set here
+  (the local bridge and LAN servers are plain http).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/isrg_root_x1" />
+            <certificates src="@raw/isrg_root_x2" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

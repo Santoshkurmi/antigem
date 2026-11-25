@@ -330,4 +330,6 @@ async function main() {
   for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => host.close().then(() => process.exit(0)));
   if (!args.includes('--serve')) { await stdio(request => host.mcp(request, option('--extension-id'))); await host.close(); }
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error('[ExtensionHost]', error); process.exitCode = 1; });
+// Compare real paths: import.meta.url has symlinks resolved, argv[1] does not (Android 7: /data/user/0 -> /data/data)
+const realPath = file => { try { return fs.realpathSync(file); } catch { return path.resolve(file); } };
+if (process.argv[1] && realPath(process.argv[1]) === realPath(fileURLToPath(import.meta.url))) main().catch(error => { console.error('[ExtensionHost]', error); process.exitCode = 1; });

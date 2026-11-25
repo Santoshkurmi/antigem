@@ -1,5 +1,6 @@
 package ai.antigem.data.local.chroot
 
+import ai.antigem.data.local.waitForCompat
 import ai.antigem.data.preferences.AuthPreferences
 import android.content.Context
 import android.net.ConnectivityManager
@@ -311,7 +312,7 @@ object ChrootManager {
         } catch (e: IOException) {
             stdinError = e.message
         }
-        val finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+        val finished = process.waitForCompat(timeoutMs, TimeUnit.MILLISECONDS)
         if (!finished) {
             process.destroy()
             tOut.join(1000); tErr.join(1000)
@@ -328,7 +329,7 @@ object ChrootManager {
         try {
             val p = ProcessBuilder("su", "-c", "id -u").redirectErrorStream(true).start()
             val text = withTimeoutOrNull(60_000L) { p.inputStream.bufferedReader().readText() }
-            p.waitFor(5, TimeUnit.SECONDS)
+            p.waitForCompat(5, TimeUnit.SECONDS)
             text?.trim()?.lines()?.lastOrNull()?.trim() == "0"
         } catch (_: Exception) {
             false
