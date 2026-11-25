@@ -20,14 +20,15 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 141,
-    "version_name": "2.0.5-beta.4",
+    "version_code": 142,
+    "version_name": "2.0.5-beta.5",
     "changelog": [
-      "Added Settings → Language: make your own language for the app, edit its texts, and import, export or share language files. Switching languages changes the app at once, no restart",
-      "AI agents can translate the app for you with the new Language MCP server (in each agent's MCP settings); you watch the app change while they work",
-      "Signing out of Antigravity, Claude Code or Codex now asks you to confirm first",
-      "Fixed a crash when the terminal starts on Android 8",
-      "fix: stop huge agent error messages from crashing the chat (cap error card text, escape AGY error JSON)"
+      "Added Get more languages in Settings → Language: download languages made by people who use AntiGem from the new AntiGem Languages repository on GitHub. The app itself now ships only English",
+      "Downloaded languages show who made them, and show Update when their translation gets better. They can't be edited, so an update never overwrites your changes: duplicate one to change it",
+      "Name & details of your own language now lists everyone who made it (with GitHub usernames), plus a description and a variant like Formal",
+      "Added Send to the community in a language's ⋮ menu: share a language you made so everyone can download it",
+      "AI agents can list and download community languages through the Language MCP server",
+      "Fixed SSH terminals skipping the server's host key check and your saved SSH key when opening or closing remote tmux windows"
     ]
   }
 }
