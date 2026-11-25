@@ -57,6 +57,26 @@ object CustomSlashCommands {
             """.trimIndent()
         ),
         CustomSlashCommand(
+            name = "playground",
+            description = "Build a live, interactive web page (HTML/CSS/JS) that runs right in the chat",
+            expansion = """
+                Build a live, interactive web page that runs right here in the chat: ${'$'}ARGUMENTS
+                If that is empty or unclear, first ask what it should be (a game, a visual demo, a tool, a UI mock-up …), then continue.
+
+                How the chat runs it:
+                - One small page: a single ```html_app block with the whole document (CSS in <style>, JS in <script>).
+                - Bigger: split it into files. Name each block after its language: ```html_app:index.html first, then ```css:css/style.css, ```js:js/main.js, ```json:data/levels.json … (more pages: ```html_app:about.html). The chat serves them together as one site, so <link href="css/style.css">, <script type="module" src="js/main.js">, `import … from './util.js'`, fetch('data/levels.json') and links between the pages work. Only text files this way; images: inline SVG, data: URLs or https links.
+                - A real project on disk (many files, images, sounds), or when the user asks for files: write them into a folder of its own, then show a ```html_app block that holds only the absolute path of its .html file. Everything in that folder (images, fonts, audio) loads; files outside it and hidden files (.env) don't.
+                - It runs sandboxed in its own origin: localStorage, IndexedDB, canvas, WebGL, Web Audio, fetch to CORS APIs and CDN scripts (e.g. https://cdn.jsdelivr.net/npm/…) work. alert(), confirm(), prompt(), window.open() and new tabs don't: show messages and dialogs inside the page.
+
+                Make it good:
+                - It is shown on a phone first: a ~360-420 px wide card (and a fullscreen button). Mobile-first, responsive layout, touch and pointer input (pointer events), tap targets ≥ 40 px, no hover-only controls; keyboard too when it helps.
+                - Polished look: a clear visual style, good spacing and typography, smooth animations (requestAnimationFrame, CSS transitions); readable on a dark and on a light chat.
+                - Working, complete code: no placeholders or TODOs, no missing files; every file a page references is in the same reply (each reply is its own site). Keep state in localStorage when it helps (scores, settings).
+                - Write the blocks in one reply, then say in a line or two what it does and how to use it. To change it later: in-chat files, send the whole app again (every file); a site on disk, edit its files and show the path block again (the card's reload button also picks up edits).
+            """.trimIndent()
+        ),
+        CustomSlashCommand(
             name = "browser_mcp",
             description = "Do a task in AntiGem's built-in browser with the Browser Automation MCP",
             expansion = """

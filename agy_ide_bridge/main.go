@@ -463,6 +463,8 @@ func main() {
 	mux.HandleFunc("/api/fs/archive/list", h.FsArchiveListHandler)
 	mux.HandleFunc("/api/fs/search", h.FsSearchHandler)
 	mux.HandleFunc("/api/fs/raw", h.FsRawHandler)
+	// a web page shown in the chat (html_app block naming an .html file): only files inside its folder
+	mux.HandleFunc("/api/fs/site", h.FsSiteHandler)
 	mux.HandleFunc("/api/fs/upload", h.FsUploadHandler)
 	mux.HandleFunc("/api/tree", h.FileTreeHandler)
 	mux.HandleFunc("/api/file/read", h.FileReadHandler)

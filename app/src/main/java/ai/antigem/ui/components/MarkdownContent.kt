@@ -150,8 +150,20 @@ sealed class MarkdownBlock {
     /** smiles / functionplot / jsxgraph / matter / tikz: drawn from the STEM bundle (Settings → STEM & diagrams). */
     @androidx.compose.runtime.Immutable
     data class Stem(val kind: StemKind, val code: String) : MarkdownBlock()
+    /**
+     * An ```html_app block. [entry]: its file name (```html_app:index.html) when it is a site of several files, which
+     * are then in [files] (path → text, the entry first). [sitePath]: the block only names an .html file on disk.
+     * [complete]: its closing fence (and every file's) arrived; until then the card waits instead of reloading per token.
+     */
     @androidx.compose.runtime.Immutable
-    data class InteractiveUi(val htmlCode: String, val title: String = L.components.markdown.interactiveApp) : MarkdownBlock()
+    data class InteractiveUi(
+        val htmlCode: String,
+        val title: String = L.components.markdown.interactiveApp,
+        val entry: String = "",
+        val files: Map<String, String> = emptyMap(),
+        val sitePath: String = "",
+        val complete: Boolean = true
+    ) : MarkdownBlock()
     /** An ```antigem-memory block (Agent memory): shown as a chip; [complete] once its closing fence arrived. */
     @androidx.compose.runtime.Immutable
     data class MemoryChip(val body: String, val complete: Boolean) : MarkdownBlock()
@@ -208,7 +220,15 @@ fun MarkdownBlockView(
             AgentErrorCard(error = block, modifier = modifier)
         }
         is MarkdownBlock.InteractiveUi -> {
-            InteractiveUiView(htmlCode = block.htmlCode, title = block.title, modifier = modifier)
+            InteractiveUiView(
+                htmlCode = block.htmlCode,
+                title = block.title,
+                files = block.files,
+                entry = block.entry,
+                sitePath = block.sitePath,
+                complete = block.complete,
+                modifier = modifier
+            )
         }
         is MarkdownBlock.Math -> {
             NativeMathView(latex = block.latex, isDisplay = block.isDisplay, modifier = modifier)
@@ -3156,8 +3176,13 @@ fun parseMarkdownBlocks(
             } else if (StemKind.fromLang(lang) != null && i < lines.size) {
                 // only once the closing ``` arrived: a block still streaming in stays code (no TeX run per token)
                 result.add(MarkdownBlock.Stem(kind = StemKind.fromLang(lang)!!, code = codeLines.joinToString("\n").trim()))
-            } else if (lang.equals("interactive_ui", ignoreCase = true) || lang.equals("interactive_app", ignoreCase = true) || lang.equals("html_app", ignoreCase = true) || lang.equals("canvas_app", ignoreCase = true) || lang.equals("widget", ignoreCase = true) || lang.equals("ui", ignoreCase = true) || lang.equals("mini_app", ignoreCase = true)) {
-                result.add(MarkdownBlock.InteractiveUi(htmlCode = codeLines.joinToString("\n").trim()))
+            } else if (isAppLang(lang.substringBefore(':'))) {
+                // ```html_app (one page), ```html_app:index.html (a site whose other files are ```css:style.css … blocks
+                // in this message, see groupAppFiles) or ```html_app with only /abs/path/page.html (a site on disk)
+                val code = codeLines.joinToString("\n").trim()
+                val entry = lang.substringAfter(':', "").trim().let { appFilePath(it) ?: "" }
+                val sitePath = code.takeIf { !it.contains('\n') && it.startsWith("/") && (it.endsWith(".html", true) || it.endsWith(".htm", true)) } ?: ""
+                result.add(MarkdownBlock.InteractiveUi(htmlCode = code, entry = entry, sitePath = sitePath, complete = i < lines.size))
             } else {
                 result.add(MarkdownBlock.Code(language = lang, code = codeLines.joinToString("\n")))
             }
@@ -3405,7 +3430,51 @@ fun parseMarkdownBlocks(
         }
     }
 
-    return result
+    return groupAppFiles(result, lines)
+}
+
+private fun isAppLang(lang: String): Boolean = lang.lowercase() in APP_LANGS
+
+private val APP_LANGS = setOf("interactive_ui", "interactive_app", "html_app", "canvas_app", "widget", "ui", "mini_app")
+
+/** A file name after ```lang: — a relative path inside the app (no "..", no hidden parts), or null. */
+private fun appFilePath(raw: String): String? {
+    val p = raw.trim().removePrefix("./").trimStart('/')
+    if (p.isEmpty() || p.length > 200 || p.any { it.isWhitespace() || it == '\\' || it == '?' || it == '#' }) return null
+    if (p.split('/').any { it.isEmpty() || it.startsWith(".") }) return null
+    return p
+}
+
+/**
+ * A multi-file app: when a message has an ```html_app:<entry> block, its ```lang:<path> code blocks (css:style.css,
+ * js:app.js, html_app:about.html …) are the app's other files. They join the first named app block (one card, with a
+ * file picker in its Code tab) instead of showing as code. Without a named app block, nothing changes. While a fence
+ * is still open a file may still be arriving: the app waits (no reload per token).
+ */
+private fun groupAppFiles(blocks: MutableList<MarkdownBlock>, lines: List<String>): List<MarkdownBlock> {
+    val appIndex = blocks.indexOfFirst { it is MarkdownBlock.InteractiveUi && it.entry.isNotEmpty() && it.sitePath.isEmpty() }
+    if (appIndex < 0) return blocks
+    val app = blocks[appIndex] as MarkdownBlock.InteractiveUi
+    val files = linkedMapOf(app.entry to app.htmlCode)
+    val out = ArrayList<MarkdownBlock>(blocks.size)
+    var appAt = 0
+    blocks.forEachIndexed { index, block ->
+        if (index == appIndex) {
+            appAt = out.size
+            return@forEachIndexed
+        }
+        val named = when {
+            block is MarkdownBlock.Code && block.language.contains(':') ->
+                appFilePath(block.language.substringAfter(':'))?.let { it to block.code.trimEnd() }
+            block is MarkdownBlock.InteractiveUi && block.entry.isNotEmpty() && block.sitePath.isEmpty() -> block.entry to block.htmlCode
+            else -> null
+        }
+        if (named != null) files.putIfAbsent(named.first, named.second) else out.add(block)
+    }
+    // an open fence anywhere: a file may still be arriving
+    val streaming = lines.count { it.trimStart().startsWith("```") } % 2 == 1
+    out.add(appAt, app.copy(files = files, complete = app.complete && !streaming))
+    return out
 }
 
 /**

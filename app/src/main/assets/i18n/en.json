@@ -2216,6 +2216,12 @@
     "components.interactiveUiView.restartApp": "Restart App",
     "components.interactiveUiView.openFullscreen": "Open Fullscreen",
     "components.interactiveUiView.exitFullscreen": "Exit Fullscreen",
+    "components.interactiveUiView.buildingTheApp": "Building the app…",
+    "components.interactiveUiView.runNow": "Run now",
+    "components.interactiveUiView.countFiles": {
+      "one": "{count} file",
+      "other": "{count} files"
+    },
     "components.localServerOutput.serverLogsSsh": "Server Logs (SSH)",
     "components.localServerOutput.localServerLogs": "Local Server Logs",
     "components.localServerOutput.starting": "Starting...",

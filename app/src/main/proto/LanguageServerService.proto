@@ -11461,6 +11461,7 @@ message ToolSourceMetadata {
   string conversation_id = 1;
   int32 step_index = 2;
   ChatToolCall tool_call = 3;
+  string label = 4;
 }
 
 message ToolStatus {

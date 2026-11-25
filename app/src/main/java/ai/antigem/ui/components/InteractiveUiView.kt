@@ -9,6 +9,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.content.Intent
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -17,6 +18,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import ai.antigem.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -64,19 +68,32 @@ class InteractiveUiJsBridge(
     }
 }
 
+/**
+ * An ```html_app card. One page ([htmlCode]), a site of several files written in the chat ([files], opened at
+ * [entry]), or a site on disk ([sitePath], read through the bridge). [complete]: false while the block (or one of its
+ * files) is still streaming in: the card waits instead of reloading the page on every token.
+ */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun InteractiveUiView(
     htmlCode: String,
     title: String = L.components.interactiveUiView.interactiveApp,
+    files: Map<String, String> = emptyMap(),
+    entry: String = "",
+    sitePath: String = "",
+    complete: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val isDark = isAppInDarkTheme()
     var isFullscreen by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) } // 0 = App, 1 = Code
     var reloadKey by remember { mutableIntStateOf(0) }
     var isCopied by remember { mutableStateOf(false) }
+    // "Run now" on the waiting card (e.g. a reply that stopped before its closing ```)
+    var runAnyway by remember { mutableStateOf(false) }
+    val ready = complete || runAnyway
+    val multi = files.isNotEmpty() && entry.isNotEmpty()
+    val onDisk = sitePath.isNotEmpty()
 
     LaunchedEffect(isCopied) {
         if (isCopied) {
@@ -85,60 +102,33 @@ fun InteractiveUiView(
         }
     }
 
-    val primaryHex = if (isDark) "#E07A5F" else "#D97757"
-    val bgHex = if (isDark) "#1E1E1E" else "#F7F7F8"
-    val textHex = if (isDark) "#ECECF1" else "#1A1A1A"
-    val cardBgHex = if (isDark) "#2A2A2A" else "#FFFFFF"
-    val borderHex = if (isDark) "#3A3A3A" else "#E5E5E5"
-
-    // each block its own origin (from its code: stable across reloads), so one chat's block can't read another's
-    // localStorage or cookies
-    val blockOrigin = remember(htmlCode) {
-        "https://b" + Integer.toHexString(htmlCode.hashCode()) + Integer.toHexString(htmlCode.length) + ".antigravity.local/"
+    // each block its own origin, so one chat's block can't read another's localStorage or cookies. From its code (a
+    // site: its first page, so a file arriving later keeps the origin), or from its path on disk (stable across edits)
+    val blockOrigin = remember(htmlCode, sitePath) {
+        if (onDisk) "https://d" + Integer.toHexString(sitePath.hashCode()) + Integer.toHexString(sitePath.length) + ".antigravity.local/"
+        else "https://b" + Integer.toHexString(htmlCode.hashCode()) + Integer.toHexString(htmlCode.length) + ".antigravity.local/"
     }
-    val fullHtml = remember(htmlCode, isDark, reloadKey) {
-        if (htmlCode.trimStart().startsWith("<!DOCTYPE", ignoreCase = true) ||
-            htmlCode.trimStart().startsWith("<html", ignoreCase = true)
-        ) {
-            htmlCode
-        } else {
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
-                <style>
-                    :root {
-                        --primary: $primaryHex;
-                        --bg: $bgHex;
-                        --text: $textHex;
-                        --card-bg: $cardBgHex;
-                        --border: $borderHex;
-                    }
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body {
-                        background-color: var(--bg);
-                        color: var(--text);
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                        padding: 12px;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                    }
-                    button, input, select, textarea {
-                        font-family: inherit;
-                    }
-                </style>
-            </head>
-            <body>
-                $htmlCode
-            </body>
-            </html>
-            """.trimIndent()
+    val fullHtml = remember(htmlCode, isDark, reloadKey) { themedPage(htmlCode, isDark) }
+    val site: BlockSite? = remember(files, entry, sitePath, isDark) {
+        when {
+            onDisk -> DiskSite(sitePath)
+            multi -> InlineSite(files, entry) { themedPage(it, isDark) }
+            else -> null
         }
+    }
+    val pageKey = "$reloadKey:$isDark:" + when {
+        onDisk -> sitePath
+        multi -> "${files.hashCode()}:${files.size}"
+        else -> "${fullHtml.hashCode()}:${fullHtml.length}"
+    }
+    val load: (WebView) -> Unit = { view ->
+        if (site != null) view.loadUrl(blockOrigin + site.startUrlPath)
+        else view.loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
+    }
+    val subtitle = when {
+        onDisk -> sitePath.substringAfterLast('/')
+        multi -> L.components.interactiveUiView.countFiles(files.size)
+        else -> null
     }
 
     Surface(
@@ -159,7 +149,7 @@ fun InteractiveUiView(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
                     Icon(
                         imageVector = Icons.Default.SmartButton,
                         contentDescription = null,
@@ -171,11 +161,22 @@ fun InteractiveUiView(
                         text = title,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
                     )
+                    if (subtitle != null) {
+                        Text(
+                            text = " · $subtitle",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(6.dp))
                     // Tab Selector: App vs Code
                     Row(
                         modifier = Modifier
@@ -230,7 +231,10 @@ fun InteractiveUiView(
 
                     // Fullscreen / Expand Button
                     IconButton(
-                        onClick = { isFullscreen = true },
+                        onClick = {
+                            runAnyway = true
+                            isFullscreen = true
+                        },
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
@@ -244,7 +248,42 @@ fun InteractiveUiView(
             }
 
             // Body Area
-            if (selectedTab == 0) {
+            if (selectedTab == 0 && !ready) {
+                // still streaming in: one load at the end instead of one per token
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = ClaudeTerracotta
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = L.components.interactiveUiView.buildingTheApp,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                    }
+                    if (multi) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = files.keys.joinToString(" · "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    TextButton(onClick = { runAnyway = true }) {
+                        Text(L.components.interactiveUiView.runNow, color = ClaudeTerracotta, fontSize = 12.sp)
+                    }
+                }
+            } else if (selectedTab == 0) {
                 // Interactive Web App Canvas
                 Box(
                     modifier = Modifier
@@ -255,32 +294,8 @@ fun InteractiveUiView(
                         // kept alive while the chat is open (ChatWebViewCache): scrolling back keeps the app's state
                         KeptWebView(
                             part = "app",
-                            factory = { ctx ->
-                                WebView(ctx).apply {
-                                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                    settings.apply {
-                                        javaScriptEnabled = true
-                                        domStorageEnabled = true
-                                        loadWithOverviewMode = true
-                                        useWideViewPort = true
-                                        builtInZoomControls = false
-                                        displayZoomControls = false
-                                        cacheMode = WebSettings.LOAD_NO_CACHE
-                                    }
-                                    webChromeClient = WebChromeClient()
-                                    webViewClient = blockClient(blockOrigin, kept = true)
-                                    installBlockBridge(this, ctx, blockOrigin)
-                                }
-                            },
-                            update = { view ->
-                                // load only when the page changed (a kept view comes back with its page running)
-                                val pageKey = "$reloadKey:$isDark:${fullHtml.hashCode()}:${fullHtml.length}"
-                                if (view.tag != pageKey) {
-                                    view.tag = pageKey
-                                    view.loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
-                                }
-                            },
+                            factory = { ctx -> newBlockWebView(ctx, blockOrigin, kept = true, zoom = false) },
+                            update = { view -> updateBlockWebView(view, blockOrigin, site, pageKey, load) },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -288,7 +303,39 @@ fun InteractiveUiView(
             } else {
                 // Source Code Inspector
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    CodeBlock(code = htmlCode, language = "html")
+                    when {
+                        multi -> {
+                            var shown by remember(files.keys) { mutableStateOf(entry) }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                files.keys.forEach { name ->
+                                    val on = name == shown
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (on) ClaudeTerracotta else MaterialTheme.colorScheme.surface)
+                                            .clickable { shown = name }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = name,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (on) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                        )
+                                    }
+                                }
+                            }
+                            CodeBlock(code = files[shown] ?: files.getValue(entry), language = siteLanguage(shown))
+                        }
+                        onDisk -> CodeBlock(code = sitePath, language = "text")
+                        else -> CodeBlock(code = htmlCode, language = "html")
+                    }
                 }
             }
         }
@@ -315,7 +362,7 @@ fun InteractiveUiView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
                             Icon(
                                 imageVector = Icons.Default.SmartButton,
                                 contentDescription = null,
@@ -324,10 +371,12 @@ fun InteractiveUiView(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = title,
+                                text = title + (subtitle?.let { " · $it" } ?: ""),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -353,28 +402,8 @@ fun InteractiveUiView(
                     Box(modifier = Modifier.fillMaxSize()) {
                         key(reloadKey, isDark) {
                             AndroidView(
-                                factory = { ctx ->
-                                    WebView(ctx).apply {
-                                        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
-                                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                        settings.apply {
-                                            javaScriptEnabled = true
-                                            domStorageEnabled = true
-                                            loadWithOverviewMode = true
-                                            useWideViewPort = true
-                                            builtInZoomControls = true
-                                            displayZoomControls = false
-                                            cacheMode = WebSettings.LOAD_NO_CACHE
-                                        }
-                                        webChromeClient = WebChromeClient()
-                                        webViewClient = blockClient(blockOrigin, kept = false)
-                                        installBlockBridge(this, ctx, blockOrigin)
-                                        loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
-                                    }
-                                },
-                                update = { view ->
-                                    view.loadDataWithBaseURL(blockOrigin, fullHtml, "text/html", "UTF-8", null)
-                                },
+                                factory = { ctx -> newBlockWebView(ctx, blockOrigin, kept = false, zoom = true) },
+                                update = { view -> updateBlockWebView(view, blockOrigin, site, pageKey, load) },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -385,12 +414,110 @@ fun InteractiveUiView(
     }
 }
 
+/** A one-page block (or a site's .html fragment) as a full page, with the chat's theme colours as CSS variables. */
+private fun themedPage(code: String, isDark: Boolean): String {
+    if (code.trimStart().startsWith("<!DOCTYPE", ignoreCase = true) || code.trimStart().startsWith("<html", ignoreCase = true)) {
+        return code
+    }
+    val primaryHex = if (isDark) "#E07A5F" else "#D97757"
+    val bgHex = if (isDark) "#1E1E1E" else "#F7F7F8"
+    val textHex = if (isDark) "#ECECF1" else "#1A1A1A"
+    val cardBgHex = if (isDark) "#2A2A2A" else "#FFFFFF"
+    val borderHex = if (isDark) "#3A3A3A" else "#E5E5E5"
+    return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
+            <style>
+                :root {
+                    --primary: $primaryHex;
+                    --bg: $bgHex;
+                    --text: $textHex;
+                    --card-bg: $cardBgHex;
+                    --border: $borderHex;
+                }
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body {
+                    background-color: var(--bg);
+                    color: var(--text);
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                    padding: 12px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                }
+                button, input, select, textarea {
+                    font-family: inherit;
+                }
+            </style>
+        </head>
+        <body>
+            $code
+        </body>
+        </html>
+    """.trimIndent()
+}
+
+/** What a block's WebView serves and shows now: a kept view outlives the composition that made it. */
+private class BlockState(val client: BlockClient) {
+    var pageKey: String? = null
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+private fun newBlockWebView(ctx: Context, origin: String, kept: Boolean, zoom: Boolean): WebView = WebView(ctx).apply {
+    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+    settings.apply {
+        javaScriptEnabled = true
+        domStorageEnabled = true
+        loadWithOverviewMode = true
+        useWideViewPort = true
+        builtInZoomControls = zoom
+        displayZoomControls = false
+        cacheMode = WebSettings.LOAD_NO_CACHE
+    }
+    webChromeClient = WebChromeClient()
+    val client = BlockClient(origin, kept)
+    webViewClient = client
+    tag = BlockState(client)
+    installBlockBridge(this, ctx, origin)
+}
+
+/** Points the view at the current files and loads the page only when it changed (a kept view comes back running). */
+private fun updateBlockWebView(view: WebView, origin: String, site: BlockSite?, pageKey: String, load: (WebView) -> Unit) {
+    val state = view.tag as? BlockState
+    if (state == null) {
+        load(view)
+        return
+    }
+    state.client.origin = origin
+    state.client.site = site
+    if (state.pageKey != pageKey) {
+        state.pageKey = pageKey
+        load(view)
+    }
+}
+
 /**
  * The block page stays the block page: it can't navigate itself (or be navigated by a script) to another site, where
  * it would keep the antiGemini bridge. A web link the user taps opens in the browser; any other scheme is dropped.
  * Frames inside the block load as before. [kept]: the chat's own view (a dead renderer is handed to the cache).
+ * [site]: a site of several files, served at [origin] (pages of the site navigate inside the block).
  */
-private fun blockClient(origin: String, kept: Boolean): WebViewClient = object : WebViewClient() {
+private class BlockClient(@Volatile var origin: String, private val kept: Boolean) : WebViewClient() {
+    @Volatile var site: BlockSite? = null
+
+    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+        val s = site ?: return null
+        if (!request.url.toString().startsWith(origin)) return null
+        val path = (request.url.path ?: "").removePrefix("/")
+        return runCatching { s.serve(path, request) }.getOrElse { siteError(500, it.message ?: "Error") }
+    }
+
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         if (!request.isForMainFrame) return false
         val url = request.url
