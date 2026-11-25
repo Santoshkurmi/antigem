@@ -13,6 +13,7 @@ import (
 	"gemini-server/pkg/buildinfo"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -308,8 +309,17 @@ func (h *Handler) ConversationsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// validConvID reports whether id names one conversation folder under BrainDir: not empty, ".", ".." or a path.
+func validConvID(id string) bool {
+	return id != "" && id != "." && id != ".." && !strings.ContainsAny(id, `/\`)
+}
+
 func (h *Handler) ConversationMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	convID := strings.TrimPrefix(r.URL.Path, "/api/conversations/")
+	if !validConvID(convID) {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "invalid conversation id", "messages": []models.ChatMessage{}})
+		return
+	}
 
 	transcriptPath := filepath.Join(h.Cfg.BrainDir, convID, ".system_generated", "logs", "transcript.jsonl")
 	if _, err := os.Stat(transcriptPath); os.IsNotExist(err) {
@@ -329,6 +339,10 @@ func (h *Handler) ConversationMessagesHandler(w http.ResponseWriter, r *http.Req
 func (h *Handler) UpdateConversationTitleHandler(w http.ResponseWriter, r *http.Request) {
 	convID := strings.TrimPrefix(r.URL.Path, "/api/conversations/")
 	convID = strings.TrimSuffix(convID, "/title")
+	if !validConvID(convID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid conversation id"})
+		return
+	}
 
 	var req struct {
 		Title string `json:"title"`
@@ -349,6 +363,11 @@ func (h *Handler) UpdateConversationTitleHandler(w http.ResponseWriter, r *http.
 
 func (h *Handler) DeleteConversationHandler(w http.ResponseWriter, r *http.Request) {
 	convID := strings.TrimPrefix(r.URL.Path, "/api/conversations/")
+	// an empty id would be BrainDir itself, and RemoveAll would delete every conversation
+	if !validConvID(convID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid conversation id"})
+		return
+	}
 
 	convDir := filepath.Join(h.Cfg.BrainDir, convID)
 	_ = os.RemoveAll(convDir)
@@ -457,7 +476,7 @@ func (h *Handler) ExportConversationArchiveHandler(w http.ResponseWriter, r *htt
 	convID = strings.TrimSuffix(convID, "/share")
 	convID = strings.TrimSpace(convID)
 
-	if convID == "" {
+	if !validConvID(convID) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "conversationId is required"})
 		return
 	}
@@ -1580,12 +1599,7 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = os.MkdirAll(filepath.Dir(req.Path), 0755)
-	tmpPath := req.Path + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(req.Content), 0644); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if err := os.Rename(tmpPath, req.Path); err != nil {
+	if err := writeFileAtomic(req.Path, []byte(req.Content)); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -1597,6 +1611,32 @@ func (h *Handler) FileSaveHandler(w http.ResponseWriter, r *http.Request) {
 		"path":    req.Path,
 		"hash":    newHash,
 	})
+}
+
+// writeFileAtomic replaces a file through a temp file and a rename. A symlink is followed, so its target is written
+// and the link stays; the file keeps its permissions (a new file gets 0644).
+func writeFileAtomic(path string, data []byte) error {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	mode := os.FileMode(0644)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, mode); err != nil {
+		return err
+	}
+	// WriteFile's mode is reduced by the umask; set the original one exactly
+	if err := os.Chmod(tmpPath, mode); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
 
 func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {
@@ -1638,12 +1678,7 @@ func (h *Handler) FilePatchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newContent := strings.Join(updated, "\n")
-	tmpPath := req.Path + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(newContent), 0644); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if err := os.Rename(tmpPath, req.Path); err != nil {
+	if err := writeFileAtomic(req.Path, []byte(newContent)); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -1830,6 +1865,12 @@ func (h *Handler) UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("[UPLOAD] Saved attachment: %s (%d bytes) at %s\n", uniqueName, len(buffer), targetPath)
 
+	// /attachments/ serves the startup workspace's attachments; a file saved in another project names that project
+	attachmentURL := fmt.Sprintf("%s/attachments/%s", publicBaseURL(r, h.Cfg.Port), uniqueName)
+	if wsDir != h.Cfg.WorkspaceDir {
+		attachmentURL += "?project=" + url.QueryEscape(wsDir)
+	}
+
 	writeJSON(w, http.StatusOK, models.ChatAttachment{
 		ID:        fmt.Sprintf("att_%d", time.Now().UnixMilli()),
 		Name:      req.Filename,
@@ -1837,7 +1878,7 @@ func (h *Handler) UploadHandler(w http.ResponseWriter, r *http.Request) {
 		Path:      targetPath,
 		IsImage:   isImage,
 		Size:      len(buffer),
-		URL:       fmt.Sprintf("%s/attachments/%s", publicBaseURL(r, h.Cfg.Port), uniqueName),
+		URL:       attachmentURL,
 	})
 }
 
@@ -1846,8 +1887,15 @@ func (h *Handler) ArtifactsFileServer() http.Handler {
 }
 
 func (h *Handler) AttachmentsFileServer() http.Handler {
-	targetDir := filepath.Join(h.Cfg.WorkspaceDir, ".gemini", "attachments")
-	return http.StripPrefix("/attachments/", http.FileServer(http.Dir(targetDir)))
+	defaultDir := filepath.Join(h.Cfg.WorkspaceDir, ".gemini", "attachments")
+	return http.StripPrefix("/attachments/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// ?project=<dir>: an upload saved in that project's .gemini/attachments (UploadHandler)
+		dir := defaultDir
+		if p := r.URL.Query().Get("project"); p != "" && dirExists(p) {
+			dir = filepath.Join(p, ".gemini", "attachments")
+		}
+		http.FileServer(http.Dir(dir)).ServeHTTP(w, r)
+	}))
 }
 
 func dirExists(path string) bool {

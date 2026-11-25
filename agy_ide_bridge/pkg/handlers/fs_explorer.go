@@ -533,6 +533,13 @@ func (h *Handler) FsTransferHandler(w http.ResponseWriter, r *http.Request) {
 					results = append(results, res)
 					continue
 				}
+				// e.g. moving /t/foo/foo up into /t: removing /t/foo would delete the source with it
+				if fsIsWithin(dst, src) {
+					res.Error = "cannot replace a folder that contains the source"
+					failed++
+					results = append(results, res)
+					continue
+				}
 				if err := os.RemoveAll(dst); err != nil {
 					res.Error = err.Error()
 					failed++
