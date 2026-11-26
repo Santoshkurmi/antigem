@@ -20,26 +20,20 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 143,
-    "version_name": "2.0.5-beta.6",
+    "version_code": 144,
+    "version_name": "2.0.5-beta.7",
     "changelog": [
-      "Added Settings → Pets: Gemmy now has 7 friends: Kitsu the nine-tailed fox, Frost the polar bear cub, Beep the robot, Mochi the cat, Cinder the baby dragon, Mist the ghost and Lotl the axolotl. Each has its own reactions, a signature move and a favourite treat",
-      "Added on/off switches for each skill, MCP server and plugin of Antigravity, Claude Code, Codex and OpenCode: turn one off without removing it",
-      "Web pages in chat can now be sites made of several files (HTML, CSS, JS) or a page saved on the phone, and the new /playground command makes live HTML/CSS/JS pages",
-      "The IDE can show Markdown files as a formatted preview, and switch back to editing the source",
-      "More security: plugins ask before every install and update, other apps can no longer make AntiGem open its private files, and home-screen shortcuts and widgets are signed (Settings → Home screen → Link key)",
-      "Plugins in /sdcard/antiGem/extensions no longer load, because any app could put code there: install them again in Settings → Plugins",
-      "Jarvis: approve a command by voice (\"yes, run it\"), see everything Jarvis approved for you, and it asks before switching Claude Code to a mode that asks you less",
-      "Backups without \"include secrets\" now leave out SSH keys, API keys, logins and shell histories, and crash reports hide paths, addresses and tokens before you see or send them",
-      "Added a Phone tools key in Settings → Where agents run: make a new key if you think yours leaked. On servers, the bridge token no longer shows in the process list",
-      "Wireless debugging that AntiGem turned on now turns itself off after 10 idle minutes, and a changed SSH host key now shows the new key's fingerprint",
-      "Fixed connection (SSL) errors and a crash on Android 7 and 7.1",
-      "Fixed a crash when changing the app's language while an agent was working",
-      "Fixed exporting and sharing OpenCode chats from the chat list (\"conversation not found\")",
-      "Fixed Claude Code sometimes losing the last reply or error line at the end of a turn",
-      "Saving a file in the IDE now keeps its permissions (scripts stay executable), and moving a folder into its parent folder no longer deletes it",
-      "Antigravity subagent chats now sit under the chat that started them, and opening a chat no longer unfolds its subagents",
-      "Fixed termux-tts-speak staying silent on its first text, and voice messages in chat sometimes playing the wrong recording"
+      "Antigravity: when a model's weekly limit is used up, the chat shows \"7d 0%\" instead of the 5-hour share, which could still read 100% while the model can't run",
+      "Added a Switch account button for Antigravity in the accounts dialog (tap your profile): save, switch, add or delete accounts without opening Settings",
+      "Long chats full of images use much less memory: pictures and voice notes are kept as files instead of in memory",
+      "Chats open faster and stay smooth: the message list is built in the background, scrolling no longer redraws the whole screen, and home-screen widgets no longer slow the chat while an agent is answering",
+      "\"Clauding\" now shows only in Claude Code chats while the agent works",
+      "Better TalkBack and keyboard support across the app: labelled buttons and keys, show/hide password buttons, and hidden pages are no longer read out",
+      "Added Go to Line in the IDE's editor menu",
+      "Fixed a crash in app previews",
+      "Fixed first message undo causing empty in input box for agy"
+
+    
     ]
   }
 }
