@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -241,7 +243,7 @@ fun ProjectSidebar(
                 modifier = Modifier
                     .weight(1f)
                     .a11yMinTouchTarget(talkBackOn)
-                    .clickable { selectedTab = SidebarTab.EXPLORER }
+                    .selectable(selected = selectedTab == SidebarTab.EXPLORER, role = Role.Tab) { selectedTab = SidebarTab.EXPLORER }
             ) {
                 Row(
                     modifier = Modifier.padding(vertical = 5.dp),
@@ -270,7 +272,7 @@ fun ProjectSidebar(
                 modifier = Modifier
                     .weight(1f)
                     .a11yMinTouchTarget(talkBackOn)
-                    .clickable { selectedTab = SidebarTab.SOURCE_CONTROL }
+                    .selectable(selected = selectedTab == SidebarTab.SOURCE_CONTROL, role = Role.Tab) { selectedTab = SidebarTab.SOURCE_CONTROL }
             ) {
                 Row(
                     modifier = Modifier.padding(vertical = 5.dp),

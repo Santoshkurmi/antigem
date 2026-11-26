@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -311,10 +319,10 @@ private fun PanelHeader(
             contentAlignment = Alignment.Center
         ) { Icon(Icons.Filled.PlayArrow, null, tint = ClaudeTerracotta, modifier = Modifier.size(20.dp)) }
         Spacer(Modifier.width(8.dp))
-        Text(L.common.run, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText)
+        Text(L.common.run, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.width(12.dp))
         Row(
-            Modifier.clip(RoundedCornerShape(10.dp)).background(AppColors.editorBg).padding(3.dp),
+            Modifier.clip(RoundedCornerShape(10.dp)).background(AppColors.editorBg).padding(3.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             SegmentButton(L.run.screen.commands, selected = !showRuns, onClick = onShowCommands)
@@ -335,7 +343,8 @@ private fun SegmentButton(label: String, selected: Boolean, enabled: Boolean = t
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
-        color = if (selected) ClaudeTerracotta.copy(alpha = 0.18f) else Color.Transparent
+        color = if (selected) ClaudeTerracotta.copy(alpha = 0.18f) else Color.Transparent,
+        modifier = Modifier.semantics { role = Role.Tab; this.selected = selected }
     ) {
         Text(
             label,
@@ -387,7 +396,7 @@ private fun CommandsView(
         FolderRow(folder, activeProjectPath, ideProjects, recent, onPickFolder, onBrowse)
 
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             CommandFilter.entries.forEach { f ->
@@ -410,7 +419,7 @@ private fun CommandsView(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             if (loading) {
-                item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = ClaudeTerracotta) } }
+                item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp, color = ClaudeTerracotta) } }
             }
             when (filter) {
                 CommandFilter.PROJECT -> {
@@ -450,7 +459,7 @@ private fun CommandsView(
                     }
                     suggested.forEach { group ->
                         item(key = "h:" + group.kind) {
-                            Text(group.kind, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ClaudeTerracotta, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp))
+                            Text(group.kind, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ClaudeTerracotta, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp).semantics { heading() })
                         }
                         if (group.needsAndroidSetup) {
                             item(key = "w:" + group.kind) {
@@ -490,7 +499,7 @@ private fun FolderRow(
             shape = RoundedCornerShape(12.dp),
             color = AppColors.editorPanel,
             border = BorderStroke(1.dp, AppColors.editorBorder),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
         ) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.FolderOpen, null, tint = ClaudeTerracotta, modifier = Modifier.size(20.dp))
@@ -552,7 +561,7 @@ private fun CommandRow(
         shape = RoundedCornerShape(12.dp),
         color = AppColors.editorPanel,
         border = BorderStroke(0.5.dp, AppColors.editorBorder),
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = onRun, onLongClick = { menu = true })
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).combinedClickable(onClick = onRun, onLongClick = { menu = true }, onClickLabel = L.common.run, onLongClickLabel = L.run.screen.showOptions, role = Role.Button)
     ) {
         Row(Modifier.padding(start = 6.dp, end = 2.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onRun) {
@@ -594,7 +603,7 @@ private fun TemplateRow(t: RunTemplate, onRun: () -> Unit, onAdd: (() -> Unit)?)
         shape = RoundedCornerShape(12.dp),
         color = AppColors.editorPanel,
         border = BorderStroke(0.5.dp, AppColors.editorBorder),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
     ) {
         Row(Modifier.padding(start = 6.dp, end = 2.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onRun) {
@@ -620,12 +629,13 @@ private fun TemplateRow(t: RunTemplate, onRun: () -> Unit, onAdd: (() -> Unit)?)
 }
 
 @Composable
-private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun FilterPill(label: String, selected: Boolean, role: Role = Role.Tab, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
         color = if (selected) ClaudeTerracotta.copy(alpha = 0.18f) else AppColors.editorPanel,
-        border = BorderStroke(1.dp, if (selected) ClaudeTerracotta.copy(alpha = 0.6f) else AppColors.editorBorder)
+        border = BorderStroke(1.dp, if (selected) ClaudeTerracotta.copy(alpha = 0.6f) else AppColors.editorBorder),
+        modifier = Modifier.semantics { this.role = role; this.selected = selected }
     ) {
         Text(
             label, fontSize = 12.5.sp,
@@ -679,7 +689,7 @@ private fun CommandEditorDialog(
             modifier = Modifier.fillMaxWidth(0.94f).imePadding()
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (edit.originalName == null) L.run.screen.newCommand else L.run.screen.editCommand, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText)
+                Text(if (edit.originalName == null) L.run.screen.newCommand else L.run.screen.editCommand, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppColors.editorText, modifier = Modifier.semantics { heading() })
                 OutlinedTextField(
                     value = name, onValueChange = { name = it }, singleLine = true,
                     label = { Text(L.common.name) }, placeholder = { Text(L.run.screen.buildDebugApk) },
@@ -701,9 +711,9 @@ private fun CommandEditorDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(L.run.screen.saveTo, fontSize = 12.sp, color = AppColors.editorMuted)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterPill(L.run.screen.thisProject, selected = !global) { if (canSaveToProject) global = false }
-                    FilterPill(L.run.screen.globalAnyFolder, selected = global) { global = true }
+                Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterPill(L.run.screen.thisProject, selected = !global, role = Role.RadioButton) { if (canSaveToProject) global = false }
+                    FilterPill(L.run.screen.globalAnyFolder, selected = global, role = Role.RadioButton) { global = true }
                 }
                 Text(
                     if (global) "Kept in the app's home (~/.antigem/global-run.json); runs in the folder picked in the panel."
@@ -750,7 +760,7 @@ private fun RunsView(
     Column(Modifier.fillMaxSize()) {
         // one tab per run (Metro and a build side by side)
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             runs.forEach { run ->
@@ -759,7 +769,8 @@ private fun RunsView(
                     onClick = { onSelect(run.id) },
                     shape = RoundedCornerShape(10.dp),
                     color = if (isSel) AppColors.editorPanel else Color.Transparent,
-                    border = BorderStroke(1.dp, if (isSel) ClaudeTerracotta.copy(alpha = 0.55f) else AppColors.editorBorder)
+                    border = BorderStroke(1.dp, if (isSel) ClaudeTerracotta.copy(alpha = 0.55f) else AppColors.editorBorder),
+                    modifier = Modifier.semantics { role = Role.Tab; this.selected = isSel }
                 ) {
                     Row(Modifier.padding(start = 10.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                         StatusDot(run.status, Modifier.size(14.dp))
@@ -800,7 +811,7 @@ private fun RunsView(
             Surface(
                 onClick = { onSendToChat(selected) },
                 color = AppColors.danger.copy(alpha = 0.12f),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
             ) {
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.ForwardToInbox, null, tint = AppColors.danger, modifier = Modifier.size(16.dp))
@@ -829,7 +840,7 @@ private fun RunsView(
 @Composable
 private fun StatusDot(status: RunStatus, modifier: Modifier = Modifier) {
     when (status) {
-        RunStatus.RUNNING -> CircularProgressIndicator(modifier, strokeWidth = 2.dp, color = ClaudeTerracotta)
+        RunStatus.RUNNING -> CircularProgressIndicator(modifier.semantics { contentDescription = L.common.running }, strokeWidth = 2.dp, color = ClaudeTerracotta)
         RunStatus.SUCCEEDED -> Icon(Icons.Filled.CheckCircle, L.common.done, tint = AppColors.success, modifier = modifier)
         RunStatus.FAILED -> Icon(Icons.Filled.Error, L.common.failed, tint = AppColors.danger, modifier = modifier)
         RunStatus.STOPPED -> Icon(Icons.Filled.StopCircle, L.common.stopped, tint = AppColors.editorMuted, modifier = modifier)
@@ -902,7 +913,7 @@ private fun RunBubble(runs: List<RunEntry>, seen: Set<String>) {
                     when {
                         running > 0 -> {
                             CircularProgressIndicator(Modifier.size(44.dp), strokeWidth = 2.5.dp, color = ClaudeTerracotta)
-                            Icon(Icons.Filled.PlayArrow, L.run.screen.runs, tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Filled.PlayArrow, L.run.screen.runsRunningcountRunning(running), tint = ClaudeTerracotta, modifier = Modifier.size(22.dp))
                         }
                         failed -> Icon(Icons.Filled.Close, L.run.screen.aRunFailed, tint = AppColors.danger, modifier = Modifier.size(26.dp))
                         else -> Icon(Icons.Filled.Check, L.run.screen.runsFinished, tint = AppColors.success, modifier = Modifier.size(26.dp))
@@ -911,7 +922,8 @@ private fun RunBubble(runs: List<RunEntry>, seen: Set<String>) {
             }
             if (running > 1) {
                 Box(
-                    Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(ClaudeTerracotta),
+                    // the count is in the bubble's label already
+                    Modifier.align(Alignment.TopEnd).size(20.dp).clip(CircleShape).background(ClaudeTerracotta).clearAndSetSemantics { },
                     contentAlignment = Alignment.Center
                 ) { Text("$running", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White) }
             }

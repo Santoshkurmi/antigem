@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -165,7 +174,9 @@ fun LocalToolsInstallDialog(
                     },
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    // changes as the install starts, succeeds or fails: TalkBack reads it out
+                    modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite }
                 )
 
                 Text(
@@ -223,6 +234,7 @@ fun LocalToolsInstallDialog(
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                    .semantics(mergeDescendants = true) { }
                                     .padding(vertical = 5.dp, horizontal = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -251,6 +263,7 @@ fun LocalToolsInstallDialog(
                                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                         }
                                     )
+                                    .semantics(mergeDescendants = true) { }
                                     .padding(vertical = 5.dp, horizontal = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -286,6 +299,7 @@ fun LocalToolsInstallDialog(
                                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                                         }
                                     )
+                                    .semantics(mergeDescendants = true) { }
                                     .padding(vertical = 5.dp, horizontal = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -316,7 +330,7 @@ fun LocalToolsInstallDialog(
                 when (val state = installerState) {
                     is LocalInstallerState.Idle -> {
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().selectableGroup(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Option 1: Auto Download from GitHub (Recommended)
@@ -329,7 +343,8 @@ fun LocalToolsInstallDialog(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedSourceType = 0 }
+                                    // the whole card is the radio button for TalkBack (the small one inside is hidden from it)
+                                    .selectable(selected = selectedSourceType == 0, role = Role.RadioButton) { selectedSourceType = 0 }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(12.dp),
@@ -338,7 +353,8 @@ fun LocalToolsInstallDialog(
                                     RadioButton(
                                         selected = selectedSourceType == 0,
                                         onClick = { selectedSourceType = 0 },
-                                        colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                        colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                        modifier = Modifier.clearAndSetSemantics { }
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(modifier = Modifier.weight(1f)) {
@@ -376,7 +392,7 @@ fun LocalToolsInstallDialog(
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { showChrootSetup = true }
+                                    .clickable(role = Role.Button) { showChrootSetup = true }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(12.dp),
@@ -410,14 +426,16 @@ fun LocalToolsInstallDialog(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedSourceType = 2 }
+                                    // the whole card is the radio button for TalkBack (the small one inside is hidden from it)
+                                    .selectable(selected = selectedSourceType == 2, role = Role.RadioButton) { selectedSourceType = 2 }
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         RadioButton(
                                             selected = selectedSourceType == 2,
                                             onClick = { selectedSourceType = 2 },
-                                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                            colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                            modifier = Modifier.clearAndSetSemantics { }
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Column(modifier = Modifier.weight(1f)) {
@@ -471,7 +489,8 @@ fun LocalToolsInstallDialog(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedSourceType = 1 }
+                                    // the whole card is the radio button for TalkBack (the small one inside is hidden from it)
+                                    .selectable(selected = selectedSourceType == 1, role = Role.RadioButton) { selectedSourceType = 1 }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(12.dp),
@@ -480,7 +499,8 @@ fun LocalToolsInstallDialog(
                                     RadioButton(
                                         selected = selectedSourceType == 1,
                                         onClick = { selectedSourceType = 1 },
-                                        colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                        colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                        modifier = Modifier.clearAndSetSemantics { }
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(modifier = Modifier.weight(1f)) {
@@ -543,7 +563,8 @@ fun LocalToolsInstallDialog(
                                 text = L.settings.localToolsInstall.foundTermuxBootstrapPackage,
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.semantics { heading() }
                             )
 
                             Surface(
@@ -557,28 +578,28 @@ fun LocalToolsInstallDialog(
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { },
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(L.settings.localToolsInstall.releaseTag, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.releaseTag, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { },
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(L.settings.localToolsInstall.architecture, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.arch, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = ClaudeTerracotta)
                                     }
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { },
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(L.settings.localToolsInstall.packageSize, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(info.sizeFormatted, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = QuotaGreen)
                                     }
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
+                                        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { },
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(L.settings.localToolsInstall.targetSandbox, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -614,13 +635,16 @@ fun LocalToolsInstallDialog(
                                     text = L.settings.localToolsInstall.step1DownloadingImporting,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 )
                                 Text(
                                     text = "$pct%",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = ClaudeTerracotta
+                                    color = ClaudeTerracotta,
+                                    // the progress bar below says it
+                                    modifier = Modifier.clearAndSetSemantics { }
                                 )
                             }
 
@@ -675,13 +699,16 @@ fun LocalToolsInstallDialog(
                                     text = L.settings.localToolsInstall.step2UnzippingExtracting,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 )
                                 Text(
                                     text = "$pct%",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = ClaudeTerracotta
+                                    color = ClaudeTerracotta,
+                                    // the progress bar below says it
+                                    modifier = Modifier.clearAndSetSemantics { }
                                 )
                             }
 
@@ -725,7 +752,8 @@ fun LocalToolsInstallDialog(
                                     text = L.settings.localToolsInstall.step3ConfiguringShellPermissions,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 )
                             }
 
@@ -757,7 +785,8 @@ fun LocalToolsInstallDialog(
                                 text = L.settings.localToolsInstall.step4VerifyingLocalEnvironment,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LinearProgressIndicator(
@@ -820,7 +849,8 @@ fun LocalToolsInstallDialog(
                                     text = state.errorMessage,
                                     fontSize = 12.sp,
                                     fontFamily = FontFamily.Monospace,
-                                    color = Color.Red
+                                    color = Color.Red,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 )
                             }
                         }
@@ -850,7 +880,8 @@ fun LocalToolsInstallDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { showLogs = !showLogs },
+                                    .semantics { stateDescription = if (showLogs) L.components.a11y.expanded else L.components.a11y.collapsed }
+                                    .clickable(role = Role.Button) { showLogs = !showLogs },
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {

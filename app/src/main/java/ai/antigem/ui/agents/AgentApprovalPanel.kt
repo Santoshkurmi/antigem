@@ -49,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -141,7 +144,7 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
             ) { Icon(item.icon, null, tint = accent, modifier = Modifier.size(19.dp)) }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(item.title, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(item.title, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.semantics { heading() })
                 Text(
                     listOfNotNull(item.agent.label(), item.subtitle).joinToString(" · "),
                     fontSize = 11.5.sp,
@@ -294,7 +297,9 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
                         OutlinedButton(
                             onClick = { alwaysMenu = true },
                             shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(start = 12.dp, end = 6.dp)
+                            contentPadding = PaddingValues(start = 12.dp, end = 6.dp),
+                            // TalkBack: "Always allow options" rather than a bare "Always" (it opens the list of always-allow choices)
+                            modifier = Modifier.semantics { contentDescription = L.agents.agentApproval.alwaysAllowOptions }
                         ) {
                             Text(L.agents.agentApproval.always, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
                             Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))

@@ -56,6 +56,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -138,7 +144,7 @@ private fun StoreScreen(catalogUrl: String, onBack: () -> Unit) {
             TopAppBar(
                 title = {
                     Column {
-                        Text(L.miniapps.miniAppStoreActivity.getMiniApps)
+                        Text(L.miniapps.miniAppStoreActivity.getMiniApps, modifier = Modifier.semantics { heading() })
                         Text(catalog?.name ?: MiniAppStore.REPO, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
@@ -156,13 +162,13 @@ private fun StoreScreen(catalogUrl: String, onBack: () -> Unit) {
     ) { pad ->
         val c = catalog
         when {
-            c == null && loading -> Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            c == null && loading -> Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.semantics { contentDescription = L.common.loading }) }
             c == null -> Column(
                 Modifier.fillMaxSize().padding(pad).padding(32.dp),
                 verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(Icons.Outlined.CloudOff, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(L.miniapps.miniAppStoreActivity.couldntLoadTheApps, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+                Text(L.miniapps.miniAppStoreActivity.couldntLoadTheApps, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite })
                 Text(error.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
                 Button(onClick = { load() }, modifier = Modifier.padding(top = 16.dp)) { Text(L.common.tryAgain) }
@@ -175,7 +181,7 @@ private fun StoreScreen(catalogUrl: String, onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (error != null) item { Text(error.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(4.dp)) }
+                if (error != null) item { Text(error.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(4.dp).semantics { liveRegion = LiveRegionMode.Polite }) }
                 items(c.apps, key = { it.id }) { e ->
                     val (state, detail) = remember(e, tick) { MiniAppStore.state(context, e) }
                     StoreCard(e, state, detail,
@@ -217,12 +223,13 @@ private fun StoreCard(e: MiniAppStore.Entry, state: MiniAppStore.State, detail: 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                // the icon (or its letter) is decoration: the name is read next to it
+                Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.primaryContainer).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                     Text(e.name.take(1).uppercase(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     if (e.iconUrl != null) AsyncImage(model = e.iconUrl, contentDescription = null, modifier = Modifier.size(56.dp))
                 }
                 Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                    Text(e.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
                     Text("${e.developer} · ${e.version} · ${Formatter.formatShortFileSize(context, e.size)}",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

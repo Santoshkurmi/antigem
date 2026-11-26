@@ -21,6 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,7 +107,7 @@ fun SkillsAndPluginsSubScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                        Text(text = errorMessage, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                        Text(text = errorMessage, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                         IconButton(onClick = onClearStatus, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Default.Close, contentDescription = L.common.dismiss, modifier = Modifier.size(16.dp))
                         }
@@ -124,7 +130,7 @@ fun SkillsAndPluginsSubScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = QuotaGreen, modifier = Modifier.size(18.dp))
-                        Text(text = statusMessage, fontSize = 12.5.sp, color = QuotaGreen, modifier = Modifier.weight(1f))
+                        Text(text = statusMessage, fontSize = 12.5.sp, color = QuotaGreen, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                         IconButton(onClick = onClearStatus, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Default.Close, contentDescription = L.common.dismiss, modifier = Modifier.size(16.dp))
                         }
@@ -325,7 +331,7 @@ private fun SkillsTabView(
 
             IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = GeminiBlue)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp, color = GeminiBlue)
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = L.common.refresh, modifier = Modifier.size(18.dp))
                 }
@@ -334,7 +340,7 @@ private fun SkillsTabView(
 
         if (isLoading && skills.isEmpty() && offSkills.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = GeminiBlue)
+                CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = L.common.loading }, color = GeminiBlue)
             }
         } else if (shown.isEmpty() && offSkills.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -400,7 +406,7 @@ private fun SkillItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
@@ -483,8 +489,12 @@ private fun SkillItemCard(
                 }
                 if (onToggle != null && enabled != null) {
                     Spacer(Modifier.width(6.dp))
-                    if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = AgyAccent)
-                    else Switch(checked = enabled, onCheckedChange = onToggle, colors = SwitchDefaults.colors(checkedTrackColor = AgyAccent))
+                    if (busy) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = L.common.working }, strokeWidth = 2.dp, color = AgyAccent)
+                    else Switch(
+                        checked = enabled, onCheckedChange = onToggle, colors = SwitchDefaults.colors(checkedTrackColor = AgyAccent),
+                        // TalkBack: which skill this turns on or off
+                        modifier = Modifier.semantics { contentDescription = "/${skill.name}" }
+                    )
                 }
             }
 
@@ -554,11 +564,12 @@ private fun InstalledPluginsTabView(
                 text = L.settings.skillsAndPlugins.installedBundlesExtensions,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                modifier = Modifier.semantics { heading() }
             )
             IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = GeminiBlue)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp, color = GeminiBlue)
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = L.common.refresh, modifier = Modifier.size(18.dp))
                 }
@@ -567,7 +578,7 @@ private fun InstalledPluginsTabView(
 
         if (isLoading && plugins.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = GeminiBlue)
+                CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = L.common.loading }, color = GeminiBlue)
             }
         } else if (plugins.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -740,8 +751,12 @@ private fun InstalledPluginCard(
 
                 // off: agy keeps it installed but loads it in no chat
                 if (onToggle != null) {
-                    if (toggling) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = AgyAccent)
-                    else Switch(checked = enabled, onCheckedChange = onToggle, enabled = !isDeleting, colors = SwitchDefaults.colors(checkedTrackColor = AgyAccent))
+                    if (toggling) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = L.common.working }, strokeWidth = 2.dp, color = AgyAccent)
+                    else Switch(
+                        checked = enabled, onCheckedChange = onToggle, enabled = !isDeleting, colors = SwitchDefaults.colors(checkedTrackColor = AgyAccent),
+                        // TalkBack: which plugin this turns on or off
+                        modifier = Modifier.semantics { contentDescription = plugin.displayName.ifBlank { plugin.name } }
+                    )
                 }
 
                 IconButton(
@@ -751,7 +766,7 @@ private fun InstalledPluginCard(
                 ) {
                     if (isDeleting) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(16.dp).semantics { contentDescription = L.common.removing },
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -822,11 +837,12 @@ private fun GooglePluginsStoreTabView(
                 text = L.settings.skillsAndPlugins.officialBuildWithGooglePlugins,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                modifier = Modifier.semantics { heading() }
             )
             IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = GeminiBlue)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp, color = GeminiBlue)
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = L.common.refresh, modifier = Modifier.size(18.dp))
                 }
@@ -835,7 +851,7 @@ private fun GooglePluginsStoreTabView(
 
         if (isLoading && catalog.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = GeminiBlue)
+                CircularProgressIndicator(modifier = Modifier.semantics { contentDescription = L.common.loading }, color = GeminiBlue)
             }
         } else if (catalog.isEmpty()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -958,7 +974,7 @@ private fun GoogleCatalogPluginCard(
                         modifier = Modifier.height(32.dp)
                     ) {
                         if (isInstalling) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp).semantics { contentDescription = L.common.installing }, strokeWidth = 2.dp, color = Color.White)
                         } else {
                             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1035,7 +1051,8 @@ fun SkillDetailMarkdownDialog(
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.semantics { heading() }
                             )
                             if (!skill.displayName.isNullOrBlank()) {
                                 Text(

@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -297,7 +298,7 @@ fun TerminalLauncherOnboardingDialog(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedStyle = TerminalLauncherManager.STYLE_ANTITERM }
+                                .selectable(selected = isAntiTermSelected, role = Role.RadioButton) { selectedStyle = TerminalLauncherManager.STYLE_ANTITERM }
                         ) {
                             Row(
                                 modifier = Modifier
@@ -336,7 +337,9 @@ fun TerminalLauncherOnboardingDialog(
                                 RadioButton(
                                     selected = isAntiTermSelected,
                                     onClick = { selectedStyle = TerminalLauncherManager.STYLE_ANTITERM },
-                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                    // the card above is the one TalkBack stop
+                                    modifier = Modifier.mergedIntoRow()
                                 )
                             }
                         }
@@ -354,7 +357,7 @@ fun TerminalLauncherOnboardingDialog(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedStyle = TerminalLauncherManager.STYLE_TERMUX }
+                                .selectable(selected = isTermuxSelected, role = Role.RadioButton) { selectedStyle = TerminalLauncherManager.STYLE_TERMUX }
                         ) {
                             Row(
                                 modifier = Modifier
@@ -396,7 +399,9 @@ fun TerminalLauncherOnboardingDialog(
                                 RadioButton(
                                     selected = isTermuxSelected,
                                     onClick = { selectedStyle = TerminalLauncherManager.STYLE_TERMUX },
-                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                    // the card above is the one TalkBack stop
+                                    modifier = Modifier.mergedIntoRow()
                                 )
                             }
                         }

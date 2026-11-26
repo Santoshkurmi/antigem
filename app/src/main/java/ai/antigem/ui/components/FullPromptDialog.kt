@@ -1,5 +1,6 @@
 package ai.antigem.ui.components
 
+import ai.antigem.i18n.L
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -92,7 +93,7 @@ fun FullPromptDialog(prompt: String, attachmentCount: Int = 0, onDismiss: () -> 
                         Text("Full prompt", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         Text(stats, fontSize = 12.sp, color = muted)
                     }
-                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = "Close") }
+                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = L.common.close) }
                 }
                 Text(
                     "Exactly what was sent to the agent, including the parts the chat hides." +

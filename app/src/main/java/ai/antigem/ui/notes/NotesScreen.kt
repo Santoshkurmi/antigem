@@ -32,6 +32,10 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -194,7 +198,7 @@ private fun NotesList(
                         )
                         if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, contentDescription = L.notes.screen.clearSearch) }
                     } else {
-                        Text(L.common.notes, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp))
+                        Text(L.common.notes, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp).semantics { heading() })
                         IconButton(onClick = { searching = true }) { Icon(Icons.Outlined.Search, contentDescription = L.common.search) }
                     }
                 }
@@ -278,7 +282,7 @@ private fun SectionHeader(label: String) {
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.8.sp,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp).semantics { heading() }
     )
 }
 
@@ -308,7 +312,7 @@ private fun NoteCard(note: Note, onClick: () -> Unit) {
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick)
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -332,7 +336,7 @@ private fun NoteCard(note: Note, onClick: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             if (item.done) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
-                            null,
+                            if (item.done) L.common.done else null,
                             tint = if (item.done) ClaudeTerracotta else muted,
                             modifier = Modifier.size(16.dp)
                         )
@@ -358,7 +362,8 @@ private fun NoteCard(note: Note, onClick: () -> Unit) {
                     Text(
                         "${note.doneCount}/${note.items.size} done",
                         fontSize = 11.sp,
-                        color = if (note.doneCount == note.items.size) ClaudeTerracotta else muted.copy(alpha = 0.5f)
+                        color = if (note.doneCount == note.items.size) ClaudeTerracotta else muted.copy(alpha = 0.5f),
+                        modifier = Modifier.semantics { contentDescription = L.notes.screen.donecountOfItemscountDone(note.doneCount, note.items.size) }
                     )
                 }
             }
@@ -499,7 +504,7 @@ private fun NoteEditor(note: Note, onBack: () -> Unit, onDelete: () -> Unit) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable { insertItem(note.items.size) }
+                        .clickable(role = Role.Button) { insertItem(note.items.size) }
                         .padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -540,7 +545,9 @@ private fun TodoRow(
             onCheckedChange = { checked ->
                 NotesRepository.update(noteId) { n -> n.copy(items = n.items.map { if (it.id == item.id) it.copy(done = checked) else it }) }
             },
-            colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta)
+            colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
+            // TalkBack: which item this box checks off
+            modifier = Modifier.semantics { contentDescription = item.text.ifBlank { L.notes.screen.listItem } }
         )
         SyncedField(
             key = item.id,

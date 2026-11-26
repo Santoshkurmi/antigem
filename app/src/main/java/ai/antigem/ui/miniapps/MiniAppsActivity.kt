@@ -46,6 +46,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -138,13 +143,14 @@ private fun MiniAppsScreen(activity: MiniAppsActivity, onBack: () -> Unit) {
     Scaffold(
         topBar = { Column {
             TopAppBar(
-                title = { Text(L.miniapps.activity.miniApps) },
+                title = { Text(L.miniapps.activity.miniApps, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, L.common.back) } },
                 actions = {
                     IconButton(onClick = { context.startActivity(android.content.Intent(context, MiniAppStoreActivity::class.java)) }) {
                         Icon(Icons.Outlined.Storefront, L.miniapps.activity.getApps)
                     }
-                    IconButton(onClick = {
+                    // on / off is only its colour: TalkBack says it
+                    IconButton(modifier = Modifier.semantics { stateDescription = if (devMode) L.common.on else L.common.off }, onClick = {
                         devMode = !devMode
                         prefs.edit().putBoolean("dev_mode", devMode).apply()
                         android.widget.Toast.makeText(context, if (devMode) L.miniapps.activity.developerModeOnDevelopmentAppsRun else L.miniapps.activity.developerModeOffOnlyInstalledSigned, android.widget.Toast.LENGTH_LONG).show()
@@ -212,11 +218,12 @@ private fun MiniAppsScreen(activity: MiniAppsActivity, onBack: () -> Unit) {
                 items(list, key = { it.id }) { app ->
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                            .combinedClickable(onClick = { MiniAppActivity.launch(context, app.id) }, onLongClick = { info = app })
+                            .combinedClickable(role = Role.Button, onLongClickLabel = L.miniapps.activity.appInfo, onClick = { MiniAppActivity.launch(context, app.id) }, onLongClick = { info = app })
                             .padding(vertical = 12.dp, horizontal = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(Modifier.alpha(if (!app.signed && !devMode || app.tampered) 0.4f else 1f)) { AppIcon(app, 58) }
+                        // the icon's description is the name, read just below
+                        Box(Modifier.alpha(if (!app.signed && !devMode || app.tampered) 0.4f else 1f).clearAndSetSemantics { }) { AppIcon(app, 58) }
                         Text(app.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                         Text(
                             when { app.tampered -> "modified"; app.signed -> app.version; else -> "DEV · ${app.version}" },

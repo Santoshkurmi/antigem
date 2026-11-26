@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -47,6 +48,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -118,7 +124,9 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
             .animateContentSize()
     ) {
         Row(
-            Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
+            Modifier.fillMaxWidth()
+                .semantics { stateDescription = if (expanded) L.components.a11y.expanded else L.components.a11y.collapsed }
+                .clickable(role = Role.Button) { expanded = !expanded }.padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             JarvisBotIcon(28.dp, accent, animated = active.isNotEmpty() || status != null)
@@ -166,7 +174,7 @@ fun JarvisCommandStrip(chatId: String, onOpenChat: (String) -> Unit, toolsMissin
             Row(
                 Modifier.fillMaxWidth().padding(start = 12.dp, end = 10.dp, bottom = 8.dp)
                     .clip(RoundedCornerShape(10.dp)).background(Amber.copy(alpha = 0.12f))
-                    .clickable { ai.antigem.data.jarvis.JarvisController.requestSettings("JARVIS_SETUP") }
+                    .clickable(role = Role.Button) { ai.antigem.data.jarvis.JarvisController.requestSettings("JARVIS_SETUP") }
                     .padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -188,7 +196,7 @@ private fun ToggleChip(label: String, icon: ImageVector, on: Boolean, onClick: (
             .clip(RoundedCornerShape(50))
             .background(if (on) Cyan.copy(alpha = 0.14f) else Color.Transparent)
             .border(1.dp, c.copy(alpha = if (on) 0.6f else 0.3f), RoundedCornerShape(50))
-            .clickable { onClick() }
+            .toggleable(value = on, role = Role.Switch) { onClick() }
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -206,7 +214,9 @@ private fun TaskPill(t: JarvisTasks.Task, onClick: () -> Unit) {
             .clip(RoundedCornerShape(50))
             .background(c.copy(alpha = 0.12f))
             .border(1.dp, c.copy(alpha = 0.4f), RoundedCornerShape(50))
-            .clickable { onClick() }
+            // the dot's colour is the task's state
+            .semantics { stateDescription = taskStateSpoken(t.state) }
+            .clickable(role = Role.Button) { onClick() }
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -244,7 +254,18 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
                         "blocked" -> "!" to Danger
                         else -> "○" to onSurface.copy(alpha = 0.4f)
                     }
-                    Text(mark, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold, modifier = Modifier.width(16.dp))
+                    Text(
+                        mark, fontSize = 12.sp, color = c, fontWeight = FontWeight.Bold,
+                        // a word, not the symbol's name
+                        modifier = Modifier.width(16.dp).semantics {
+                            contentDescription = when (s.status) {
+                                "done" -> L.common.done
+                                "doing" -> L.jarvis.commandCenter.stepInProgress
+                                "blocked" -> L.jarvis.commandCenter.stepBlocked
+                                else -> L.jarvis.commandCenter.stepToDo
+                            }
+                        }
+                    )
                     Column(Modifier.weight(1f)) {
                         Text("${s.n}. ${s.text}", fontSize = 12.5.sp, color = onSurface.copy(alpha = if (s.status == "done") 0.55f else 0.9f), lineHeight = 17.sp)
                         if (s.note.isNotBlank()) Text(s.note, fontSize = 11.sp, color = onSurface.copy(alpha = 0.5f), lineHeight = 15.sp)
@@ -280,7 +301,7 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
         mine.take(20).forEach { t ->
             val c = taskColor(t.state)
             Row(
-                Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable { onOpenChat(t.id) }.padding(vertical = 4.dp),
+                Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button) { onOpenChat(t.id) }.padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(c))
@@ -304,7 +325,7 @@ private fun Board(key: String, m: JarvisManagers.Manager, mine: List<JarvisTasks
 private fun BoardTitle(text: String) {
     Text(
         text.uppercase(), fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp, color = Cyan.copy(alpha = 0.9f),
-        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp)
+        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp).semantics { heading() }
     )
 }
 
@@ -312,13 +333,13 @@ private fun BoardTitle(text: String) {
 private fun SmallAction(label: String, color: Color, onClick: () -> Unit) {
     Text(
         label, fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = color,
-        modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(50)).clickable { onClick() }.padding(horizontal = 10.dp, vertical = 4.dp)
+        modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(50)).clickable(role = Role.Button) { onClick() }.padding(horizontal = 10.dp, vertical = 4.dp)
     )
 }
 
 @Composable
 private fun IconMini(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
-    Box(Modifier.size(30.dp).clip(CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(30.dp).clip(CircleShape).clickable(role = Role.Button) { onClick() }, contentAlignment = Alignment.Center) {
         Icon(icon, label, tint = tint, modifier = Modifier.size(16.dp))
     }
 }
@@ -363,7 +384,8 @@ fun JarvisEventCard(raw: String, onOpenChat: (String) -> Unit) {
             .clip(RoundedCornerShape(14.dp))
             .background(Cyan.copy(alpha = 0.05f))
             .border(1.dp, Cyan.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
-            .clickable(enabled = hasDetails) { open = !open }
+            .semantics { if (hasDetails) stateDescription = if (open) L.components.a11y.expanded else L.components.a11y.collapsed }
+            .clickable(enabled = hasDetails, role = if (hasDetails) Role.Button else null) { open = !open }
             .padding(horizontal = 12.dp, vertical = 9.dp)
             .animateContentSize()
     ) {
@@ -414,7 +436,7 @@ fun JarvisChatWelcome(onExample: (String) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 520.dp)) {
         JarvisBotBadge(72.dp, Cyan, animated = true)
         Spacer(Modifier.height(14.dp))
-        Text(L.jarvis.commandCenter.jarvisCommandCenter, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = onSurface)
+        Text(L.jarvis.commandCenter.jarvisCommandCenter, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = onSurface, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(6.dp))
         Text(
             L.jarvis.commandCenter.giveMeABigJobI2,
@@ -435,7 +457,7 @@ fun JarvisChatWelcome(onExample: (String) -> Unit) {
                     .clip(RoundedCornerShape(14.dp))
                     .background(Cyan.copy(alpha = 0.06f))
                     .border(1.dp, Cyan.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
-                    .clickable { onExample(ex) }
+                    .clickable(role = Role.Button) { onExample(ex) }
                     .padding(horizontal = 12.dp, vertical = 10.dp)
             )
         }

@@ -4,7 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +22,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -135,7 +145,7 @@ fun JarvisQuickChip(title: String, value: String, on: Boolean, onClick: () -> Un
             .clip(RoundedCornerShape(16.dp))
             .background(if (on) Cyan.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.04f))
             .border(1.dp, c.copy(alpha = if (on) 0.5f else 0.2f), RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .clickable(role = Role.Button) { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Text(title, color = Color.White.copy(alpha = 0.55f), fontSize = 10.5.sp)
@@ -174,7 +184,8 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
         else Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.45f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() },
+            // tap outside closes (not a clickable: that would merge the sheet into one TalkBack item; Close is in the header)
+            .pointerInput(onClose) { detectTapGestures { onClose() } },
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
@@ -185,7 +196,8 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
                 .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFA111A2C), Color(0xFC070B14))))
                 .border(1.dp, Brush.verticalGradient(listOf(Cyan.copy(alpha = 0.5f), Color.Transparent)), RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                // taps inside the sheet stay inside (not a clickable: that would make the whole sheet one TalkBack item)
+                .pointerInput(Unit) { detectTapGestures { } }
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
@@ -195,10 +207,10 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
                 JarvisBotIcon(28.dp, Cyan)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(L.common.quickSettings, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.common.quickSettings, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                     Text(L.jarvis.quickSettings.appliesFromTheNextTimeThe, color = Color.White.copy(alpha = 0.5f), fontSize = 11.5.sp)
                 }
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { onClose() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button) { onClose() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.Close, L.common.close, tint = Color.White.copy(alpha = 0.7f))
                 }
             }
@@ -241,7 +253,9 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
                                 .clip(RoundedCornerShape(50))
                                 .background(if (on) Cyan.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.04f))
                                 .border(1.dp, if (on) Cyan.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
-                                .clickable {
+                                // a checkbox for TalkBack: its name without the "✓ " / "+ " mark
+                                .semantics { contentDescription = q.title }
+                                .toggleable(value = on, role = Role.Checkbox) {
                                     val next = if (on) pins - q else pins + q
                                     P.quickPins.set(next.joinToString(",") { it.id })
                                 }
@@ -264,7 +278,7 @@ fun JarvisQuickSettings(onClose: () -> Unit, floating: Boolean = false) {
 private fun QsTitle(text: String) {
     Text(
         text.uppercase(), color = Cyan.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
+        modifier = Modifier.padding(top = 14.dp, bottom = 6.dp).semantics { heading() }
     )
 }
 
@@ -276,7 +290,7 @@ private fun QsHint(text: String) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun QsChoice(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 2.dp).selectableGroup()) {
         options.forEach { (value, label) ->
             val on = value == selected
             Text(
@@ -286,7 +300,7 @@ private fun QsChoice(options: List<Pair<String, String>>, selected: String, onSe
                     .clip(RoundedCornerShape(50))
                     .background(if (on) Cyan.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f))
                     .border(1.dp, if (on) Cyan.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.14f), RoundedCornerShape(50))
-                    .clickable { onSelect(value) }
+                    .selectable(selected = on, role = Role.RadioButton) { onSelect(value) }
                     .padding(horizontal = 12.dp, vertical = 7.dp)
             )
         }
@@ -296,12 +310,14 @@ private fun QsChoice(options: List<Pair<String, String>>, selected: String, onSe
 @Composable
 private fun QsSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, shown: String, onChange: (Float) -> Unit) {
     Column(Modifier.padding(top = 4.dp)) {
-        Row {
+        // the slider below says both
+        Row(Modifier.clearAndSetSemantics { }) {
             Text(label, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(shown, color = Cyan, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
         Slider(
             value = value.coerceIn(range), onValueChange = onChange, valueRange = range,
+            modifier = Modifier.semantics { contentDescription = label; stateDescription = shown },
             colors = SliderDefaults.colors(thumbColor = Cyan, activeTrackColor = Cyan, inactiveTrackColor = Color.White.copy(alpha = 0.15f))
         )
     }
@@ -311,7 +327,7 @@ private fun QsSlider(label: String, value: Float, range: ClosedFloatingPointRang
 private fun QsLink(label: String, onClick: () -> Unit) {
     Text(
         label, color = Cyan, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-        modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, Cyan.copy(alpha = 0.35f), RoundedCornerShape(50)).clickable { onClick() }
+        modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, Cyan.copy(alpha = 0.35f), RoundedCornerShape(50)).clickable(role = Role.Button) { onClick() }
             .padding(horizontal = 14.dp, vertical = 8.dp)
     )
 }

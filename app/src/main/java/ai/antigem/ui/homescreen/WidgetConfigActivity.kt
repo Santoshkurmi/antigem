@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -171,10 +173,10 @@ class WidgetConfigActivity : ComponentActivity() {
                 Column {
                     options.forEach { (value, text) ->
                         Row(
-                            Modifier.fillMaxWidth().clickable { filter = value }.padding(horizontal = 8.dp, vertical = 6.dp),
+                            Modifier.fillMaxWidth().selectable(selected = filter == value, role = Role.RadioButton) { filter = value }.padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(selected = filter == value, onClick = { filter = value })
+                            RadioButton(selected = filter == value, onClick = { filter = value }, modifier = Modifier.mergedIntoRow())
                             Column(Modifier.weight(1f)) {
                                 Text(text.first, fontWeight = FontWeight.Medium)
                                 Text(text.second, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

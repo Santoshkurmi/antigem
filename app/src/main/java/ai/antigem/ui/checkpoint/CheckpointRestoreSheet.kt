@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -35,6 +36,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -122,7 +131,7 @@ fun CheckpointRestoreSheet(
                 SheetState.Loading -> Busy(L.checkpoint.restore.comparingTheProjectWithThisCheckpoint)
                 SheetState.Working -> Busy(L.checkpoint.restore.restoring)
                 is SheetState.Failed -> {
-                    Notice(Icons.Outlined.ErrorOutline, AppColors.danger, s.message)
+                    Notice(Icons.Outlined.ErrorOutline, AppColors.danger, s.message, live = true)
                     Spacer(Modifier.height(12.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onDismiss) { Text(L.common.close) }
@@ -143,9 +152,9 @@ fun CheckpointRestoreSheet(
                     }
                     if (onRestoreChat != null) {
                         Spacer(Modifier.height(16.dp))
-                        Text(L.checkpoint.restore.whatGoesBack, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(L.checkpoint.restore.whatGoesBack, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { heading() })
                         Spacer(Modifier.height(8.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             RestoreMode.entries.forEach { m ->
                                 ai.antigem.ui.claude.PickerOption(
                                     title = m.title,
@@ -204,7 +213,7 @@ fun CheckpointRestoreSheet(
                 is SheetState.Done -> DoneBody(s, projectPath, onDismiss, onUndone = { state = SheetState.Undone }, onUndoing = { state = SheetState.Working },
                     onUndoFailed = { state = SheetState.Failed(it) })
                 SheetState.Undone -> {
-                    Notice(Icons.Outlined.CheckCircle, AppColors.success, L.checkpoint.restore.restoreUndoneTheFilesAreAs)
+                    Notice(Icons.Outlined.CheckCircle, AppColors.success, L.checkpoint.restore.restoreUndoneTheFilesAreAs, live = true)
                     Spacer(Modifier.height(14.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Button(onClick = onDismiss) { Text(L.common.done) }
@@ -227,7 +236,7 @@ private fun SheetHeader(cp: CheckpointSummary, fromChat: Boolean) {
         Column(Modifier.weight(1f)) {
             Text(
                 if (cp.isPreRestore) L.checkpoint.restore.undoThatRestore else if (fromChat) L.checkpoint.restore.goBackToBeforeThisMessage else L.checkpoint.restore.restoreThisCheckpoint,
-                fontSize = 17.sp, fontWeight = FontWeight.Bold
+                fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() }
             )
             Text(
                 listOfNotNull(agent?.label(), formatCheckpointTime(cp.time)).joinToString(" · "),
@@ -247,21 +256,25 @@ private fun SheetHeader(cp: CheckpointSummary, fromChat: Boolean) {
 @Composable
 private fun Busy(text: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 26.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        CircularProgressIndicator(Modifier.size(20.dp).clearAndSetSemantics { }, strokeWidth = 2.dp)
         Spacer(Modifier.width(12.dp))
-        Text(text, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
 }
 
+/** [live]: TalkBack reads it out when it shows up (a result or an error after waiting). */
 @Composable
-internal fun Notice(icon: ImageVector, color: Color, text: String) {
+internal fun Notice(icon: ImageVector, color: Color, text: String, live: Boolean = false) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top
     ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(17.dp).padding(top = 1.dp))
         Spacer(Modifier.width(9.dp))
-        Text(text, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+        Text(
+            text, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+            modifier = if (live) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier
+        )
     }
 }
 
@@ -354,7 +367,9 @@ private fun FileRow(projectPath: String, checkpointId: String, f: CheckpointFile
     val dir = f.path.substringBeforeLast('/', "")
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 9.dp),
+            Modifier.fillMaxWidth()
+                .semantics { stateDescription = if (open) L.components.a11y.expanded else L.components.a11y.collapsed }
+                .clickable(role = Role.Button) { open = !open }.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, label, tint = color, modifier = Modifier.size(17.dp))
@@ -378,8 +393,8 @@ private fun FileRow(projectPath: String, checkpointId: String, f: CheckpointFile
             Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) {
                 when {
                     f.binary -> Text(L.checkpoint.restore.aBinaryFileItIsPut, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    diffError != null -> Text(diffError!!, fontSize = 12.sp, color = AppColors.danger)
-                    diff == null -> LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+                    diffError != null -> Text(diffError!!, fontSize = 12.sp, color = AppColors.danger, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    diff == null -> LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).semantics { contentDescription = L.common.loading })
                     else -> DiffBlock(diff!!)
                 }
             }
@@ -435,7 +450,10 @@ private fun DoneBody(
             Icon(Icons.Outlined.CheckCircle, null, tint = AppColors.success, modifier = Modifier.size(32.dp))
         }
         Spacer(Modifier.height(10.dp))
-        Text(if (r.errors.isEmpty()) L.checkpoint.restore.filesRestored else L.checkpoint.restore.filesRestoredWithProblems, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (r.errors.isEmpty()) L.checkpoint.restore.filesRestored else L.checkpoint.restore.filesRestoredWithProblems, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+        )
         Text(
             if (parts.isEmpty()) L.checkpoint.restore.nothingHadToChange else parts.joinToString(" · "),
             fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant

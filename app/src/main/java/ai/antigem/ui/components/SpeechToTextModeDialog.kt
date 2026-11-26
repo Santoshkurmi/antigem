@@ -3,6 +3,7 @@ package ai.antigem.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -132,7 +133,7 @@ private fun SpeechModeOptionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),

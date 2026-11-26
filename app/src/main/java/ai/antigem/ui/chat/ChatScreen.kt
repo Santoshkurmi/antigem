@@ -461,6 +461,8 @@ fun ChatScreen(
     val conversationError by viewModel.conversationError.collectAsState()
     val activeInstances by viewModel.activeInstances.collectAsState()
     val isActivelyRunning by viewModel.isCurrentChatActivelyRunning.collectAsState()
+    // TalkBack on: the chat speaks "Reply finished", approvals and questions (ChatTalkBackAnnouncer); off: nothing runs
+    val talkBackOn = ai.antigem.ui.components.rememberTalkBackOn()
     val isBackgroundActive by viewModel.isCurrentChatBackgroundActive.collectAsState()
     val queuedMessages by viewModel.queuedMessages.collectAsState()
     val quotaSummary by viewModel.quotaSummary.collectAsState()
@@ -2044,14 +2046,16 @@ fun ChatScreen(
                                         .widthIn(max = 150.dp)
                                         .clip(RoundedCornerShape(50))
                                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                                        .clickable(
-                                            enabled = !isChatStarted || showStatusDot,
-                                            role = Role.Button,
-                                            onClickLabel = if (!isChatStarted) L.chat.screen.chooseProject else L.components.a11y.agentsStatus
-                                        ) {
-                                            if (!isChatStarted) showProjectPickerDialog = true
-                                            else if (showStatusDot) statusMenuOpen = true
-                                        }
+                                        // nothing to open (chat started, no status dot): plain text for TalkBack, not a "disabled" button
+                                        .then(
+                                            if (!isChatStarted || showStatusDot) Modifier.clickable(
+                                                role = Role.Button,
+                                                onClickLabel = if (!isChatStarted) L.chat.screen.chooseProject else L.components.a11y.agentsStatus
+                                            ) {
+                                                if (!isChatStarted) showProjectPickerDialog = true
+                                                else statusMenuOpen = true
+                                            } else Modifier
+                                        )
                                         .padding(start = if (showStatusDot) 4.dp else 10.dp, end = if (isChatStarted) 10.dp else 4.dp, top = 3.dp, bottom = 3.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -3149,6 +3153,15 @@ fun ChatScreen(
                     ai.antigem.ui.agents.findPendingQuestion(
                         currentConv?.agent ?: ai.antigem.domain.model.AgentKind.AGY,
                         messages
+                    )
+                }
+                if (talkBackOn) {
+                    ChatTalkBackAnnouncer(
+                        chatKey = currentConv?.id,
+                        running = isActivelyRunning,
+                        needsApproval = approvalItems.isNotEmpty(),
+                        hasQuestion = pendingQuestion != null,
+                        error = conversationError
                     )
                 }
                 AnimatedVisibility(

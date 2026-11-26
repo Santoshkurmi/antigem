@@ -46,6 +46,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import ai.antigem.i18n.L
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 
 // ---------------- formatting ----------------
 
@@ -148,6 +151,20 @@ private fun SelectionMark(selected: Boolean) {
     }
 }
 
+/** What TalkBack offers on a tap: Open, or (while selecting) Select / Deselect. */
+private fun entryClickLabel(selecting: Boolean, selected: Boolean): String = when {
+    !selecting -> L.common.open
+    selected -> L.files.explorerComponents.deselect
+    else -> L.files.explorerComponents.select
+}
+
+/** TalkBack: "Selected" / "Not selected" while selecting, "Cut" while the entry waits to be pasted. Semantics only. */
+private fun Modifier.entryStateSemantics(selecting: Boolean, selected: Boolean, cut: Boolean): Modifier =
+    if (!selecting && !cut) this else semantics {
+        if (selecting) this.selected = selected
+        if (cut) stateDescription = L.files.fileExplorer.cut
+    }
+
 // ---------------- list row ----------------
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -171,7 +188,13 @@ internal fun EntryRow(
             .padding(horizontal = 8.dp, vertical = 1.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                onClickLabel = entryClickLabel(selecting, selected),
+                onLongClickLabel = if (selected) L.files.explorerComponents.deselect else L.files.explorerComponents.select,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .entryStateSemantics(selecting, selected, cut)
             .padding(start = 10.dp, end = 2.dp, top = 8.dp, bottom = 8.dp)
             .alpha(if (dimmed || cut) 0.45f else if (entry.hidden) 0.7f else 1f),
         verticalAlignment = Alignment.CenterVertically
@@ -228,7 +251,13 @@ internal fun EntryTile(
             .fillMaxWidth()
             .padding(4.dp)
             .clip(RoundedCornerShape(18.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                onClickLabel = entryClickLabel(selecting, selected),
+                onLongClickLabel = if (selected) L.files.explorerComponents.deselect else L.files.explorerComponents.select,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .entryStateSemantics(selecting, selected, cut)
             .alpha(if (dimmed || cut) 0.45f else if (entry.hidden) 0.7f else 1f)
     ) {
         Box(Modifier.fillMaxWidth()) {
@@ -331,7 +360,7 @@ internal fun BreadcrumbBar(
                         Modifier
                             .clip(RoundedCornerShape(9.dp))
                             .then(if (last) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier)
-                            .combinedClickableCompat(onClick = { onCrumb(c) }, onLongClick = onCopyPath)
+                            .combinedClickableCompat(onClick = { onCrumb(c) }, onLongClick = onCopyPath, onLongClickLabel = L.files.explorerDialogs.copyPath)
                             .padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -361,9 +390,10 @@ internal fun BreadcrumbBar(
     }
 }
 
+// [onLongClickLabel]: what TalkBack calls the long press ("Copy path" instead of "long press")
 @OptIn(ExperimentalFoundationApi::class)
-internal fun Modifier.combinedClickableCompat(onClick: () -> Unit, onLongClick: () -> Unit): Modifier =
-    this.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+internal fun Modifier.combinedClickableCompat(onClick: () -> Unit, onLongClick: () -> Unit, onLongClickLabel: String? = null): Modifier =
+    this.combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = onLongClickLabel)
 
 // ---------------- small pieces ----------------
 

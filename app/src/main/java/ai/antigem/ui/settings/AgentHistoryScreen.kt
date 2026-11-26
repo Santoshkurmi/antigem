@@ -13,6 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,7 +123,7 @@ fun AgentHistoryScreen() {
                 else -> L.settings.agentHistory.showncountOfChatscountSavedChatValue(shown.size, chats.size, if (chats.size == 1) "" else "s")
             }
             Text(count, fontSize = 12.sp, color = muted, modifier = Modifier.weight(1f))
-            if (loading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            if (loading) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp)
         }
 
         loadError?.let { err ->
@@ -186,7 +193,7 @@ fun AgentHistoryScreen() {
 @Composable
 private fun HistoryGroupHeader(title: String, subtitle: String?) {
     Spacer(Modifier.height(14.dp))
-    Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
     if (!subtitle.isNullOrBlank()) {
         Text(
             subtitle, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -200,7 +207,7 @@ private fun HistoryGroupHeader(title: String, subtitle: String?) {
 private fun HistoryErrorText(text: String) {
     Text(
         text, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.error,
-        modifier = Modifier.padding(vertical = 8.dp)
+        modifier = Modifier.padding(vertical = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }
     )
 }
 
@@ -211,7 +218,7 @@ private fun HistoryRow(c: MemoryBridgeClient.HistoryChat, onClick: () -> Unit) {
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().semantics { role = Role.Button }
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text(
@@ -302,7 +309,7 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
                 Spacer(Modifier.height(10.dp))
                 when {
                     loading -> Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
+                        CircularProgressIndicator(Modifier.size(28.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.5.dp)
                     }
                     failed != null -> HistoryErrorText(failed)
                     tooLarge -> {
@@ -327,7 +334,7 @@ private fun HistoryViewer(chat: MemoryBridgeClient.HistoryChat, onClose: () -> U
                 }
                 error?.let {
                     Spacer(Modifier.height(10.dp))
-                    Text(it, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.error)
+                    Text(it, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 }
             }
         },

@@ -1,6 +1,8 @@
 package ai.antigem.ui.ide
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -99,7 +101,7 @@ fun NewProjectDialog(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedTemplate = template.id },
+                            .selectable(selected = selectedTemplate == template.id, role = Role.RadioButton) { selectedTemplate = template.id },
                         shape = RoundedCornerShape(8.dp),
                         color = if (selectedTemplate == template.id) {
                             MaterialTheme.colorScheme.primaryContainer

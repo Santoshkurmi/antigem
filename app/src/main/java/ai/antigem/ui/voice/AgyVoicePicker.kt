@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import ai.antigem.data.voice.AgyVoiceCall
 import ai.antigem.data.voice.AgyVoicePreferences
 import ai.antigem.data.voice.AgyVoicePreview
@@ -64,6 +67,9 @@ import kotlin.math.sin
 import ai.antigem.i18n.L
 
 private fun rgbColor(v: Int) = Color(0xFF000000.toInt() or v)
+
+/** On the half-shown neighbour pages (one instance: the pages recompose every frame while a sample plays). */
+private val HiddenFromTalkBack = Modifier.clearAndSetSemantics { }
 
 /**
  * The voice picker (as in the Antigravity desktop app): one big orb per voice; swipe to hear each one, then use it.
@@ -126,7 +132,7 @@ private fun PickerContent(
             }
             Text(
                 L.voice.agyVoicePicker.chooseAVoice, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().semantics { heading() }
             )
             Spacer(Modifier.height(6.dp))
             Text(
@@ -149,7 +155,9 @@ private fun PickerContent(
                             val s = lerp(1f, 0.78f, offset)
                             scaleX = s; scaleY = s
                             alpha = lerp(1f, 0.45f, offset)
-                        },
+                        }
+                            // the half-shown neighbours: TalkBack reads only the voice in the middle (the arrows move)
+                            .then(if (page == pager.currentPage) Modifier else HiddenFromTalkBack),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {

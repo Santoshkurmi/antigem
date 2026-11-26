@@ -1,5 +1,6 @@
 package ai.antigem.ui.browser.mcp
 
+import ai.antigem.i18n.L
 import android.content.Context
 import android.net.Uri
 import android.os.SystemClock
@@ -249,14 +250,14 @@ fun BrowserAgentLockOverlay(onUnlock: () -> Unit, modifier: Modifier = Modifier)
                 .background(Color(0xF2202124), RoundedCornerShape(50))
                 .padding(start = 4.dp, end = 4.dp, top = 3.dp, bottom = 3.dp)
         ) {
-            Icon(Icons.Filled.DragIndicator, contentDescription = "Drag", tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.DragIndicator, contentDescription = null, tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(2.dp))
             Icon(Icons.Outlined.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
-            Text("AI controls this tab", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            Text(L.browser.browserAgentLock.aiControlsThisTab, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.width(2.dp))
             TextButton(onClick = onUnlock, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(30.dp)) {
-                Text("Unlock", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ai.antigem.theme.AppColors.warning)
+                Text(L.browser.screen.unlock, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = ai.antigem.theme.AppColors.warning)
             }
         }
     }

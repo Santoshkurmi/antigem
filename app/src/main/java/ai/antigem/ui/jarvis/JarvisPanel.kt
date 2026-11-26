@@ -4,8 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,6 +35,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -82,7 +86,8 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
         else Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() },
+            // tap outside closes (not a clickable: that would merge the sheet into one TalkBack item; Close is in the header)
+            .pointerInput(Unit) { detectTapGestures { close() } },
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
@@ -93,8 +98,8 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFA111A2C), Color(0xFC070B14))))
                 .border(1.dp, Brush.verticalGradient(listOf(Cyan.copy(alpha = 0.5f), Color.Transparent)), RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                // taps inside the sheet stay inside
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                // taps inside the sheet stay inside (not a clickable: that would make the whole sheet one TalkBack item)
+                .pointerInput(Unit) { detectTapGestures { } }
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -110,7 +115,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(L.common.jarvis, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(L.common.jarvis, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                     val sub = when (phase) {
                         Phase.LISTENING -> L.common.listening
                         Phase.THINKING -> steps.lastOrNull()?.text ?: L.jarvis.panel.working
@@ -148,7 +153,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             SectionTitle(L.jarvis.panel.tasks, Modifier.weight(1f))
                             if (shownTasks.any { !it.active }) {
-                                Text(L.jarvis.panel.clearFinished, color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable { JarvisTasks.clearFinished() }.padding(horizontal = 8.dp, vertical = 4.dp))
+                                Text(L.jarvis.panel.clearFinished, color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(role = Role.Button) { JarvisTasks.clearFinished() }.padding(horizontal = 8.dp, vertical = 4.dp))
                             }
                         }
                     }
@@ -166,14 +171,14 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             SectionTitle(L.jarvis.panel.conversation, Modifier.weight(1f))
                             if (voiceChat.isNotBlank()) {
-                                Text(L.jarvis.panel.openChat, color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
+                                Text(L.jarvis.panel.openChat, color = Cyan, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(role = Role.Button) {
                                     close()
                                     JarvisController.vm.selectConversation(voiceChat)
                                     JarvisController.vm.requestViewMode("CHAT")
                                 }.padding(horizontal = 8.dp, vertical = 4.dp))
                             }
                             if (log.isNotEmpty()) {
-                                Text(L.common.clear, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable {
+                                Text(L.common.clear, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(role = Role.Button) {
                                     JarvisController.clearHistory()
                                 }.padding(horizontal = 8.dp, vertical = 4.dp))
                             }
@@ -234,7 +239,7 @@ fun JarvisPanel(onTalk: () -> Unit, onNoticeAction: (String) -> Unit, floating: 
 
 @Composable
 private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text.uppercase(), color = Cyan.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp, modifier = modifier.padding(bottom = 6.dp))
+    Text(text.uppercase(), color = Cyan.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp, modifier = modifier.padding(bottom = 6.dp).semantics { heading() })
 }
 
 @Composable
@@ -247,7 +252,7 @@ private fun TaskRow(t: JarvisTasks.Task, onOpen: () -> Unit, onStop: () -> Unit,
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White.copy(alpha = 0.04f))
             .border(1.dp, c.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
-            .clickable { onOpen() }
+            .clickable(role = Role.Button) { onOpen() }
             .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -300,7 +305,7 @@ private fun RoundIcon(icon: ImageVector, label: String, tint: Color, filled: Boo
             .size(if (small) 34.dp else 44.dp)
             .clip(CircleShape)
             .background(if (filled) tint.copy(alpha = 0.2f) else Color.Transparent)
-            .clickable { onClick() },
+            .clickable(role = Role.Button) { onClick() },
         contentAlignment = Alignment.Center
     ) { Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(if (small) 18.dp else 22.dp)) }
 }
@@ -312,7 +317,7 @@ private fun FooterButton(label: String, color: Color = Cyan, onClick: () -> Unit
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(50))
-            .clickable { onClick() }
+            .clickable(role = Role.Button) { onClick() }
             .padding(horizontal = 14.dp, vertical = 8.dp)
     )
 }

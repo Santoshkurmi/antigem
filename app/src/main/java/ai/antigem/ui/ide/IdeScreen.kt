@@ -1059,7 +1059,7 @@ fun IdeScreen(
                                 } else if (tab.isReadOnly) {
                                     Icon(
                                         imageVector = Icons.Default.Lock,
-                                        contentDescription = "Read-Only",
+                                        contentDescription = L.ide.screen.readOnly,
                                         tint = ai.antigem.theme.AppColors.warning.copy(alpha = 0.85f),
                                         modifier = Modifier.size(12.dp)
                                     )

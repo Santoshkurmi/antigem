@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -906,7 +907,7 @@ fun ChatHistoryDrawer(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (selected) accent.copy(alpha = 0.14f) else Color.Transparent)
-                                .clickable { jarvisFilter = false; agentFilter = agent }
+                                .selectable(selected = selected, role = Role.RadioButton) { jarvisFilter = false; agentFilter = agent }
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         )
                     }
@@ -916,7 +917,7 @@ fun ChatHistoryDrawer(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (jarvisFilter) jarvisAccent.copy(alpha = 0.14f) else Color.Transparent)
-                                .clickable { agentFilter = null; jarvisFilter = true }
+                                .selectable(selected = jarvisFilter, role = Role.RadioButton) { agentFilter = null; jarvisFilter = true }
                                 .padding(start = 7.dp, end = 10.dp, top = 3.dp, bottom = 3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -2301,7 +2302,7 @@ fun SearchChatsDialog(
                             ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedTimeFilter = timeLabel }
+                                .selectable(selected = isSelected, role = Role.RadioButton) { selectedTimeFilter = timeLabel }
                         ) {
                             Text(
                                 // the filter keys stay English (compared above); only the shown label is translated
@@ -2344,7 +2345,7 @@ fun SearchChatsDialog(
                                 ),
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { selectedWorkspaceFilter = wsName }
+                                    .selectable(selected = isSelected, role = Role.RadioButton) { selectedWorkspaceFilter = wsName }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),

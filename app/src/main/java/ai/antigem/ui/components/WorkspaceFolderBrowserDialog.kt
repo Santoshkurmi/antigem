@@ -19,6 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -109,14 +115,17 @@ fun WorkspaceFolderBrowserDialog(
                             text = L.components.workspaceFolderBrowser.browseFolders,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.semantics { heading() }
                         )
                         Text(
                             text = currentPath,
                             fontSize = 11.5.sp,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            // TalkBack reads the new folder after opening one or going up
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                         )
                     }
 
@@ -164,7 +173,7 @@ fun WorkspaceFolderBrowserDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(32.dp),
+                                    modifier = Modifier.size(32.dp).semantics { contentDescription = L.common.loading },
                                     color = ClaudeTerracotta,
                                     strokeWidth = 2.5.dp
                                 )
@@ -181,7 +190,8 @@ fun WorkspaceFolderBrowserDialog(
                                     Text(
                                         text = errorMessage ?: "",
                                         color = MaterialTheme.colorScheme.error,
-                                        fontSize = 12.5.sp
+                                        fontSize = 12.5.sp,
+                                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Button(onClick = { loadDir(currentPath) }) {
@@ -215,7 +225,7 @@ fun WorkspaceFolderBrowserDialog(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable { loadDir(dir.path) }
+                                            .clickable(onClickLabel = L.common.open, role = Role.Button) { loadDir(dir.path) }
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),

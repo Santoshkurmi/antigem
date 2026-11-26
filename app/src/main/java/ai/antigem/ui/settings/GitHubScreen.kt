@@ -21,6 +21,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +74,7 @@ fun GitHubScreen(cardBg: Color, cardBorder: BorderStroke, onOpenProject: (Projec
                 color = (if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen).copy(alpha = 0.1f)
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f))
+                    Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                     IconButton(onClick = GitHubManager::clearMessage) { Icon(Icons.Default.Close, L.common.dismiss, Modifier.size(18.dp)) }
                 }
             }
@@ -127,7 +134,7 @@ private fun GitHubStatusCard(state: GitHubManager.State, cardBg: Color, cardBord
                     state.ghInstalled == true -> L.settings.gitHub.notSignedIn
                     else -> "GitHub"
                 }
-                Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
                 val subtitle = when {
                     account != null -> "@${account.login}"
                     state.signedIn -> state.accountError ?: L.settings.gitHub.loadingAccount
@@ -141,7 +148,7 @@ private fun GitHubStatusCard(state: GitHubManager.State, cardBg: Color, cardBord
                     account?.plan?.let { Pill(it.uppercase(), QuotaGreen) }
                 }
             }
-            if (state.refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.dp)
+            if (state.refreshing) CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp)
             else IconButton(onClick = { GitHubManager.refresh() }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
         }
     }
@@ -170,7 +177,7 @@ private fun InstallCard(state: GitHubManager.State, cardBg: Color, cardBorder: B
             Hint(state.installLog.lastOrNull { !it.startsWith("$") } ?: L.common.starting)
         }
         if (state.installLog.isNotEmpty()) LogBox(state.installLog)
-        state.installError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+        state.installError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
     }
 }
 
@@ -180,13 +187,13 @@ private fun SignInCard(state: GitHubManager.State, cardBg: Color, cardBorder: Bo
     val clipboard = LocalClipboardManager.current
     StepCard(1, L.settings.gitHub.signInToGithub, null, cardBg, cardBorder) {
         state.ghVersion?.let { Hint(it) }
-        state.authProblem?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+        state.authProblem?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         when (val login = state.login) {
             Login.Idle, is Login.Failed -> {
                 Hint(L.settings.gitHub.signInWithYourBrowserGithub)
                 if (login is Login.Failed) {
                     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)) {
-                        Text(login.message, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().padding(12.dp))
+                        Text(login.message, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth().padding(12.dp).semantics { liveRegion = LiveRegionMode.Polite })
                     }
                 }
                 Button(onClick = GitHubManager::startBrowserLogin) {
@@ -244,9 +251,9 @@ private fun TokenLogin() {
 @Composable
 private fun Busy(text: String, onCancel: (() -> Unit)?) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        CircularProgressIndicator(Modifier.size(18.dp).clearAndSetSemantics { }, strokeWidth = 2.dp)
         Spacer(Modifier.width(10.dp))
-        Text(text, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.weight(1f))
+        Text(text, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
         if (onCancel != null) TextButton(onClick = onCancel) { Text(L.common.cancel) }
     }
 }
@@ -259,7 +266,7 @@ private fun AccountCard(state: GitHubManager.State, cardBg: Color, cardBorder: B
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(L.common.account, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(L.common.account, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
                 Pill("SIGNED IN", QuotaGreen)
             }
             if (account == null) {
@@ -307,7 +314,8 @@ private fun AccountCard(state: GitHubManager.State, cardBg: Color, cardBorder: B
 @Composable
 private fun DetailRow(label: String, value: String?, mono: Boolean = false) {
     if (value.isNullOrBlank()) return
-    Row(verticalAlignment = Alignment.Top) {
+    // TalkBack: label and value as one item ("Username, octocat")
+    Row(Modifier.semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.Top) {
         Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f), modifier = Modifier.width(110.dp))
         Text(value, fontSize = 12.5.sp, fontFamily = if (mono) FontFamily.Monospace else null, modifier = Modifier.weight(1f))
     }
@@ -320,7 +328,7 @@ private fun GitSetupCard(state: GitHubManager.State, cardBg: Color, cardBorder: 
     var email by remember(state.gitUserEmail, account) { mutableStateOf(state.gitUserEmail ?: account?.email ?: account?.noreplyEmail.orEmpty()) }
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(L.settings.gitHub.git, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+            Text(L.settings.gitHub.git, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
             if (!state.gitInstalled) {
                 Text("git isn't installed" + (if (GitHubManager.remote) L.settings.gitHub.onTheServer2 else ". Run \"pkg install git\" in the terminal."),
                     fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
@@ -335,7 +343,7 @@ private fun GitSetupCard(state: GitHubManager.State, cardBg: Color, cardBorder: 
                 Button(enabled = state.busy == null, onClick = { GitHubManager.setupGit() }) { Text(L.settings.gitHub.setUpGit) }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            Text(L.settings.gitHub.commitIdentity, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(L.settings.gitHub.commitIdentity, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
             Hint(if (state.gitUserName == null || state.gitUserEmail == null) L.settings.gitHub.notSetYetGitWontCommit
                 else L.settings.gitHub.newCommitsAreSignedAsGitusername(state.gitUserName, state.gitUserEmail))
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("user.name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -365,11 +373,11 @@ private fun ReposCard(state: GitHubManager.State, cardBg: Color, cardBorder: Bor
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (state.reposLoaded) L.settings.gitHub.repositoriesCount(state.repos.size) else L.settings.gitHub.repositories, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                if (state.reposLoading) CircularProgressIndicator(Modifier.padding(8.dp).size(18.dp), strokeWidth = 2.dp)
+                Text(if (state.reposLoaded) L.settings.gitHub.repositoriesCount(state.repos.size) else L.settings.gitHub.repositories, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
+                if (state.reposLoading) CircularProgressIndicator(Modifier.padding(8.dp).size(18.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp)
                 else IconButton(onClick = GitHubManager::loadRepos) { Icon(Icons.Outlined.Refresh, L.settings.gitHub.reloadRepositories, Modifier.size(20.dp)) }
             }
-            state.reposError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error) }
+            state.reposError?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
             if (state.repos.isNotEmpty()) {
                 OutlinedTextField(
                     value = query, onValueChange = { query = it; shown = REPO_PAGE }, singleLine = true,
@@ -401,7 +409,7 @@ private fun RepoRow(repo: GitHubManager.Repo, ownLogin: String?, onClone: () -> 
     var menu by remember { mutableStateOf(false) }
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
     Box {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { menu = true }.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button) { menu = true }.padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(if (repo.isPrivate) Icons.Outlined.Lock else Icons.Outlined.Book, null, tint = dim, modifier = Modifier.size(15.dp))
                 Text(

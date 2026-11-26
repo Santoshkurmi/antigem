@@ -19,6 +19,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,7 +71,8 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                 color = (if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen).copy(alpha = 0.1f)
             ) {
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f))
+                    // a task's result comes by itself: TalkBack reads it out
+                    Text(msg, fontSize = 12.5.sp, color = if (state.isError) MaterialTheme.colorScheme.error else QuotaGreen, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
                     IconButton(onClick = X11DesktopManager::clearMessage) { Icon(Icons.Default.Close, L.common.dismiss, Modifier.size(18.dp)) }
                 }
             }
@@ -77,7 +85,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         if (!state.bootstrapInstalled) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(L.settings.x11Desktop.installTheLinuxEnvironmentFirst, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+                    Text(L.settings.x11Desktop.installTheLinuxEnvironmentFirst, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
                     Hint(L.settings.x11Desktop.theDesktopRunsInAntigemsTerminal)
                 }
             }
@@ -173,7 +181,8 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                         selected = state.desktop == d,
                         enabled = !busy && !state.running,
                         onClick = { X11DesktopManager.setDesktop(d) },
-                        label = { Text(if (d in state.installedDesktops) "${d.label} ✓" else d.label) }
+                        // "Installed", not the ✓ symbol's name
+                        label = { Text(if (d in state.installedDesktops) "${d.label} ✓" else d.label, modifier = Modifier.clearAndSetSemantics { contentDescription = if (d in state.installedDesktops) "${d.label}, ${L.common.installed}" else d.label }) }
                     )
                 }
             }
@@ -216,7 +225,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
         Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(L.settings.x11Desktop.webBrowser, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(L.settings.x11Desktop.webBrowser, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
                     if (browserInstalled) {
                         Pill(L.common.installed, QuotaGreen)
                     } else {
@@ -229,7 +238,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
                             selected = state.browser == b,
                             enabled = !busy,
                             onClick = { X11DesktopManager.setBrowser(b) },
-                            label = { Text(if (b in state.installedBrowsers) "${b.label} ✓" else b.label) }
+                            label = { Text(if (b in state.installedBrowsers) "${b.label} ✓" else b.label, modifier = Modifier.clearAndSetSemantics { contentDescription = if (b in state.installedBrowsers) "${b.label}, ${L.common.installed}" else b.label }) }
                         )
                     }
                 }
@@ -264,7 +273,7 @@ fun X11DesktopScreen(cardBg: Color, cardBorder: BorderStroke, onOpenAdbConnect: 
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(L.settings.x11Desktop.ifTheDesktopClosesByItself, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(L.settings.x11Desktop.ifTheDesktopClosesByItself, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
                         Pill(L.common.optional, MaterialTheme.colorScheme.primary)
                     }
                     Hint(L.settings.x11Desktop.android12AndNewerStopThe)
@@ -291,7 +300,7 @@ private fun IntroCard(running: Boolean, cardBg: Color, cardBorder: BorderStroke)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.DesktopWindows, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(10.dp))
-                Text(L.settings.x11Desktop.linuxDesktop, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(L.settings.x11Desktop.linuxDesktop, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
                 if (running) Pill(L.common.running, QuotaGreen)
             }
             Hint(L.settings.x11Desktop.runLinuxDesktopAppsABrowser)
@@ -328,8 +337,11 @@ private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderS
     Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = cardBg), border = cardBorder) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(L.settings.x11Desktop.setUpManually, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { open = !open }) { Text(if (open) L.common.hide else L.common.show, fontSize = 12.5.sp) }
+                Text(L.settings.x11Desktop.setUpManually, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).semantics { heading() })
+                TextButton(
+                    onClick = { open = !open },
+                    modifier = Modifier.semantics { stateDescription = if (open) L.components.a11y.expanded else L.components.a11y.collapsed }
+                ) { Text(if (open) L.common.hide else L.common.show, fontSize = 12.5.sp) }
             }
             if (!open) {
                 Hint(L.settings.x11Desktop.preferTheTerminalTheseAreThe)

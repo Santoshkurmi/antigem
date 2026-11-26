@@ -309,6 +309,11 @@ private fun VideoOverlay(
     var skipForward by remember { mutableStateOf(true) }
     var skipSeconds by remember { mutableIntStateOf(0) }
     var skipTick by remember { mutableIntStateOf(0) }
+    // TalkBack on: the controls don't hide by themselves (they'd vanish while the user swipes to them). Read once, no listener
+    val talkBackOn = remember {
+        (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager)
+            ?.isTouchExplorationEnabled == true
+    }
 
     fun poke() {
         controlsVisible = true
@@ -316,7 +321,7 @@ private fun VideoOverlay(
     }
 
     LaunchedEffect(controlsVisible, c.isPlaying, interaction, scrubFraction, menuOpen, speedMenuOpen) {
-        if (controlsVisible && c.isPlaying && scrubFraction == null && !menuOpen && !speedMenuOpen) {
+        if (!talkBackOn && controlsVisible && c.isPlaying && scrubFraction == null && !menuOpen && !speedMenuOpen) {
             delay(3000)
             controlsVisible = false
         }

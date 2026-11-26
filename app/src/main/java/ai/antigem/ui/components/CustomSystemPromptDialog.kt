@@ -1,5 +1,6 @@
 package ai.antigem.ui.components
 
+import ai.antigem.i18n.L
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -189,7 +190,7 @@ Available slash commands: /goal, /schedule, /browser, /plan, /grill-me, /teamwor
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ContentCopy,
-                                contentDescription = "Copy Prompt",
+                                contentDescription = L.components.customSystemPromptDialog.copyPrompt,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -297,7 +298,7 @@ Available slash commands: /goal, /schedule, /browser, /plan, /grill-me, /teamwor
                         TextButton(onClick = { promptText = "" }) {
                             Icon(
                                 imageVector = Icons.Outlined.RestartAlt,
-                                contentDescription = "Clear",
+                                contentDescription = L.common.clear,
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.error
                             )

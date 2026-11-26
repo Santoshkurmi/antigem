@@ -100,6 +100,8 @@ import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.foundation.selection.toggleable
 
 /**
  * Tab model representing a live web session with its own state and WebView.
@@ -1065,6 +1067,7 @@ private fun BrowserMenuSheet(
                     icon = Icons.Rounded.DesktopWindows,
                     label = L.browser.screen.desktop,
                     active = activeTab?.isDesktopMode == true,
+                    isSwitch = true,
                     modifier = Modifier.weight(1f),
                     onClick = { closeThen(onToggleDesktop) }
                 )
@@ -1072,6 +1075,7 @@ private fun BrowserMenuSheet(
                     icon = Icons.Rounded.Code,
                     label = "DevTools",
                     active = activeTab?.isDevToolsEnabled == true,
+                    isSwitch = true,
                     modifier = Modifier.weight(1f),
                     onClick = { closeThen(onToggleDevTools) }
                 )
@@ -1149,7 +1153,9 @@ private fun BrowserMenuTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    active: Boolean = false
+    active: Boolean = false,
+    // an on/off tile (Desktop, DevTools): TalkBack says "Switch, On / Off" instead of "Button"
+    isSwitch: Boolean = false
 ) {
     val container by animateColorAsState(
         targetValue = if (active) ClaudeTerracotta.copy(alpha = 0.14f) else ai.antigem.theme.AppColors.fill,
@@ -1168,8 +1174,10 @@ private fun BrowserMenuTile(
                 BorderStroke(1.dp, if (active) ClaudeTerracotta.copy(alpha = 0.35f) else Color.Transparent),
                 RoundedCornerShape(18.dp)
             )
-            .then(if (active) Modifier.semantics { stateDescription = L.common.active } else Modifier)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .then(
+                if (isSwitch) Modifier.toggleable(value = active, enabled = enabled, role = Role.Switch, onValueChange = { onClick() })
+                else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            )
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -1254,17 +1262,24 @@ private fun SearchHistoryOverlay(
         }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(role = Role.Button, onClickLabel = L.common.dismiss) { onDismiss() }
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        // The dim backdrop: a tap outside the card closes it. It is a sibling BEHIND the card, not its parent: a
+        // clickable parent would swallow the card's texts ("Recent searches") into one screen-wide "Dismiss" item for
+        // TalkBack. The card (a Surface) keeps taps from reaching it; TalkBack reaches it after the card.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(role = Role.Button) { onDismiss() }
+                .semantics {
+                    contentDescription = L.common.dismiss
+                    traversalIndex = 1f
+                }
+        )
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .pointerInput(Unit) { detectTapGestures {} }, // consume clicks inside card to prevent dismiss
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             shape = RoundedCornerShape(16.dp),
             color = ai.antigem.theme.AppColors.card,
             shadowElevation = 8.dp,
@@ -1786,7 +1801,7 @@ private fun TabOverviewScreen(
                         }
 
                         Text(
-                            text = "Tabs (${tabs.size})",
+                            text = L.browser.screen.tabsTitle(tabs.size),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,

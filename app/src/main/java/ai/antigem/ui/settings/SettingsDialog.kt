@@ -19,6 +19,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import ai.antigem.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
@@ -1955,7 +1956,7 @@ private fun AppearanceSubScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable { onSetFloatingSwitcherOrientation("VERTICAL") },
+                                .selectable(selected = isVert, role = Role.RadioButton) { onSetFloatingSwitcherOrientation("VERTICAL") },
                             shape = RoundedCornerShape(10.dp),
                             color = if (isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
                             border = BorderStroke(1.dp, if (isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
@@ -1975,7 +1976,7 @@ private fun AppearanceSubScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable { onSetFloatingSwitcherOrientation("HORIZONTAL") },
+                                .selectable(selected = !isVert, role = Role.RadioButton) { onSetFloatingSwitcherOrientation("HORIZONTAL") },
                             shape = RoundedCornerShape(10.dp),
                             color = if (!isVert) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
                             border = BorderStroke(1.dp, if (!isVert) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
@@ -5761,7 +5762,7 @@ private fun ProjectsBackupRestoreDialog(
                                         border = BorderStroke(1.dp, if (backupMode == "git") ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clickable { backupMode = "git" }
+                                            .selectable(selected = backupMode == "git", role = Role.RadioButton) { backupMode = "git" }
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(8.dp),
@@ -5788,7 +5789,7 @@ private fun ProjectsBackupRestoreDialog(
                                         border = BorderStroke(1.dp, if (backupMode == "full") ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
                                         modifier = Modifier
                                             .weight(1f)
-                                            .clickable { backupMode = "full" }
+                                            .selectable(selected = backupMode == "full", role = Role.RadioButton) { backupMode = "full" }
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(8.dp),
@@ -6167,7 +6168,7 @@ private fun ProjectsBackupRestoreDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(6.dp))
-                                        .clickable { conflictStrategy = "bak" }
+                                        .selectable(selected = conflictStrategy == "bak", role = Role.RadioButton) { conflictStrategy = "bak" }
                                         .padding(4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -6189,7 +6190,7 @@ private fun ProjectsBackupRestoreDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(6.dp))
-                                        .clickable { conflictStrategy = "overwrite" }
+                                        .selectable(selected = conflictStrategy == "overwrite", role = Role.RadioButton) { conflictStrategy = "overwrite" }
                                         .padding(4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -8311,7 +8312,7 @@ private fun AddPermissionRuleDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedDecision = key },
+                                .selectable(selected = isSel, role = Role.RadioButton) { selectedDecision = key },
                             shape = RoundedCornerShape(8.dp),
                             color = if (isSel) col.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                             border = BorderStroke(

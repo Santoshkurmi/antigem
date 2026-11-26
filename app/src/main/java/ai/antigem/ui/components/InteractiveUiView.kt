@@ -18,6 +18,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import ai.antigem.theme.isAppInDarkTheme
@@ -188,7 +190,7 @@ fun InteractiveUiView(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
-                                .clickable { selectedTab = 0 }
+                                .selectable(selected = selectedTab == 0, role = Role.Tab) { selectedTab = 0 }
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
@@ -202,7 +204,7 @@ fun InteractiveUiView(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
-                                .clickable { selectedTab = 1 }
+                                .selectable(selected = selectedTab == 1, role = Role.Tab) { selectedTab = 1 }
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(

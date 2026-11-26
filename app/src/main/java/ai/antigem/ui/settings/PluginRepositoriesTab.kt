@@ -12,6 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.antigem.ui.browser.PluginRepo
@@ -55,7 +61,7 @@ fun PluginRepositoriesTab(busy: Boolean, runOperation: (suspend () -> String?) -
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(L.settings.pluginRepositoriesTab.hostYourOwnRepository, style = MaterialTheme.typography.titleSmall)
+                    Text(L.settings.pluginRepositoriesTab.hostYourOwnRepository, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
                     Text(L.settings.pluginRepositoriesTab.howToLayOutAGithub(PluginRepositories.INDEX), style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = { guide = runCatching { readBundledGuide(context) }.getOrElse { L.settings.pluginRepositoriesTab.guideNotFoundMessage(it.message) } }) { Icon(Icons.Outlined.Visibility, L.settings.pluginRepositoriesTab.viewGuide) }
@@ -65,7 +71,7 @@ fun PluginRepositoriesTab(busy: Boolean, runOperation: (suspend () -> String?) -
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(L.settings.pluginRepositoriesTab.pluginSdkForPc, style = MaterialTheme.typography.titleSmall)
+                    Text(L.settings.pluginRepositoriesTab.pluginSdkForPc, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
                     Text(L.settings.pluginRepositoriesTab.allPluginDocsAndExamplesAs, style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = { scope.launch { saveToDownloads(context, "antigem-plugin-sdk.zip", bundledSdkZip(context), "application/zip") } }) { Icon(Icons.Outlined.FolderZip, L.settings.pluginRepositoriesTab.downloadPluginSdkZip) }
@@ -87,14 +93,14 @@ fun PluginRepositoriesTab(busy: Boolean, runOperation: (suspend () -> String?) -
                 Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(listing?.title ?: repo.label, style = MaterialTheme.typography.titleMedium)
+                            Text(listing?.title ?: repo.label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
                             if (listing?.title != null && listing.title != repo.label) Text(repo.label, style = MaterialTheme.typography.bodySmall)
                         }
-                        if (repo.label in PluginRepositories.loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        if (repo.label in PluginRepositories.loading) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = L.common.checking }, strokeWidth = 2.dp)
                         else IconButton(onClick = { scope.launch { PluginRepositories.refresh(repo) } }) { Icon(Icons.Outlined.Refresh, L.common.checkForUpdates) }
                         IconButton(onClick = { PluginRepositories.remove(repo) }) { Icon(Icons.Outlined.Delete, L.settings.pluginRepositoriesTab.removeRepository) }
                     }
-                    PluginRepositories.errors[repo.label]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    PluginRepositories.errors[repo.label]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                     if (listing != null && listing.plugins.isEmpty()) Text(L.settings.pluginRepositoriesTab.thisRepositoryListsNoPlugins, style = MaterialTheme.typography.bodySmall)
                     listing?.plugins?.forEach { plugin -> RepoPluginRow(repo, plugin, busy) { installOrUpdate(repo, plugin) } }
                 }
@@ -162,8 +168,9 @@ internal fun PluginInstallProgress(progress: ai.antigem.ui.browser.RepoInstallPr
         else -> L.settings.pluginRepositoriesTab.startingPlugin
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (fraction != null) LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-        else LinearProgressIndicator(Modifier.fillMaxWidth())
+        // the text below says the same (phase and percentage): the bar isn't a second stop for TalkBack
+        if (fraction != null) LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().clearAndSetSemantics { })
+        else LinearProgressIndicator(Modifier.fillMaxWidth().clearAndSetSemantics { })
         if (progress.note.isNotBlank()) Text(progress.note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         Row(Modifier.fillMaxWidth()) {
             Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)

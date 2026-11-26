@@ -28,7 +28,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +58,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -272,6 +281,21 @@ private fun OrbLayer(
                 Box(
                     Modifier
                         .size(orbDp)
+                        // raw gestures only: TalkBack gets a name, its state, double-tap to talk and long-press for the panel
+                        // (remembered: this recomposes with the voice level while Jarvis listens or speaks)
+                        .then(remember(active, phase, quiet, attention, activeTasks, onTap) {
+                            Modifier.semantics(mergeDescendants = true) {
+                                contentDescription = L.common.jarvis
+                                val state = listOfNotNull(
+                                    if (active) defaultLabel(phase, quiet) else null,
+                                    if (attention) L.jarvis.overlay.needsYourAttention else if (activeTasks > 0) L.jarvis.overlay.tasksRunning(activeTasks) else null
+                                )
+                                if (state.isNotEmpty()) stateDescription = state.joinToString(", ")
+                                role = Role.Button
+                                onClick(label = if (phase == Phase.LISTENING) L.common.send else L.jarvis.panel.talk) { onTap(); true }
+                                onLongClick(label = L.jarvis.overlay.openPanel) { JarvisController.panelOpen.value = true; true }
+                            }
+                        })
                         .pointerInput(orbPx) {
                             detectDragGestures(
                                 onDragEnd = { snap() },
@@ -406,7 +430,7 @@ internal fun StatusPill(phase: Phase, steps: List<JarvisController.Step>) {
             .clip(RoundedCornerShape(50))
             .background(Brush.horizontalGradient(listOf(GlassTop, GlassBottom)))
             .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(50))
-            .clickable { JarvisController.panelOpen.value = true }
+            .clickable(role = Role.Button, onClickLabel = L.jarvis.overlay.openPanel) { JarvisController.panelOpen.value = true }
             .padding(start = 12.dp, end = if (phase == Phase.THINKING) 6.dp else 14.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -418,7 +442,7 @@ internal fun StatusPill(phase: Phase, steps: List<JarvisController.Step>) {
         if (phase == Phase.THINKING) {
             Spacer(Modifier.width(6.dp))
             Box(
-                Modifier.size(24.dp).clip(CircleShape).background(Danger.copy(alpha = 0.16f)).clickable { JarvisController.stopEverything() },
+                Modifier.size(24.dp).clip(CircleShape).background(Danger.copy(alpha = 0.16f)).clickable(role = Role.Button) { JarvisController.stopEverything() },
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Filled.Stop, L.common.stop, tint = Danger, modifier = Modifier.size(14.dp)) }
         }
@@ -434,7 +458,9 @@ internal fun NoticeChip(n: JarvisController.Notice, onAction: (String) -> Unit, 
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xF0101827))
             .border(1.dp, color.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
-            .clickable { JarvisController.clearNotice() }
+            // a notice comes by itself: TalkBack reads it out (on this node: the text below is merged into it)
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .clickable(role = Role.Button, onClickLabel = L.common.dismiss) { JarvisController.clearNotice() }
             .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -445,7 +471,7 @@ internal fun NoticeChip(n: JarvisController.Notice, onAction: (String) -> Unit, 
             Spacer(Modifier.width(8.dp))
             Text(
                 when { a == "mic" -> L.common.allow; a.startsWith("chat:") -> L.common.open; else -> L.common.setUp }, color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(color).clickable { onAction(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(color).clickable(role = Role.Button) { onAction(a) }.padding(horizontal = 10.dp, vertical = 5.dp)
             )
         }
     }
@@ -459,7 +485,9 @@ internal fun TaskChip(t: JarvisTasks.Task) {
             .clip(RoundedCornerShape(50))
             .background(c.copy(alpha = 0.12f))
             .border(1.dp, c.copy(alpha = 0.35f), RoundedCornerShape(50))
-            .clickable { JarvisController.panelOpen.value = true }
+            // the dot's colour is the task's state
+            .semantics { stateDescription = taskStateSpoken(t.state) }
+            .clickable(role = Role.Button, onClickLabel = L.jarvis.overlay.openPanel) { JarvisController.panelOpen.value = true }
             .padding(horizontal = 8.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -477,6 +505,18 @@ internal fun taskColor(s: JarvisTasks.State): Color = when (s) {
     JarvisTasks.State.DONE -> Green
     JarvisTasks.State.FAILED -> Danger
     JarvisTasks.State.STOPPED -> Color(0xFF9CA3AF)
+}
+
+/** What TalkBack says for a task's state (shown only as a colour on the chips). */
+internal fun taskStateSpoken(s: JarvisTasks.State): String = when (s) {
+    JarvisTasks.State.STARTING -> L.common.starting
+    JarvisTasks.State.RUNNING -> L.common.running
+    JarvisTasks.State.NEEDS_APPROVAL -> L.jarvis.commandCenter.needsApproval
+    JarvisTasks.State.NEEDS_ANSWER -> L.jarvis.commandCenter.asksAQuestion
+    JarvisTasks.State.STALLED -> L.jarvis.commandCenter.noProgress
+    JarvisTasks.State.DONE -> L.common.done
+    JarvisTasks.State.FAILED -> L.common.failed
+    JarvisTasks.State.STOPPED -> L.common.stopped
 }
 
 /** What the user can do right now: cancel / wait / send while listening, stop / reply while Jarvis speaks. */
@@ -504,7 +544,7 @@ private fun ActionButtons(phase: Phase, holding: Boolean, auto: Boolean, quiet: 
                     .size(if (big) 42.dp else 32.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.06f))
-                    .clickable { JarvisController.quickSettingsOpen.value = true },
+                    .clickable(role = Role.Button) { JarvisController.quickSettingsOpen.value = true },
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Filled.Tune, L.common.quickSettings, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(if (big) 20.dp else 16.dp)) }
         }
@@ -518,11 +558,11 @@ internal fun PillButton(label: String, icon: ImageVector, color: Color, big: Boo
             .clip(RoundedCornerShape(50))
             .background(if (filled) color.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f))
             .border(1.dp, color.copy(alpha = if (filled) 0.7f else 0.45f), RoundedCornerShape(50))
-            .clickable { onClick() }
+            .clickable(role = Role.Button) { onClick() }
             .padding(horizontal = if (big) 20.dp else 12.dp, vertical = if (big) 10.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(if (big) 20.dp else 15.dp))
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(if (big) 20.dp else 15.dp)) // the label next to it says it
         Spacer(Modifier.width(5.dp))
         Text(label, color = Color.White, fontSize = if (big) 14.sp else 12.sp, fontWeight = FontWeight.Medium)
     }
@@ -594,8 +634,9 @@ private fun FullScreenJarvis(
         Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xF0070B14), Color(0xF2101828))))
-            // swallow touches so nothing behind the overlay is hit by accident
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+            // swallow touches so nothing behind the overlay is hit by accident (not a clickable: that would make the whole
+            // screen one TalkBack item)
+            .pointerInput(Unit) { detectTapGestures { } },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(28.dp)) {
@@ -711,7 +752,8 @@ fun IdleOrb(size: Dp, activeTasks: Int, attention: Boolean) {
 /** Small marker on the active orb: violet with the number of running tasks, amber when something needs the user. */
 @Composable
 internal fun TaskBadge(orb: Dp, count: Int, attention: Boolean) {
-    Box(Modifier.size(orb), contentAlignment = Alignment.TopEnd) {
+    // the orb says it ("!" / a number would be read as symbols)
+    Box(Modifier.size(orb).clearAndSetSemantics { }, contentAlignment = Alignment.TopEnd) {
         Box(
             Modifier.size(16.dp).clip(CircleShape).background(if (attention) Amber else Violet).border(1.5.dp, Color(0xFF0A0F1C), CircleShape),
             contentAlignment = Alignment.Center
