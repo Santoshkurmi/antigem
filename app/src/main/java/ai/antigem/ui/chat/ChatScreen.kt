@@ -157,6 +157,85 @@ private fun FollowTail(
     }
 }
 
+/** How often the chat screen takes message updates while the newest message is off screen (see [pacedMessages]). */
+private const val MESSAGE_PACE_MS = 250L
+
+/**
+ * The messages for the chat screen. While [slow] (no row of the newest message is on screen: the user reads older
+ * messages while a reply may be streaming), updates are passed on at most every [MESSAGE_PACE_MS], always the newest
+ * one: the screen and its list rebuild a few times a second instead of on every streamed word. Passed on at once:
+ * every update when not [slow], the first list, another chat's list, a list that got shorter or emptied (edit,
+ * rewind, reload), and the newest list the moment [slow] ends. Nothing is ever dropped: the last update always
+ * arrives, at most [MESSAGE_PACE_MS] late.
+ */
+private fun pacedMessages(
+    source: kotlinx.coroutines.flow.StateFlow<List<ChatMessage>>,
+    slow: () -> Boolean
+): kotlinx.coroutines.flow.Flow<List<ChatMessage>> = kotlinx.coroutines.flow.channelFlow {
+    var sent: List<ChatMessage>? = null
+    var sentAt = 0L
+    var timer: kotlinx.coroutines.Job? = null
+    suspend fun pass(list: List<ChatMessage>) {
+        sent = list
+        sentAt = android.os.SystemClock.uptimeMillis()
+        send(list)
+    }
+    launch {
+        // the newest message came on screen: what was held back follows at once
+        snapshotFlow { slow() }.collect { isSlow ->
+            if (!isSlow) {
+                timer?.cancel()
+                timer = null
+                val newest = source.value
+                if (newest !== sent) pass(newest)
+            }
+        }
+    }
+    source.collect { list ->
+        val last = sent
+        val urgent = last == null || !slow() || list.isEmpty() || last.isEmpty() || list.size < last.size ||
+            list.first().conversationId != last.first().conversationId
+        val wait = MESSAGE_PACE_MS - (android.os.SystemClock.uptimeMillis() - sentAt)
+        if (urgent || wait <= 0) {
+            timer?.cancel()
+            timer = null
+            pass(list)
+        } else if (timer == null) {
+            timer = launch {
+                delay(wait)
+                timer = null
+                pass(source.value)
+            }
+        }
+    }
+}
+
+/** The index of the first row of the newest message in [rows] (rows.size when no row belongs to a message). */
+private fun firstRowOfNewestMessage(rows: List<ChatFeedItem>): Int {
+    var newest: String? = null
+    var first = rows.size
+    for (i in rows.indices.reversed()) {
+        val id = rows[i].messageIdOrNull() ?: continue
+        if (newest == null) newest = id else if (id != newest) break
+        first = i
+    }
+    return first
+}
+
+/** The message a row belongs to (null for dividers and voice-call markers). */
+private fun ChatFeedItem.messageIdOrNull(): String? = when (this) {
+    is ChatFeedItem.AssistantBlock -> messageId
+    is ChatFeedItem.AssistantThinking -> messageId
+    is ChatFeedItem.AssistantTyping -> messageId
+    is ChatFeedItem.AssistantFooter -> message.id
+    is ChatFeedItem.StreamingMessage -> message.id
+    is ChatFeedItem.User -> message.id
+    is ChatFeedItem.Summary -> message.id
+    is ChatFeedItem.JarvisEvent -> message.id
+    is ChatFeedItem.StepGroup -> steps.firstOrNull()?.messageId
+    else -> null
+}
+
 /**
  * The floating jump-to-top / jump-to-bottom button. It reads the scroll flags itself (shown, direction, at the top,
  * at the bottom), so while scrolling only the button redraws when they change, not the chat screen.
@@ -334,7 +413,13 @@ fun ChatScreen(
             ai.antigem.ui.components.AppToastHelper.showToast(it, ai.antigem.ui.components.ChatToastType.INFO)
         }
     }
-    val messages by viewModel.messages.collectAsState()
+    // True while none of the newest message's rows is on screen (the user reads older messages while a reply may be
+    // streaming): the screen then takes message updates a few times a second instead of on every streamed word, so
+    // scrolling through older messages stays smooth (see pacedMessages). Set further down, from the list's layout.
+    val readingOlder = remember { mutableStateOf(false) }
+    val messagesSource = viewModel.messages
+    val messages by remember(messagesSource) { pacedMessages(messagesSource) { readingOlder.value } }
+        .collectAsState(initial = messagesSource.value)
     val artifacts by viewModel.artifacts.collectAsState()
     val selectedModelId by viewModel.selectedModelId.collectAsState()
     val availableModels by viewModel.availableModels.collectAsState()
@@ -1114,6 +1199,23 @@ fun ChatScreen(
     }
     val isAtBottom by isAtBottomState
 
+    // The rows, the list and "at bottom" as they are right now, for actions that run on a tap (opening a link, a Jarvis
+    // card, editing a prompt): read when tapped, so those actions are made once and don't change on every update
+    val linkRows by rememberUpdatedState(feedItems)
+    val linkListState by rememberUpdatedState(listState)
+    val linkAtBottomState by rememberUpdatedState(isAtBottomState)
+    val latestRowMessages by rememberUpdatedState(rowMessages)
+
+    // C: is any row of the newest message on screen? While none is, message updates are paced (see readingOlder)
+    val newestMessageFirstRow = remember(feedItems) { firstRowOfNewestMessage(feedItems) }
+    LaunchedEffect(listState, newestMessageFirstRow) {
+        snapshotFlow {
+            // nothing laid out yet counts as on screen: updates are never held back while a chat opens
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: Int.MAX_VALUE
+            lastVisible < newestMessageFirstRow
+        }.collect { readingOlder.value = it }
+    }
+
     val isAtTop by remember(listState) {
         derivedStateOf {
             listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
@@ -1394,15 +1496,18 @@ fun ChatScreen(
     }
 
     /** Opens a chat Jarvis points at (a task of its team) and keeps the way back to the Jarvis chat. */
-    val openJarvisLinkedChat: (String) -> Unit = { targetId ->
-        val currentId = currentConv?.id
-        if (!currentId.isNullOrBlank() && !currentId.equals(targetId, ignoreCase = true)) {
-            if (feedItems.isNotEmpty()) {
-                ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+    // made once (it goes to the Jarvis cards in the list): reads the chat, rows and scroll position when tapped
+    val openJarvisLinkedChat: (String) -> Unit = remember(viewModel, conversationBackStack) {
+        { targetId ->
+            val currentId = currentConv?.id
+            if (!currentId.isNullOrBlank() && !currentId.equals(targetId, ignoreCase = true)) {
+                if (linkRows.isNotEmpty()) {
+                    ConversationScrollCache.save(currentId, linkListState.firstVisibleItemIndex, linkListState.firstVisibleItemScrollOffset, linkAtBottomState.value)
+                }
+                conversationBackStack.add(currentId)
             }
-            conversationBackStack.add(currentId)
+            viewModel.selectConversation(targetId)
         }
-        viewModel.selectConversation(targetId)
     }
     val navigateBackConversation: () -> Unit = {
         while (conversationBackStack.isNotEmpty()) {
@@ -1455,9 +1560,6 @@ fun ChatScreen(
     // What the link handler needs, as it is when a link is tapped. The handler itself is made once: it goes to every
     // row through a static composition local, so a new one rebuilt the whole screen (it was made again whenever
     // "at bottom" flipped, a row was added or the chat list refreshed, which made scrolling and streaming stutter)
-    val linkRows by rememberUpdatedState(feedItems)
-    val linkListState by rememberUpdatedState(listState)
-    val linkAtBottomState by rememberUpdatedState(isAtBottomState)
     val linkFileOpener by rememberUpdatedState(fileLinkOpener)
     val fileLinkHandler = remember(scope) {
         FileLinkHandler(
@@ -2528,14 +2630,17 @@ fun ChatScreen(
                                             onOpenChat = openJarvisLinkedChat
                                         )
                                         is ChatFeedItem.User -> {
-                                            val msgIndex = rowMessages.indexOfFirst { it.id == feedItem.message.id }
-                                            val willDeleteOutput = msgIndex < rowMessages.lastIndex
                                             UserMessageBubble(
                                                 message = feedItem.message,
                                                 isLastUserMessage = true,
                                                 isDevModeEnabled = isDevModeEnabled,
                                                 canEdit = !isReadOnlyChat,
                                                 onEdit = { targetMsg ->
+                                                    // asks first when replies follow this prompt (editing deletes them):
+                                                    // judged on the messages on screen when tapped, so the row doesn't
+                                                    // depend on the message list (it changes on every streamed word)
+                                                    val rows = latestRowMessages
+                                                    val willDeleteOutput = rows.indexOfFirst { it.id == feedItem.message.id } < rows.lastIndex
                                                     if (willDeleteOutput) {
                                                         pendingMessageAction = PendingMessageAction(MessageActionType.EDIT, targetMsg)
                                                     } else {

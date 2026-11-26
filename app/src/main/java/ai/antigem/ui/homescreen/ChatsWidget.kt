@@ -85,7 +85,7 @@ internal val SAMPLE_CHATS get() = listOf(
 @Composable
 private fun ChatsContent(preview: Boolean) {
     val ctx = LocalContext.current
-    val snap by HomeSnapshot.state.collectAsState()
+    val snap by HomeSnapshot.widgetState.collectAsState()
     val hide by HomePrefs.hideTitles.collectAsState()
     val data = snap ?: HomeData()
     val filter = (LocalState.current as? Preferences)?.get(WidgetKeys.FILTER) ?: "all"

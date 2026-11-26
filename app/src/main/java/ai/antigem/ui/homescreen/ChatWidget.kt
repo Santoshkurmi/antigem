@@ -88,7 +88,7 @@ class ChatWidgetReceiver : GlanceAppWidgetReceiver() {
 private fun OneChat(sample: HomeChat?) {
     val ctx = LocalContext.current
     val prefs = LocalState.current as? Preferences
-    val snap by HomeSnapshot.state.collectAsState()
+    val snap by HomeSnapshot.widgetState.collectAsState()
     val hide by HomePrefs.hideTitles.collectAsState()
     val c = GlanceTheme.colors
     val id = sample?.id ?: prefs?.get(ChatWidget.KEY_ID)

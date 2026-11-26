@@ -52,6 +52,15 @@ private val VERBS get() = listOf(
  */
 private fun textWidth() = (VERBS + L.components.agentWorkingSpinner.compacting2).maxOf { it.length } + 3
 
+/**
+ * The width (px) of the widest text the row can show, per text setup (density, font scale, language): the same for
+ * every working row, so it is measured once for the app's life. The word style is fixed (only its color changes).
+ */
+private val wordWidthCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+/** The glyphs laid out, per text setup and color (a handful of entries for the app's life). */
+private val glyphLayoutCache = java.util.concurrent.ConcurrentHashMap<String, List<androidx.compose.ui.text.TextLayoutResult>>()
+
 private const val GLYPH_STEP_MS = 120L
 private const val DECODE_FRAME_MS = 40L
 /** The verb changes after 2 s, then 3 s, then every 5 s. */
@@ -76,11 +85,18 @@ fun AgentWorkingSpinner(color: Color, modifier: Modifier = Modifier, compacting:
     val density = LocalDensity.current
     val language = LocalLanguageVersion.current
 
-    // measured once: every glyph, and the widest text the row can show (again when the language changes)
-    val glyphLayouts = remember(measurer, glyphStyle) { GLYPHS.map { measurer.measure(it, glyphStyle) } }
+    // measured once per text setup for the app's life (not each time the row appears: measuring every verb took
+    // 40-90 ms whenever a turn started or the row came back on screen): every glyph, and the widest text the row can
+    // show (again when the language, the text size or the screen density changes)
+    val setup = "${density.density}|${density.fontScale}|$language"
+    val glyphLayouts = remember(measurer, glyphStyle, setup) {
+        glyphLayoutCache.getOrPut("$setup|${glyphStyle.color}") { GLYPHS.map { measurer.measure(it, glyphStyle) } }
+    }
     val wordRef = remember(measurer, wordStyle, language) { measurer.measure(L.components.agentWorkingSpinner.compacting, wordStyle) }
-    val wordWidth = remember(measurer, wordStyle, language) {
-        (VERBS + L.components.agentWorkingSpinner.compacting2).maxOf { measurer.measure("$it...", wordStyle).size.width } + measurer.measure("▌", wordStyle).size.width
+    val wordWidth = remember(measurer, wordStyle, setup) {
+        wordWidthCache.getOrPut(setup) {
+            (VERBS + L.components.agentWorkingSpinner.compacting2).maxOf { measurer.measure("$it...", wordStyle).size.width } + measurer.measure("▌", wordStyle).size.width
+        }
     }
     val glyphBox = remember(glyphLayouts) { glyphLayouts.maxOf { it.size.width } }
     val gapPx = with(density) { 4.dp.roundToPx() }

@@ -90,6 +90,20 @@ object HomeSnapshot {
     /** null until [load] read the saved list. */
     val state: StateFlow<HomeData?> = _state.asStateFlow()
 
+    private val _widgetState = MutableStateFlow<HomeData?>(null)
+    /**
+     * What the home-screen widgets show: [state], handed over by [HomeWidgets] when it redraws them. While the app is
+     * on screen the widgets can't be seen, so they don't get changes then (each widget redraw is built on the main
+     * thread and made the chat stutter while a reply streamed); as soon as the app leaves the screen they get the
+     * newest at once. The app's own screens use [state].
+     */
+    val widgetState: StateFlow<HomeData?> = _widgetState.asStateFlow()
+
+    /** The widgets take the newest data (see [widgetState]). */
+    fun publishToWidgets() {
+        _state.value?.let { _widgetState.value = it }
+    }
+
     /** Last replies seen per chat: text and time. */
     private val replies = ConcurrentHashMap<String, Pair<String, Long>>()
     /** Chats that finished out of sight and have not been opened since. */
@@ -114,6 +128,8 @@ object HomeSnapshot {
                 if (c.done) done += c.id
             }
             _state.value = data
+            // a widget drawn before the app ran (its own process start) shows the saved list at once
+            if (_widgetState.value == null) _widgetState.value = data
             return data
         }
     }

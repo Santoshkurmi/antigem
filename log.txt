@@ -1,0 +1,877 @@
+--------- beginning of main
+11-26 13:35:11.710 31726 32307 D HOME_WIDGETS: compose theme: colorsPref=f4ac522 version=5327bb3 light=7a16570 dark=14080e9
+11-26 13:35:11.710 31726 32307 D HOME_WIDGETS: compose Chats: snap=8e7ae2b hide=1f87288 state=null size=36cb035 colors=f55cca
+11-26 13:35:16.231 31726 31825 D HOME_WIDGETS: refresh chat widgets (list=true, app on screen=true, 154595829 ms since the last)
+11-26 13:35:16.800 31726 31726 D HOME_WIDGETS: compose theme: colorsPref=f4ac522 version=5327bb3 light=7a16570 dark=14080e9
+11-26 13:35:16.801 31726 31726 D HOME_WIDGETS: compose Chats: snap=85e51a0 hide=1f87288 state=6de6421 size=ec7b159 colors=6e5d11e
+11-26 13:35:16.870 31726 31726 D HOME_WIDGETS: compose theme: colorsPref=f4ac522 version=5327bb3 light=7a16570 dark=14080e9
+11-26 13:35:16.870 31726 31726 D HOME_WIDGETS: compose OneChat: snap=85e51a0 hide=1f87288 state=1e679e colors=1f6b0ab
+11-26 13:35:31.236 31726 32310 D HOME_WIDGETS: refresh chat widgets (list=true, app on screen=true, 15005 ms since the last)
+11-26 13:35:31.246 31726 31726 D HOME_WIDGETS: compose Chats: snap=c625e78 hide=1f87288 state=6de6421 size=ec7b159 colors=6e5d11e
+11-26 13:35:31.253 31726 31726 D HOME_WIDGETS: compose OneChat: snap=c625e78 hide=1f87288 state=1e679e colors=1f6b0ab
+11-26 13:35:41.237 31726 31726 D CHAT_RENDER: START scrolling=false generating=true budget 8.3ms
+11-26 13:35:41.263 31726 32532 D CHAT_RENDER: FRAME 85.2ms: input 0.0 animation 6.9 layout 0.1 draw 7.2 sync 0.2 gpu-cmd 1.6 swap 0.7 delay 67.1
+11-26 13:35:41.310 31726 32531 D CHAT_RENDER: STALL 47ms (sample 1): Snapshot.getInvalid$androidx_compose_runtime_runtime:65 < TransparentObserverMutableSnapshot.getInvalid$androidx_compose_runtime_runtime:1882 < SnapshotKt.current:2682 < DerivedSnapshotState.getValue:290 < LazyListItemProviderKt.rememberLazyListItemProviderLambda$lambda$0$1:52 < LazyListItemProviderKt.$r8$lambda$j65Hw0Tp5FiBazMiAUYUI-ewfzY:0 < LazyListItemProviderKt$$ExternalSyntheticLambda1.invoke:0 < Snapshot$Companion.observe:2818 < DerivedSnapshotState.currentRecord:217 < DerivedSnapshotState.getCurrentRecord:304 < DerivedSnapshotState.isInvalidFor:297 < SnapshotStateObserver$ObservedScopeMap.recordInvalidation:662 < SnapshotStateObserver.drainChanges:74 < SnapshotStateObserver.applyObserver$lambda$0:53
+11-26 13:35:41.311 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: generating | SCREEN 1x 43.8ms (messages+rows) | msgs +1 | built 1x bg 1.4ms | list measure 2.2ms | rows 11 (11 new, 0 again) 2.5ms :: Paragraph new 0.3ms (24 chars) | Numbered new 0.2ms (66 chars) | Paragraph new 0.2ms (20 chars) | Bullet new 0.2ms (259 chars) | Numbered new 0.2ms (139 chars)
+11-26 13:35:41.353 31726 32531 D CHAT_RENDER: STALL 89ms (sample 2): Paint.nInit:-2 < Paint.<init>:706 < TextPaint.<init>:55 < AndroidTextPaint.<init>:47 < AndroidParagraphIntrinsics.<init>:68 < ParagraphIntrinsicsKt.ParagraphIntrinsics:330 < MultiParagraphIntrinsics.<init>:153 < TextMeasurer$Companion.layout:432 < TextMeasurer$Companion.access$layout:421 < TextMeasurer.measure-trO9Fmg:198 < TextMeasurer.measure-trO9Fmg$default:152 < TextMeasurer.measure-7kVAXEo:338 < TextMeasurer.measure-7kVAXEo$default:325 < AgentWorkingSpinnerKt.AgentWorkingSpinner-KTwxG1Y:98 || app: AgentWorkingSpinnerKt.AgentWorkingSpinner-KTwxG1Y:98 < ChatScreenKt.ChatScreen$lambda$471$0$1$15$0$1$9$0$0$3:2795 < ChatScreenKt.$r8$lambda$sRZiCIru7drEaXq5ucCZhlq_73s:0 < ChatScreenKt$$ExternalSyntheticLambda109.invoke:0 < BouncyOverscrollEffect$node$1.measure-3p2s80s:272 < ChatRenderTrace.listModifier_delegate$lambda$0$0:314 < ChatRenderTrace.$r8$lambda$P6zsZpWp4MrBLksSL6_SXty4muQ:0 < ChatRenderTrace$$ExternalSyntheticLambda0.invoke:0
+11-26 13:35:41.416 31726 32532 D CHAT_RENDER: FRAME 154.5ms: input 0.0 animation 49.0 layout 0.2 draw 90.2 sync 0.4 gpu-cmd 2.5 swap 0.7 delay 5.3
+11-26 13:35:41.420 31726 31726 D CHAT_RENDER: JANK 150.2ms = 18.0 frames: generating | list measure 74.3ms | rows 2 (2 new, 0 again) 4.7ms :: USER new 4.6ms (28 chars) | TYPING new 0.0ms (0 chars)
+11-26 13:35:41.438 31726 32532 D CHAT_RENDER: FRAME 150.9ms: input 0.0 animation 6.2 layout 0.4 draw 8.3 sync 0.2 gpu-cmd 1.7 swap 0.8 delay 132.2
+11-26 13:35:41.479 31726 32531 D CHAT_RENDER: STALL 42ms (sample 1): RecomposeScopeImpl.getForcedRecompose:268 < GapComposer.addRecomposeScope:2148 < GapComposer.startRestartGroup:2125 < LazyLayoutItemContentFactoryKt.SkippableItem-JVlU9Rs:125 < LazyLayoutItemContentFactoryKt.access$SkippableItem-JVlU9Rs:1 < LazyLayoutItemContentFactory$CachedItemContent.createContentLambda$lambda$0:95 < LazyLayoutItemContentFactory$CachedItemContent$$ExternalSyntheticLambda0.invoke:0 < ComposableLambdaImpl.invoke:122 < ComposableLambdaImpl$invoke$1.invoke:123 < ComposableLambdaImpl$invoke$1.invoke:123 < RecomposeScopeImpl.compose:205 < GapComposer.recomposeToGroupEnd:1699 < GapComposer.skipCurrentGroup:2035 < GapComposer.doCompose-aFTiNEg:2684
+11-26 13:35:41.485 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: generating | SCREEN 1x 45.6ms (rows) | built 1x bg 1.8ms | list measure 2.9ms | rows 11 (0 new, 11 again) 2.1ms :: Paragraph 0.3ms (24 chars) | Bullet 0.3ms (259 chars) | Numbered 0.2ms (66 chars) | Bullet 0.2ms (237 chars) | Numbered 0.2ms (139 chars)
+11-26 13:35:41.509 31726 31726 D CHAT_RENDER: JANK 66.8ms = 8.0 frames: generating | list measure 3.2ms
+11-26 13:35:41.515 31726 32532 D CHAT_RENDER: FRAME 70.5ms: input 0.0 animation 50.7 layout 0.2 draw 11.2 sync 0.3 gpu-cmd 2.1 swap 1.3 delay 3.1
+11-26 13:35:41.521 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating | list measure 2.3ms
+11-26 13:35:41.531 31726 32532 D CHAT_RENDER: FRAME 65.1ms: input 0.0 animation 5.6 layout 0.2 draw 8.0 sync 0.3 gpu-cmd 2.0 swap 1.0 delay 46.9
+11-26 13:35:42.036 31726 32532 D CHAT_RENDER: FRAME 17.3ms: input 0.0 animation 2.1 layout 0.2 draw 2.1 sync 0.4 gpu-cmd 3.3 swap 1.3 delay 1.0
+11-26 13:35:42.170 31726 32532 D CHAT_RENDER: FRAME 12.8ms: input 0.0 animation 0.5 layout 0.3 draw 2.8 sync 0.5 gpu-cmd 3.2 swap 1.7 delay 3.1
+11-26 13:35:42.218 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating | list measure 0.0ms
+11-26 13:35:42.224 31726 32532 D CHAT_RENDER: FRAME 26.6ms: input 5.8 animation 11.4 layout 0.1 draw 3.8 sync 0.6 gpu-cmd 1.5 swap 0.6 delay 1.3
+11-26 13:35:42.253 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: scrolling generating | list measure 0.0ms
+11-26 13:35:42.257 31726 32532 D CHAT_RENDER: FRAME 47.9ms: input 2.3 animation 14.3 layout 0.3 draw 11.2 sync 0.2 gpu-cmd 1.8 swap 1.1 delay 15.7
+11-26 13:35:42.274 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating | list measure 8.4ms | rows 1 (0 new, 1 again) 2.1ms :: Paragraph 2.1ms (55 chars)
+11-26 13:35:42.281 31726 32532 D CHAT_RENDER: FRAME 51.2ms: input 0.0 animation 17.8 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.3 swap 0.7 delay 28.1
+11-26 13:35:42.290 31726 32532 D CHAT_RENDER: FRAME 27.9ms: input 0.0 animation 5.7 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 3.7 swap 0.5 delay 16.0
+11-26 13:35:42.299 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.0ms | rows 1 (0 new, 1 again) 1.8ms :: Bullet 1.8ms (179 chars)
+11-26 13:35:42.307 31726 32532 D CHAT_RENDER: FRAME 25.2ms: input 0.0 animation 11.9 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.8 swap 0.5 delay 8.1
+11-26 13:35:42.315 31726 32532 D CHAT_RENDER: FRAME 25.6ms: input 0.0 animation 5.7 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 15.9
+11-26 13:35:42.323 31726 32532 D CHAT_RENDER: FRAME 14.4ms: input 0.0 animation 2.0 layout 0.1 draw 2.2 sync 0.2 gpu-cmd 1.1 swap 0.4 delay 7.2
+11-26 13:35:42.332 31726 32532 D CHAT_RENDER: FRAME 13.8ms: input 0.0 animation 5.0 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.4 delay 5.0
+11-26 13:35:42.340 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 2.6 layout 0.1 draw 2.9 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 4.7
+11-26 13:35:42.349 31726 32532 D CHAT_RENDER: FRAME 13.2ms: input 0.0 animation 2.4 layout 0.1 draw 2.8 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 4.4
+11-26 13:35:42.362 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 14.2ms | rows 1 (1 new, 0 again) 2.7ms :: Bullet new 2.7ms (364 chars)
+11-26 13:35:42.374 31726 32532 D CHAT_RENDER: FRAME 30.2ms: input 0.0 animation 18.9 layout 0.1 draw 1.3 sync 0.3 gpu-cmd 2.8 swap 0.7 delay 4.2
+11-26 13:35:42.381 31726 32532 D CHAT_RENDER: FRAME 30.2ms: input 0.0 animation 6.1 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 20.3
+11-26 13:35:42.437 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:42.441 31726 32532 D CHAT_RENDER: FRAME 19.9ms: input 0.0 animation 7.2 layout 0.2 draw 4.5 sync 0.2 gpu-cmd 2.1 swap 0.5 delay 3.8
+11-26 13:35:42.457 31726 32532 D CHAT_RENDER: FRAME 22.8ms: input 0.0 animation 6.6 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 11.7
+11-26 13:35:42.508 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 12.5ms | rows 1 (1 new, 0 again) 2.7ms :: Bullet new 2.7ms (237 chars)
+11-26 13:35:42.516 31726 32532 D CHAT_RENDER: FRAME 24.6ms: input 0.0 animation 17.8 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 1.7
+11-26 13:35:42.517 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.0ms
+11-26 13:35:42.525 31726 32532 D CHAT_RENDER: FRAME 24.1ms: input 0.0 animation 4.7 layout 0.1 draw 0.1 sync 0.1 gpu-cmd 1.2 swap 0.5 delay 16.3
+11-26 13:35:42.566 31726 32532 D CHAT_RENDER: FRAME 14.0ms: input 0.0 animation 2.9 layout 0.1 draw 2.8 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 4.7
+11-26 13:35:42.575 31726 32532 D CHAT_RENDER: FRAME 13.2ms: input 0.0 animation 1.9 layout 0.1 draw 2.9 sync 0.1 gpu-cmd 1.1 swap 0.5 delay 5.3
+11-26 13:35:42.583 31726 32532 D CHAT_RENDER: FRAME 13.4ms: input 0.0 animation 1.9 layout 0.1 draw 2.7 sync 0.4 gpu-cmd 1.7 swap 0.7 delay 4.7
+11-26 13:35:42.591 31726 32532 D CHAT_RENDER: FRAME 14.7ms: input 0.0 animation 2.6 layout 0.1 draw 3.5 sync 0.2 gpu-cmd 1.7 swap 0.7 delay 4.7
+11-26 13:35:42.594 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.6ms
+11-26 13:35:42.599 31726 32532 D CHAT_RENDER: FRAME 17.7ms: input 0.0 animation 6.5 layout 0.1 draw 0.8 sync 0.4 gpu-cmd 1.9 swap 0.8 delay 6.1
+11-26 13:35:42.607 31726 32532 D CHAT_RENDER: FRAME 20.7ms: input 0.0 animation 3.2 layout 0.1 draw 2.9 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 10.8
+11-26 13:35:42.621 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:42.666 31726 32532 D CHAT_RENDER: FRAME 16.5ms: input 4.0 animation 2.8 layout 0.1 draw 3.4 sync 0.3 gpu-cmd 2.0 swap 0.8 delay 1.7
+11-26 13:35:42.678 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:42.683 31726 32532 D CHAT_RENDER: FRAME 22.4ms: input 4.2 animation 2.6 layout 0.1 draw 3.2 sync 0.3 gpu-cmd 1.7 swap 0.6 delay 7.9
+11-26 13:35:42.694 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 2.2ms
+11-26 13:35:42.698 31726 32532 D CHAT_RENDER: FRAME 25.4ms: input 5.5 animation 9.0 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 5.1
+11-26 13:35:42.704 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.0ms
+11-26 13:35:42.707 31726 32532 D CHAT_RENDER: FRAME 18.9ms: input 3.3 animation 4.5 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 7.2
+11-26 13:35:42.720 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:42.732 31726 32532 D CHAT_RENDER: FRAME 18.3ms: input 0.0 animation 1.1 layout 0.1 draw 2.0 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 11.2
+11-26 13:35:42.754 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.6ms | rows 1 (1 new, 0 again) 2.6ms :: Paragraph new 2.6ms (19 chars)
+11-26 13:35:42.758 31726 32532 D CHAT_RENDER: FRAME 21.1ms: input 0.0 animation 15.0 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 1.7
+11-26 13:35:42.767 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.6ms | rows 1 (1 new, 0 again) 1.6ms :: Paragraph new 1.6ms (85 chars)
+11-26 13:35:42.774 31726 32532 D CHAT_RENDER: FRAME 26.9ms: input 0.0 animation 10.4 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 12.0
+11-26 13:35:42.789 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.6ms | rows 1 (1 new, 0 again) 3.3ms :: Tool:BASH new 3.3ms (62 chars)
+11-26 13:35:42.799 31726 32532 D CHAT_RENDER: FRAME 31.6ms: input 0.0 animation 16.6 layout 0.1 draw 2.3 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 8.8
+11-26 13:35:42.803 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.6ms | rows 1 (1 new, 0 again) 1.5ms :: Paragraph new 1.5ms (127 chars)
+11-26 13:35:42.816 31726 32532 D CHAT_RENDER: FRAME 30.0ms: input 0.0 animation 10.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.9 swap 0.7 delay 14.2
+11-26 13:35:42.824 31726 32532 D CHAT_RENDER: FRAME 19.6ms: input 0.0 animation 4.4 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 11.1
+11-26 13:35:42.832 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.8ms | rows 1 (1 new, 0 again) 2.6ms :: StepGroup(7) new 2.6ms (0 chars)
+11-26 13:35:42.841 31726 32532 D CHAT_RENDER: FRAME 22.3ms: input 0.0 animation 14.1 layout 0.1 draw 2.5 sync 0.4 gpu-cmd 0.9 swap 0.4 delay 2.4
+11-26 13:35:42.849 31726 32532 D CHAT_RENDER: FRAME 23.4ms: input 0.0 animation 4.3 layout 0.1 draw 0.0 sync 0.3 gpu-cmd 2.0 swap 0.6 delay 14.7
+11-26 13:35:42.851 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.3ms | rows 1 (1 new, 0 again) 1.7ms :: Paragraph new 1.7ms (176 chars)
+11-26 13:35:42.857 31726 32532 D CHAT_RENDER: FRAME 19.5ms: input 0.0 animation 10.9 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 4.1
+11-26 13:35:42.869 31726 32532 D CHAT_RENDER: FRAME 16.1ms: input 0.0 animation 1.6 layout 0.1 draw 1.7 sync 0.1 gpu-cmd 1.3 swap 0.4 delay 9.4
+11-26 13:35:42.899 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.9ms
+11-26 13:35:42.908 31726 32532 D CHAT_RENDER: FRAME 23.7ms: input 0.0 animation 16.2 layout 0.1 draw 1.8 sync 0.3 gpu-cmd 1.6 swap 0.7 delay 1.5
+11-26 13:35:42.915 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 1.7 layout 0.1 draw 1.6 sync 0.1 gpu-cmd 1.4 swap 0.5 delay 15.6
+11-26 13:35:42.919 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.7ms | rows 1 (1 new, 0 again) 1.6ms :: Paragraph new 1.6ms (151 chars)
+11-26 13:35:42.924 31726 32532 D CHAT_RENDER: FRAME 19.6ms: input 0.0 animation 10.4 layout 0.1 draw 0.9 sync 0.3 gpu-cmd 1.2 swap 0.5 delay 4.6
+11-26 13:35:42.933 31726 32532 D CHAT_RENDER: FRAME 20.3ms: input 0.0 animation 5.9 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 10.4
+11-26 13:35:42.960 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 14.0ms | rows 1 (1 new, 0 again) 3.7ms :: AgentThought new 3.7ms (166 chars)
+11-26 13:35:42.966 31726 32532 D CHAT_RENDER: FRAME 28.3ms: input 0.0 animation 19.1 layout 0.1 draw 3.0 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 2.2
+11-26 13:35:42.982 31726 32532 D CHAT_RENDER: FRAME 34.6ms: input 0.0 animation 10.9 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 2.1 swap 0.6 delay 18.0
+11-26 13:35:42.990 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 6.2ms (messages) | list measure 1.1ms
+11-26 13:35:43.000 31726 32532 D CHAT_RENDER: FRAME 23.1ms: input 0.0 animation 10.8 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 7.7
+11-26 13:35:43.008 31726 32532 D CHAT_RENDER: FRAME 22.1ms: input 0.0 animation 1.7 layout 0.1 draw 2.0 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 14.6
+11-26 13:35:43.038 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | SCREEN 1x 24.3ms (rows) | list measure 1.2ms | rows 11 (0 new, 11 again) 1.4ms :: Bullet 0.2ms (265 chars) | Paragraph 0.2ms (19 chars) | Paragraph 0.1ms (176 chars) | Paragraph 0.1ms (85 chars) | Paragraph 0.1ms (151 chars)
+11-26 13:35:43.050 31726 32532 D CHAT_RENDER: FRAME 38.7ms: input 0.0 animation 27.2 layout 0.1 draw 5.1 sync 0.3 gpu-cmd 1.7 swap 0.7 delay 1.6
+11-26 13:35:43.057 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.6ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (1055 chars)
+11-26 13:35:43.066 31726 32532 D CHAT_RENDER: FRAME 49.8ms: input 0.0 animation 15.0 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 29.3
+11-26 13:35:43.074 31726 32532 D CHAT_RENDER: FRAME 22.6ms: input 0.0 animation 4.0 layout 0.1 draw 0.3 sync 0.1 gpu-cmd 1.1 swap 0.5 delay 14.9
+11-26 13:35:43.159 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 0.0 animation 2.7 layout 0.1 draw 2.2 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 4.4
+11-26 13:35:43.164 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:43.167 31726 32532 D CHAT_RENDER: FRAME 13.5ms: input 0.0 animation 2.0 layout 0.1 draw 2.9 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 5.0
+11-26 13:35:43.177 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms | GC 1x 38ms
+11-26 13:35:43.183 31726 32532 D CHAT_RENDER: FRAME 26.4ms: input 0.0 animation 6.6 layout 0.4 draw 3.9 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 11.8
+11-26 13:35:43.191 31726 32532 D CHAT_RENDER: FRAME 16.1ms: input 0.0 animation 1.7 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 9.1
+11-26 13:35:43.244 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 9.7ms (messages) | list measure 0.0ms
+11-26 13:35:43.250 31726 32532 D CHAT_RENDER: FRAME 19.5ms: input 0.0 animation 11.9 layout 0.1 draw 2.4 sync 0.3 gpu-cmd 1.6 swap 0.7 delay 1.1
+11-26 13:35:43.258 31726 32532 D CHAT_RENDER: FRAME 16.3ms: input 0.0 animation 1.6 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 9.4
+11-26 13:35:43.296 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | SCREEN 1x 24.1ms (rows) | list measure 1.1ms | rows 8 (0 new, 8 again) 0.9ms :: Paragraph 0.2ms (176 chars) | Paragraph 0.1ms (1055 chars) | Paragraph 0.1ms (151 chars) | Paragraph 0.1ms (127 chars) | Paragraph 0.1ms (192 chars)
+11-26 13:35:43.301 31726 32532 D CHAT_RENDER: FRAME 36.7ms: input 0.0 animation 27.0 layout 0.2 draw 4.6 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 0.6
+11-26 13:35:43.317 31726 32532 D CHAT_RENDER: FRAME 39.0ms: input 0.0 animation 6.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 28.5
+11-26 13:35:43.542 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 13.1ms | rows 1 (1 new, 0 again) 3.5ms :: StepGroup(4) new 3.5ms (0 chars)
+11-26 13:35:43.550 31726 32532 D CHAT_RENDER: FRAME 25.2ms: input 0.0 animation 17.5 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 1.5
+11-26 13:35:43.558 31726 32532 D CHAT_RENDER: FRAME 22.4ms: input 0.0 animation 1.4 layout 0.1 draw 1.4 sync 0.1 gpu-cmd 1.0 swap 0.6 delay 16.0
+11-26 13:35:43.608 31726 32532 D CHAT_RENDER: FRAME 14.2ms: input 0.0 animation 5.4 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.3 swap 0.7 delay 4.5
+11-26 13:35:43.618 31726 32532 D CHAT_RENDER: FRAME 13.1ms: input 0.0 animation 2.1 layout 0.1 draw 2.3 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 5.1
+11-26 13:35:43.619 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:43.654 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | SCREEN 1x 22.0ms (other) | list measure 0.0ms
+11-26 13:35:43.658 31726 32532 D CHAT_RENDER: FRAME 44.8ms: input 0.0 animation 25.6 layout 0.1 draw 5.3 sync 0.3 gpu-cmd 1.7 swap 0.6 delay 8.8
+11-26 13:35:43.667 31726 32532 D CHAT_RENDER: FRAME 35.0ms: input 0.0 animation 2.5 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 27.6
+11-26 13:35:44.225 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | list measure 0.0ms
+11-26 13:35:44.279 31726 32532 D CHAT_RENDER: FRAME 27.7ms: input 11.3 animation 10.1 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 0.9
+11-26 13:35:44.282 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | list measure 3.2ms
+11-26 13:35:44.301 31726 32532 D CHAT_RENDER: FRAME 31.5ms: input 0.0 animation 6.5 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 20.9
+11-26 13:35:44.305 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.9ms | rows 1 (0 new, 1 again) 1.7ms :: StepGroup(6) 1.7ms (0 chars)
+11-26 13:35:44.310 31726 32532 D CHAT_RENDER: FRAME 19.0ms: input 0.0 animation 9.3 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 4.7
+11-26 13:35:44.327 31726 32532 D CHAT_RENDER: FRAME 24.9ms: input 0.0 animation 9.8 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 10.6
+11-26 13:35:44.334 31726 32532 D CHAT_RENDER: FRAME 14.7ms: input 0.0 animation 3.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 7.7
+11-26 13:35:44.343 31726 32532 D CHAT_RENDER: FRAME 13.0ms: input 0.0 animation 1.8 layout 0.1 draw 2.1 sync 0.2 gpu-cmd 1.2 swap 1.1 delay 6.0
+11-26 13:35:44.348 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.2ms | rows 1 (1 new, 0 again) 2.0ms :: StepGroup(5) new 2.0ms (0 chars)
+11-26 13:35:44.359 31726 32532 D CHAT_RENDER: FRAME 21.2ms: input 0.0 animation 12.1 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 3.8
+11-26 13:35:44.368 31726 32532 D CHAT_RENDER: FRAME 26.4ms: input 0.0 animation 9.8 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 12.3
+11-26 13:35:44.376 31726 32532 D CHAT_RENDER: FRAME 13.3ms: input 0.0 animation 1.0 layout 0.1 draw 1.2 sync 0.1 gpu-cmd 1.0 swap 0.4 delay 8.2
+11-26 13:35:44.393 31726 32532 D CHAT_RENDER: FRAME 17.2ms: input 0.0 animation 11.4 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 0.9
+11-26 13:35:44.402 31726 32532 D CHAT_RENDER: FRAME 13.1ms: input 0.0 animation 3.0 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 0.8 swap 0.3 delay 7.2
+11-26 13:35:44.403 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.3ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (103 chars)
+11-26 13:35:44.410 31726 32532 D CHAT_RENDER: FRAME 18.7ms: input 0.0 animation 9.5 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 4.7
+11-26 13:35:44.427 31726 32532 D CHAT_RENDER: FRAME 26.5ms: input 0.0 animation 12.5 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 8.8
+11-26 13:35:44.429 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.8ms
+11-26 13:35:44.435 31726 32532 D CHAT_RENDER: FRAME 18.9ms: input 0.0 animation 5.2 layout 0.1 draw 2.0 sync 0.1 gpu-cmd 1.3 swap 0.5 delay 8.3
+11-26 13:35:44.452 31726 32532 D CHAT_RENDER: FRAME 16.1ms: input 0.0 animation 10.1 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 1.0
+11-26 13:35:44.460 31726 32532 D CHAT_RENDER: FRAME 13.2ms: input 0.0 animation 3.5 layout 0.1 draw 0.3 sync 0.1 gpu-cmd 1.4 swap 0.4 delay 5.9
+11-26 13:35:44.471 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.9ms
+11-26 13:35:44.477 31726 32532 D CHAT_RENDER: FRAME 18.3ms: input 0.0 animation 11.3 layout 0.1 draw 1.7 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 1.8
+11-26 13:35:44.488 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.9ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (132 chars)
+11-26 13:35:44.493 31726 32532 D CHAT_RENDER: FRAME 27.9ms: input 0.0 animation 12.7 layout 0.1 draw 1.5 sync 0.3 gpu-cmd 1.4 swap 0.6 delay 10.1
+11-26 13:35:44.501 31726 32532 D CHAT_RENDER: FRAME 18.1ms: input 0.0 animation 3.7 layout 0.1 draw 0.5 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 10.3
+11-26 13:35:44.516 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.6ms | rows 1 (1 new, 0 again) 2.6ms :: StepGroup(2) new 2.6ms (0 chars)
+11-26 13:35:44.528 31726 32532 D CHAT_RENDER: FRAME 22.8ms: input 0.0 animation 14.8 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.6 swap 0.8 delay 2.3
+11-26 13:35:44.535 31726 32532 D CHAT_RENDER: FRAME 22.0ms: input 0.0 animation 4.3 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 13.5
+11-26 13:35:44.536 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.1ms | rows 1 (1 new, 0 again) 1.3ms :: Paragraph new 1.3ms (192 chars)
+11-26 13:35:44.544 31726 32532 D CHAT_RENDER: FRAME 16.8ms: input 0.0 animation 9.1 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 3.3
+11-26 13:35:44.552 31726 32532 D CHAT_RENDER: FRAME 15.1ms: input 0.0 animation 1.5 layout 0.1 draw 1.6 sync 0.1 gpu-cmd 1.3 swap 0.5 delay 8.5
+11-26 13:35:44.572 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 4.7ms
+11-26 13:35:44.577 31726 32532 D CHAT_RENDER: FRAME 18.0ms: input 0.0 animation 9.8 layout 0.1 draw 2.5 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 1.9
+11-26 13:35:44.585 31726 32532 D CHAT_RENDER: FRAME 19.8ms: input 0.0 animation 4.6 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 11.0
+11-26 13:35:44.602 31726 32532 D CHAT_RENDER: FRAME 15.9ms: input 0.0 animation 9.8 layout 0.1 draw 0.8 sync 0.3 gpu-cmd 1.4 swap 0.6 delay 1.3
+11-26 13:35:44.610 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 0.0 animation 3.1 layout 0.1 draw 0.0 sync 0.1 gpu-cmd 1.0 swap 0.4 delay 6.6
+11-26 13:35:44.641 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.1ms | rows 1 (1 new, 0 again) 2.6ms :: StepGroup(4) new 2.6ms (0 chars)
+11-26 13:35:44.651 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 15.1 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 1.8
+11-26 13:35:44.660 31726 32532 D CHAT_RENDER: FRAME 20.3ms: input 0.0 animation 3.5 layout 0.1 draw 0.3 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 13.3
+11-26 13:35:44.669 31726 32532 D CHAT_RENDER: FRAME 17.9ms: input 0.0 animation 10.7 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 1.9
+11-26 13:35:44.670 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.9ms
+11-26 13:35:44.677 31726 32532 D CHAT_RENDER: FRAME 16.2ms: input 0.0 animation 3.7 layout 0.1 draw 0.0 sync 0.1 gpu-cmd 1.8 swap 0.4 delay 8.2
+11-26 13:35:44.718 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.9ms
+11-26 13:35:44.727 31726 32532 D CHAT_RENDER: FRAME 24.4ms: input 0.0 animation 15.9 layout 0.1 draw 2.6 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 1.6
+11-26 13:35:44.736 31726 32532 D CHAT_RENDER: FRAME 22.6ms: input 0.0 animation 3.6 layout 0.1 draw 0.1 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 15.3
+11-26 13:35:44.755 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.2ms | rows 1 (1 new, 0 again) 2.1ms :: Paragraph new 2.1ms (21 chars)
+11-26 13:35:44.761 31726 32532 D CHAT_RENDER: FRAME 21.2ms: input 0.0 animation 14.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 1.3
+11-26 13:35:44.771 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.9ms | rows 1 (1 new, 0 again) 1.7ms :: StepGroup(5) new 1.7ms (0 chars)
+11-26 13:35:44.778 31726 32532 D CHAT_RENDER: FRAME 28.3ms: input 0.0 animation 12.0 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 10.3
+11-26 13:35:44.786 31726 32532 D CHAT_RENDER: FRAME 17.5ms: input 0.0 animation 4.0 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 1.4 swap 0.4 delay 9.5
+11-26 13:35:44.828 31726 32532 D CHAT_RENDER: FRAME 13.7ms: input 0.0 animation 5.3 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 4.3
+11-26 13:35:44.873 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:44.877 31726 32532 D CHAT_RENDER: FRAME 15.2ms: input 0.0 animation 0.6 layout 0.1 draw 2.4 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 8.2
+11-26 13:35:44.906 31726 31726 D CHAT_RENDER: SLOW MAIN 9.2ms: Handler (android.view.ViewRootImpl$ViewRootHandler)  androidx.compose.foundation.lazy.layout.AndroidPrefetchScheduler: 0
+11-26 13:35:44.970 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 3.9ms
+11-26 13:35:44.978 31726 32532 D CHAT_RENDER: FRAME 25.6ms: input 4.6 animation 10.9 layout 0.2 draw 4.3 sync 0.3 gpu-cmd 2.2 swap 0.7 delay 0.7
+11-26 13:35:44.985 31726 32532 D CHAT_RENDER: FRAME 23.8ms: input 2.1 animation 1.7 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 14.5
+11-26 13:35:44.993 31726 32532 D CHAT_RENDER: FRAME 15.2ms: input 1.9 animation 4.1 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 5.4
+11-26 13:35:45.003 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 1.8 animation 1.4 layout 0.1 draw 1.4 sync 0.3 gpu-cmd 1.0 swap 0.4 delay 4.6
+11-26 13:35:45.011 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 2.2 animation 2.0 layout 0.1 draw 1.9 sync 0.1 gpu-cmd 1.5 swap 0.5 delay 2.7
+11-26 13:35:45.019 31726 32532 D CHAT_RENDER: FRAME 13.4ms: input 2.8 animation 1.6 layout 0.1 draw 2.0 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 2.8
+11-26 13:35:45.032 31726 32532 D CHAT_RENDER: FRAME 12.8ms: input 1.7 animation 4.2 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 2.5
+11-26 13:35:45.034 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.2ms
+11-26 13:35:45.035 31726 32532 D CHAT_RENDER: FRAME 15.3ms: input 2.0 animation 4.9 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 2.2 swap 1.0 delay 2.5
+11-26 13:35:45.053 31726 32532 D CHAT_RENDER: FRAME 27.1ms: input 3.9 animation 5.3 layout 0.2 draw 3.0 sync 0.2 gpu-cmd 2.3 swap 0.7 delay 9.9
+11-26 13:35:45.054 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:45.060 31726 32532 D CHAT_RENDER: FRAME 20.0ms: input 4.3 animation 2.8 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 7.1
+11-26 13:35:45.077 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 13.2ms | rows 1 (1 new, 0 again) 2.6ms :: FOOTER new 2.6ms (6927 chars)
+11-26 13:35:45.085 31726 32532 D CHAT_RENDER: FRAME 25.1ms: input 0.0 animation 17.8 layout 0.1 draw 2.2 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 1.0
+11-26 13:35:45.094 31726 32532 D CHAT_RENDER: FRAME 22.6ms: input 0.0 animation 3.9 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.4 delay 14.8
+11-26 13:35:45.096 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.4ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (188 chars)
+11-26 13:35:45.102 31726 32532 D CHAT_RENDER: FRAME 19.0ms: input 0.0 animation 9.3 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 4.8
+11-26 13:35:45.110 31726 32532 D CHAT_RENDER: FRAME 16.1ms: input 0.0 animation 3.6 layout 0.1 draw 0.0 sync 0.1 gpu-cmd 1.4 swap 0.4 delay 8.7
+11-26 13:35:45.144 31726 32532 D CHAT_RENDER: FRAME 14.9ms: input 0.0 animation 5.3 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 4.0
+11-26 13:35:45.153 31726 32532 D CHAT_RENDER: FRAME 14.7ms: input 0.0 animation 4.7 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 6.3
+11-26 13:35:45.160 31726 32532 D CHAT_RENDER: FRAME 15.9ms: input 0.0 animation 5.2 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.6 swap 0.9 delay 5.6
+11-26 13:35:45.168 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.1ms | rows 1 (1 new, 0 again) 2.7ms :: Numbered new 2.7ms (128 chars)
+11-26 13:35:45.177 31726 32532 D CHAT_RENDER: FRAME 24.2ms: input 0.0 animation 13.3 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.7 swap 0.8 delay 5.7
+11-26 13:35:45.185 31726 32532 D CHAT_RENDER: FRAME 22.2ms: input 0.0 animation 3.4 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 1.3 swap 0.4 delay 14.8
+11-26 13:35:45.208 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.5ms | rows 1 (1 new, 0 again) 2.8ms :: Numbered new 2.8ms (198 chars)
+11-26 13:35:45.221 31726 32532 D CHAT_RENDER: FRAME 23.1ms: input 0.0 animation 16.4 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 1.5
+11-26 13:35:45.227 31726 32532 D CHAT_RENDER: FRAME 19.0ms: input 0.0 animation 1.6 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.3 swap 0.4 delay 12.3
+11-26 13:35:45.258 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.8ms | rows 1 (1 new, 0 again) 2.4ms :: Numbered new 2.4ms (243 chars)
+11-26 13:35:45.270 31726 32532 D CHAT_RENDER: FRAME 21.3ms: input 0.0 animation 15.2 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 1.2
+11-26 13:35:45.279 31726 32532 D CHAT_RENDER: FRAME 18.5ms: input 0.0 animation 1.2 layout 0.1 draw 1.4 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 12.6
+11-26 13:35:45.336 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 7.5 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 1.7
+11-26 13:35:45.345 31726 32532 D CHAT_RENDER: FRAME 14.8ms: input 0.0 animation 5.3 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 1.3 swap 0.5 delay 5.8
+11-26 13:35:45.352 31726 32532 D CHAT_RENDER: FRAME 14.1ms: input 0.0 animation 4.4 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 5.6
+11-26 13:35:45.367 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 11.7ms | rows 1 (1 new, 0 again) 2.8ms :: Bullet new 2.8ms (154 chars)
+11-26 13:35:45.369 31726 32532 D CHAT_RENDER: FRAME 26.3ms: input 0.0 animation 15.8 layout 0.1 draw 1.0 sync 0.3 gpu-cmd 1.8 swap 0.7 delay 4.5
+11-26 13:35:45.444 31726 32532 D CHAT_RENDER: FRAME 15.7ms: input 3.8 animation 6.8 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 0.9
+11-26 13:35:45.453 31726 32532 D CHAT_RENDER: FRAME 15.5ms: input 3.4 animation 2.2 layout 0.1 draw 2.1 sync 0.1 gpu-cmd 1.0 swap 0.5 delay 4.6
+11-26 13:35:45.457 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:45.461 31726 32532 D CHAT_RENDER: FRAME 16.5ms: input 2.7 animation 1.6 layout 0.1 draw 1.7 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 6.9
+11-26 13:35:45.478 31726 32532 D CHAT_RENDER: FRAME 12.5ms: input 2.9 animation 1.8 layout 0.1 draw 1.5 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 2.2
+11-26 13:35:45.495 31726 32532 D CHAT_RENDER: FRAME 14.3ms: input 2.9 animation 2.3 layout 0.1 draw 2.3 sync 0.2 gpu-cmd 1.7 swap 0.7 delay 2.6
+11-26 13:35:45.503 31726 32532 D CHAT_RENDER: FRAME 13.3ms: input 2.3 animation 1.6 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.9 swap 0.6 delay 3.4
+11-26 13:35:45.514 31726 32532 D CHAT_RENDER: FRAME 14.5ms: input 2.3 animation 4.9 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 2.4
+11-26 13:35:45.519 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 1.8 animation 1.5 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 4.3
+11-26 13:35:45.527 31726 32532 D CHAT_RENDER: FRAME 14.3ms: input 0.0 animation 0.8 layout 0.1 draw 1.7 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 7.7
+11-26 13:35:45.530 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.6ms | rows 1 (1 new, 0 again) 1.7ms :: Bullet new 1.7ms (24 chars)
+11-26 13:35:45.536 31726 32532 D CHAT_RENDER: FRAME 19.2ms: input 0.0 animation 10.9 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 3.6
+11-26 13:35:45.553 31726 32532 D CHAT_RENDER: FRAME 24.6ms: input 0.0 animation 10.9 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 8.9
+11-26 13:35:45.571 31726 32532 D CHAT_RENDER: FRAME 16.1ms: input 0.0 animation 9.8 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 1.5
+11-26 13:35:45.578 31726 32532 D CHAT_RENDER: FRAME 12.6ms: input 0.0 animation 1.1 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 6.7
+11-26 13:35:45.586 31726 32532 D CHAT_RENDER: FRAME 17.2ms: input 0.0 animation 10.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 2.3
+11-26 13:35:45.595 31726 32532 D CHAT_RENDER: FRAME 12.6ms: input 0.0 animation 1.1 layout 0.1 draw 1.5 sync 0.1 gpu-cmd 0.9 swap 0.4 delay 7.1
+11-26 13:35:45.596 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.3ms | rows 1 (1 new, 0 again) 1.3ms :: Paragraph new 1.3ms (310 chars)
+11-26 13:35:45.603 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 8.9 layout 0.1 draw 0.9 sync 0.3 gpu-cmd 1.0 swap 0.5 delay 2.7
+11-26 13:35:45.612 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 1.1 swap 0.5 delay 8.6
+11-26 13:35:45.701 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.4ms | rows 1 (1 new, 0 again) 2.7ms :: Bullet new 2.7ms (79 chars)
+11-26 13:35:45.711 31726 32532 D CHAT_RENDER: FRAME 21.7ms: input 0.0 animation 14.8 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 1.6
+11-26 13:35:45.720 31726 32532 D CHAT_RENDER: FRAME 25.7ms: input 0.0 animation 6.3 layout 0.1 draw 2.2 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 13.3
+11-26 13:35:45.730 31726 32532 D CHAT_RENDER: FRAME 13.7ms: input 0.0 animation 1.1 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 7.9
+11-26 13:35:45.751 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.4ms | rows 1 (1 new, 0 again) 2.7ms :: Bullet new 2.7ms (195 chars)
+11-26 13:35:45.762 31726 32532 D CHAT_RENDER: FRAME 22.0ms: input 0.0 animation 15.4 layout 0.1 draw 0.9 sync 0.3 gpu-cmd 1.3 swap 0.6 delay 1.8
+11-26 13:35:45.770 31726 32532 D CHAT_RENDER: FRAME 21.8ms: input 0.0 animation 5.2 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 12.6
+11-26 13:35:45.921 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 2.7ms
+11-26 13:35:45.929 31726 32532 D CHAT_RENDER: FRAME 24.3ms: input 6.1 animation 11.5 layout 0.1 draw 2.2 sync 0.3 gpu-cmd 1.4 swap 0.7 delay 0.6
+11-26 13:35:45.937 31726 32532 D CHAT_RENDER: FRAME 24.7ms: input 2.4 animation 4.6 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 13.9
+11-26 13:35:45.943 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:45.951 31726 32532 D CHAT_RENDER: FRAME 15.6ms: input 1.9 animation 1.4 layout 0.1 draw 1.8 sync 0.1 gpu-cmd 1.1 swap 0.6 delay 7.1
+11-26 13:35:45.962 31726 32532 D CHAT_RENDER: FRAME 16.5ms: input 4.1 animation 4.5 layout 0.1 draw 3.0 sync 0.3 gpu-cmd 1.7 swap 0.6 delay 0.6
+11-26 13:35:45.969 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.7ms | rows 1 (1 new, 0 again) 1.9ms :: Bullet new 1.9ms (264 chars)
+11-26 13:35:45.979 31726 32532 D CHAT_RENDER: FRAME 24.5ms: input 0.0 animation 12.6 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 6.4
+11-26 13:35:45.986 31726 32532 D CHAT_RENDER: FRAME 22.2ms: input 0.0 animation 3.9 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 14.3
+11-26 13:35:46.019 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 17.8ms | rows 1 (1 new, 0 again) 4.6ms :: Code new 4.6ms (393 chars)
+11-26 13:35:46.028 31726 32532 D CHAT_RENDER: FRAME 32.1ms: input 0.0 animation 23.2 layout 0.1 draw 3.9 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 1.3
+11-26 13:35:46.037 31726 32532 D CHAT_RENDER: FRAME 33.0ms: input 0.0 animation 4.4 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 2.9 swap 0.5 delay 22.9
+11-26 13:35:46.095 31726 32532 D CHAT_RENDER: FRAME 13.4ms: input 0.0 animation 7.4 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 1.6
+11-26 13:35:46.104 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 5.0 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 4.9
+11-26 13:35:46.114 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.0ms | rows 1 (1 new, 0 again) 1.9ms :: Paragraph new 1.9ms (30 chars)
+11-26 13:35:46.120 31726 32532 D CHAT_RENDER: FRAME 18.7ms: input 0.0 animation 11.8 layout 0.1 draw 1.1 sync 0.3 gpu-cmd 1.1 swap 0.4 delay 2.1
+11-26 13:35:46.131 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.0ms | rows 1 (1 new, 0 again) 1.8ms :: Paragraph new 1.8ms (251 chars)
+11-26 13:35:46.138 31726 32532 D CHAT_RENDER: FRAME 28.6ms: input 0.0 animation 13.6 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 9.0
+11-26 13:35:46.145 31726 32532 D CHAT_RENDER: FRAME 19.1ms: input 0.0 animation 4.5 layout 0.1 draw 0.6 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 9.5
+11-26 13:35:46.200 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 4.7ms
+11-26 13:35:46.203 31726 32532 D CHAT_RENDER: FRAME 19.2ms: input 0.0 animation 10.1 layout 0.1 draw 2.5 sync 0.3 gpu-cmd 1.1 swap 0.5 delay 2.7
+11-26 13:35:46.214 31726 32532 D CHAT_RENDER: FRAME 19.2ms: input 0.0 animation 4.0 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 1.1 swap 0.5 delay 11.2
+11-26 13:35:46.239 31726 31812 D HOME_WIDGETS: refresh chat widgets (list=true, app on screen=true, 15002 ms since the last)
+11-26 13:35:46.241 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.0ms | rows 1 (1 new, 0 again) 2.5ms :: Paragraph new 2.5ms (117 chars)
+11-26 13:35:46.251 31726 32532 D CHAT_RENDER: FRAME 20.9ms: input 0.0 animation 14.2 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 1.9
+11-26 13:35:46.256 31726 31726 D HOME_WIDGETS: compose Chats: snap=9de22b1 hide=1f87288 state=6de6421 size=ec7b159 colors=6e5d11e
+11-26 13:35:46.257 31726 32532 D CHAT_RENDER: FRAME 18.1ms: input 0.0 animation 1.5 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 11.2
+11-26 13:35:46.264 31726 31726 D CHAT_RENDER: SLOW MAIN 8.0ms: coroutine androidx.glance.session.InteractiveFrameClock$onNewAwaiters$2.invokeSuspend(InteractiveFrameClock.kt:114
+11-26 13:35:46.264 31726 31726 D HOME_WIDGETS: compose OneChat: snap=9de22b1 hide=1f87288 state=1e679e colors=1f6b0ab
+11-26 13:35:46.266 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms | rows 1 (1 new, 0 again) 1.8ms | slow main: 8.0ms kt:114 :: AgentThought new 1.8ms (1729 chars)
+11-26 13:35:46.278 31726 32532 D CHAT_RENDER: FRAME 17.7ms: input 0.0 animation 1.7 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 10.5
+11-26 13:35:46.296 31726 32532 D CHAT_RENDER: FRAME 15.9ms: input 0.0 animation 7.9 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 2.4
+11-26 13:35:46.298 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.8ms
+11-26 13:35:46.306 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 3.5 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.4 swap 1.0 delay 7.9
+11-26 13:35:46.312 31726 32532 D CHAT_RENDER: FRAME 17.4ms: input 0.0 animation 2.1 layout 0.1 draw 2.2 sync 0.1 gpu-cmd 1.4 swap 0.6 delay 9.0
+11-26 13:35:46.339 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 10.5ms | rows 1 (1 new, 0 again) 3.1ms :: USER new 3.1ms (127 chars)
+11-26 13:35:46.345 31726 32532 D CHAT_RENDER: FRAME 25.2ms: input 0.0 animation 16.6 layout 0.1 draw 1.2 sync 0.3 gpu-cmd 1.8 swap 0.7 delay 2.1
+11-26 13:35:46.355 31726 32532 D CHAT_RENDER: FRAME 25.1ms: input 0.0 animation 3.8 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 17.2
+11-26 13:35:46.405 31726 32532 D CHAT_RENDER: FRAME 12.5ms: input 0.0 animation 5.0 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 2.4
+11-26 13:35:46.505 31726 32532 D CHAT_RENDER: FRAME 35.0ms: input 0.0 animation 24.5 layout 0.1 draw 3.8 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 2.3
+11-26 13:35:46.520 31726 31726 D CHAT_RENDER: JANK 50.1ms = 6.0 frames: scrolling generating paced | list measure 18.4ms | rows 1 (1 new, 0 again) 4.5ms :: FOOTER new 4.5ms (11097 chars)
+11-26 13:35:46.529 31726 32532 D CHAT_RENDER: FRAME 52.6ms: input 2.2 animation 0.9 layout 0.1 draw 0.2 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 45.2
+11-26 13:35:46.554 31726 32532 D CHAT_RENDER: FRAME 16.4ms: input 3.1 animation 2.3 layout 0.1 draw 2.3 sync 0.3 gpu-cmd 1.7 swap 0.7 delay 4.4
+11-26 13:35:46.562 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:46.563 31726 32532 D CHAT_RENDER: FRAME 19.3ms: input 2.9 animation 2.0 layout 0.1 draw 2.2 sync 0.3 gpu-cmd 1.6 swap 0.6 delay 7.9
+11-26 13:35:46.586 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 11.9ms | rows 1 (1 new, 0 again) 2.6ms :: Paragraph new 2.6ms (125 chars)
+11-26 13:35:46.587 31726 32532 D CHAT_RENDER: FRAME 28.1ms: input 2.9 animation 16.4 layout 0.1 draw 1.2 sync 0.5 gpu-cmd 1.3 swap 0.5 delay 3.4
+11-26 13:35:46.603 31726 32532 D CHAT_RENDER: FRAME 31.4ms: input 0.0 animation 3.0 layout 0.1 draw 1.6 sync 0.3 gpu-cmd 1.7 swap 0.7 delay 22.3
+11-26 13:35:46.629 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.4ms | rows 1 (1 new, 0 again) 2.7ms :: Numbered new 2.7ms (74 chars)
+11-26 13:35:46.638 31726 32532 D CHAT_RENDER: FRAME 25.1ms: input 0.0 animation 16.1 layout 0.1 draw 1.0 sync 0.3 gpu-cmd 1.7 swap 0.6 delay 3.5
+11-26 13:35:46.647 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.5ms | rows 1 (1 new, 0 again) 1.8ms :: Numbered new 1.8ms (155 chars)
+11-26 13:35:46.654 31726 32532 D CHAT_RENDER: FRAME 31.7ms: input 0.0 animation 12.1 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 14.8
+11-26 13:35:46.662 31726 32532 D CHAT_RENDER: FRAME 23.1ms: input 0.0 animation 3.3 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 15.8
+11-26 13:35:46.679 31726 32532 D CHAT_RENDER: FRAME 17.2ms: input 0.0 animation 10.4 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 2.3
+11-26 13:35:46.688 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 1.2 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 7.8
+11-26 13:35:46.693 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.0ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (102 chars)
+11-26 13:35:46.704 31726 32532 D CHAT_RENDER: FRAME 22.3ms: input 0.0 animation 10.4 layout 0.1 draw 0.9 sync 0.3 gpu-cmd 1.5 swap 1.7 delay 6.1
+11-26 13:35:46.713 31726 32532 D CHAT_RENDER: FRAME 20.8ms: input 0.0 animation 4.2 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.6 swap 0.7 delay 12.0
+11-26 13:35:46.715 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.9ms | rows 1 (1 new, 0 again) 1.6ms :: Bullet new 1.6ms (103 chars)
+11-26 13:35:46.721 31726 32532 D CHAT_RENDER: FRAME 19.0ms: input 0.0 animation 10.2 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 3.9
+11-26 13:35:46.737 31726 32532 D CHAT_RENDER: FRAME 23.6ms: input 0.0 animation 10.2 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 8.8
+11-26 13:35:46.746 31726 32532 D CHAT_RENDER: FRAME 12.5ms: input 0.0 animation 3.1 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 0.8 swap 0.3 delay 6.3
+11-26 13:35:46.781 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.5ms
+11-26 13:35:46.781 31726 32532 D CHAT_RENDER: FRAME 14.6ms: input 0.0 animation 8.7 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.4 swap 0.4 delay 1.4
+11-26 13:35:46.787 31726 32532 D CHAT_RENDER: FRAME 17.6ms: input 0.0 animation 5.6 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 2.4 swap 1.0 delay 6.9
+11-26 13:35:46.799 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.5ms | rows 1 (1 new, 0 again) 2.3ms :: Bullet new 2.3ms (131 chars)
+11-26 13:35:46.804 31726 32532 D CHAT_RENDER: FRAME 28.4ms: input 0.0 animation 15.2 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 8.5
+11-26 13:35:46.813 31726 32532 D CHAT_RENDER: FRAME 16.2ms: input 0.0 animation 1.3 layout 0.1 draw 1.3 sync 0.1 gpu-cmd 1.6 swap 0.4 delay 9.6
+11-26 13:35:46.830 31726 32532 D CHAT_RENDER: FRAME 14.0ms: input 0.0 animation 7.6 layout 0.1 draw 1.0 sync 0.1 gpu-cmd 1.3 swap 0.5 delay 1.7
+11-26 13:35:46.839 31726 32532 D CHAT_RENDER: FRAME 13.5ms: input 0.0 animation 4.8 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 4.6
+11-26 13:35:46.880 31726 32532 D CHAT_RENDER: FRAME 12.6ms: input 0.0 animation 1.9 layout 0.1 draw 2.1 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 4.8
+11-26 13:35:46.895 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.6ms | rows 1 (1 new, 0 again) 2.6ms :: Bullet new 2.6ms (66 chars)
+11-26 13:35:46.904 31726 32532 D CHAT_RENDER: FRAME 22.4ms: input 0.0 animation 15.6 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 1.9
+11-26 13:35:46.913 31726 32532 D CHAT_RENDER: FRAME 20.5ms: input 0.0 animation 1.5 layout 0.1 draw 1.7 sync 0.1 gpu-cmd 1.4 swap 0.7 delay 13.7
+11-26 13:35:46.929 31726 32532 D CHAT_RENDER: FRAME 16.7ms: input 0.0 animation 10.3 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 1.6
+11-26 13:35:46.941 31726 32532 D CHAT_RENDER: FRAME 13.5ms: input 0.0 animation 1.0 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.0 swap 0.4 delay 7.9
+11-26 13:35:46.957 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.0ms | rows 1 (1 new, 0 again) 1.7ms :: Bullet new 1.7ms (77 chars)
+11-26 13:35:46.964 31726 32532 D CHAT_RENDER: FRAME 16.4ms: input 0.0 animation 9.8 layout 0.1 draw 0.8 sync 0.3 gpu-cmd 1.6 swap 0.4 delay 1.8
+11-26 13:35:46.972 31726 32532 D CHAT_RENDER: FRAME 17.2ms: input 0.0 animation 4.1 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 8.8
+11-26 13:35:47.000 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.9ms
+11-26 13:35:47.013 31726 32532 D CHAT_RENDER: FRAME 21.1ms: input 0.0 animation 14.0 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 2.4
+11-26 13:35:47.022 31726 32532 D CHAT_RENDER: FRAME 16.7ms: input 0.0 animation 1.2 layout 0.1 draw 1.4 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 10.8
+11-26 13:35:47.030 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 9.8 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 1.6
+11-26 13:35:47.039 31726 32532 D CHAT_RENDER: FRAME 12.8ms: input 0.0 animation 3.5 layout 0.1 draw 0.0 sync 0.1 gpu-cmd 1.1 swap 0.5 delay 6.0
+11-26 13:35:47.074 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.4ms
+11-26 13:35:47.081 31726 32532 D CHAT_RENDER: FRAME 13.1ms: input 0.0 animation 5.3 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 3.3
+11-26 13:35:47.144 31726 32531 D CHAT_RENDER: STALL 42ms (sample 1): WidgetLayoutKt$special$$inlined$findModifier$2.invoke:28 < WidgetLayoutKt$special$$inlined$findModifier$2.invoke:23 < GlanceModifier$Element.foldIn:71 < CombinedGlanceModifier.foldIn:112 < WidgetLayoutKt.getHeightModifier:419 < WidgetLayoutKt.createNode:247 < WidgetLayoutKt.createNode:260 < WidgetLayoutKt.createNode:260 < WidgetLayoutKt.createNode:260 < LayoutConfiguration.addLayout:186 < LazyListTranslatorKt.translateEmittableLazyList:85 < LazyListTranslatorKt.translateEmittableLazyColumn:48 < RemoteViewsTranslatorKt.translateChild:230 < RemoteViewsTranslatorKt.setChildren:450
+11-26 13:35:47.186 31726 31726 D CHAT_RENDER: SLOW MAIN 91.1ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:47.186 31726 32531 D CHAT_RENDER: STALL 90ms (sample 2): StateFlowImpl.setValue:321 < AppWidgetSession.processEmittableTree$suspendImpl:196 < AppWidgetSession$processEmittableTree$1.invokeSuspend:15 < BaseContinuationImpl.resumeWith:34 < DispatchedTask.run:98 < ActivityThread.main:9964
+11-26 13:35:47.197 31726 31726 D CHAT_RENDER: JANK 100.2ms = 12.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 91.1ms kt:179
+11-26 13:35:47.213 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 4.7ms
+11-26 13:35:47.223 31726 32532 D CHAT_RENDER: FRAME 120.0ms: input 0.0 animation 11.4 layout 0.1 draw 2.2 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 99.3
+11-26 13:35:47.228 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.4ms | rows 1 (1 new, 0 again) 1.6ms :: Paragraph new 1.6ms (120 chars)
+11-26 13:35:47.238 31726 32532 D CHAT_RENDER: FRAME 29.5ms: input 0.0 animation 10.2 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 15.1
+11-26 13:35:47.247 31726 32532 D CHAT_RENDER: FRAME 20.4ms: input 0.0 animation 4.2 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 13.0
+11-26 13:35:47.264 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.8ms | rows 1 (1 new, 0 again) 2.2ms :: Paragraph new 2.2ms (166 chars)
+11-26 13:35:47.272 31726 32532 D CHAT_RENDER: FRAME 24.9ms: input 0.0 animation 16.6 layout 0.1 draw 2.9 sync 0.3 gpu-cmd 1.7 swap 0.7 delay 1.4
+11-26 13:35:47.280 31726 32532 D CHAT_RENDER: FRAME 22.8ms: input 0.0 animation 3.8 layout 0.1 draw 0.5 sync 0.1 gpu-cmd 1.0 swap 0.4 delay 15.6
+11-26 13:35:47.284 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.5ms | rows 1 (1 new, 0 again) 1.7ms :: StepGroup(2) new 1.7ms (0 chars)
+11-26 13:35:47.289 31726 32532 D CHAT_RENDER: FRAME 19.6ms: input 0.0 animation 9.7 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 4.8
+11-26 13:35:47.298 31726 32532 D CHAT_RENDER: FRAME 17.8ms: input 0.0 animation 3.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.0 swap 0.4 delay 10.6
+11-26 13:35:47.311 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.0ms | rows 1 (1 new, 0 again) 2.0ms :: Paragraph new 2.0ms (63 chars)
+11-26 13:35:47.322 31726 32532 D CHAT_RENDER: FRAME 21.2ms: input 0.0 animation 14.2 layout 0.1 draw 1.4 sync 0.3 gpu-cmd 1.2 swap 0.6 delay 2.1
+11-26 13:35:47.330 31726 32532 D CHAT_RENDER: FRAME 18.3ms: input 0.0 animation 1.3 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 12.2
+11-26 13:35:47.339 31726 32532 D CHAT_RENDER: FRAME 16.8ms: input 0.0 animation 9.6 layout 0.1 draw 1.7 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 1.8
+11-26 13:35:47.347 31726 32532 D CHAT_RENDER: FRAME 15.7ms: input 0.0 animation 1.9 layout 0.1 draw 2.0 sync 0.2 gpu-cmd 2.2 swap 0.6 delay 7.4
+11-26 13:35:47.355 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 5.0 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 6.0
+11-26 13:35:47.359 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.4ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (112 chars)
+11-26 13:35:47.364 31726 32532 D CHAT_RENDER: FRAME 19.0ms: input 0.0 animation 9.7 layout 0.1 draw 0.9 sync 0.3 gpu-cmd 1.3 swap 0.5 delay 4.9
+11-26 13:35:47.372 31726 32532 D CHAT_RENDER: FRAME 18.4ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 11.0
+11-26 13:35:47.382 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.7ms | rows 1 (1 new, 0 again) 1.5ms :: StepGroup(2) new 1.5ms (0 chars)
+11-26 13:35:47.389 31726 32532 D CHAT_RENDER: FRAME 16.8ms: input 0.0 animation 10.2 layout 0.1 draw 1.5 sync 0.3 gpu-cmd 1.2 swap 1.5 delay 1.5
+11-26 13:35:47.399 31726 32532 D CHAT_RENDER: FRAME 18.9ms: input 0.0 animation 5.7 layout 0.2 draw 0.7 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 8.8
+11-26 13:35:47.399 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.4ms
+11-26 13:35:47.423 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 14.8ms | rows 1 (1 new, 0 again) 3.8ms | GC 1x 34ms :: Paragraph new 3.8ms (118 chars)
+11-26 13:35:47.431 31726 32532 D CHAT_RENDER: FRAME 33.5ms: input 0.0 animation 20.4 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 8.9
+11-26 13:35:47.438 31726 32532 D CHAT_RENDER: FRAME 23.2ms: input 0.0 animation 3.6 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 16.0
+11-26 13:35:47.445 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.9ms | rows 1 (1 new, 0 again) 1.8ms :: StepGroup(4) new 1.8ms (0 chars)
+11-26 13:35:47.456 31726 32532 D CHAT_RENDER: FRAME 21.4ms: input 0.0 animation 10.5 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 5.8
+11-26 13:35:47.464 31726 32532 D CHAT_RENDER: FRAME 19.6ms: input 0.0 animation 1.4 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 13.4
+11-26 13:35:47.475 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.1ms | rows 1 (1 new, 0 again) 1.4ms :: Paragraph new 1.4ms (198 chars)
+11-26 13:35:47.481 31726 32532 D CHAT_RENDER: FRAME 17.8ms: input 0.0 animation 11.2 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 1.8
+11-26 13:35:47.489 31726 32532 D CHAT_RENDER: FRAME 16.9ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 9.5
+11-26 13:35:47.539 31726 32532 D CHAT_RENDER: FRAME 13.0ms: input 0.0 animation 6.6 layout 0.1 draw 0.6 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 2.1
+11-26 13:35:47.545 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.2ms
+11-26 13:35:47.557 31726 32532 D CHAT_RENDER: FRAME 22.4ms: input 0.0 animation 11.5 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.3 swap 1.3 delay 5.8
+11-26 13:35:47.565 31726 32532 D CHAT_RENDER: FRAME 20.6ms: input 0.0 animation 3.6 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 12.8
+11-26 13:35:47.615 31726 32532 D CHAT_RENDER: FRAME 13.1ms: input 0.0 animation 6.7 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 2.2
+11-26 13:35:47.622 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.5ms
+11-26 13:35:47.631 31726 32532 D CHAT_RENDER: FRAME 22.6ms: input 0.0 animation 10.2 layout 0.1 draw 2.6 sync 0.2 gpu-cmd 1.3 swap 0.8 delay 6.3
+11-26 13:35:47.632 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.9ms
+11-26 13:35:47.639 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 3.5 layout 0.1 draw 0.2 sync 0.2 gpu-cmd 1.8 swap 0.7 delay 14.6
+11-26 13:35:47.649 31726 32532 D CHAT_RENDER: FRAME 14.4ms: input 0.0 animation 0.5 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 8.5
+11-26 13:35:47.700 31726 32531 D CHAT_RENDER: STALL 42ms (sample 1): LayoutProto$LayoutNode.<init>:1756 < LayoutProto$LayoutNode.dynamicMethod:2893 < GeneratedMessageLite.dynamicMethod:290 < GeneratedMessageLite.newMutableInstance:106 < GeneratedMessageLite$Builder.newMutableInstance:437 < GeneratedMessageLite$Builder.<init>:433 < LayoutProto$LayoutNode$Builder.<init>:2344 < LayoutProto$LayoutNode$Builder.<init>:2337 < LayoutProto$LayoutNode.dynamicMethod:2896 < GeneratedMessageLite.dynamicMethod:290 < GeneratedMessageLite.createBuilder:211 < LayoutProto$LayoutNode.newBuilder:2328 < WidgetLayoutKt.createNode:243 < WidgetLayoutKt.createNode:260
+11-26 13:35:47.739 31726 31726 D CHAT_RENDER: SLOW MAIN 84.3ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:47.754 31726 31726 D CHAT_RENDER: SLOW MAIN 10.1ms: Handler (android.os.Handler)  androidx.compose.ui.platform.AndroidUiDispatcher$dispatchCallback$1: 0
+11-26 13:35:47.760 31726 31726 D CHAT_RENDER: JANK 108.5ms = 13.0 frames: scrolling generating paced | list measure 5.7ms | slow main: 84.3ms kt:179, 10.1ms AndroidUiDispatcher$dispatchCallback$1: 0
+11-26 13:35:47.774 31726 32532 D CHAT_RENDER: FRAME 114.5ms: input 0.0 animation 1.7 layout 0.1 draw 2.4 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 102.9
+11-26 13:35:47.812 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 16.8ms | rows 1 (1 new, 0 again) 3.9ms :: FOOTER new 3.9ms (13935 chars)
+11-26 13:35:47.823 31726 32532 D CHAT_RENDER: FRAME 30.8ms: input 0.0 animation 21.0 layout 0.1 draw 2.8 sync 0.3 gpu-cmd 1.9 swap 0.9 delay 2.7
+11-26 13:35:47.831 31726 32532 D CHAT_RENDER: FRAME 34.0ms: input 0.0 animation 8.3 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 21.5
+11-26 13:35:47.873 31726 32531 D CHAT_RENDER: STALL 40ms (sample 1): MeasurePassDelegate.getPlaceOrder:62 < LayoutNode.getPlaceOrder$androidx_compose_ui_ui:841 < MeasurePassDelegate.checkChildrenPlaceOrderForUpdates:253 < MeasurePassDelegate.layoutChildrenBlock$lambda$0:205 < MeasurePassDelegate$$ExternalSyntheticLambda1.invoke:0 < SnapshotStateObserver.observeReads:809 < MeasurePassDelegate.layoutChildren:986 < MeasurePassDelegate.onNodePlaced$androidx_compose_ui_ui:419 < InnerNodeCoordinator.onAfterPlaceAt:166 < InnerNodeCoordinator.placeAt-f8xVGno:155 < Placeable.access$placeAt-f8xVGno:36 < Placeable$PlacementScope.placeRelative-70tqf50:595 < Placeable$PlacementScope.placeRelative-70tqf50$default:214 < IntrinsicSizeModifier.measure_3p2s80s$lambda$0:293 || app: BouncyOverscrollEffect$node$1.measure_3p2s80s$lambda$1:277 < BouncyOverscrollEffect$node$1$$ExternalSyntheticLambda0.invoke:0 < ChatRenderTrace.listModifier_delegate$lambda$0$0$0:316 < ChatRenderTrace.$r8$lambda$w0_Nvva6IexCZ122G2JQs4RSoec:0 < ChatRenderTrace$$ExternalSyntheticLambda5.invoke:0 < BouncyOverscrollEffect.applyToScroll-Rhakbz0:158
+11-26 13:35:47.878 31726 31726 D CHAT_RENDER: JANK 58.4ms = 7.0 frames: scrolling generating paced | list measure 37.5ms | rows 1 (1 new, 0 again) 2.0ms :: Table new 2.0ms (0 chars)
+11-26 13:35:47.882 31726 32532 D CHAT_RENDER: FRAME 62.6ms: input 0.0 animation 45.3 layout 0.1 draw 4.4 sync 0.2 gpu-cmd 2.3 swap 0.6 delay 8.3
+11-26 13:35:47.899 31726 32532 D CHAT_RENDER: FRAME 63.2ms: input 0.0 animation 4.2 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 2.9 swap 0.5 delay 53.2
+11-26 13:35:47.943 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.0ms | rows 1 (1 new, 0 again) 2.0ms :: Header new 2.0ms (14 chars)
+11-26 13:35:47.948 31726 32532 D CHAT_RENDER: FRAME 18.5ms: input 0.0 animation 11.7 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.4 swap 0.3 delay 2.0
+11-26 13:35:47.961 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.1ms | rows 1 (1 new, 0 again) 1.8ms :: Paragraph new 1.8ms (151 chars)
+11-26 13:35:47.964 31726 32532 D CHAT_RENDER: FRAME 29.0ms: input 0.0 animation 14.1 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 9.9
+11-26 13:35:47.973 31726 32532 D CHAT_RENDER: FRAME 18.8ms: input 0.0 animation 3.5 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 11.4
+11-26 13:35:48.001 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.8ms
+11-26 13:35:48.008 31726 32532 D CHAT_RENDER: FRAME 20.5ms: input 0.0 animation 12.5 layout 0.1 draw 1.2 sync 0.3 gpu-cmd 1.5 swap 0.6 delay 2.8
+11-26 13:35:48.015 31726 32532 D CHAT_RENDER: FRAME 16.4ms: input 0.0 animation 1.2 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.6 swap 0.7 delay 10.1
+11-26 13:35:48.057 31726 32532 D CHAT_RENDER: FRAME 13.3ms: input 0.0 animation 3.8 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 4.5
+11-26 13:35:48.102 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:48.123 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 6.7 layout 0.2 draw 2.9 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 9.3
+11-26 13:35:48.163 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.3ms
+11-26 13:35:48.165 31726 32532 D CHAT_RENDER: FRAME 20.0ms: input 0.0 animation 11.3 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 3.6
+11-26 13:35:48.174 31726 32532 D CHAT_RENDER: FRAME 21.5ms: input 0.0 animation 4.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.0 swap 0.5 delay 13.1
+11-26 13:35:48.260 31726 31726 D CHAT_RENDER: SLOW MAIN 8.0ms: Handler (android.view.ViewRootImpl$ViewRootHandler)  androidx.compose.foundation.lazy.layout.AndroidPrefetchScheduler: 0
+11-26 13:35:48.316 31726 32531 D CHAT_RENDER: STALL 46ms (sample 1): RemoteViews$BaseReflectionAction.getUniqueKey:2843 < RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setCharSequence:7803 < RemoteViews.setTextViewText:6746 < TextTranslatorKt.setText:132 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370
+11-26 13:35:48.355 31726 31726 D CHAT_RENDER: SLOW MAIN 87.6ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:48.375 31726 31726 D CHAT_RENDER: SLOW MAIN 12.6ms: Handler (android.os.Handler)  androidx.compose.ui.platform.AndroidUiDispatcher$dispatchCallback$1: 0
+11-26 13:35:48.376 31726 31726 D CHAT_RENDER: JANK 116.8ms = 14.0 frames: scrolling generating paced | list measure 8.3ms | rows 1 (1 new, 0 again) 1.7ms | slow main: 87.6ms kt:179, 12.6ms AndroidUiDispatcher$dispatchCallback$1: 0 :: Bullet new 1.7ms (161 chars)
+11-26 13:35:48.391 31726 32532 D CHAT_RENDER: FRAME 119.5ms: input 0.0 animation 1.3 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 109.6
+11-26 13:35:48.407 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 0.0 animation 1.6 layout 0.1 draw 1.8 sync 0.3 gpu-cmd 1.5 swap 0.7 delay 5.8
+11-26 13:35:48.414 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.1ms | rows 1 (1 new, 0 again) 2.5ms :: Bullet new 2.5ms (196 chars)
+11-26 13:35:48.425 31726 32532 D CHAT_RENDER: FRAME 23.8ms: input 0.0 animation 14.9 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.8 swap 0.9 delay 3.8
+11-26 13:35:48.433 31726 32532 D CHAT_RENDER: FRAME 22.1ms: input 0.0 animation 4.0 layout 0.2 draw 0.4 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 13.4
+11-26 13:35:48.441 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 8.3 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 3.4
+11-26 13:35:48.448 31726 32532 D CHAT_RENDER: FRAME 14.6ms: input 0.0 animation 2.9 layout 0.1 draw 0.3 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 8.2
+11-26 13:35:48.451 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.2ms | rows 1 (1 new, 0 again) 1.5ms :: Bullet new 1.5ms (79 chars)
+11-26 13:35:48.457 31726 32532 D CHAT_RENDER: FRAME 18.0ms: input 0.0 animation 8.9 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 4.6
+11-26 13:35:48.474 31726 32532 D CHAT_RENDER: FRAME 23.2ms: input 0.0 animation 10.2 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 8.7
+11-26 13:35:48.486 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.3ms | rows 1 (1 new, 0 again) 2.1ms :: Paragraph new 2.1ms (185 chars)
+11-26 13:35:48.492 31726 32532 D CHAT_RENDER: FRAME 18.0ms: input 0.0 animation 10.6 layout 0.1 draw 1.4 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 2.0
+11-26 13:35:48.499 31726 32532 D CHAT_RENDER: FRAME 18.4ms: input 0.0 animation 3.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 10.9
+11-26 13:35:48.519 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.6ms | rows 1 (1 new, 0 again) 2.0ms :: Header new 2.0ms (18 chars)
+11-26 13:35:48.524 31726 32532 D CHAT_RENDER: FRAME 19.5ms: input 0.0 animation 11.8 layout 0.1 draw 1.0 sync 0.3 gpu-cmd 1.5 swap 0.5 delay 2.5
+11-26 13:35:48.540 31726 32532 D CHAT_RENDER: FRAME 24.3ms: input 0.0 animation 9.9 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 9.8
+11-26 13:35:48.543 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.1ms | rows 1 (1 new, 0 again) 1.3ms :: Bullet new 1.3ms (128 chars)
+11-26 13:35:48.550 31726 32532 D CHAT_RENDER: FRAME 19.1ms: input 0.0 animation 8.9 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 6.1
+11-26 13:35:48.561 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 3.4 layout 0.1 draw 0.3 sync 0.1 gpu-cmd 1.0 swap 0.5 delay 9.0
+11-26 13:35:48.583 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 7.6ms (messages) | msgs +1 | list measure 3.4ms
+11-26 13:35:48.591 31726 32532 D CHAT_RENDER: FRAME 23.5ms: input 0.0 animation 14.7 layout 0.1 draw 2.7 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 2.7
+11-26 13:35:48.599 31726 32532 D CHAT_RENDER: FRAME 22.5ms: input 0.0 animation 3.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 15.5
+11-26 13:35:48.604 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | built 1x bg 7.8ms | list measure 6.1ms | rows 1 (1 new, 0 again) 1.3ms :: Paragraph new 1.3ms (311 chars)
+11-26 13:35:48.606 31726 32532 D CHAT_RENDER: FRAME 18.5ms: input 0.0 animation 8.9 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 5.2
+11-26 13:35:48.645 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: scrolling generating paced | SCREEN 1x 26.9ms (rows) | list measure 2.0ms | rows 12 (0 new, 12 again) 1.5ms :: Paragraph 0.2ms (158 chars) | Bullet 0.1ms (196 chars) | Paragraph 0.1ms (185 chars) | Bullet 0.1ms (161 chars) | Paragraph 0.1ms (311 chars)
+11-26 13:35:48.649 31726 32532 D CHAT_RENDER: FRAME 52.9ms: input 0.0 animation 33.6 layout 0.1 draw 3.8 sync 0.3 gpu-cmd 1.6 swap 0.9 delay 11.4
+11-26 13:35:48.666 31726 32532 D CHAT_RENDER: FRAME 46.2ms: input 0.0 animation 6.3 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 36.3
+11-26 13:35:48.672 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.6ms | rows 1 (1 new, 0 again) 2.2ms :: StepGroup(2) new 2.2ms (0 chars)
+11-26 13:35:48.683 31726 32532 D CHAT_RENDER: FRAME 22.5ms: input 0.0 animation 13.7 layout 0.1 draw 1.7 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 3.7
+11-26 13:35:48.691 31726 32532 D CHAT_RENDER: FRAME 18.7ms: input 0.0 animation 1.3 layout 0.1 draw 1.2 sync 0.1 gpu-cmd 1.0 swap 0.4 delay 13.3
+11-26 13:35:48.700 31726 32532 D CHAT_RENDER: FRAME 14.2ms: input 0.0 animation 8.5 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 1.6
+11-26 13:35:48.703 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.4ms
+11-26 13:35:48.707 31726 32532 D CHAT_RENDER: FRAME 16.4ms: input 0.0 animation 5.1 layout 0.1 draw 0.2 sync 0.2 gpu-cmd 1.8 swap 0.6 delay 6.6
+11-26 13:35:48.716 31726 32532 D CHAT_RENDER: FRAME 18.5ms: input 0.0 animation 4.6 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 10.1
+11-26 13:35:48.756 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.7ms | rows 1 (1 new, 0 again) 2.5ms :: StepGroup(2) new 2.5ms (0 chars)
+11-26 13:35:48.767 31726 32532 D CHAT_RENDER: FRAME 23.1ms: input 0.0 animation 14.4 layout 0.1 draw 2.1 sync 0.2 gpu-cmd 1.4 swap 0.8 delay 2.7
+11-26 13:35:48.775 31726 32532 D CHAT_RENDER: FRAME 20.5ms: input 0.0 animation 3.6 layout 0.1 draw 0.4 sync 0.4 gpu-cmd 1.0 swap 0.5 delay 13.2
+11-26 13:35:48.791 31726 32532 D CHAT_RENDER: FRAME 14.1ms: input 0.0 animation 8.2 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 1.8
+11-26 13:35:48.799 31726 32532 D CHAT_RENDER: FRAME 13.6ms: input 0.0 animation 3.9 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.1 swap 0.6 delay 6.4
+11-26 13:35:48.808 31726 32532 D CHAT_RENDER: FRAME 13.6ms: input 0.0 animation 1.6 layout 0.1 draw 2.0 sync 0.3 gpu-cmd 1.4 swap 0.7 delay 6.3
+11-26 13:35:48.835 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | msgs +1 (1 held) | list measure 7.6ms | rows 1 (1 new, 0 again) 1.5ms :: StepGroup(8) new 1.5ms (0 chars)
+11-26 13:35:48.842 31726 32532 D CHAT_RENDER: FRAME 34.0ms: input 0.0 animation 24.5 layout 0.3 draw 3.3 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 2.1
+11-26 13:35:48.851 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 7.8ms (messages) | list measure 1.4ms | GC 1x 44ms
+11-26 13:35:48.858 31726 32532 D CHAT_RENDER: FRAME 43.7ms: input 0.0 animation 14.1 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 25.2
+11-26 13:35:48.875 31726 32532 D CHAT_RENDER: FRAME 21.8ms: input 0.0 animation 8.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 8.5
+11-26 13:35:48.900 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | SCREEN 1x 22.6ms (rows) | list measure 0.8ms | rows 11 (0 new, 11 again) 1.1ms :: Paragraph 0.2ms (158 chars) | Paragraph 0.2ms (94 chars) | Paragraph 0.1ms (180 chars) | Paragraph 0.1ms (311 chars) | Bullet 0.1ms (100 chars)
+11-26 13:35:48.900 31726 32532 D CHAT_RENDER: FRAME 36.8ms: input 0.0 animation 25.0 layout 0.1 draw 3.7 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 4.4
+11-26 13:35:48.963 31726 32531 D CHAT_RENDER: STALL 45ms (sample 1): RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViewsCompat.setTextViewMaxLines:2567 < TextTranslatorKt.setText:81 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227
+11-26 13:35:49.000 31726 31726 D CHAT_RENDER: SLOW MAIN 84.1ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:49.001 31726 32531 D CHAT_RENDER: STALL 83ms (sample 2): StateFlowImpl.getValue:320 < DataStoreInMemoryCache.getCurrentState:33 < DataStoreImpl$updateData$2.invokeSuspend:173 < DataStoreImpl$updateData$2.invoke:8 < DataStoreImpl$updateData$2.invoke:4 < UndispatchedKt.startUndispatched:66 < UndispatchedKt.startUndispatchedOrReturn:43 < BuildersKt__Builders_commonKt.withContext:497 < BuildersKt.withContext:1 < DataStoreImpl.updateData:171 < GlanceState.updateValue:119 < LayoutConfiguration.save:209 < AppWidgetSession.processEmittableTree$suspendImpl:202 < AppWidgetSession$processEmittableTree$1.invokeSuspend:15
+11-26 13:35:49.011 31726 31726 D CHAT_RENDER: JANK 100.2ms = 12.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 84.1ms kt:179
+11-26 13:35:49.029 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.7ms | rows 1 (1 new, 0 again) 1.5ms :: Paragraph new 1.5ms (116 chars)
+11-26 13:35:49.042 31726 32532 D CHAT_RENDER: FRAME 117.3ms: input 0.0 animation 13.4 layout 0.1 draw 2.3 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 93.4
+11-26 13:35:49.050 31726 32532 D CHAT_RENDER: FRAME 18.2ms: input 0.0 animation 1.4 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.1 swap 2.6 delay 10.7
+11-26 13:35:49.058 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 8.7 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 2.0
+11-26 13:35:49.073 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.3ms | rows 1 (1 new, 0 again) 2.7ms :: USER new 2.7ms (64 chars)
+11-26 13:35:49.085 31726 32532 D CHAT_RENDER: FRAME 23.4ms: input 0.0 animation 13.8 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 4.5
+11-26 13:35:49.092 31726 32532 D CHAT_RENDER: FRAME 19.5ms: input 0.0 animation 1.3 layout 0.1 draw 1.1 sync 0.1 gpu-cmd 1.5 swap 0.5 delay 13.6
+11-26 13:35:49.108 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 12.3ms | rows 1 (1 new, 0 again) 2.6ms :: FOOTER new 2.6ms (2458 chars)
+11-26 13:35:49.117 31726 32532 D CHAT_RENDER: FRAME 22.9ms: input 0.0 animation 15.5 layout 0.1 draw 2.5 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 1.5
+11-26 13:35:49.119 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.1ms | rows 1 (1 new, 0 again) 1.2ms :: Paragraph new 1.2ms (21 chars)
+11-26 13:35:49.125 31726 32532 D CHAT_RENDER: FRAME 27.6ms: input 0.0 animation 8.3 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 14.8
+11-26 13:35:49.137 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.1ms | rows 1 (1 new, 0 again) 2.5ms :: Tool:BASH new 2.5ms (4 chars)
+11-26 13:35:49.141 31726 32532 D CHAT_RENDER: FRAME 29.1ms: input 0.0 animation 13.4 layout 0.1 draw 2.6 sync 0.2 gpu-cmd 1.8 swap 0.6 delay 9.1
+11-26 13:35:49.159 31726 32532 D CHAT_RENDER: FRAME 23.7ms: input 0.0 animation 8.6 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 10.7
+11-26 13:35:49.167 31726 32532 D CHAT_RENDER: FRAME 13.7ms: input 0.0 animation 1.2 layout 0.1 draw 1.1 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 8.3
+11-26 13:35:49.189 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.8ms | rows 1 (1 new, 0 again) 2.6ms :: AgentThought new 2.6ms (2098 chars)
+11-26 13:35:49.201 31726 32532 D CHAT_RENDER: FRAME 22.3ms: input 0.0 animation 13.1 layout 0.1 draw 2.6 sync 0.3 gpu-cmd 1.4 swap 0.6 delay 2.8
+11-26 13:35:49.203 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.7ms | rows 1 (1 new, 0 again) 1.9ms :: USER new 1.9ms (138 chars)
+11-26 13:35:49.209 31726 32532 D CHAT_RENDER: FRAME 27.2ms: input 0.0 animation 9.9 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 12.5
+11-26 13:35:49.217 31726 32532 D CHAT_RENDER: FRAME 17.1ms: input 0.0 animation 3.6 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.5 swap 0.4 delay 9.5
+11-26 13:35:49.270 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 15.4ms
+11-26 13:35:49.277 31726 32532 D CHAT_RENDER: FRAME 27.9ms: input 0.0 animation 18.9 layout 0.1 draw 2.5 sync 0.3 gpu-cmd 1.7 swap 0.7 delay 1.8
+11-26 13:35:49.284 31726 32532 D CHAT_RENDER: FRAME 25.4ms: input 0.0 animation 3.2 layout 0.1 draw 0.2 sync 0.2 gpu-cmd 1.4 swap 0.4 delay 18.5
+11-26 13:35:49.301 31726 32532 D CHAT_RENDER: FRAME 15.8ms: input 0.0 animation 7.8 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 3.2
+11-26 13:35:49.347 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.1ms | rows 1 (1 new, 0 again) 2.3ms :: Bullet new 2.3ms (115 chars)
+11-26 13:35:49.359 31726 32532 D CHAT_RENDER: FRAME 21.2ms: input 0.0 animation 13.1 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.8 swap 0.6 delay 2.5
+11-26 13:35:49.368 31726 32532 D CHAT_RENDER: FRAME 17.5ms: input 0.0 animation 1.3 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 11.4
+11-26 13:35:49.376 31726 32532 D CHAT_RENDER: FRAME 16.0ms: input 0.0 animation 9.2 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 2.1
+11-26 13:35:49.406 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.4ms | rows 1 (1 new, 0 again) 3.0ms :: Bullet new 3.0ms (53 chars)
+11-26 13:35:49.417 31726 32532 D CHAT_RENDER: FRAME 22.8ms: input 0.0 animation 15.1 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 2.5
+11-26 13:35:49.420 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.0ms | rows 1 (1 new, 0 again) 1.6ms :: Paragraph new 1.6ms (126 chars)
+11-26 13:35:49.426 31726 32532 D CHAT_RENDER: FRAME 25.2ms: input 0.0 animation 8.8 layout 0.1 draw 0.7 sync 0.3 gpu-cmd 1.0 swap 0.4 delay 12.5
+11-26 13:35:49.435 31726 32532 D CHAT_RENDER: FRAME 16.8ms: input 0.0 animation 4.0 layout 0.1 draw 0.4 sync 0.3 gpu-cmd 1.1 swap 0.4 delay 9.1
+11-26 13:35:49.472 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.3ms | rows 1 (1 new, 0 again) 2.6ms :: Paragraph new 2.6ms (429 chars)
+11-26 13:35:49.484 31726 32532 D CHAT_RENDER: FRAME 21.2ms: input 0.0 animation 12.7 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 2.8
+11-26 13:35:49.493 31726 32532 D CHAT_RENDER: FRAME 18.6ms: input 0.0 animation 3.3 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 11.6
+11-26 13:35:49.526 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:49.534 31726 32532 D CHAT_RENDER: FRAME 24.8ms: input 0.0 animation 11.4 layout 0.4 draw 5.1 sync 0.3 gpu-cmd 1.6 swap 0.6 delay 3.8
+11-26 13:35:49.543 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 1.7 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 15.7
+11-26 13:35:49.609 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 0.0 animation 4.4 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 4.0
+11-26 13:35:49.617 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 1.7 layout 0.1 draw 1.8 sync 0.3 gpu-cmd 1.6 swap 0.5 delay 6.2
+11-26 13:35:49.643 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 4.9ms
+11-26 13:35:49.643 31726 32532 D CHAT_RENDER: FRAME 19.5ms: input 0.0 animation 8.9 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.8 swap 1.3 delay 3.8
+11-26 13:35:49.660 31726 31726 D CHAT_RENDER: SLOW MAIN 8.4ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:49.708 31726 32531 D CHAT_RENDER: STALL 45ms (sample 1): RemoteViews$BaseReflectionAction.getUniqueKey:2843 < RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViewsCompat.setLinearLayoutGravity:932 < RemoteViewsTranslatorKt.translateEmittableRow:337 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450
+11-26 13:35:49.743 31726 31726 D CHAT_RENDER: SLOW MAIN 81.6ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:49.749 31726 31726 D CHAT_RENDER: JANK 100.2ms = 12.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 81.6ms kt:179, 8.4ms kt:179
+11-26 13:35:49.768 31726 32532 D CHAT_RENDER: FRAME 110.2ms: input 0.0 animation 6.1 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 2.0 swap 0.5 delay 96.2
+11-26 13:35:49.785 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 8.5 layout 0.1 draw 0.7 sync 0.1 gpu-cmd 1.4 swap 0.6 delay 1.3
+11-26 13:35:49.841 31726 32531 D CHAT_RENDER: STALL 43ms (sample 1): RectListKt.getEverythingButLastChildOffset:852 < RectList.insert:1125 < RectList.insertBasedOnParentOffset:242 < RectManager.recalculateRectIfDirty:300 < MeasurePassDelegate.markNodeAndSubtreeAsPlaced:300 < MeasurePassDelegate.onNodePlaced$androidx_compose_ui_ui:384 < InnerNodeCoordinator.onAfterPlaceAt:166 < InnerNodeCoordinator.placeAt-f8xVGno:155 < Placeable.access$placeAt-f8xVGno:36 < Placeable$PlacementScope.placeRelative:612 < Placeable$PlacementScope.placeRelative$default:231 < SizeNode.measure_3p2s80s$lambda$1:887 < SizeNode$$ExternalSyntheticLambda0.invoke:0 < LookaheadCapablePlaceable$layout$1.placeChildren:277 || app: BouncyOverscrollEffect$node$1.measure_3p2s80s$lambda$1:277 < BouncyOverscrollEffect$node$1$$ExternalSyntheticLambda0.invoke:0 < ChatRenderTrace.listModifier_delegate$lambda$0$0$0:316 < ChatRenderTrace.$r8$lambda$w0_Nvva6IexCZ122G2JQs4RSoec:0 < ChatRenderTrace$$ExternalSyntheticLambda5.invoke:0 < BouncyOverscrollEffect.applyToScroll-Rhakbz0:158
+11-26 13:35:49.842 31726 31726 D CHAT_RENDER: JANK 50.1ms = 6.0 frames: scrolling generating paced | list measure 39.4ms
+11-26 13:35:49.852 31726 32532 D CHAT_RENDER: FRAME 56.2ms: input 0.0 animation 47.0 layout 0.1 draw 4.1 sync 0.1 gpu-cmd 1.4 swap 0.5 delay 1.7
+11-26 13:35:49.860 31726 32532 D CHAT_RENDER: FRAME 55.3ms: input 0.0 animation 3.3 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 1.5 swap 0.5 delay 47.8
+11-26 13:35:49.885 31726 32532 D CHAT_RENDER: FRAME 13.4ms: input 0.0 animation 4.4 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.8 swap 0.5 delay 4.3
+11-26 13:35:49.910 31726 32532 D CHAT_RENDER: FRAME 14.0ms: input 0.0 animation 7.5 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 2.1
+11-26 13:35:49.918 31726 32532 D CHAT_RENDER: FRAME 14.5ms: input 0.0 animation 4.4 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 5.8
+11-26 13:35:49.927 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 0.0 animation 1.3 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 6.6
+11-26 13:35:49.931 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.1ms | rows 1 (1 new, 0 again) 2.3ms :: Paragraph new 2.3ms (89 chars)
+11-26 13:35:49.936 31726 32532 D CHAT_RENDER: FRAME 21.0ms: input 0.0 animation 12.1 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 3.6
+11-26 13:35:49.944 31726 32532 D CHAT_RENDER: FRAME 18.2ms: input 0.0 animation 1.3 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 11.5
+11-26 13:35:49.954 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.2ms | rows 1 (1 new, 0 again) 1.9ms :: StepGroup(2) new 1.9ms (0 chars)
+11-26 13:35:49.960 31726 32532 D CHAT_RENDER: FRAME 19.3ms: input 0.0 animation 11.2 layout 0.1 draw 2.9 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 1.7
+11-26 13:35:49.968 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 1.1 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 9.4
+11-26 13:35:50.031 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.2ms
+11-26 13:35:50.044 31726 32532 D CHAT_RENDER: FRAME 21.3ms: input 0.0 animation 12.7 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.6 swap 0.7 delay 2.7
+11-26 13:35:50.052 31726 32532 D CHAT_RENDER: FRAME 17.7ms: input 0.0 animation 1.2 layout 0.1 draw 1.1 sync 0.1 gpu-cmd 1.5 swap 0.5 delay 11.4
+11-26 13:35:50.117 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:50.127 31726 32532 D CHAT_RENDER: FRAME 21.5ms: input 0.0 animation 6.5 layout 0.5 draw 7.8 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 2.9
+11-26 13:35:50.135 31726 32532 D CHAT_RENDER: FRAME 20.7ms: input 0.0 animation 2.0 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 13.8
+11-26 13:35:50.143 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.0ms | rows 1 (1 new, 0 again) 2.3ms :: StepGroup(2) new 2.3ms (0 chars)
+11-26 13:35:50.152 31726 32532 D CHAT_RENDER: FRAME 24.7ms: input 0.0 animation 13.7 layout 0.1 draw 2.0 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 5.2
+11-26 13:35:50.161 31726 32532 D CHAT_RENDER: FRAME 22.2ms: input 0.0 animation 3.2 layout 0.1 draw 0.0 sync 0.1 gpu-cmd 1.4 swap 0.5 delay 15.2
+11-26 13:35:50.190 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.8ms | rows 1 (1 new, 0 again) 2.8ms :: Paragraph new 2.8ms (154 chars)
+11-26 13:35:50.202 31726 32532 D CHAT_RENDER: FRAME 21.8ms: input 0.0 animation 14.1 layout 0.1 draw 1.0 sync 0.4 gpu-cmd 2.0 swap 0.7 delay 1.8
+11-26 13:35:50.210 31726 32532 D CHAT_RENDER: FRAME 19.7ms: input 0.0 animation 3.9 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.6 swap 0.8 delay 11.3
+11-26 13:35:50.244 31726 32532 D CHAT_RENDER: FRAME 12.5ms: input 0.0 animation 2.2 layout 0.1 draw 2.1 sync 0.5 gpu-cmd 1.7 swap 0.6 delay 3.4
+11-26 13:35:50.277 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 7.1 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 2.1
+11-26 13:35:50.286 31726 32532 D CHAT_RENDER: FRAME 14.7ms: input 0.0 animation 5.4 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 5.0
+11-26 13:35:50.294 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 0.0 animation 1.6 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 5.1
+11-26 13:35:50.354 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.8ms
+11-26 13:35:50.361 31726 32532 D CHAT_RENDER: FRAME 19.4ms: input 0.0 animation 10.8 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 3.1
+11-26 13:35:50.369 31726 32532 D CHAT_RENDER: FRAME 16.2ms: input 0.0 animation 3.4 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 8.8
+11-26 13:35:50.505 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:50.511 31726 32532 D CHAT_RENDER: FRAME 14.3ms: input 0.0 animation 0.4 layout 0.1 draw 1.6 sync 0.3 gpu-cmd 1.5 swap 0.6 delay 8.2
+11-26 13:35:50.519 31726 31726 D CHAT_RENDER: SLOW MAIN 8.1ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:50.572 31726 32531 D CHAT_RENDER: STALL 49ms (sample 1): Connector$Companion$identity$1.transformToColor-l2rxGTc$androidx_compose_ui_ui_graphics:307 < Color.convert-vNxB06k:136 < ColorKt.toArgb-8_81llA:661 < TextTranslatorKt.setText:135 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227 < RemoteViewsTranslatorKt.setChildren:450
+11-26 13:35:50.601 31726 31726 D CHAT_RENDER: SLOW MAIN 81.0ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:50.605 31726 31726 D CHAT_RENDER: JANK 100.2ms = 12.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 81.0ms kt:179, 8.1ms kt:179
+11-26 13:35:50.622 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 1.1ms
+11-26 13:35:50.629 31726 32532 D CHAT_RENDER: FRAME 110.8ms: input 0.0 animation 8.2 layout 0.1 draw 5.3 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 93.0
+11-26 13:35:50.636 31726 32532 D CHAT_RENDER: FRAME 18.0ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.3 gpu-cmd 1.5 swap 0.5 delay 9.6
+11-26 13:35:50.670 31726 32532 D CHAT_RENDER: FRAME 21.1ms: input 0.0 animation 13.2 layout 0.5 draw 0.2 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 2.9
+11-26 13:35:50.672 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 1.2ms
+11-26 13:35:50.688 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.5ms | rows 1 (0 new, 1 again) 2.2ms | GC 1x 35ms :: Paragraph 2.2ms (83 chars)
+11-26 13:35:50.695 31726 32532 D CHAT_RENDER: FRAME 35.6ms: input 0.0 animation 12.5 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 18.0
+11-26 13:35:50.711 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 8.6 layout 0.1 draw 1.0 sync 0.1 gpu-cmd 1.3 swap 0.6 delay 9.1
+11-26 13:35:50.728 31726 32532 D CHAT_RENDER: FRAME 14.1ms: input 0.0 animation 4.6 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 4.9
+11-26 13:35:50.736 31726 32532 D CHAT_RENDER: FRAME 14.3ms: input 0.0 animation 2.0 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 6.1
+11-26 13:35:50.746 31726 32532 D CHAT_RENDER: FRAME 14.9ms: input 0.0 animation 4.5 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 5.5
+11-26 13:35:50.753 31726 32532 D CHAT_RENDER: FRAME 13.6ms: input 0.0 animation 4.1 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 5.1
+11-26 13:35:50.760 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.1ms | rows 1 (0 new, 1 again) 2.1ms :: Paragraph 2.1ms (429 chars)
+11-26 13:35:50.769 31726 32532 D CHAT_RENDER: FRAME 24.9ms: input 0.0 animation 13.2 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 6.0
+11-26 13:35:50.778 31726 32532 D CHAT_RENDER: FRAME 22.0ms: input 0.0 animation 3.4 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 14.2
+11-26 13:35:50.803 31726 32532 D CHAT_RENDER: FRAME 14.5ms: input 0.0 animation 5.1 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 4.4
+11-26 13:35:50.831 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.8ms | rows 1 (0 new, 1 again) 2.3ms :: Paragraph 2.3ms (126 chars)
+11-26 13:35:50.837 31726 32532 D CHAT_RENDER: FRAME 20.8ms: input 0.0 animation 12.8 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 3.1
+11-26 13:35:50.845 31726 32532 D CHAT_RENDER: FRAME 17.8ms: input 0.0 animation 3.0 layout 0.1 draw 0.3 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 9.9
+11-26 13:35:50.882 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 8.9ms
+11-26 13:35:50.887 31726 32532 D CHAT_RENDER: FRAME 23.4ms: input 0.0 animation 14.1 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.6 swap 0.9 delay 3.6
+11-26 13:35:50.941 31726 32531 D CHAT_RENDER: STALL 40ms (sample 1): RemoteViews$BaseReflectionAction.getUniqueKey:2843 < RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViews.setImageViewResource:6835 < ImageTranslatorKt.translateEmittableImage:62 < RemoteViewsTranslatorKt.translateChild:237 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315 < RemoteViewsTranslatorKt.translateChild:224 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227 < RemoteViewsTranslatorKt.setChildren:450
+11-26 13:35:50.983 31726 31726 D CHAT_RENDER: SLOW MAIN 83.3ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:50.996 31726 31726 D CHAT_RENDER: JANK 91.8ms = 11.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 83.3ms kt:179
+11-26 13:35:51.011 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.4ms | rows 1 (0 new, 1 again) 1.3ms :: Paragraph 1.3ms (83 chars)
+11-26 13:35:51.021 31726 32532 D CHAT_RENDER: FRAME 110.4ms: input 0.0 animation 11.2 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.0 swap 0.5 delay 91.0
+11-26 13:35:51.028 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.5ms | rows 1 (0 new, 1 again) 1.8ms :: Paragraph 1.8ms (89 chars)
+11-26 13:35:51.038 31726 32532 D CHAT_RENDER: FRAME 31.8ms: input 0.0 animation 12.2 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 14.1
+11-26 13:35:51.043 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.9ms | rows 1 (0 new, 1 again) 1.5ms :: StepGroup(2) 1.5ms (0 chars)
+11-26 13:35:51.054 31726 32532 D CHAT_RENDER: FRAME 31.7ms: input 0.0 animation 9.8 layout 0.1 draw 3.1 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 14.9
+11-26 13:35:51.062 31726 32532 D CHAT_RENDER: FRAME 24.7ms: input 0.0 animation 7.4 layout 0.1 draw 0.7 sync 0.1 gpu-cmd 1.3 swap 0.4 delay 13.1
+11-26 13:35:51.103 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 0.0 animation 5.1 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 3.4
+11-26 13:35:51.121 31726 32532 D CHAT_RENDER: FRAME 17.4ms: input 0.0 animation 10.9 layout 0.1 draw 1.0 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 1.6
+11-26 13:35:51.128 31726 32532 D CHAT_RENDER: FRAME 13.7ms: input 0.0 animation 2.7 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 7.2
+11-26 13:35:51.166 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.3ms | rows 1 (0 new, 1 again) 2.2ms :: StepGroup(2) 2.2ms (0 chars)
+11-26 13:35:51.171 31726 32532 D CHAT_RENDER: FRAME 20.2ms: input 0.0 animation 11.9 layout 0.1 draw 2.2 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 2.2
+11-26 13:35:51.179 31726 32532 D CHAT_RENDER: FRAME 17.2ms: input 0.0 animation 1.2 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 11.2
+11-26 13:35:51.195 31726 32532 D CHAT_RENDER: FRAME 13.3ms: input 0.0 animation 6.6 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 1.9
+11-26 13:35:51.204 31726 32532 D CHAT_RENDER: FRAME 14.4ms: input 0.0 animation 4.2 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 6.3
+11-26 13:35:51.207 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:51.213 31726 32532 D CHAT_RENDER: FRAME 14.4ms: input 0.0 animation 1.5 layout 0.1 draw 1.6 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 7.6
+11-26 13:35:51.221 31726 32532 D CHAT_RENDER: FRAME 17.2ms: input 0.0 animation 2.0 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.1 swap 0.4 delay 9.7
+11-26 13:35:51.233 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.4ms | rows 1 (0 new, 1 again) 2.2ms :: StepGroup(10) 2.2ms (0 chars)
+11-26 13:35:51.238 31726 32532 D CHAT_RENDER: FRAME 20.9ms: input 0.0 animation 11.6 layout 0.1 draw 2.0 sync 0.3 gpu-cmd 1.4 swap 0.6 delay 3.5
+11-26 13:35:51.246 31726 32532 D CHAT_RENDER: FRAME 18.9ms: input 0.0 animation 3.4 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 11.2
+11-26 13:35:51.286 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:51.288 31726 32532 D CHAT_RENDER: FRAME 12.9ms: input 0.0 animation 1.9 layout 0.1 draw 2.6 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 4.5
+11-26 13:35:51.300 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:51.304 31726 32532 D CHAT_RENDER: FRAME 28.0ms: input 0.0 animation 9.0 layout 0.2 draw 3.3 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 11.7
+11-26 13:35:51.321 31726 32532 D CHAT_RENDER: FRAME 21.5ms: input 0.0 animation 5.7 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 11.4
+11-26 13:35:51.346 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.6ms | rows 1 (0 new, 1 again) 2.5ms :: StepGroup(6) 2.5ms (0 chars)
+11-26 13:35:51.354 31726 32532 D CHAT_RENDER: FRAME 23.2ms: input 0.0 animation 14.6 layout 0.1 draw 2.0 sync 0.3 gpu-cmd 1.7 swap 1.6 delay 2.5
+11-26 13:35:51.362 31726 32532 D CHAT_RENDER: FRAME 23.8ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 15.9
+11-26 13:35:51.371 31726 32532 D CHAT_RENDER: FRAME 14.0ms: input 0.0 animation 1.6 layout 0.1 draw 2.1 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 6.3
+11-26 13:35:51.380 31726 32532 D CHAT_RENDER: FRAME 13.0ms: input 0.0 animation 1.7 layout 0.1 draw 2.1 sync 0.3 gpu-cmd 1.6 swap 0.6 delay 5.1
+11-26 13:35:51.397 31726 32532 D CHAT_RENDER: FRAME 17.1ms: input 0.0 animation 10.5 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 1.6
+11-26 13:35:51.398 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.7ms
+11-26 13:35:51.405 31726 32532 D CHAT_RENDER: FRAME 15.5ms: input 0.0 animation 2.8 layout 0.1 draw 0.1 sync 0.1 gpu-cmd 2.0 swap 0.5 delay 8.3
+11-26 13:35:51.459 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 9.4ms (messages) | list measure 0.0ms
+11-26 13:35:51.472 31726 32532 D CHAT_RENDER: FRAME 22.1ms: input 0.0 animation 11.8 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 4.1
+11-26 13:35:51.479 31726 32532 D CHAT_RENDER: FRAME 20.4ms: input 0.0 animation 3.4 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 12.1
+11-26 13:35:51.504 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | SCREEN 1x 20.6ms (rows) | list measure 0.7ms | rows 10 (0 new, 10 again) 0.6ms :: Paragraph 0.2ms (154 chars) | Paragraph 0.1ms (119 chars) | Paragraph 0.1ms (196 chars) | Paragraph 0.1ms (185 chars) | USER 0.0ms (144 chars)
+11-26 13:35:51.513 31726 32532 D CHAT_RENDER: FRAME 31.4ms: input 0.0 animation 22.7 layout 0.1 draw 3.3 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 1.1
+11-26 13:35:51.521 31726 32532 D CHAT_RENDER: FRAME 30.8ms: input 0.0 animation 2.7 layout 0.1 draw 1.0 sync 0.1 gpu-cmd 1.8 swap 0.6 delay 22.7
+11-26 13:35:51.567 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 14.3ms
+11-26 13:35:51.572 31726 32532 D CHAT_RENDER: FRAME 28.3ms: input 0.0 animation 17.7 layout 0.1 draw 2.8 sync 0.4 gpu-cmd 1.2 swap 0.5 delay 3.0
+11-26 13:35:51.582 31726 32532 D CHAT_RENDER: FRAME 28.0ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 19.8
+11-26 13:35:51.622 31726 32532 D CHAT_RENDER: FRAME 13.3ms: input 0.0 animation 0.3 layout 0.1 draw 1.3 sync 0.3 gpu-cmd 1.5 swap 0.5 delay 7.6
+11-26 13:35:51.670 31726 32531 D CHAT_RENDER: STALL 45ms (sample 1): RemoteViews.replaceAction:10675 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViewsCompat.setTextViewMaxLines:2567 < TextTranslatorKt.setText:81 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227
+11-26 13:35:51.703 31726 31726 D CHAT_RENDER: SLOW MAIN 80.9ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:51.715 31726 31726 D CHAT_RENDER: JANK 100.2ms = 12.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 80.9ms kt:179
+11-26 13:35:51.741 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | SCREEN 1x 5.9ms (messages) | msgs +1 (1 held) | list measure 8.7ms | rows 1 (1 new, 0 again) 1.9ms :: StepGroup(3) new 1.9ms (0 chars)
+11-26 13:35:51.746 31726 32532 D CHAT_RENDER: FRAME 119.7ms: input 0.0 animation 20.4 layout 0.1 draw 2.2 sync 0.2 gpu-cmd 2.1 swap 0.7 delay 92.3
+11-26 13:35:51.763 31726 32532 D CHAT_RENDER: FRAME 31.1ms: input 0.0 animation 8.8 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.4 swap 1.0 delay 17.7
+11-26 13:35:51.792 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: scrolling generating paced | SCREEN 1x 20.2ms (rows) | list measure 6.3ms | rows 13 (1 new, 12 again) 2.3ms :: AgentThought new 1.6ms (534 chars) | Paragraph 0.1ms (154 chars) | Paragraph 0.1ms (196 chars) | Paragraph 0.1ms (185 chars) | Paragraph 0.1ms (73 chars)
+11-26 13:35:51.796 31726 32532 D CHAT_RENDER: FRAME 44.9ms: input 0.0 animation 29.2 layout 0.1 draw 5.3 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 5.8
+11-26 13:35:51.807 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.7ms | rows 1 (1 new, 0 again) 1.7ms :: USER new 1.7ms (83 chars)
+11-26 13:35:51.813 31726 32532 D CHAT_RENDER: FRAME 52.9ms: input 0.0 animation 11.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 36.0
+11-26 13:35:51.828 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.8ms | rows 1 (1 new, 0 again) 2.2ms :: FOOTER new 2.2ms (10912 chars)
+11-26 13:35:51.830 31726 32532 D CHAT_RENDER: FRAME 29.5ms: input 0.0 animation 14.3 layout 0.1 draw 2.3 sync 0.4 gpu-cmd 1.1 swap 0.4 delay 9.3
+11-26 13:35:51.839 31726 32532 D CHAT_RENDER: FRAME 19.8ms: input 0.0 animation 1.5 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 13.0
+11-26 13:35:51.857 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 5.9ms | rows 1 (1 new, 0 again) 1.3ms :: Paragraph new 1.3ms (24 chars)
+11-26 13:35:51.864 31726 32532 D CHAT_RENDER: FRAME 23.2ms: input 0.0 animation 14.1 layout 0.3 draw 3.3 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 0.9
+11-26 13:35:51.880 31726 32532 D CHAT_RENDER: FRAME 34.8ms: input 0.0 animation 13.1 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 17.0
+11-26 13:35:51.888 31726 32532 D CHAT_RENDER: FRAME 14.2ms: input 0.0 animation 2.4 layout 0.0 draw 0.3 sync 0.1 gpu-cmd 1.6 swap 0.4 delay 7.6
+11-26 13:35:51.896 31726 32532 D CHAT_RENDER: FRAME 18.1ms: input 0.0 animation 8.8 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.9 swap 0.6 delay 3.9
+11-26 13:35:51.905 31726 32532 D CHAT_RENDER: FRAME 14.0ms: input 0.0 animation 1.0 layout 0.1 draw 1.1 sync 0.1 gpu-cmd 1.7 swap 0.5 delay 7.7
+11-26 13:35:51.913 31726 32532 D CHAT_RENDER: FRAME 17.5ms: input 0.0 animation 8.5 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.7 swap 0.5 delay 3.6
+11-26 13:35:51.922 31726 32532 D CHAT_RENDER: FRAME 13.2ms: input 0.0 animation 2.9 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 1.0 swap 0.4 delay 6.8
+11-26 13:35:51.939 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 9.1 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 1.4
+11-26 13:35:51.947 31726 32532 D CHAT_RENDER: FRAME 15.5ms: input 0.0 animation 5.0 layout 0.1 draw 0.6 sync 0.3 gpu-cmd 1.6 swap 0.6 delay 5.7
+11-26 13:35:51.955 31726 32532 D CHAT_RENDER: FRAME 13.4ms: input 0.0 animation 1.5 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 6.2
+11-26 13:35:51.960 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.9ms | rows 1 (1 new, 0 again) 2.6ms :: Bullet new 2.6ms (120 chars)
+11-26 13:35:51.974 31726 32532 D CHAT_RENDER: FRAME 22.0ms: input 0.0 animation 13.5 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 3.7
+11-26 13:35:51.982 31726 32532 D CHAT_RENDER: FRAME 19.2ms: input 0.0 animation 3.3 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 12.2
+11-26 13:35:51.988 31726 32532 D CHAT_RENDER: FRAME 14.7ms: input 0.0 animation 7.3 layout 0.1 draw 1.4 sync 0.2 gpu-cmd 1.6 swap 1.1 delay 1.7
+11-26 13:35:51.997 31726 32532 D CHAT_RENDER: FRAME 13.4ms: input 0.0 animation 3.7 layout 0.1 draw 0.4 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 5.5
+11-26 13:35:52.031 31726 32531 D CHAT_RENDER: STALL 40ms (sample 1): HardwareRenderer.nSyncAndDrawFrame:-2 < HardwareRenderer.syncAndDrawFrame:555 < ThreadedRenderer.draw:852 < ViewRootImpl.draw:6678 < ViewRootImpl.performDraw:6288 < ViewRootImpl.performTraversals:5103 < ViewRootImpl.doTraversal:3519 < ViewRootImpl$TraversalRunnable.run:11951 < Choreographer$CallbackRecord.run:1852 < Choreographer$CallbackRecord.run:1861 < Choreographer.doCallbacks:1373 < Choreographer.doFrame:1230 < Choreographer$FrameDisplayEventReceiver.run:1835 < ActivityThread.main:9964
+11-26 13:35:52.034 31726 31726 D CHAT_RENDER: JANK 50.1ms = 6.0 frames: scrolling generating paced | SCREEN 1x 22.1ms (rows) | list measure 10.0ms | rows 14 (1 new, 13 again) 3.5ms :: Bullet new 2.4ms (96 chars) | Paragraph 0.1ms (24 chars) | Bullet 0.1ms (70 chars) | Paragraph 0.1ms (21 chars) | Bullet 0.1ms (142 chars)
+11-26 13:35:52.039 31726 32532 D CHAT_RENDER: FRAME 52.1ms: input 0.0 animation 36.2 layout 0.2 draw 4.2 sync 0.3 gpu-cmd 1.7 swap 1.2 delay 7.4
+11-26 13:35:52.055 31726 32532 D CHAT_RENDER: FRAME 60.2ms: input 0.0 animation 11.3 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 44.3
+11-26 13:35:52.065 31726 32532 D CHAT_RENDER: FRAME 14.5ms: input 0.0 animation 2.5 layout 0.1 draw 0.3 sync 0.1 gpu-cmd 1.1 swap 0.4 delay 8.4
+11-26 13:35:52.105 31726 32531 D CHAT_RENDER: STALL 45ms (sample 1): ProtobufArrayList.ensureIndexInRange:144 < ProtobufArrayList.get:99 < AbstractProtobufList.equals:61 < SchemaUtil.safeEquals:858 < MessageSchema.equals:921 < MessageSchema.equals:804 < GeneratedMessageLite.equals:160 < AbstractProtobufList.equals:61 < SchemaUtil.safeEquals:858 < MessageSchema.equals:921 < MessageSchema.equals:804 < GeneratedMessageLite.equals:160 < AbstractProtobufList.equals:61 < SchemaUtil.safeEquals:858
+11-26 13:35:52.136 31726 31726 D CHAT_RENDER: SLOW MAIN 79.0ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:52.137 31726 31726 D CHAT_RENDER: JANK 91.8ms = 11.0 frames: scrolling generating paced | list measure 0.6ms | slow main: 79.0ms kt:179
+11-26 13:35:52.171 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | list measure 19.9ms | rows 4 (4 new, 0 again) 5.1ms :: Bullet new 2.0ms (50 chars) | Bullet new 1.2ms (35 chars) | Bullet new 1.0ms (46 chars) | Bullet new 1.0ms (23 chars)
+11-26 13:35:52.173 31726 32532 D CHAT_RENDER: FRAME 114.1ms: input 0.0 animation 24.6 layout 0.1 draw 1.6 sync 0.3 gpu-cmd 1.7 swap 0.6 delay 80.3
+11-26 13:35:52.184 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.4ms | rows 1 (1 new, 0 again) 1.3ms :: Bullet new 1.3ms (18 chars)
+11-26 13:35:52.189 31726 32532 D CHAT_RENDER: FRAME 44.4ms: input 0.0 animation 9.8 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 30.8
+11-26 13:35:52.201 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.6ms | rows 1 (1 new, 0 again) 1.3ms :: Bullet new 1.3ms (17 chars)
+11-26 13:35:52.208 31726 32532 D CHAT_RENDER: FRAME 27.0ms: input 0.0 animation 10.7 layout 0.1 draw 2.3 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 10.8
+11-26 13:35:52.227 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | msgs +1 (1 held) | list measure 6.0ms | rows 1 (1 new, 0 again) 1.7ms :: Paragraph new 1.7ms (84 chars)
+11-26 13:35:52.232 31726 32532 D CHAT_RENDER: FRAME 29.9ms: input 0.0 animation 12.4 layout 0.1 draw 3.4 sync 0.3 gpu-cmd 1.6 swap 0.7 delay 10.3
+11-26 13:35:52.247 31726 32532 D CHAT_RENDER: FRAME 30.3ms: input 1.6 animation 7.0 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.3 swap 0.8 delay 17.9
+11-26 13:35:52.286 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | SCREEN 1x 22.2ms (rows) | list measure 1.1ms | rows 17 (0 new, 17 again) 1.7ms :: Bullet 0.2ms (81 chars) | Numbered 0.1ms (39 chars) | Paragraph 0.1ms (24 chars) | Bullet 0.1ms (50 chars) | Bullet 0.1ms (35 chars)
+11-26 13:35:52.289 31726 32532 D CHAT_RENDER: FRAME 36.1ms: input 1.7 animation 24.9 layout 0.1 draw 4.3 sync 0.3 gpu-cmd 1.6 swap 0.7 delay 1.3
+11-26 13:35:52.302 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.6ms
+11-26 13:35:52.306 31726 32532 D CHAT_RENDER: FRAME 44.8ms: input 2.2 animation 10.9 layout 0.1 draw 0.9 sync 0.3 gpu-cmd 1.4 swap 0.6 delay 26.8
+11-26 13:35:52.319 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.1ms | rows 1 (1 new, 0 again) 1.5ms :: Numbered new 1.5ms (110 chars)
+11-26 13:35:52.322 31726 32532 D CHAT_RENDER: FRAME 24.8ms: input 1.6 animation 9.3 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 9.7
+11-26 13:35:52.330 31726 32532 D CHAT_RENDER: FRAME 19.7ms: input 0.0 animation 3.1 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 0.9 swap 0.4 delay 11.7
+11-26 13:35:52.359 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 10.1ms | rows 1 (1 new, 0 again) 2.8ms :: Numbered new 2.8ms (64 chars)
+11-26 13:35:52.365 31726 32532 D CHAT_RENDER: FRAME 20.4ms: input 0.0 animation 14.0 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 1.3
+11-26 13:35:52.372 31726 32532 D CHAT_RENDER: FRAME 17.1ms: input 0.0 animation 3.6 layout 0.1 draw 0.1 sync 0.1 gpu-cmd 1.3 swap 0.6 delay 10.2
+11-26 13:35:52.389 31726 32532 D CHAT_RENDER: FRAME 14.7ms: input 0.0 animation 9.1 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 1.7
+11-26 13:35:52.407 31726 32532 D CHAT_RENDER: FRAME 14.3ms: input 0.0 animation 7.5 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.0 swap 0.4 delay 3.1
+11-26 13:35:52.414 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 0.0 animation 3.7 layout 0.1 draw 0.5 sync 0.3 gpu-cmd 1.2 swap 0.5 delay 5.3
+11-26 13:35:52.424 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 11.0ms | rows 1 (1 new, 0 again) 3.2ms :: Bullet new 3.2ms (161 chars)
+11-26 13:35:52.431 31726 32532 D CHAT_RENDER: FRAME 25.3ms: input 0.0 animation 15.1 layout 0.1 draw 1.7 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 4.7
+11-26 13:35:52.439 31726 31726 D CHAT_RENDER: SLOW MAIN 9.0ms: Handler (android.view.ViewRootImpl$ViewRootHandler)  androidx.compose.foundation.lazy.layout.AndroidPrefetchScheduler: 0
+11-26 13:35:52.440 31726 32532 D CHAT_RENDER: FRAME 24.3ms: input 0.0 animation 3.5 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 16.9
+11-26 13:35:52.443 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.8ms | rows 1 (1 new, 0 again) 5.2ms | slow main: 9.0ms AndroidPrefetchScheduler: 0 :: Bullet new 5.2ms (131 chars)
+11-26 13:35:52.460 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.6ms | GC 1x 36ms
+11-26 13:35:52.464 31726 32532 D CHAT_RENDER: FRAME 28.8ms: input 0.0 animation 14.0 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.2 swap 0.7 delay 10.8
+11-26 13:35:52.473 31726 32532 D CHAT_RENDER: FRAME 17.0ms: input 0.0 animation 1.1 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 11.4
+11-26 13:35:52.513 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.4ms | rows 1 (1 new, 0 again) 3.3ms :: Bullet new 3.3ms (352 chars)
+11-26 13:35:52.523 31726 32532 D CHAT_RENDER: FRAME 22.4ms: input 0.0 animation 15.6 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 2.3
+11-26 13:35:52.533 31726 32532 D CHAT_RENDER: FRAME 21.0ms: input 0.0 animation 3.3 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 1.1 swap 0.5 delay 14.2
+11-26 13:35:52.590 31726 32532 D CHAT_RENDER: FRAME 14.3ms: input 0.0 animation 2.2 layout 0.1 draw 2.7 sync 0.3 gpu-cmd 1.6 swap 0.7 delay 5.6
+11-26 13:35:52.607 31726 32532 D CHAT_RENDER: FRAME 14.0ms: input 0.0 animation 5.4 layout 0.3 draw 0.7 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 3.9
+11-26 13:35:52.616 31726 32532 D CHAT_RENDER: FRAME 14.4ms: input 0.0 animation 2.3 layout 0.1 draw 2.7 sync 0.2 gpu-cmd 1.6 swap 0.8 delay 5.6
+11-26 13:35:52.648 31726 32532 D CHAT_RENDER: FRAME 16.1ms: input 0.0 animation 8.6 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 2.6
+11-26 13:35:52.656 31726 32532 D CHAT_RENDER: FRAME 14.6ms: input 0.0 animation 3.0 layout 0.1 draw 0.0 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 7.8
+11-26 13:35:52.664 31726 32532 D CHAT_RENDER: FRAME 12.5ms: input 0.0 animation 3.1 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 5.2
+11-26 13:35:52.702 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.6ms
+11-26 13:35:52.707 31726 32532 D CHAT_RENDER: FRAME 19.8ms: input 0.0 animation 13.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 1.3
+11-26 13:35:52.715 31726 32532 D CHAT_RENDER: FRAME 17.9ms: input 0.0 animation 3.7 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 10.4
+11-26 13:35:52.734 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:52.766 31726 31726 D CHAT_RENDER: SLOW MAIN 8.2ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:52.815 31726 32531 D CHAT_RENDER: STALL 46ms (sample 1): RemoteViews$Action.getUniqueKey:757 < RemoteViews$BaseReflectionAction.getUniqueKey:2843 < RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setBoolean:7456 < RemoteViewsCompat.setImageViewAdjustViewBounds:652 < ImageTranslatorKt.translateEmittableImage:86 < RemoteViewsTranslatorKt.translateChild:237 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315 < RemoteViewsTranslatorKt.translateChild:224 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227
+11-26 13:35:52.846 31726 31726 D CHAT_RENDER: SLOW MAIN 79.6ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:52.854 31726 31726 D CHAT_RENDER: JANK 100.2ms = 12.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 79.6ms kt:179, 8.2ms kt:179
+11-26 13:35:52.872 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.0ms | rows 1 (1 new, 0 again) 1.6ms :: Bullet new 1.6ms (86 chars)
+11-26 13:35:52.882 31726 32532 D CHAT_RENDER: FRAME 119.9ms: input 0.0 animation 15.6 layout 0.1 draw 1.5 sync 0.2 gpu-cmd 1.9 swap 0.6 delay 95.5
+11-26 13:35:52.888 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.6ms | rows 1 (1 new, 0 again) 1.6ms :: Bullet new 1.6ms (135 chars)
+11-26 13:35:52.890 31726 32532 D CHAT_RENDER: FRAME 28.5ms: input 0.0 animation 10.2 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.5 swap 0.5 delay 13.8
+11-26 13:35:52.901 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.1ms | rows 1 (1 new, 0 again) 1.8ms :: Bullet new 1.8ms (159 chars)
+11-26 13:35:52.907 31726 32532 D CHAT_RENDER: FRAME 27.9ms: input 0.0 animation 10.3 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.9 swap 0.6 delay 12.8
+11-26 13:35:52.915 31726 32532 D CHAT_RENDER: FRAME 16.4ms: input 0.0 animation 3.2 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.2 swap 0.4 delay 9.6
+11-26 13:35:52.961 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | list measure 17.5ms | GC 1x 29ms
+11-26 13:35:52.966 31726 32532 D CHAT_RENDER: FRAME 34.3ms: input 0.0 animation 25.3 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.0 swap 0.4 delay 3.8
+11-26 13:35:52.977 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.8ms | rows 1 (1 new, 0 again) 2.0ms :: Bullet new 2.0ms (103 chars)
+11-26 13:35:52.982 31726 32532 D CHAT_RENDER: FRAME 43.4ms: input 0.0 animation 11.3 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 27.3
+11-26 13:35:52.999 31726 32532 D CHAT_RENDER: FRAME 22.6ms: input 0.0 animation 8.3 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 10.1
+11-26 13:35:53.007 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 1.7 layout 0.1 draw 1.9 sync 0.1 gpu-cmd 1.3 swap 0.9 delay 8.1
+11-26 13:35:53.017 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.7ms | rows 1 (1 new, 0 again) 2.7ms :: Paragraph new 2.7ms (146 chars)
+11-26 13:35:53.024 31726 32532 D CHAT_RENDER: FRAME 26.3ms: input 0.0 animation 13.8 layout 0.1 draw 0.8 sync 0.2 gpu-cmd 1.5 swap 0.7 delay 7.6
+11-26 13:35:53.027 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:53.032 31726 32532 D CHAT_RENDER: FRAME 22.4ms: input 0.0 animation 1.3 layout 0.1 draw 1.2 sync 0.1 gpu-cmd 1.2 swap 0.5 delay 16.6
+11-26 13:35:53.049 31726 32532 D CHAT_RENDER: FRAME 13.9ms: input 0.0 animation 8.2 layout 0.1 draw 0.8 sync 0.3 gpu-cmd 1.1 swap 0.5 delay 1.5
+11-26 13:35:53.083 31726 32531 D CHAT_RENDER: STALL 42ms (sample 1): SpannableStringInternal.getSpans:407 < SpannableString.getSpans:24 < SpannableStringInternal.sendSpanAdded:448 < SpannableStringInternal.setSpan:259 < SpannableStringInternal.setSpan:187 < SpannableString.setSpan:61 < TextTranslatorKt.setText:131 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450
+11-26 13:35:53.116 31726 31726 D CHAT_RENDER: SLOW MAIN 77.4ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:53.118 31726 31726 D CHAT_RENDER: JANK 91.8ms = 11.0 frames: scrolling generating paced | list measure 5.5ms | rows 1 (1 new, 0 again) 1.2ms | slow main: 77.4ms kt:179 :: Paragraph new 1.2ms (163 chars)
+11-26 13:35:53.138 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.8ms | rows 2 (2 new, 0 again) 3.3ms :: StepGroup(2) new 1.8ms (0 chars) | Paragraph new 1.5ms (129 chars)
+11-26 13:35:53.150 31726 32532 D CHAT_RENDER: FRAME 109.5ms: input 0.0 animation 15.9 layout 0.1 draw 1.9 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 84.2
+11-26 13:35:53.156 31726 32532 D CHAT_RENDER: FRAME 18.7ms: input 0.0 animation 1.2 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.2 swap 1.2 delay 12.7
+11-26 13:35:53.191 31726 32532 D CHAT_RENDER: FRAME 16.4ms: input 0.0 animation 7.9 layout 0.1 draw 1.6 sync 0.4 gpu-cmd 1.5 swap 0.5 delay 2.6
+11-26 13:35:53.199 31726 32532 D CHAT_RENDER: FRAME 16.2ms: input 0.0 animation 4.3 layout 0.1 draw 0.1 sync 0.3 gpu-cmd 1.7 swap 0.5 delay 7.9
+11-26 13:35:53.209 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 4.1 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.6 swap 1.0 delay 6.8
+11-26 13:35:53.272 31726 32531 D CHAT_RENDER: STALL 47ms (sample 1): FontWeight.equals-impl0:5 < TextTranslatorKt.setText:113 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315 < RemoteViewsTranslatorKt.translateChild:224 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315 < RemoteViewsTranslatorKt.translateChild:224
+11-26 13:35:53.303 31726 31726 D CHAT_RENDER: SLOW MAIN 83.3ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:53.313 31726 31726 D CHAT_RENDER: JANK 91.8ms = 11.0 frames: scrolling generating paced | list measure 0.0ms | GC 1x 39ms | slow main: 83.3ms kt:179
+11-26 13:35:53.331 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.3ms | rows 1 (1 new, 0 again) 1.4ms :: StepGroup(2) new 1.4ms (0 chars)
+11-26 13:35:53.342 31726 32532 D CHAT_RENDER: FRAME 109.6ms: input 2.4 animation 12.4 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.8 swap 0.6 delay 84.7
+11-26 13:35:53.350 31726 32532 D CHAT_RENDER: FRAME 24.6ms: input 0.0 animation 6.7 layout 0.1 draw 0.4 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 13.9
+11-26 13:35:53.357 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.5ms | rows 1 (1 new, 0 again) 1.3ms :: Paragraph new 1.3ms (265 chars)
+11-26 13:35:53.366 31726 32532 D CHAT_RENDER: FRAME 22.0ms: input 0.0 animation 9.6 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 8.0
+11-26 13:35:53.376 31726 32532 D CHAT_RENDER: FRAME 20.5ms: input 0.0 animation 1.2 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 14.8
+11-26 13:35:53.437 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 9.9ms | rows 1 (1 new, 0 again) 3.2ms :: AgentThought new 3.2ms (4879 chars)
+11-26 13:35:53.442 31726 32532 D CHAT_RENDER: FRAME 25.9ms: input 0.0 animation 16.3 layout 0.1 draw 1.9 sync 0.5 gpu-cmd 1.1 swap 0.5 delay 3.6
+11-26 13:35:53.449 31726 32532 D CHAT_RENDER: FRAME 27.2ms: input 0.0 animation 3.5 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 19.4
+11-26 13:35:53.460 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.3ms | rows 1 (1 new, 0 again) 1.7ms :: USER new 1.7ms (175 chars)
+11-26 13:35:53.466 31726 32532 D CHAT_RENDER: FRAME 17.6ms: input 0.0 animation 10.7 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 2.5
+11-26 13:35:53.475 31726 32532 D CHAT_RENDER: FRAME 15.5ms: input 0.0 animation 2.7 layout 0.1 draw 0.3 sync 0.2 gpu-cmd 1.4 swap 0.7 delay 9.0
+11-26 13:35:53.509 31726 32532 D CHAT_RENDER: FRAME 14.5ms: input 0.0 animation 6.7 layout 0.1 draw 0.6 sync 0.3 gpu-cmd 1.6 swap 0.6 delay 3.5
+11-26 13:35:53.517 31726 32532 D CHAT_RENDER: FRAME 14.2ms: input 0.0 animation 1.1 layout 0.1 draw 1.1 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 7.9
+11-26 13:35:53.525 31726 32532 D CHAT_RENDER: FRAME 13.1ms: input 0.0 animation 1.3 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.8 swap 0.6 delay 6.6
+11-26 13:35:53.634 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.6ms
+11-26 13:35:53.642 31726 32532 D CHAT_RENDER: FRAME 25.0ms: input 0.0 animation 14.3 layout 0.1 draw 2.4 sync 0.3 gpu-cmd 2.0 swap 0.8 delay 3.3
+11-26 13:35:53.651 31726 32532 D CHAT_RENDER: FRAME 22.7ms: input 0.0 animation 3.4 layout 0.1 draw 0.1 sync 0.1 gpu-cmd 1.1 swap 0.5 delay 16.0
+11-26 13:35:53.680 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:53.683 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 0.7 layout 0.1 draw 2.1 sync 0.2 gpu-cmd 1.6 swap 1.0 delay 8.4
+11-26 13:35:53.736 31726 32531 D CHAT_RENDER: STALL 46ms (sample 1): RemoteViews.replaceAction:10674 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViewsCompat.setLinearLayoutGravity:932 < RemoteViewsTranslatorKt.translateEmittableRow:337 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370 < RemoteViewsTranslatorKt.translateChild:227 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315
+11-26 13:35:53.769 31726 32531 D CHAT_RENDER: STALL 81ms (sample 2): RemoteViews$BaseReflectionAction.writeToParcel:2748 < RemoteViews$ReflectionAction.writeToParcel:2957 < RemoteViews.writeActionsToParcel:9048 < RemoteViews.writeToParcel:9007 < RemoteViews.writeToParcel:8982 < RemoteViews$RemoteCollectionItems.writeToParcel:9699 < RemoteViews$RemoteCollectionItems.-$$Nest$mwriteToParcel:0 < RemoteViews$SetRemoteCollectionItemListAdapterAction.writeToParcel:1310 < RemoteViews.writeActionsToParcel:9048 < RemoteViews.writeToParcel:9007 < RemoteViews.writeToParcel:8982 < AppWidgetManager.lambda$updateAppWidget$5:725 < AppWidgetManager.$r8$lambda$Emo9F9Eo3H92TWufpOrPKUtYf-g:0 < AppWidgetManager$$ExternalSyntheticLambda11.acceptOrThrow:0
+11-26 13:35:53.772 31726 31726 D CHAT_RENDER: SLOW MAIN 86.1ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:53.797 31726 31726 D CHAT_RENDER: SLOW MAIN 20.8ms: Handler (android.os.Handler)  androidx.compose.ui.platform.AndroidUiDispatcher$dispatchCallback$1: 0
+11-26 13:35:53.797 31726 31726 D CHAT_RENDER: JANK 116.9ms = 14.0 frames: scrolling generating paced | list measure 15.8ms | rows 2 (2 new, 0 again) 3.7ms | GC 1x 38ms | slow main: 86.1ms kt:179, 20.8ms AndroidUiDispatcher$dispatchCallback$1: 0 :: USER new 1.9ms (54 chars) | AgentThought new 1.8ms (1352 chars)
+11-26 13:35:53.817 31726 32532 D CHAT_RENDER: FRAME 122.4ms: input 0.0 animation 2.3 layout 0.1 draw 3.6 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 112.4
+11-26 13:35:53.821 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 5.1ms (messages) | list measure 0.0ms
+11-26 13:35:53.825 31726 32532 D CHAT_RENDER: FRAME 19.3ms: input 0.0 animation 6.4 layout 0.1 draw 1.5 sync 0.3 gpu-cmd 1.4 swap 0.5 delay 7.5
+11-26 13:35:53.835 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | built 1x bg 6.8ms | list measure 6.8ms | rows 1 (1 new, 0 again) 1.0ms :: DIVIDER new 1.0ms (0 chars)
+11-26 13:35:53.842 31726 32532 D CHAT_RENDER: FRAME 27.2ms: input 0.0 animation 11.1 layout 0.1 draw 1.6 sync 0.3 gpu-cmd 1.3 swap 0.6 delay 10.6
+11-26 13:35:53.881 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: scrolling generating paced | SCREEN 1x 18.3ms (rows) | list measure 12.2ms | rows 14 (1 new, 13 again) 3.0ms :: FOOTER new 2.3ms (18374 chars) | Paragraph 0.1ms (129 chars) | Paragraph 0.1ms (21 chars) | Paragraph 0.1ms (265 chars) | Paragraph 0.1ms (50 chars)
+11-26 13:35:53.884 31726 32532 D CHAT_RENDER: FRAME 53.9ms: input 0.0 animation 34.0 layout 0.1 draw 5.5 sync 0.5 gpu-cmd 2.0 swap 0.5 delay 8.7
+11-26 13:35:53.899 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 11.4ms | rows 2 (2 new, 0 again) 2.8ms :: Paragraph new 1.6ms (33 chars) | Numbered new 1.2ms (139 chars)
+11-26 13:35:53.908 31726 32532 D CHAT_RENDER: FRAME 58.5ms: input 0.0 animation 15.4 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.5 swap 0.8 delay 37.7
+11-26 13:35:53.912 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 6.2ms | rows 1 (1 new, 0 again) 1.4ms :: Numbered new 1.4ms (77 chars)
+11-26 13:35:53.917 31726 32532 D CHAT_RENDER: FRAME 27.8ms: input 0.0 animation 8.7 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 14.1
+11-26 13:35:53.925 31726 32532 D CHAT_RENDER: FRAME 17.8ms: input 0.0 animation 3.1 layout 0.1 draw 0.4 sync 0.3 gpu-cmd 1.2 swap 0.4 delay 10.5
+11-26 13:35:53.938 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.8ms
+11-26 13:35:53.950 31726 32532 D CHAT_RENDER: FRAME 21.9ms: input 0.0 animation 13.4 layout 0.1 draw 1.3 sync 0.4 gpu-cmd 1.8 swap 0.7 delay 2.4
+11-26 13:35:53.959 31726 32532 D CHAT_RENDER: FRAME 20.4ms: input 0.0 animation 3.7 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 2.2 swap 0.7 delay 11.5
+11-26 13:35:53.961 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 7.0ms | rows 1 (1 new, 0 again) 1.7ms :: Numbered new 1.7ms (74 chars)
+11-26 13:35:53.967 31726 32532 D CHAT_RENDER: FRAME 18.1ms: input 0.0 animation 10.5 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.8 swap 0.7 delay 2.2
+11-26 13:35:53.984 31726 32532 D CHAT_RENDER: FRAME 22.3ms: input 0.0 animation 8.4 layout 0.1 draw 0.7 sync 0.2 gpu-cmd 1.7 swap 0.6 delay 8.7
+11-26 13:35:53.998 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.9ms | rows 1 (1 new, 0 again) 2.3ms :: Bullet new 2.3ms (147 chars)
+11-26 13:35:54.009 31726 32532 D CHAT_RENDER: FRAME 23.1ms: input 0.0 animation 14.3 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 3.4
+11-26 13:35:54.017 31726 32532 D CHAT_RENDER: FRAME 21.7ms: input 0.0 animation 4.1 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.6 swap 0.5 delay 13.1
+11-26 13:35:54.034 31726 32532 D CHAT_RENDER: FRAME 15.0ms: input 0.0 animation 9.6 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.3 swap 0.5 delay 0.8
+11-26 13:35:54.042 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 0.0 animation 2.8 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 5.8
+11-26 13:35:54.067 31726 32532 D CHAT_RENDER: FRAME 13.2ms: input 0.0 animation 5.0 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 3.5
+11-26 13:35:54.073 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | msgs +1 (1 held) | list measure 7.8ms | rows 1 (1 new, 0 again) 1.9ms :: Paragraph new 1.9ms (53 chars)
+11-26 13:35:54.085 31726 32532 D CHAT_RENDER: FRAME 22.5ms: input 0.0 animation 11.7 layout 0.1 draw 1.1 sync 0.3 gpu-cmd 1.8 swap 0.6 delay 5.3
+11-26 13:35:54.093 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 6.2ms (messages) | list measure 6.9ms | rows 1 (1 new, 0 again) 1.4ms :: Bullet new 1.4ms (126 chars)
+11-26 13:35:54.101 31726 32532 D CHAT_RENDER: FRAME 34.8ms: input 0.0 animation 16.6 layout 0.1 draw 1.2 sync 0.2 gpu-cmd 1.7 swap 0.7 delay 12.8
+11-26 13:35:54.109 31726 32532 D CHAT_RENDER: FRAME 23.9ms: input 0.0 animation 3.5 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 16.1
+11-26 13:35:54.128 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: scrolling generating paced | SCREEN 1x 19.2ms (rows) | list measure 1.5ms | rows 13 (0 new, 13 again) 1.0ms :: Numbered 0.2ms (139 chars) | Numbered 0.1ms (77 chars) | Bullet 0.1ms (126 chars) | Numbered 0.1ms (119 chars) | Bullet 0.1ms (225 chars)
+11-26 13:35:54.134 31726 32532 D CHAT_RENDER: FRAME 35.4ms: input 0.0 animation 23.1 layout 0.1 draw 2.9 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 5.5
+11-26 13:35:54.151 31726 32532 D CHAT_RENDER: FRAME 42.7ms: input 0.0 animation 11.7 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 26.1
+11-26 13:35:54.162 31726 32532 D CHAT_RENDER: FRAME 13.3ms: input 0.0 animation 1.2 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 7.6
+11-26 13:35:54.174 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | list measure 7.2ms | rows 1 (1 new, 0 again) 1.5ms :: Bullet new 1.5ms (117 chars)
+11-26 13:35:54.177 31726 32532 D CHAT_RENDER: FRAME 25.6ms: input 0.0 animation 10.6 layout 3.8 draw 4.2 sync 0.2 gpu-cmd 1.5 swap 0.9 delay 3.1
+11-26 13:35:54.192 31726 32532 D CHAT_RENDER: FRAME 32.0ms: input 0.0 animation 6.9 layout 0.3 draw 0.6 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 20.9
+11-26 13:35:54.194 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 5.9ms | rows 1 (1 new, 0 again) 1.5ms | GC 1x 37ms :: Bullet new 1.5ms (68 chars)
+11-26 13:35:54.201 31726 32532 D CHAT_RENDER: FRAME 17.7ms: input 0.0 animation 8.2 layout 0.1 draw 0.9 sync 0.2 gpu-cmd 1.2 swap 0.5 delay 5.3
+11-26 13:35:54.210 31726 32532 D CHAT_RENDER: FRAME 15.4ms: input 0.0 animation 3.2 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 1.1 swap 1.0 delay 8.7
+11-26 13:35:54.238 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.2ms
+11-26 13:35:54.244 31726 32532 D CHAT_RENDER: FRAME 19.4ms: input 0.0 animation 12.2 layout 0.1 draw 1.4 sync 0.3 gpu-cmd 1.5 swap 0.6 delay 1.9
+11-26 13:35:54.251 31726 32532 D CHAT_RENDER: FRAME 17.9ms: input 0.0 animation 3.4 layout 0.1 draw 0.4 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 10.7
+11-26 13:35:54.323 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 9.2ms | rows 1 (1 new, 0 again) 2.4ms :: Bullet new 2.4ms (28 chars)
+11-26 13:35:54.335 31726 32532 D CHAT_RENDER: FRAME 21.1ms: input 0.0 animation 12.9 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 3.3
+11-26 13:35:54.343 31726 32532 D CHAT_RENDER: FRAME 18.5ms: input 0.0 animation 3.2 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.1 swap 0.5 delay 11.9
+11-26 13:35:54.357 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | SCREEN 1x 5.7ms (messages) | list measure 9.4ms | rows 1 (1 new, 0 again) 2.3ms :: Bullet new 2.3ms (78 chars)
+11-26 13:35:54.360 31726 32532 D CHAT_RENDER: FRAME 27.2ms: input 0.0 animation 19.0 layout 0.1 draw 1.1 sync 0.3 gpu-cmd 1.4 swap 0.7 delay 2.8
+11-26 13:35:54.368 31726 32532 D CHAT_RENDER: FRAME 28.4ms: input 0.0 animation 3.8 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 21.0
+11-26 13:35:54.394 31726 31726 D CHAT_RENDER: JANK 25.1ms = 3.0 frames: scrolling generating paced | SCREEN 1x 19.6ms (rows) | list measure 1.7ms | rows 13 (0 new, 13 again) 1.1ms :: Numbered 0.1ms (119 chars) | Bullet 0.1ms (68 chars) | Numbered 0.1ms (74 chars) | Bullet 0.1ms (147 chars) | Bullet 0.1ms (225 chars)
+11-26 13:35:54.405 31726 32532 D CHAT_RENDER: FRAME 33.2ms: input 0.0 animation 23.7 layout 0.1 draw 3.3 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 2.4
+11-26 13:35:54.409 31726 32532 D CHAT_RENDER: FRAME 31.4ms: input 0.0 animation 2.5 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.1 swap 0.4 delay 24.7
+11-26 13:35:54.460 31726 32531 D CHAT_RENDER: STALL 48ms (sample 1): RemoteViews$Action.getUniqueKey:757 < RemoteViews$BaseReflectionAction.getUniqueKey:2843 < RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViewsCompat.setTextViewMaxLines:2567 < TextTranslatorKt.setText:81 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450
+11-26 13:35:54.483 31726 31726 D CHAT_RENDER: SLOW MAIN 74.5ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:54.484 31726 31726 D CHAT_RENDER: JANK 91.8ms = 11.0 frames: scrolling generating paced | list measure 0.0ms | slow main: 74.5ms kt:179
+11-26 13:35:54.499 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 8.2ms | rows 1 (1 new, 0 again) 2.1ms :: Bullet new 2.1ms (240 chars)
+11-26 13:35:54.510 31726 32532 D CHAT_RENDER: FRAME 100.6ms: input 0.0 animation 11.8 layout 0.1 draw 1.0 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 81.3
+11-26 13:35:54.519 31726 32532 D CHAT_RENDER: FRAME 18.1ms: input 0.0 animation 1.1 layout 0.1 draw 1.2 sync 0.1 gpu-cmd 1.0 swap 1.1 delay 12.7
+11-26 13:35:54.538 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:54.555 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | list measure 0.0ms
+11-26 13:35:54.560 31726 32532 D CHAT_RENDER: FRAME 26.0ms: input 0.0 animation 7.2 layout 0.4 draw 4.2 sync 0.3 gpu-cmd 1.3 swap 0.7 delay 10.1
+11-26 13:35:54.569 31726 32532 D CHAT_RENDER: FRAME 16.2ms: input 0.0 animation 1.9 layout 0.1 draw 1.6 sync 0.1 gpu-cmd 0.9 swap 0.4 delay 9.9
+11-26 13:35:54.607 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: scrolling generating paced | SCREEN 1x 7.9ms (messages) | list measure 1.3ms
+11-26 13:35:54.610 31726 32532 D CHAT_RENDER: FRAME 20.4ms: input 0.0 animation 13.3 layout 0.1 draw 1.4 sync 0.3 gpu-cmd 1.3 swap 0.5 delay 2.0
+11-26 13:35:54.618 31726 32532 D CHAT_RENDER: FRAME 19.7ms: input 0.0 animation 3.7 layout 0.1 draw 0.1 sync 0.2 gpu-cmd 1.3 swap 0.6 delay 12.5
+11-26 13:35:54.642 31726 31726 D CHAT_RENDER: JANK 25.0ms = 3.0 frames: scrolling generating paced | SCREEN 1x 20.4ms (rows) | list measure 0.8ms | rows 12 (0 new, 12 again) 1.1ms :: Paragraph 0.1ms (68 chars) | Bullet 0.1ms (109 chars) | Paragraph 0.1ms (53 chars) | Bullet 0.1ms (68 chars) | Bullet 0.1ms (147 chars)
+11-26 13:35:54.651 31726 32532 D CHAT_RENDER: FRAME 32.1ms: input 0.0 animation 22.5 layout 0.2 draw 3.3 sync 0.3 gpu-cmd 1.9 swap 0.7 delay 2.2
+11-26 13:35:54.661 31726 32532 D CHAT_RENDER: FRAME 31.0ms: input 0.0 animation 5.6 layout 0.1 draw 0.4 sync 0.1 gpu-cmd 0.8 swap 0.4 delay 22.3
+11-26 13:35:54.769 31726 32532 D CHAT_RENDER: FRAME 15.1ms: input 0.0 animation 7.6 layout 0.1 draw 1.3 sync 0.2 gpu-cmd 1.3 swap 1.0 delay 2.7
+11-26 13:35:54.777 31726 32532 D CHAT_RENDER: FRAME 13.0ms: input 0.0 animation 1.0 layout 0.1 draw 1.1 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 7.6
+11-26 13:35:54.785 31726 32532 D CHAT_RENDER: FRAME 12.7ms: input 0.0 animation 1.7 layout 0.1 draw 1.8 sync 0.2 gpu-cmd 1.4 swap 0.5 delay 5.9
+11-26 13:35:55.024 31726 31726 D CHAT_RENDER: SLOW MAIN 8.2ms: Handler (android.view.ViewRootImpl$ViewRootHandler)  androidx.compose.foundation.lazy.layout.AndroidPrefetchScheduler: 0
+11-26 13:35:55.109 31726 32531 D CHAT_RENDER: STALL 50ms (sample 1): ColorKt.toArgb-8_81llA:661 < ImageTranslatorApi31Impl.applyTintColorFilter:191 < ImageTranslatorKt.applyColorFilter:129 < ImageTranslatorKt.translateEmittableImage:68 < RemoteViewsTranslatorKt.translateChild:237 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315 < RemoteViewsTranslatorKt.translateChild:224 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableBox:315 < RemoteViewsTranslatorKt.translateChild:224
+11-26 13:35:55.143 31726 32531 D CHAT_RENDER: STALL 85ms (sample 2): RemoteViews$BaseReflectionAction.getUniqueKey:2843 < RemoteViews.replaceAction:10677 < RemoteViews.addAction:6588 < RemoteViews.setInt:7489 < RemoteViewsCompat.setTextViewMaxLines:2567 < TextTranslatorKt.setText:81 < TextTranslatorKt.setText$default:72 < TextTranslatorKt.translateEmittableText:62 < RemoteViewsTranslatorKt.translateChild:228 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableRow:342 < RemoteViewsTranslatorKt.translateChild:226 < RemoteViewsTranslatorKt.setChildren:450 < RemoteViewsTranslatorKt.translateEmittableColumn:370
+11-26 13:35:55.172 31726 31726 D CHAT_RENDER: SLOW MAIN 116.1ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:55.180 31726 31726 D CHAT_RENDER: JANK 125.2ms = 15.0 frames: generating paced | list measure 0.0ms | GC 1x 36ms | slow main: 116.1ms kt:179
+11-26 13:35:56.470 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | SCREEN 1x 12.4ms (messages) | list measure 0.0ms
+11-26 13:35:56.481 31726 32532 D CHAT_RENDER: FRAME 29.7ms: input 0.0 animation 14.0 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.6 swap 0.6 delay 6.3
+11-26 13:35:56.538 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: generating paced | SCREEN 1x 37.0ms (rows) | list measure 1.5ms | rows 13 (0 new, 13 again) 1.8ms :: Paragraph 0.2ms (68 chars) | Bullet 0.2ms (240 chars) | Bullet 0.1ms (109 chars) | Bullet 0.1ms (225 chars) | Bullet 0.1ms (68 chars)
+11-26 13:35:56.548 31726 32532 D CHAT_RENDER: FRAME 50.9ms: input 0.0 animation 39.5 layout 0.1 draw 4.6 sync 0.2 gpu-cmd 1.3 swap 0.7 delay 2.8
+11-26 13:35:56.548 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | list measure 0.0ms
+11-26 13:35:56.715 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | SCREEN 1x 9.8ms (messages) | list measure 0.0ms
+11-26 13:35:56.722 31726 32532 D CHAT_RENDER: FRAME 23.1ms: input 0.0 animation 11.1 layout 0.1 draw 0.5 sync 0.2 gpu-cmd 1.4 swap 0.8 delay 4.5
+11-26 13:35:56.777 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: generating paced | SCREEN 1x 35.8ms (rows) | list measure 1.3ms | rows 13 (0 new, 13 again) 1.7ms :: Paragraph 0.2ms (68 chars) | Paragraph 0.2ms (59 chars) | Bullet 0.1ms (109 chars) | Bullet 0.1ms (126 chars) | Bullet 0.1ms (225 chars)
+11-26 13:35:56.787 31726 32532 D CHAT_RENDER: FRAME 47.0ms: input 0.0 animation 38.2 layout 0.1 draw 4.5 sync 0.3 gpu-cmd 1.5 swap 0.7 delay 0.5
+11-26 13:35:56.971 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | SCREEN 1x 14.6ms (messages) | list measure 0.0ms
+11-26 13:35:56.982 31726 32532 D CHAT_RENDER: FRAME 23.6ms: input 0.0 animation 16.0 layout 0.2 draw 0.8 sync 0.5 gpu-cmd 1.3 swap 0.5 delay 3.0
+11-26 13:35:57.020 31726 31726 D CHAT_RENDER: JANK 33.4ms = 4.0 frames: generating paced | SCREEN 1x 31.4ms (rows) | list measure 1.3ms | rows 13 (0 new, 13 again) 1.9ms :: Bullet 0.3ms (225 chars) | Paragraph 0.2ms (68 chars) | Bullet 0.2ms (109 chars) | Bullet 0.1ms (240 chars) | Bullet 0.1ms (200 chars)
+11-26 13:35:57.030 31726 32532 D CHAT_RENDER: FRAME 41.6ms: input 0.0 animation 33.2 layout 0.1 draw 4.3 sync 0.3 gpu-cmd 1.5 swap 0.6 delay 0.4
+11-26 13:35:57.066 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | list measure 0.0ms
+11-26 13:35:57.113 31726 32531 D CHAT_RENDER: STALL 41ms (sample 1): MeasuredText$Builder.nBuildMeasuredText:-2 < MeasuredText$Builder.build:489 < MeasuredParagraph.buildForStaticLayoutInternal:629 < MeasuredParagraph.buildForStaticLayout:532 < PrecomputedText.createMeasuredParagraphs:527 < StaticLayout.generate:889 < StaticLayout.<init>:752 < StaticLayout.<init>:0 < StaticLayout$Builder.build:561 < StaticLayoutFactory23.create:199 < StaticLayoutFactory.create:77 < TextLayout.<init>:265 < TextLayout.<init>:122 < AndroidParagraph.constructTextLayout:736 || app: BouncyOverscrollEffect$node$1.measure-3p2s80s:272
+11-26 13:35:57.133 31726 32532 D CHAT_RENDER: FRAME 74.3ms: input 0.0 animation 37.6 layout 2.2 draw 17.3 sync 0.3 gpu-cmd 1.5 swap 0.6 delay 9.9
+11-26 13:35:57.136 31726 31726 D CHAT_RENDER: JANK 66.8ms = 8.0 frames: generating paced | SCREEN 1x 27.5ms (other) | list measure 0.0ms
+11-26 13:35:57.149 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | list measure 0.0ms
+11-26 13:35:57.156 31726 32532 D CHAT_RENDER: FRAME 77.2ms: input 0.0 animation 9.2 layout 0.5 draw 0.8 sync 0.2 gpu-cmd 1.5 swap 0.6 delay 63.2
+11-26 13:35:57.165 31726 31726 D CHAT_RENDER: JANK 16.7ms = 2.0 frames: generating paced | list measure 0.0ms | GC 1x 37ms
+11-26 13:35:57.172 31726 32532 D CHAT_RENDER: FRAME 25.6ms: input 0.0 animation 7.3 layout 0.1 draw 5.6 sync 0.2 gpu-cmd 1.2 swap 0.6 delay 9.6
+11-26 13:35:57.231 31726 32532 D CHAT_RENDER: FRAME 18.0ms: input 0.0 animation 11.2 layout 0.1 draw 0.6 sync 0.2 gpu-cmd 1.4 swap 0.6 delay 2.7
+11-26 13:35:57.278 31726 31726 D CHAT_RENDER: JANK 41.7ms = 5.0 frames: generating paced | SCREEN 1x 35.3ms (rows) | list measure 1.5ms | rows 13 (0 new, 13 again) 1.8ms :: Paragraph 0.2ms (68 chars) | Bullet 0.1ms (117 chars) | Bullet 0.1ms (68 chars) | Paragraph 0.1ms (59 chars) | Bullet 0.1ms (225 chars)
+11-26 13:35:57.279 31726 31726 D CHAT_RENDER: SUMMARY 1404 frames, 254 janky (18%), worst 150.2ms, budget 8.3ms | screen rebuilt 36x 669ms | msgs 17 (11 held) | built 18x bg 113ms | GC 19x 685ms
+11-26 13:35:57.280 31726 31726 D CHAT_RENDER: SUMMARY main 281x total 4629ms max 141.5ms: frame
+11-26 13:35:57.280 31726 31726 D CHAT_RENDER: SUMMARY main 18x total 1295ms max 116.1ms: coroutine kotlinx.coroutines.flow.FlowKt__ReduceKt.first(Reduce.kt:179
+11-26 13:35:57.280 31726 31726 D CHAT_RENDER: SUMMARY main 3x total 44ms max 20.8ms: Handler (android.os.Handler)  androidx.compose.ui.platform.AndroidUiDispatcher$dispatchCallback$1: 0
+11-26 13:35:57.280 31726 31726 D CHAT_RENDER: SUMMARY main 4x total 34ms max 9.2ms: Handler (android.view.ViewRootImpl$ViewRootHandler)  androidx.compose.foundation.lazy.layout.AndroidPrefetchScheduler: 0
+11-26 13:35:57.280 31726 31726 D CHAT_RENDER: SUMMARY main 1x total 8ms max 8.0ms: coroutine androidx.glance.session.InteractiveFrameClock$onNewAwaiters$2.invokeSuspend(InteractiveFrameClock.kt:114
+11-26 13:35:57.281 31726 31726 D CHAT_RENDER: SUMMARY rows Paragraph: 154 composed (82 new), total 150.9ms, avg 0.98ms, slowest 3.8ms (118 chars, block_claude_asst_1794b980-3258-4835-9d28-0d9b8efb6a59_7)
+11-26 13:35:57.281 31726 31726 D CHAT_RENDER: SUMMARY rows Bullet: 161 composed (69 new), total 133.6ms, avg 0.83ms, slowest 5.2ms (131 chars, block_claude_asst_9aa99242-1915-48b8-9914-b5223670cbfe_22)
+11-26 13:35:57.281 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(2): 27 composed (16 new), total 32.5ms, avg 1.20ms, slowest 2.6ms (0 chars, steps_block_claude_asst_e560f539-7d06-4b2f-8fd1-777dba24d3c2_11)
+11-26 13:35:57.281 31726 31726 D CHAT_RENDER: SUMMARY rows Numbered: 28 composed (18 new), total 29.1ms, avg 1.04ms, slowest 2.8ms (198 chars, block_claude_asst_ed0cbcea-72ce-4c36-a458-90fb4b22ec6c_21)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows USER: 18 composed (11 new), total 24.2ms, avg 1.35ms, slowest 4.6ms (28 chars, user_user_30eddc51-8c20-455b-ba54-e9cfdc7aed5a)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows FOOTER: 19 composed (11 new), total 22.7ms, avg 1.19ms, slowest 4.5ms (11097 chars, footer_claude_asst_1794b980-3258-4835-9d28-0d9b8efb6a59)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows AgentThought: 14 composed (8 new), total 20.1ms, avg 1.44ms, slowest 3.7ms (166 chars, block_claude_asst_e560f539-7d06-4b2f-8fd1-777dba24d3c2_45)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(4): 4 composed (4 new), total 9.3ms, avg 2.31ms, slowest 3.5ms (0 chars, steps_block_claude_asst_e560f539-7d06-4b2f-8fd1-777dba24d3c2_39)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows Tool:BASH: 8 composed (3 new), total 8.4ms, avg 1.05ms, slowest 3.3ms (62 chars, block_claude_asst_e560f539-7d06-4b2f-8fd1-777dba24d3c2_58)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(6): 6 composed (2 new), total 7.6ms, avg 1.27ms, slowest 2.5ms (0 chars, steps_block_claude_asst_46f74f60-a19a-4106-896f-57ac40b50ec7_0)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(5): 4 composed (4 new), total 7.5ms, avg 1.87ms, slowest 2.0ms (0 chars, steps_block_claude_asst_e560f539-7d06-4b2f-8fd1-777dba24d3c2_5)
+11-26 13:35:57.282 31726 31726 D CHAT_RENDER: SUMMARY rows Code: 1 composed (1 new), total 4.6ms, avg 4.57ms, slowest 4.6ms (393 chars, block_claude_asst_ed0cbcea-72ce-4c36-a458-90fb4b22ec6c_7)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows Header: 4 composed (2 new), total 4.2ms, avg 1.04ms, slowest 2.0ms (18 chars, block_claude_asst_96c2f8db-e96c-4eb6-a5cc-e63734fdd646_26)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(8): 5 composed (2 new), total 3.5ms, avg 0.70ms, slowest 1.5ms (0 chars, steps_block_claude_asst_96c2f8db-e96c-4eb6-a5cc-e63734fdd646_8)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(10): 4 composed (1 new), total 2.9ms, avg 0.72ms, slowest 2.2ms (0 chars, steps_block_claude_asst_46f74f60-a19a-4106-896f-57ac40b50ec7_7)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(7): 3 composed (1 new), total 2.7ms, avg 0.90ms, slowest 2.6ms (0 chars, steps_block_claude_asst_e560f539-7d06-4b2f-8fd1-777dba24d3c2_50)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows Table: 2 composed (2 new), total 2.1ms, avg 1.05ms, slowest 2.0ms (0 chars, block_claude_asst_96c2f8db-e96c-4eb6-a5cc-e63734fdd646_39)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows StepGroup(3): 3 composed (1 new), total 1.9ms, avg 0.64ms, slowest 1.9ms (0 chars, steps_block_claude_asst_d02a6c64-26e2-40b6-bbfb-f53c021401d8_2)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows DIVIDER: 3 composed (1 new), total 1.0ms, avg 0.34ms, slowest 1.0ms (0 chars, divider_day_2026-330)
+11-26 13:35:57.283 31726 31726 D CHAT_RENDER: SUMMARY rows TYPING: 2 composed (1 new), total 0.0ms, avg 0.01ms, slowest 0.0ms (0 chars, active_assistant_typing)
+11-26 13:36:01.245 31726 32312 D HOME_WIDGETS: refresh chat widgets (list=true, app on screen=true, 15006 ms since the last)
+11-26 13:36:01.253 31726 31726 D HOME_WIDGETS: compose Chats: snap=5d2c180 hide=1f87288 state=6de6421 size=ec7b159 colors=6e5d11e
+11-26 13:36:01.267 31726 31726 D HOME_WIDGETS: compose OneChat: snap=5d2c180 hide=1f87288 state=1e679e colors=1f6b0ab

@@ -68,7 +68,7 @@ internal fun actionsOf(prefs: Preferences?): List<HomeAction> =
 private fun ActionsContent() {
     val prefs = LocalState.current as? Preferences
     val actions = actionsOf(prefs)
-    val snap by HomeSnapshot.state.collectAsState()
+    val snap by HomeSnapshot.widgetState.collectAsState()
     val size = LocalSize.current
     val pad = 8.dp
     val labels = prefs?.get(WidgetKeys.LABELS) != "0" && size.height >= 76.dp

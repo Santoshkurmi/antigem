@@ -16,6 +16,8 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
 import ai.antigem.BuildConfig
 import ai.antigem.data.homescreen.HomeScripts
+import ai.antigem.data.homescreen.HomeSnapshot
+import ai.antigem.data.voice.VoiceCallLauncher
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.domain.model.AgentKind
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +26,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
 
@@ -81,14 +86,38 @@ object HomeWidgets {
         themeModeCache ?: runCatching { AuthPreferences(context.applicationContext).getThemeModeSync() }.getOrDefault("SYSTEM")
             .also { themeModeCache = it }
 
-    /** The saved chat list changed. */
+    /** Chat widgets waiting to be redrawn: [list] the chat list widget too (its chats or their order changed). */
+    private data class Pending(val list: Boolean = false, val chat: Boolean = false)
+
+    private val pending = MutableStateFlow(Pending())
+    private val refreshLoop = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * The saved chat list changed. The chat widgets are redrawn by one loop: at once while the app is not on screen;
+     * while it is, not at all (the widgets can't be seen then) until the app leaves the screen, and then at once with
+     * the newest data. Changes that come meanwhile are merged into one redraw; none is lost.
+     *
+     * Why not while the app is on screen: Glance builds a widget on the main thread, 80-130 ms in a debug build, and
+     * after each redraw it went on re-processing the widget for several seconds by itself (measured: 18 times in 9 s
+     * after one redraw), which made the chat stutter while a reply streamed. In split-screen or a floating window
+     * with the home screen visible, the widgets catch up when the app leaves the screen.
+     */
     fun onChatsChanged(context: Context, listChanged: Boolean) {
         val app = context.applicationContext
+        pending.update { Pending(list = it.list || listChanged, chat = true) }
+        if (!refreshLoop.compareAndSet(false, true)) return
         scope.launch {
-            runCatching {
-                if (listChanged) ChatsWidget().updateAll(app)
-                ChatWidget().updateAll(app)
-            }.onFailure { Log.w(TAG, "update: ${it.message}") }
+            while (true) {
+                pending.first { it.list || it.chat }
+                // the app is on screen: wait until it leaves it
+                VoiceCallLauncher.appVisible.first { !it }
+                val todo = pending.getAndUpdate { Pending() }
+                HomeSnapshot.publishToWidgets()
+                runCatching {
+                    if (todo.list) ChatsWidget().updateAll(app)
+                    ChatWidget().updateAll(app)
+                }.onFailure { Log.w(TAG, "update: ${it.message}") }
+            }
         }
     }
 
@@ -97,6 +126,8 @@ object HomeWidgets {
         themeModeCache = null
         _version.value++
         val app = context.applicationContext
+        // the look changed: every widget is redrawn now, with the newest data
+        HomeSnapshot.publishToWidgets()
         scope.launch {
             WidgetKind.entries.forEach { k -> runCatching { k.widget().updateAll(app) } }
         }
