@@ -47,6 +47,12 @@ private val VERBS get() = listOf(
 )
 
 /**
+ * The verbs one agent's working row picks from: "Clauding" only in a Claude chat, every other verb for every agent.
+ */
+private fun verbsFor(claude: Boolean): List<String> =
+    if (claude) VERBS else VERBS.filter { it != L.components.agentWorkingSpinner.clauding }
+
+/**
  * Room for the longest verb (or "Compacting") plus "...", in the current language: the row never changes width.
  * Worked out each time, not once: the language (and so the longest text) can change while the app runs.
  */
@@ -76,7 +82,13 @@ private const val WORD_DELAY_MS = 5_000L
  * on fixed baselines, so nothing moves up and down when a glyph or character comes from another font.
  */
 @Composable
-fun AgentWorkingSpinner(color: Color, modifier: Modifier = Modifier, compacting: Boolean = false) {
+fun AgentWorkingSpinner(
+    color: Color,
+    modifier: Modifier = Modifier,
+    compacting: Boolean = false,
+    /** A Claude chat: "Clauding" is one of the verbs (other agents never show it). */
+    claude: Boolean = false
+) {
     val measurer = rememberTextMeasurer(cacheSize = 64)
     // a quiet status line (like VS Code's softened foreground); the accent-colored star is what draws the eye
     val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
@@ -107,7 +119,7 @@ fun AgentWorkingSpinner(color: Color, modifier: Modifier = Modifier, compacting:
     val glyphStep = remember { mutableIntStateOf(0) }
     val shown = remember { mutableStateOf(" ".repeat(textWidth())) }
     GlyphTicker(glyphStep)
-    WordDecoder(shown, compacting, language)
+    WordDecoder(shown, compacting, language, claude)
 
     Canvas(
         modifier
@@ -134,18 +146,19 @@ private fun GlyphTicker(step: androidx.compose.runtime.MutableIntState) {
 }
 
 @Composable
-private fun WordDecoder(shown: androidx.compose.runtime.MutableState<String>, compacting: Boolean, language: Int) {
-    var verb by remember { mutableStateOf(VERBS.random()) }
+private fun WordDecoder(shown: androidx.compose.runtime.MutableState<String>, compacting: Boolean, language: Int, claude: Boolean) {
+    var verb by remember { mutableStateOf(verbsFor(claude).random()) }
+    val claudeNow by androidx.compose.runtime.rememberUpdatedState(claude)
     LaunchedEffect(Unit) {
         var changes = 0
         while (true) {
             delay(WORD_DELAYS_MS.getOrElse(changes) { WORD_DELAY_MS })
             changes++
-            verb = VERBS.random()
+            verb = verbsFor(claudeNow).random()
         }
     }
-    // a new language: a verb in it right away, not after the next change
-    LaunchedEffect(language) { if (verb !in VERBS) verb = VERBS.random() }
+    // a new language (or another agent): a verb it can show right away, not after the next change
+    LaunchedEffect(language, claude) { if (verb !in verbsFor(claude)) verb = verbsFor(claude).random() }
     // A cursor runs over the old text; the three characters behind it flicker through '.' and '_' before settling.
     LaunchedEffect(verb, compacting, language) {
         val target = ((if (compacting) L.components.agentWorkingSpinner.compacting2 else verb) + "...").padEnd(textWidth())

@@ -2768,6 +2768,8 @@ fun ChatScreen(
                                             ai.antigem.ui.components.AgentWorkingSpinner(
                                                 color = if (isClaudeChat) ai.antigem.ui.components.ClaudeAccent else if (isOpenCodeChat) ai.antigem.ui.components.OpenCodeAccent else if (isCodexChat) ai.antigem.ui.components.CodexAccent else ai.antigem.ui.components.AgyAccent,
                                                 compacting = isClaudeChat && claudeCompacting,
+                                                // "Clauding" only in Claude chats
+                                                claude = isClaudeChat,
                                                 // leaves in the frame the reply's footer arrives, which fades in in its place
                                                 modifier = Modifier.animateItem(fadeInSpec = tween(180), placementSpec = null, fadeOutSpec = null)
                                             )
