@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import android.net.Uri
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -729,7 +730,8 @@ fun ChatInputBar(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(26.dp)
-                                .padding(horizontal = 4.dp),
+                                .padding(horizontal = 4.dp)
+                                .clearAndSetSemantics { },
                             barColor = if (isRecordingPaused) ai.antigem.theme.AppColors.warning else ai.antigem.theme.AppColors.danger
                         )
 
@@ -1294,7 +1296,9 @@ fun ChatInputBar(
                                     1.dp,
                                     if (voiceCallActive) GeminiBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 ),
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .then(if (voiceCallActive) Modifier.semantics { stateDescription = L.common.active } else Modifier)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -1324,7 +1328,9 @@ fun ChatInputBar(
                                     1.dp,
                                     if (isLiveDictating) GeminiBlue.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 ),
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .then(if (isLiveDictating) Modifier.semantics { stateDescription = L.common.active } else Modifier)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -1361,6 +1367,12 @@ fun ChatInputBar(
                             // Send, so the arrow (textSecondary) stays visible; it used to be textSecondary on textSecondary
                             val sendBlocked = !isAuth || !isOnline || attachmentsBusy
                             val sendBtnColor = if (sendBlocked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f) else if (isBackgroundActive) ai.antigem.theme.AppColors.warning else ClaudeTerracotta
+                            val sendStateDesc = when {
+                                !isAuth -> L.common.needsSignIn
+                                attachmentsBusy -> L.components.chatInputBar.preparingAttachment
+                                !isOnline -> offlineMessage
+                                else -> null
+                            }
                             Surface(
                                 onClick = {
                                     val trimmed = textFieldState.text.toString().trim()
@@ -1384,7 +1396,9 @@ fun ChatInputBar(
                                 },
                                 shape = CircleShape,
                                 color = sendBtnColor,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .then(if (sendStateDesc != null) Modifier.semantics { stateDescription = sendStateDesc } else Modifier)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(

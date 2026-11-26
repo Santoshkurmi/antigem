@@ -369,7 +369,7 @@ fun MessageBubble(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Outlined.Layers,
-                                        contentDescription = "View Artifacts ($artifactsCount)",
+                                        contentDescription = L.components.a11y.viewArtifacts(artifactsCount),
                                         tint = ClaudeTerracotta,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -855,7 +855,7 @@ fun AssistantMessageFooter(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Layers,
-                        contentDescription = "View Artifacts ($artifactsCount)",
+                        contentDescription = L.components.a11y.viewArtifacts(artifactsCount),
                         tint = ClaudeTerracotta,
                         modifier = Modifier.size(16.dp)
                     )
@@ -1075,7 +1075,10 @@ fun ContextSummaryCheckpointBanner(
             .clip(RoundedCornerShape(12.dp))
             // TalkBack: "Expanded" / "Collapsed"
             .semantics { stateDescription = if (expanded) L.components.a11y.expanded else L.components.a11y.collapsed }
-            .clickable { expanded = !expanded },
+            .clickable(
+                role = Role.Button,
+                onClickLabel = if (expanded) L.common.hide else L.common.show
+            ) { expanded = !expanded },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, ClaudeTerracotta.copy(alpha = 0.35f))
@@ -1190,7 +1193,7 @@ private fun UserMessageImageItem(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable(onClickLabel = L.components.a11y.viewImage) {
+            .clickable(role = Role.Button, onClickLabel = L.components.a11y.viewImage) {
                 when {
                     finalUri.isNotBlank() -> onImageClick(finalUri)
                     // image kept only as data (e.g. a reopened Claude chat)
@@ -1303,7 +1306,7 @@ private fun UserMessageDocumentItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClickLabel = L.components.messageBubble.openName(attachment.name)) {
+            .clickable(role = Role.Button, onClickLabel = L.components.messageBubble.openName(attachment.name)) {
                 if (attachment.reference && attachment.path.isNotBlank()) {
                     // a file on the agent's machine (sent by path): opened like any file link (encoded, the handler decodes)
                     fileLinkHandler.onOpenFile(java.net.URLEncoder.encode(attachment.path, "UTF-8"))
