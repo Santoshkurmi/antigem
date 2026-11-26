@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -63,8 +64,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.MarkdownContent
+import ai.antigem.ui.components.a11yMinTouchTarget
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.label
+import ai.antigem.ui.components.rememberTalkBackOn
 import ai.antigem.i18n.L
 
 private val AllowGreen: androidx.compose.ui.graphics.Color get() = ai.antigem.theme.AppColors.success
@@ -130,6 +133,7 @@ fun AgentApprovalPanel(
 @Composable
 private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit)?, onDenyAll: (() -> Unit)?) {
     val accent = item.agent.accent()
+    val talkBackOn = rememberTalkBackOn()
     var denying by remember { mutableStateOf(false) }
     var feedback by remember { mutableStateOf("") }
     var alwaysMenu by remember { mutableStateOf(false) }
@@ -155,7 +159,7 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
             }
             if (count > 1) {
                 Text(
-                    "1 of $count",
+                    L.agents.agentApproval.requestProgress(count),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
@@ -167,7 +171,7 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
             }
             if (count > 1 && (onAllowAll != null || onDenyAll != null)) {
                 Box {
-                    IconButton(onClick = { overflow = true }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { overflow = true }, modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(32.dp)) {
                         Icon(Icons.Outlined.MoreVert, L.common.more, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(expanded = overflow, onDismissRequest = { overflow = false }) {
@@ -280,7 +284,11 @@ private fun ApprovalBody(item: ApprovalItem, count: Int, onAllowAll: (() -> Unit
                     }
                 }
                 TextButton(onClick = { denying = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("${item.denyLabel}…", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Text(
+                        "${item.denyLabel}…",
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        modifier = Modifier.clearAndSetSemantics { contentDescription = item.denyLabel }
+                    )
                 }
                 return@Column
             }

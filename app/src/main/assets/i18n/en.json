@@ -534,6 +534,7 @@
     "agents.agentApproval.denyAllCount": "Deny all {count}",
     "agents.agentApproval.always": "Always…",
     "agents.agentApproval.alwaysAllowOptions": "Always allow options",
+    "agents.agentApproval.requestProgress": "1 of {count}",
     "agents.agentQuestion.dismissQuestion": "Dismiss question",
     "agents.agentQuestion.chooseAny": "Choose any",
     "agents.agentQuestion.chooseOne": "Choose one",
@@ -545,6 +546,8 @@
     "agents.agentQuestion.submit": "Submit",
     "agents.agentQuestion.labelHasValue": "{label} has {value}",
     "agents.agentQuestion.aQuestion": "a question",
+    "agents.agentQuestion.questionsCount": { "one": "1 question", "other": "{count} questions" },
+    "agents.agentQuestion.pageProgress": "{page} of {total}",
     "agents.agentStatusUi.theLocalServerIsRestarting": "The local server is restarting.",
     "agents.agentStatusUi.antigravityAgyIsNotInstalledYet": "Antigravity (agy) is not installed yet. The app can install it for you.",
     "agents.agentStatusUi.signingIn": "Signing in…",
@@ -2476,6 +2479,10 @@
     "components.queuedMessagesCard.sendsWhenTheAgentIsDone": "Sends when the agent is done",
     "components.queuedMessagesCard.sendNowValue": "Send now: {value}",
     "components.queuedMessagesCard.deleteValue": "Delete: {value}",
+    "components.queuedMessagesCard.attachmentsCount": {
+      "one": "1 attachment",
+      "other": "{count} attachments"
+    },
     "components.toolOutput.lineCount": {
       "one": "{count} line",
       "other": "{count} lines"
@@ -2601,6 +2608,7 @@
     "drawer.artifactsDrawer.implementationPlan": "Implementation Plan",
     "drawer.artifactsDrawer.walkthrough": "Walkthrough",
     "drawer.artifactsDrawer.downloadToDownloadsAntigem": "Download to Downloads/AntiGem",
+    "drawer.artifactsDrawer.downloadNameToDownloads": "Download {name} to Downloads/AntiGem",
     "drawer.chatHistoryDrawer.activeCliProcess": "Active CLI Process",
     "drawer.chatHistoryDrawer.aLiveAntigravityCliProcessIs": "A live Antigravity CLI process is running in the background for this chat:",
     "drawer.chatHistoryDrawer.chatTitle": "Chat: {title}",
