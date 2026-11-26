@@ -12,7 +12,6 @@ import android.webkit.WebView
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +29,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -132,7 +134,7 @@ fun StemBlockView(kind: StemKind, code: String, modifier: Modifier = Modifier) {
                     StemIconButton(Icons.Outlined.RestartAlt, L.common.restart) { restartKey++ }
                 }
                 StemIconButton(if (isCopied) Icons.Default.Check else Icons.Outlined.ContentCopy, L.common.copy, if (isCopied) QuotaGreen else null) { copy() }
-                StemIconButton(Icons.Outlined.OpenInFull, L.common.expand) { isFullscreen = true }
+                StemIconButton(Icons.Outlined.OpenInFull, L.components.codeBlock.fullscreen) { isFullscreen = true }
             }
             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
             if (selectedTab == 0) {
@@ -164,13 +166,15 @@ private fun StemTabs(selected: Int, onSelect: (Int) -> Unit) {
             .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(2.dp)
+            .selectableGroup()
     ) {
         listOf(L.components.stemBlocks.diagram, L.common.code).forEachIndexed { i, label ->
             Box(
                 Modifier
                     .clip(RoundedCornerShape(14.dp))
                     .background(if (selected == i) ClaudeTerracotta else Color.Transparent)
-                    .clickable { onSelect(i) }
+                    // selectable: TalkBack says which tab is on (same tap and ripple as clickable)
+                    .selectable(selected = selected == i, role = Role.Tab) { onSelect(i) }
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(

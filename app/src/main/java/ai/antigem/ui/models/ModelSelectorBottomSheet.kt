@@ -8,7 +8,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -53,6 +54,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -262,7 +266,8 @@ private fun AgyModelCard(
         shape = RoundedCornerShape(14.dp),
         color = ai.antigem.theme.AppColors.card,
         border = BorderStroke(if (isActive) 1.5.dp else 1.dp, borderColor),
-        modifier = modifier.fillMaxWidth()
+        // TalkBack: "Selected" / "Not selected"
+        modifier = modifier.fillMaxWidth().semantics { this.selected = isActive }
     ) {
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -329,7 +334,7 @@ private fun TierSelector(
                 .graphicsLayer { alpha = highlight }
                 .clip(RoundedCornerShape(8.dp)).background(accent)
         )
-        Row(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize().selectableGroup()) {
             variants.forEachIndexed { i, v ->
                 val on = i == selIdx
                 val content by animateColorAsState(
@@ -337,8 +342,9 @@ private fun TierSelector(
                     label = "tier_text"
                 )
                 Box(
+                    // selectable: TalkBack says which tier is chosen (same tap and ripple as clickable)
                     Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = enabled) { onSelect(v.model.id) },
+                        .selectable(selected = on, enabled = enabled, role = Role.RadioButton) { onSelect(v.model.id) },
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

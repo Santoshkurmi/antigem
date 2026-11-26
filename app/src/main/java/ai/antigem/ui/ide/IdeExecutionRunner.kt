@@ -1,6 +1,10 @@
 package ai.antigem.ui.ide
 
 import ai.antigem.ui.components.terminalKeySemantics
+import ai.antigem.ui.components.SelectTextSheet
+import ai.antigem.ui.components.a11yMinTouchTarget
+import ai.antigem.ui.components.addReadOutputA11yAction
+import ai.antigem.ui.components.rememberTalkBackOn
 import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -61,6 +65,10 @@ fun IdeExecutionRunnerSheet(
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
     var ctrlState by remember { mutableStateOf(IdeKeyModifierState.OFF) }
     var altState by remember { mutableStateOf(IdeKeyModifierState.OFF) }
+    // TalkBack's "Read terminal output": the whole output as selectable text
+    var a11yTranscript by remember { mutableStateOf<String?>(null) }
+    // taller keys while TalkBack is on
+    val talkBackOn = rememberTalkBackOn()
 
     // Remote mode: the command runs on the server, in its own tmux session reached over SSH (a PC in use only when it
     // allows a shell for this phone; otherwise here)
@@ -284,6 +292,7 @@ fun IdeExecutionRunnerSheet(
                                 setTextSize(terminalTextSize)
                                 isFocusable = true
                                 isFocusableInTouchMode = true
+                                addReadOutputA11yAction { a11yTranscript = it }
 
                                 setTerminalViewClient(object : TerminalViewClient {
                                     override fun onScale(scale: Float): Float {
@@ -410,17 +419,17 @@ fun IdeExecutionRunnerSheet(
                         .padding(horizontal = 4.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    IdeTermKey(label = "ESC", modifier = Modifier.weight(1f)) {
+                    IdeTermKey(label = "ESC", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_ESCAPE, "\u001B")
                     }
-                    IdeTermKey(label = "TAB", modifier = Modifier.weight(1f)) {
+                    IdeTermKey(label = "TAB", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
                     }
                     IdeTermKey(
                         label = L.ide.executionRunner.ctrl,
                         isActive = ctrlState != IdeKeyModifierState.OFF,
                         isLocked = ctrlState == IdeKeyModifierState.LOCKED,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn),
                         onClick = {
                             ctrlState = if (ctrlState == IdeKeyModifierState.OFF) IdeKeyModifierState.ONE_SHOT else IdeKeyModifierState.OFF
                         },
@@ -432,7 +441,7 @@ fun IdeExecutionRunnerSheet(
                         label = L.ide.executionRunner.alt,
                         isActive = altState != IdeKeyModifierState.OFF,
                         isLocked = altState == IdeKeyModifierState.LOCKED,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn),
                         onClick = {
                             altState = if (altState == IdeKeyModifierState.OFF) IdeKeyModifierState.ONE_SHOT else IdeKeyModifierState.OFF
                         },
@@ -440,20 +449,25 @@ fun IdeExecutionRunnerSheet(
                             altState = if (altState == IdeKeyModifierState.LOCKED) IdeKeyModifierState.OFF else IdeKeyModifierState.LOCKED
                         }
                     )
-                    IdeTermKey(label = "↑", modifier = Modifier.weight(1f)) {
+                    IdeTermKey(label = "↑", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_UP, "\u001B[A")
                     }
-                    IdeTermKey(label = "↓", modifier = Modifier.weight(1f)) {
+                    IdeTermKey(label = "↓", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_DOWN, "\u001B[B")
                     }
-                    IdeTermKey(label = "←", modifier = Modifier.weight(1f)) {
+                    IdeTermKey(label = "←", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_LEFT, "\u001B[D")
                     }
-                    IdeTermKey(label = "→", modifier = Modifier.weight(1f)) {
+                    IdeTermKey(label = "→", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
                         sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_RIGHT, "\u001B[C")
                     }
                 }
             }
+        }
+
+        // TalkBack's "Read terminal output" (the terminal's actions menu)
+        a11yTranscript?.let { text ->
+            SelectTextSheet(text, onDismiss = { a11yTranscript = null }, title = L.components.a11y.terminalOutput, plainText = true)
         }
     }
 }

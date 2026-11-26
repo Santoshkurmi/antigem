@@ -1,7 +1,7 @@
 package ai.antigem.ui.codex
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -367,7 +368,8 @@ fun CodexModelSheet(backend: CodexChatBackend, onOpenSettings: () -> Unit, onDis
                         shape = RoundedCornerShape(14.dp),
                         color = if (isOn) CodexAccent.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, if (isOn) CodexAccent.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp)).clickable {
+                        // selectable: TalkBack says "Selected" / "Not selected" (same tap and ripple as clickable)
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp)).selectable(selected = isOn, role = Role.RadioButton) {
                             backend.selectModel(m.id)
                             onDismiss()
                         }

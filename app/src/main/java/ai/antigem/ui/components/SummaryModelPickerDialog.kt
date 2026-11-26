@@ -1,7 +1,7 @@
 package ai.antigem.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +72,8 @@ fun SummaryModelPickerDialog(
                         text = L.components.summaryModelPicker.summarizeConversation,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() }
                     )
                 }
 
@@ -123,7 +127,8 @@ fun SummaryModelPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedModelId = model.id },
+                                // one TalkBack item per row: "<model>, Selected/Not selected, Radio button"
+                                .selectable(selected = isSelected, role = Role.RadioButton) { selectedModelId = model.id },
                             shape = RoundedCornerShape(8.dp),
                             color = if (isSelected) ClaudeTerracotta.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                             border = BorderStroke(
@@ -140,7 +145,9 @@ fun SummaryModelPickerDialog(
                                 RadioButton(
                                     selected = isSelected,
                                     onClick = { selectedModelId = model.id },
-                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta)
+                                    colors = RadioButtonDefaults.colors(selectedColor = ClaudeTerracotta),
+                                    // the row carries it for TalkBack; still tappable
+                                    modifier = Modifier.mergedIntoRow()
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(

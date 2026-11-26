@@ -39,6 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,7 +107,8 @@ internal fun PickerOption(
         shape = RoundedCornerShape(14.dp),
         color = if (selected) color.copy(alpha = 0.08f) else claudeCardColor(),
         border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) color.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)),
-        modifier = Modifier.fillMaxWidth()
+        // TalkBack: "Selected" / "Not selected" (the check mark alone is only visual)
+        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected }
     ) {
         Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(

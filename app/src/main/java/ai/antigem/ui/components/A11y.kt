@@ -2,11 +2,17 @@ package ai.antigem.ui.components
 
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -117,6 +123,34 @@ private fun terminalKeySpokenName(label: String): String = when (label) {
 }
 
 /**
+ * True while TalkBack (touch exploration) is on; updates when it's switched on or off while the screen is showing.
+ * For things that should only change under TalkBack (bigger touch targets, extra semantics nodes).
+ */
+@Composable
+fun rememberTalkBackOn(): Boolean {
+    val context = LocalContext.current
+    val manager = remember(context) {
+        context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+    }
+    var on by remember(manager) { mutableStateOf(manager?.isTouchExplorationEnabled == true) }
+    DisposableEffect(manager) {
+        val listener = AccessibilityManager.TouchExplorationStateChangeListener { enabled -> on = enabled }
+        manager?.addTouchExplorationStateChangeListener(listener)
+        on = manager?.isTouchExplorationEnabled == true
+        onDispose { manager?.removeTouchExplorationStateChangeListener(listener) }
+    }
+    return on
+}
+
+/**
+ * At least 48 × 48dp while [talkBackOn]; nothing changes otherwise. Put it BEFORE size() / height() in the chain
+ * (size() then gives way to it). Icons keep their size; a button's press highlight or a key's background grows with
+ * it. Pass the result of one [rememberTalkBackOn] per screen, not one per button.
+ */
+fun Modifier.a11yMinTouchTarget(talkBackOn: Boolean): Modifier =
+    if (talkBackOn) this.sizeIn(minWidth = 48.dp, minHeight = 48.dp) else this
+
+/**
  * A bottom sheet's state that opens at full height while TalkBack is on (half-open sheets need a two-finger drag under
  * TalkBack, and part of the list starts off-screen) and at half height as before otherwise. Read once when the sheet
  * opens: turning TalkBack on or off while a sheet is open doesn't rebuild it.
@@ -130,4 +164,51 @@ fun rememberSheetStateFullUnderTalkBack(): SheetState {
             ?.isTouchExplorationEnabled == true
     }
     return rememberModalBottomSheetState(skipPartiallyExpanded = talkBackOn)
+}
+
+/**
+ * A native View shown through AndroidView (the terminal, the code editor): Compose's semantics don't reach inside it, so
+ * while [hidden] (a drawer or panel drawn over it, or its screen hidden) it is taken out of TalkBack's reach here,
+ * with everything inside it. Nothing is drawn differently.
+ */
+@Composable
+fun HideFromTalkBackWhile(view: android.view.View?, hidden: Boolean) {
+    DisposableEffect(view, hidden) {
+        view?.importantForAccessibility =
+            if (hidden) android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            else android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        onDispose { }
+    }
+}
+
+/**
+ * What TalkBack says for a git file's status letter ("Modified", not "M"). The bridge sends "U" for an untracked file
+ * (the Untracked list: pass [untracked]) while git's own "U" in the staged / changes lists is a conflict; a commit's
+ * files can carry a score ("R100"), so only the first letter counts.
+ */
+fun gitStatusSpokenName(status: String, untracked: Boolean = false): String = when (status.firstOrNull()) {
+    'M' -> L.components.a11y.gitModified
+    'A' -> L.components.a11y.gitAdded
+    'D' -> L.components.a11y.gitDeleted
+    'R' -> L.components.a11y.gitRenamed
+    'C' -> L.components.a11y.gitCopied
+    'T' -> L.components.a11y.gitTypeChanged
+    '?' -> L.components.a11y.gitUntracked
+    'U' -> if (untracked) L.components.a11y.gitUntracked else L.components.a11y.gitConflict
+    else -> status
+}
+
+/**
+ * On a terminal: "Read terminal output" in TalkBack's actions menu (TalkBack itself only gets the rows on screen). It
+ * hands [onRead] the whole output, scrollback included, with wrapped lines joined back (its last 2000 lines at most),
+ * to show as selectable text. An accessibility action only: nothing changes on screen or for touch.
+ */
+fun com.termux.view.TerminalView.addReadOutputA11yAction(onRead: (String) -> Unit) {
+    androidx.core.view.ViewCompat.addAccessibilityAction(this, L.components.a11y.readTerminalOutput) { view, _ ->
+        val text = (view as com.termux.view.TerminalView).currentSession?.emulator?.screen
+            ?.getTranscriptTextWithFullLinesJoined()?.trimEnd() ?: ""
+        val lines = text.lines()
+        onRead(if (lines.size > 2000) lines.takeLast(2000).joinToString("\n") else text)
+        true
+    }
 }

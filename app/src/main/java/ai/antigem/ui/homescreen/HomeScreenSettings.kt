@@ -106,8 +106,8 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
         owner.lifecycle.addObserver(obs)
         onDispose { owner.lifecycle.removeObserver(obs) }
     }
-    // "widget" or "shortcut": the chat picker is open for that
-    var picking by remember { mutableStateOf<String?>(null) }
+    // the chat picker for a chat icon is open
+    var pickingChat by remember { mutableStateOf(false) }
     var askNewKey by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val canPinWidgets = HomeWidgets.canPin(context)
@@ -134,7 +134,7 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                     }
                     Spacer(Modifier.width(8.dp))
                     if (canPinWidgets) {
-                        OutlinedButton(onClick = { if (k == WidgetKind.CHAT) picking = "widget" else HomeWidgets.pin(context, k) }) { Text(L.common.add) }
+                        OutlinedButton(onClick = { HomeWidgets.pin(context, k) }) { Text(L.common.add) }
                     }
                 }
             }
@@ -171,7 +171,7 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                 L.homescreen.settings.anIconThatOpensOneChat
             )
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { picking = "shortcut" }) { Text(L.homescreen.settings.chooseAChat) }
+            OutlinedButton(onClick = { pickingChat = true }) { Text(L.homescreen.settings.chooseAChat) }
             Spacer(Modifier.height(4.dp))
             Hint(L.homescreen.settings.alsoOnAChatInThe)
         }
@@ -274,15 +274,14 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
         )
     }
 
-    picking?.let { mode ->
+    if (pickingChat) {
         ChatPickerDialog(
-            title = if (mode == "widget") L.homescreen.settings.whichChatShouldTheWidgetShow else L.homescreen.settings.whichChatShouldGetAnIcon,
+            title = L.homescreen.settings.whichChatShouldGetAnIcon,
             chats = snap?.chats.orEmpty(),
-            onDismiss = { picking = null }
+            onDismiss = { pickingChat = false }
         ) { c ->
-            picking = null
-            if (mode == "widget") HomeWidgets.pin(context, WidgetKind.CHAT, Triple(c.id, c.agentKind, c.title))
-            else HomeShortcuts.pinChat(context, c.id, c.agentKind, c.title)
+            pickingChat = false
+            HomeShortcuts.pinChat(context, c.id, c.agentKind, c.title)
         }
     }
 }

@@ -32,6 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -74,7 +80,7 @@ fun SlashCommandOverlay(
         .sortedBy { (type, _) -> order.indexOf(type).let { if (it < 0) order.size else it } }
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().semantics { paneTitle = L.chat.slashCommandOverlay.commands },
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
@@ -89,7 +95,11 @@ fun SlashCommandOverlay(
                 val group = groupOf(type)
                 item(key = "h_$type") {
                     Row(
-                        Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 4.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            // one heading for TalkBack, with the title as written (the uppercase one can get spelled out)
+                            .clearAndSetSemantics { heading(); contentDescription = "${group.title}, ${list.size}" }
+                            .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -118,7 +128,7 @@ private fun SlashRow(item: SlashCommandItem, group: SlashGroup, query: String, r
             .fillMaxWidth()
             .padding(horizontal = 6.dp)
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

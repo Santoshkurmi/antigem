@@ -19,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,7 +70,9 @@ fun ThinkingAccordion(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(6.dp))
-                .clickable {
+                // TalkBack: "Expanded" / "Collapsed", and "double-tap to expand / collapse"
+                .semantics { stateDescription = if (isExpanded) L.components.a11y.expanded else L.components.a11y.collapsed }
+                .clickable(onClickLabel = if (isExpanded) L.common.collapse else L.common.expand) {
                     hasUserManuallyToggled = true
                     isExpanded = !isExpanded
                 }
@@ -76,7 +81,8 @@ fun ThinkingAccordion(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
+                // the row says Expanded / Collapsed
+                contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                 modifier = Modifier
                     .size(15.dp)
@@ -87,7 +93,8 @@ fun ThinkingAccordion(
 
             Icon(
                 imageVector = Icons.Outlined.Psychology,
-                contentDescription = L.common.thinking,
+                // the title next to it says it
+                contentDescription = null,
                 tint = ClaudeTerracotta.copy(alpha = 0.85f),
                 modifier = Modifier.size(15.dp)
             )
@@ -122,7 +129,9 @@ fun ThinkingAccordion(
                     Text(
                         text = "·",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                        // a separator, not read
+                        modifier = Modifier.clearAndSetSemantics { }
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(

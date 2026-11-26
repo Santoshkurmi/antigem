@@ -76,8 +76,7 @@ class ChatsWidgetReceiver : GlanceAppWidgetReceiver() {
 /** Chats for the widget picker's preview when there are none yet. */
 internal val SAMPLE_CHATS get() = listOf(
     HomeChat("s1", AgentKind.CLAUDE.name, L.homescreen.chatsWidget.fixTheLoginBug, "my-app", System.currentTimeMillis() - 60_000, running = true, pinned = true),
-    HomeChat("s2", AgentKind.AGY.name, L.homescreen.chatsWidget.darkModeForSettings, "my-app", System.currentTimeMillis() - 25 * 60_000, done = true,
-        reply = L.homescreen.chatsWidget.doneSettingsNowFollowsTheSystem),
+    HomeChat("s2", AgentKind.AGY.name, L.homescreen.chatsWidget.darkModeForSettings, "my-app", System.currentTimeMillis() - 25 * 60_000, done = true),
     HomeChat("s3", AgentKind.CODEX.name, L.homescreen.chatsWidget.writeReleaseNotes, "website", System.currentTimeMillis() - 3 * 3_600_000),
     HomeChat("s4", AgentKind.OPENCODE.name, L.homescreen.chatsWidget.planTheNewApi, "server", System.currentTimeMillis() - 26 * 3_600_000)
 )

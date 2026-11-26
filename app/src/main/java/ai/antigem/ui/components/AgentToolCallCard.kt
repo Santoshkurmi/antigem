@@ -35,6 +35,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -187,14 +192,17 @@ fun AgentToolCallCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(6.dp))
-                .clickable { ToolCallExpansionCache.setExpanded(toolCall, !isExpanded) }
+                // TalkBack: "Expanded" / "Collapsed", and "double-tap to expand / collapse"
+                .semantics { stateDescription = if (isExpanded) L.components.a11y.expanded else L.components.a11y.collapsed }
+                .clickable(onClickLabel = if (isExpanded) L.common.collapse else L.common.expand) { ToolCallExpansionCache.setExpanded(toolCall, !isExpanded) }
                 .padding(horizontal = 4.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Frontend Expand Chevron (-> / rotating arrow)
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
+                // the row says Expanded / Collapsed
+                contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(16.dp)
@@ -397,7 +405,7 @@ fun AgentToolCallCard(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(ai.antigem.theme.AppColors.editorBg)
-                                .clickable {
+                                .clickable(onClickLabel = L.components.agentToolCallCard.fullView) {
                                     if (displayUri.isNotBlank()) showFullScreenViewer = true
                                 },
                             contentAlignment = Alignment.Center
@@ -535,7 +543,8 @@ fun AgentToolCallCard(
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(horizontal = 6.dp)
+                                // TalkBack reads the time, not "stopwatch"
+                                modifier = Modifier.padding(horizontal = 6.dp).clearAndSetSemantics { contentDescription = formatDuration(toolCall.durationMs) }
                             )
                         }
 
@@ -604,7 +613,7 @@ fun AgentToolCallCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(6.dp))
-                                    .clickable { showFullOutput = true }
+                                    .clickable(role = Role.Button) { showFullOutput = true }
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {

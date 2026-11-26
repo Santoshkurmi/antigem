@@ -35,6 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -106,7 +109,13 @@ fun StepGroupPill(group: ChatFeedItem.StepGroup, onToggle: () -> Unit, modifier:
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(onClick = onToggle)
+                .clickable(
+                    onClickLabel = if (group.expanded) L.chat.stepGroupPill.hideSteps else L.chat.stepGroupPill.showSteps,
+                    role = Role.Button,
+                    onClick = onToggle
+                )
+                // TalkBack: "…, Collapsed, Button, double-tap to show steps" (the ticking clock is not in here on purpose)
+                .semantics { stateDescription = if (group.expanded) L.components.a11y.expanded else L.components.a11y.collapsed }
                 .padding(horizontal = 10.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -149,7 +158,7 @@ fun StepGroupPill(group: ChatFeedItem.StepGroup, onToggle: () -> Unit, modifier:
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (group.expanded) L.chat.stepGroupPill.hideSteps else L.chat.stepGroupPill.showSteps,
+                contentDescription = null,
                 tint = muted.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(18.dp)

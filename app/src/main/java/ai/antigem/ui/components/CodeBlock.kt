@@ -13,6 +13,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +41,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -273,7 +281,13 @@ fun CodeBlock(
             // Language Badge + Line count
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                // TalkBack: "kotlin code, 12 lines" as a heading (not "K-O-T-L-I-N, bullet, 12 lines")
+                modifier = Modifier.clearAndSetSemantics {
+                    val lines = L.components.toolOutput.lineCount(lineCount)
+                    contentDescription = if (language.isBlank()) "${L.common.code}, $lines" else L.components.a11y.codeBlockLabel(language, lines)
+                    heading()
+                }
             ) {
                 Text(
                     text = language.ifEmpty { "code" }.uppercase(),
@@ -299,15 +313,16 @@ fun CodeBlock(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .background(Color.White.copy(alpha = 0.08f))
-                        .padding(2.dp),
+                        .padding(2.dp)
+                        .selectableGroup(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Code Tab
+                    // Code Tab (selectable: TalkBack says which tab is on; same tap and ripple as clickable)
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
-                            .clickable { selectedTab = 0 }
+                            .selectable(selected = selectedTab == 0, role = Role.Tab) { selectedTab = 0 }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -332,7 +347,7 @@ fun CodeBlock(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
-                            .clickable { selectedTab = 1 }
+                            .selectable(selected = selectedTab == 1, role = Role.Tab) { selectedTab = 1 }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -511,7 +526,9 @@ fun CodeBlock(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { toggleExpand() },
+                        // TalkBack: "Expanded" / "Collapsed"
+                        .semantics { stateDescription = if (isExpanded) L.components.a11y.expanded else L.components.a11y.collapsed }
+                        .clickable(role = Role.Button) { toggleExpand() },
                     color = CodeBlockBgDark.copy(alpha = 0.7f)
                 ) {
                     Row(
@@ -522,11 +539,14 @@ fun CodeBlock(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val hiddenLines = (lineCount - CODE_PREVIEW_LINES).coerceAtLeast(1)
+                        val footerText = if (isExpanded) L.components.codeBlock.collapseCodeBlock2 else L.components.codeBlock.showAllLinecountLinesHiddenlinesMore(lineCount, hiddenLines)
                         Text(
-                            text = if (isExpanded) L.components.codeBlock.collapseCodeBlock2 else L.components.codeBlock.showAllLinecountLinesHiddenlinesMore(lineCount, hiddenLines),
+                            text = footerText,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = ClaudeTerracotta
+                            color = ClaudeTerracotta,
+                            // TalkBack reads it without the ▲ / ▼ ("black down-pointing triangle")
+                            modifier = Modifier.clearAndSetSemantics { contentDescription = footerText.replace("▲", "").replace("▼", "").trim() }
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -592,14 +612,15 @@ fun CodeBlock(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        .padding(2.dp),
+                                        .padding(2.dp)
+                                        .selectableGroup(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
-                                            .clickable { selectedTab = 0 }
+                                            .selectable(selected = selectedTab == 0, role = Role.Tab) { selectedTab = 0 }
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
@@ -613,7 +634,7 @@ fun CodeBlock(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
-                                            .clickable { selectedTab = 1 }
+                                            .selectable(selected = selectedTab == 1, role = Role.Tab) { selectedTab = 1 }
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
@@ -722,6 +743,8 @@ fun CodeBlock(
                                 modifier = Modifier
                                     .padding(start = 12.dp, end = 10.dp, top = 14.dp, bottom = 14.dp)
                                     .widthIn(min = 28.dp)
+                                    // line numbers: not read as "1 2 3 4 …"
+                                    .clearAndSetSemantics { }
                             )
 
                             // Vertical divider line

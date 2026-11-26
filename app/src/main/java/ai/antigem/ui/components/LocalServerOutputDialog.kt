@@ -55,6 +55,8 @@ fun LocalServerOutputDialog(
         mutableIntStateOf((initialFontSizeSp * density.density).roundToInt().coerceIn(16, 60))
     }
     var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
+    // TalkBack's "Read terminal output": the whole log as selectable text
+    var a11yTranscript by remember { mutableStateOf<String?>(null) }
 
     // Live terminal redraw hook: listen to pty text updates and trigger onScreenUpdated/invalidate
     DisposableEffect(serverSession, currentTerminalView) {
@@ -259,6 +261,7 @@ fun LocalServerOutputDialog(
                                     setTextSize(terminalTextSize)
                                     isFocusable = false
                                     isFocusableInTouchMode = false
+                                    addReadOutputA11yAction { a11yTranscript = it }
                                     setTerminalViewClient(object : TerminalViewClient {
                                         override fun onScale(scale: Float): Float {
                                             if (scale < 0.9f || scale > 1.1f) {
@@ -376,5 +379,10 @@ fun LocalServerOutputDialog(
                 }
             }
         }
+    }
+
+    // TalkBack's "Read terminal output" (the log's actions menu)
+    a11yTranscript?.let { text ->
+        SelectTextSheet(text, onDismiss = { a11yTranscript = null }, title = L.components.a11y.terminalOutput, plainText = true)
     }
 }

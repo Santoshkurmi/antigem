@@ -33,6 +33,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -157,7 +159,9 @@ fun MemoryChipView(body: String, complete: Boolean, modifier: Modifier = Modifie
         onClick = { expanded = !expanded },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        // TalkBack: "Expanded" / "Collapsed"
         modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)
+            .semantics { stateDescription = if (expanded) L.components.a11y.expanded else L.components.a11y.collapsed }
     ) {
         Column {
             Row(

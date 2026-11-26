@@ -18,6 +18,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.horizontalScroll
 import ai.antigem.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -57,6 +59,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Image
@@ -276,7 +288,8 @@ fun MarkdownBlockView(
                     fontWeight = FontWeight.Bold,
                     color = if (block.level <= 3) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                 ),
-                modifier = modifier.padding(top = topPad, bottom = bottomPad)
+                // TalkBack can jump from heading to heading
+                modifier = modifier.padding(top = topPad, bottom = bottomPad).semantics { heading() }
             )
         }
         is MarkdownBlock.Bullet -> {
@@ -299,7 +312,9 @@ fun MarkdownBlockView(
                             alignment = LineHeightStyle.Alignment.Center,
                             trim = LineHeightStyle.Trim.None
                         )
-                    )
+                    ),
+                    // the marker is no stop of its own for TalkBack ("bullet"); the item's text is
+                    modifier = Modifier.clearAndSetSemantics { }
                 )
                 FormattedInlineText(
                     text = block.text,
@@ -482,7 +497,8 @@ fun MarkdownAlertView(
                 ) {
                     Icon(
                         imageVector = style.icon,
-                        contentDescription = displayTitle,
+                        // the title next to it says it (it was read twice)
+                        contentDescription = null,
                         tint = style.accentColor,
                         modifier = Modifier.size(16.dp)
                     )
@@ -492,7 +508,8 @@ fun MarkdownAlertView(
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = style.accentColor,
-                        letterSpacing = 0.3.sp
+                        letterSpacing = 0.3.sp,
+                        modifier = Modifier.semantics { heading() }
                     )
                 }
 
@@ -640,7 +657,9 @@ fun NativeMathView(
                     },
                     update = { view ->
                         view.setImageDrawable(jLatexDrawable)
-                    }
+                    },
+                    // the formula is a picture: TalkBack reads its LaTeX source
+                    modifier = Modifier.semantics { contentDescription = cleanLatex }
                 )
             } else {
                 // High-performance typographic fallback if LaTeX formula syntax contains custom non-standard commands
@@ -785,12 +804,13 @@ fun MermaidDiagramView(
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(2.dp)
+                        .selectableGroup()
                 ) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
-                            .clickable { selectedTab = 0 }
+                            .selectable(selected = selectedTab == 0, role = Role.Tab) { selectedTab = 0 }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
@@ -805,7 +825,7 @@ fun MermaidDiagramView(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
-                            .clickable { selectedTab = 1 }
+                            .selectable(selected = selectedTab == 1, role = Role.Tab) { selectedTab = 1 }
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
@@ -854,7 +874,7 @@ fun MermaidDiagramView(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.OpenInFull,
-                        contentDescription = L.common.expand,
+                        contentDescription = L.components.codeBlock.fullscreen,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.size(15.dp)
                     )
@@ -991,12 +1011,13 @@ fun MermaidFullscreenDialog(
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .padding(2.dp)
+                            .selectableGroup()
                     ) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(if (selectedTab == 0) ClaudeTerracotta else Color.Transparent)
-                                .clickable { selectedTab = 0 }
+                                .selectable(selected = selectedTab == 0, role = Role.Tab) { selectedTab = 0 }
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
@@ -1011,7 +1032,7 @@ fun MermaidFullscreenDialog(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(if (selectedTab == 1) ClaudeTerracotta else Color.Transparent)
-                                .clickable { selectedTab = 1 }
+                                .selectable(selected = selectedTab == 1, role = Role.Tab) { selectedTab = 1 }
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
@@ -1337,13 +1358,16 @@ fun MarkdownDetailsView(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
+                    // TalkBack: "Expanded" / "Collapsed", and "double-tap to expand / collapse"
+                    .semantics { stateDescription = if (isExpanded) L.components.a11y.expanded else L.components.a11y.collapsed }
+                    .clickable(onClickLabel = if (isExpanded) L.common.collapse else L.common.expand) { isExpanded = !isExpanded }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
+                    // the row says Expanded / Collapsed
+                    contentDescription = null,
                     tint = ClaudeTerracotta,
                     modifier = Modifier
                         .size(20.dp)
@@ -1524,6 +1548,8 @@ fun AgentErrorCard(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
+                        // TalkBack: "Expanded" / "Collapsed"
+                        .semantics { stateDescription = if (isExpanded) L.components.a11y.expanded else L.components.a11y.collapsed }
                         .clickable { isExpanded = !isExpanded }
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                         .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1531,7 +1557,8 @@ fun AgentErrorCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) L.common.collapse else L.common.expand,
+                        // the text next to it says View / Hide error details
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier
                             .size(16.dp)
@@ -1622,7 +1649,7 @@ fun MarkdownImageView(
                     BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
                     RoundedCornerShape(12.dp)
                 )
-                .clickable {
+                .clickable(onClickLabel = L.components.a11y.viewImage, role = Role.Image) {
                     showFullDialog = true
                 },
             shape = RoundedCornerShape(12.dp),
@@ -1650,7 +1677,8 @@ fun MarkdownImageView(
                             }
                         )
                         .build(),
-                    contentDescription = image.alt,
+                    // never an unlabeled image for TalkBack
+                    contentDescription = image.alt.ifBlank { L.components.a11y.image },
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1692,7 +1720,9 @@ fun MarkdownImageView(
                 fontSize = 11.5.sp,
                 fontStyle = FontStyle.Italic,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                // the image above already reads its alt text
+                modifier = Modifier.clearAndSetSemantics { }
             )
         }
     }
@@ -1929,7 +1959,7 @@ fun YouTubeVideoView(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable { onStartPlay() }
+                            .clickable(onClickLabel = L.components.markdown.playVideo) { onStartPlay() }
                     )
 
                     // Soft dark gradient overlay
@@ -1944,6 +1974,9 @@ fun YouTubeVideoView(
                                     )
                                 )
                             )
+                            // touch only: for TalkBack it was an unlabeled button over the thumbnail (before the
+                            // clickable, so its semantics are cleared too)
+                            .clearAndSetSemantics { }
                             .clickable { onStartPlay() }
                     )
 
@@ -2025,6 +2058,8 @@ fun MarkdownTableView(
     val t0 = System.nanoTime()
     val isDark = isAppInDarkTheme()
     val density = LocalDensity.current
+    // table semantics (row / column for each cell) only while TalkBack is on: no extra nodes per cell otherwise
+    val talkBackOn = rememberTalkBackOn()
 
     val numCols = maxOf(
         table.headers.size,
@@ -2127,6 +2162,11 @@ fun MarkdownTableView(
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
                     .width(tableTotalWidth)
+                    .then(
+                        if (talkBackOn) Modifier.semantics {
+                            collectionInfo = CollectionInfo(rowCount = cachedRows.size + 1, columnCount = numCols)
+                        } else Modifier
+                    )
             ) {
                 // Table Header Row
                 Row(
@@ -2163,7 +2203,12 @@ fun MarkdownTableView(
                             Text(
                                 text = headerResult.annotatedString,
                                 inlineContent = headerResult.inlineContent,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().then(
+                                    if (talkBackOn) Modifier.semantics {
+                                        heading()
+                                        collectionItemInfo = CollectionItemInfo(rowIndex = 0, rowSpan = 1, columnIndex = colIdx, columnSpan = 1)
+                                    } else Modifier
+                                ),
                                 style = TextStyle(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
@@ -2216,7 +2261,11 @@ fun MarkdownTableView(
                                 Text(
                                     text = cellResult.annotatedString,
                                     inlineContent = cellResult.inlineContent,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().then(
+                                        if (talkBackOn) Modifier.semantics {
+                                            collectionItemInfo = CollectionItemInfo(rowIndex = rowIdx + 1, rowSpan = 1, columnIndex = colIdx, columnSpan = 1)
+                                        } else Modifier
+                                    ),
                                     style = TextStyle(
                                         fontSize = 13.sp,
                                         lineHeight = 19.sp,

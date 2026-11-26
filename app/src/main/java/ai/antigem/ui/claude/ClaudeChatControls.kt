@@ -61,6 +61,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -376,7 +378,8 @@ fun ClaudeModelSheet(
                     shape = RoundedCornerShape(14.dp),
                     color = cardColor,
                     border = BorderStroke(if (isSel) 1.5.dp else 1.dp, if (isSel) accent.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)),
-                    modifier = Modifier.fillMaxWidth()
+                    // TalkBack: "Selected" / "Not selected"
+                    modifier = Modifier.fillMaxWidth().semantics { this.selected = isSel }
                 ) {
                     Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -4,7 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -397,7 +401,7 @@ private fun QuestionBlockView(
                 fontSize = 13.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = ai.antigem.theme.AppColors.onBackground,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).semantics { heading() }
             )
 
             if (question.isMultiSelect) {
@@ -531,7 +535,11 @@ private fun OptionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable { onClick() },
+            // checkbox / radio for TalkBack ("Checked" / "Selected"); same tap and ripple as clickable
+            .then(
+                if (isMultiSelect) Modifier.toggleable(value = isSelected, role = Role.Checkbox, onValueChange = { onClick() })
+                else Modifier.selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            ),
         shape = RoundedCornerShape(8.dp),
         color = bgColor,
         border = BorderStroke(1.dp, borderColor)

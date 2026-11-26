@@ -88,6 +88,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import ai.antigem.ui.components.HideFromTalkBackWhile
+import ai.antigem.ui.components.a11yMinTouchTarget
+import ai.antigem.ui.components.rememberTalkBackOn
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,6 +132,8 @@ fun IdeScreen(
     var searchMatchCount by remember { mutableIntStateOf(0) }
     var currentMatchIndex by remember { mutableIntStateOf(-1) }
     val tabListState = rememberLazyListState()
+    // bigger buttons and tab bar while TalkBack is on
+    val talkBackOn = rememberTalkBackOn()
 
     var showRunMenu by remember { mutableStateOf(false) }
     var showAddProfileDialog by remember { mutableStateOf(false) }
@@ -331,6 +336,9 @@ fun IdeScreen(
             }
         }
     }
+    // TalkBack: the code editor (a native View) is out of reach while the sidebar or the full-height run panel covers
+    // it, or the IDE screen is hidden
+    HideFromTalkBackWhile(currentEditorView, !isVisible || sidebarOpen || (runnerSession != null && isRunnerMaximized))
 
     /** Opens a file through the same size and type checks as everywhere else; a new tap cancels the last open. */
     fun openInIde(path: String, name: String, size: Long, force: Boolean = false) {
@@ -716,7 +724,7 @@ fun IdeScreen(
                                             }
                                         }
                                     },
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(34.dp)
                                 ) {
                                     Box(
                                         contentAlignment = Alignment.Center,
@@ -746,6 +754,9 @@ fun IdeScreen(
                                         showRunMenu = true
                                     },
                                     modifier = Modifier
+                                        .a11yMinTouchTarget(talkBackOn)
+                                        // TalkBack: "Run configurations, drop-down list" (it opens a menu)
+                                        .semantics { role = Role.DropdownList }
                                         .size(22.dp)
                                         .padding(end = 4.dp)
                                 ) {
@@ -1024,14 +1035,14 @@ fun IdeScreen(
                         state = tabListState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(38.dp)
+                            .height(if (talkBackOn) 48.dp else 38.dp) // 48dp tabs while TalkBack is on
                             .background(ai.antigem.theme.AppColors.editorPanel)
                     ) {
                         items(openTabs) { tab ->
                             val isSelected = tab.path == activeTabPath
                             Row(
                                 modifier = Modifier
-                                    .height(38.dp)
+                                    .height(if (talkBackOn) 48.dp else 38.dp)
                                     .background(if (isSelected) ai.antigem.theme.AppColors.editorBg else ai.antigem.theme.AppColors.editorLine)
                                     .clickable { IdeDaemonManager.setActiveTabPath(tab.path) }
                                     .padding(horizontal = 12.dp),
@@ -1061,12 +1072,11 @@ fun IdeScreen(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = L.common.closeTab,
-                                    tint = Color.Gray,
+                                // the tap area: the icon's own 14dp, 48dp while TalkBack is on (the icon stays 14dp)
+                                Box(
+                                    contentAlignment = Alignment.Center,
                                     modifier = Modifier
-                                        .size(14.dp)
+                                        .a11yMinTouchTarget(talkBackOn)
                                         .clickable {
                                             if (tab.isModified) {
                                                 tabToClose = tab
@@ -1074,7 +1084,14 @@ fun IdeScreen(
                                                 IdeDaemonManager.closeTab(tab.path)
                                             }
                                         }
-                                )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = L.common.closeTab,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(1.dp))
                         }
@@ -1175,7 +1192,7 @@ fun IdeScreen(
                                                 searchMatchCount = 0
                                                 currentMatchIndex = -1
                                             },
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Close,
@@ -1208,7 +1225,7 @@ fun IdeScreen(
                             IconButton(
                                 onClick = { currentEditorView?.findPrevious() },
                                 enabled = searchMatchCount > 0,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowUp,
@@ -1222,7 +1239,7 @@ fun IdeScreen(
                             IconButton(
                                 onClick = { currentEditorView?.findNext() },
                                 enabled = searchMatchCount > 0,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowDown,
@@ -1239,7 +1256,7 @@ fun IdeScreen(
                                     isCaseSensitive = newCase
                                     currentEditorView?.search(findQuery, newCase)
                                 },
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(32.dp)
                             ) {
                                 Text(
                                     text = L.ide.screen.aa,
@@ -1259,7 +1276,7 @@ fun IdeScreen(
                                     currentMatchIndex = -1
                                     keyboardController?.hide()
                                 },
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -1916,6 +1933,8 @@ fun IdeScreen(
                             showFloatingPill = false,
                             backgroundColor = ai.antigem.theme.AppColors.terminalBg,
                             isMaximized = isRunnerMaximized,
+                            // TalkBack: out of reach while the sidebar is drawn over it
+                            coveredForA11y = sidebarOpen,
                             onToggleMaximize = {
                                 if (isRunnerMaximized) {
                                     isRunnerMaximized = false

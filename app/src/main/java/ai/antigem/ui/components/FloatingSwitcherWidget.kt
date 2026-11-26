@@ -55,6 +55,9 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -495,6 +498,10 @@ fun FloatingSwitcherWidget(
                                         if (tapOpensOverview) onOpenOverview() else expand()
                                         true
                                     }
+                                    // the pill's double-tap "go back" is touch only (TalkBack's double-tap presses it)
+                                    customActions = listOf(
+                                        CustomAccessibilityAction(L.common.back) { onNavigateBack(); true }
+                                    )
                                 }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -581,6 +588,8 @@ private fun FloatingSwitcherItemButton(
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
+            // TalkBack: the page shown now reads "Selected"
+            .semantics { selected = isSelected }
             .combinedClickable(
                 onLongClickLabel = L.components.floatingSwitcherWidget.toggleSwitcherOrientation,
                 onLongClick = onLongClick,

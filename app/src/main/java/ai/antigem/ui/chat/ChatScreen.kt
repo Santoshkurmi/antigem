@@ -21,6 +21,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
+import ai.antigem.ui.components.label
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -264,7 +275,7 @@ private fun ChatJumpButton(
             modifier = Modifier
                 .size(38.dp)
                 .clip(CircleShape)
-                .clickable { onJump(showUpArrow) },
+                .clickable(role = Role.Button) { onJump(showUpArrow) },
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
@@ -1645,6 +1656,8 @@ fun ChatScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
+                // while the artifacts panel is open over it, TalkBack can't wander into the chat behind it
+                modifier = if (showArtifactsDrawer) Modifier.clearAndSetSemantics { } else Modifier,
         drawerContent = {
             ChatHistoryDrawer(
                 conversations = conversations,
@@ -1983,6 +1996,9 @@ fun ChatScreen(
                         ) {
                             // long-press the title: this chat on the home screen (an icon, or a widget)
                             var titleMenuOpen by remember { mutableStateOf(false) }
+                            // same rule as the long-press below: TalkBack offers it as its long-press action
+                            val titleConv = currentConv
+                            val canPinTitle = titleConv != null && isChatStarted && !titleConv.readOnly && !isInFloatingWindow
                             Box(Modifier.weight(1f)) {
                             // the real title fades in when the chat gets one (instead of jumping from "New Chat")
                             Crossfade(
@@ -1994,6 +2010,9 @@ fun ChatScreen(
                                         val conv = currentConv
                                         if (conv != null && isChatStarted && !conv.readOnly && !isInFloatingWindow) titleMenuOpen = true
                                     })
+                                }.semantics(mergeDescendants = true) {
+                                    heading()
+                                    if (canPinTitle) onLongClick(label = L.common.addToHomeScreen) { titleMenuOpen = true; true }
                                 }
                             ) { chatTitle ->
                                 Text(
@@ -2014,26 +2033,6 @@ fun ChatScreen(
                                         currentConv?.let { ai.antigem.data.homescreen.HomeShortcuts.pinChat(context, it.id, it.agent, displayedChatTitle) }
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(L.chat.screen.addAsAWidget) },
-                                    leadingIcon = { Icon(Icons.Outlined.Widgets, null, modifier = Modifier.size(18.dp)) },
-                                    onClick = {
-                                        titleMenuOpen = false
-                                        val conv = currentConv
-                                        if (conv != null) {
-                                            if (ai.antigem.ui.homescreen.HomeWidgets.canPin(context)) {
-                                                ai.antigem.ui.homescreen.HomeWidgets.pin(
-                                                    context, ai.antigem.ui.homescreen.WidgetKind.CHAT, Triple(conv.id, conv.agent, displayedChatTitle)
-                                                )
-                                            } else {
-                                                ai.antigem.ui.components.AppToastHelper.showToast(
-                                                    L.chat.screen.longPressYourHomeScreenWidgets,
-                                                    ai.antigem.ui.components.ChatToastType.INFO
-                                                )
-                                            }
-                                        }
-                                    }
-                                )
                             }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
@@ -2044,7 +2043,7 @@ fun ChatScreen(
                                         .widthIn(max = 150.dp)
                                         .clip(RoundedCornerShape(50))
                                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                                        .clickable {
+                                        .clickable(role = Role.Button, onClickLabel = if (!isChatStarted) L.chat.screen.chooseProject else null) {
                                             if (!isChatStarted) showProjectPickerDialog = true
                                             else if (showStatusDot) statusMenuOpen = true
                                         }
@@ -2059,7 +2058,12 @@ fun ChatScreen(
                                             modifier = Modifier
                                                 .size(20.dp)
                                                 .clip(CircleShape)
-                                                .clickable { statusMenuOpen = true },
+                                                .clickable(role = Role.Button) { statusMenuOpen = true }
+                                                .semantics {
+                                                    contentDescription = L.components.a11y.agentStatusValue(
+                                                        agentEntries.joinToString { "${it.agent.label()}: ${it.label}" }
+                                                    )
+                                                },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             ai.antigem.ui.agents.AgentStatusDot(
@@ -2076,7 +2080,7 @@ fun ChatScreen(
                                             modifier = Modifier
                                                 .size(20.dp)
                                                 .clip(CircleShape)
-                                                .clickable { screenAwakeInfoOpen = true },
+                                                .clickable(role = Role.Button) { screenAwakeInfoOpen = true },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
@@ -2179,7 +2183,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .size(34.dp)
                                         .clip(CircleShape)
-                                        .clickable {
+                                        .clickable(role = Role.Button) {
                                             when (id) {
                                                 "newchat" -> {
                                                     // same as the sidebar's New chat
@@ -2410,7 +2414,8 @@ fun ChatScreen(
                                 text = L.chat.screen.unableToLoadChat,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.semantics { heading() }
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             SelectionContainer {
@@ -2553,7 +2558,8 @@ fun ChatScreen(
                                             fontSize = 22.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface,
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.semantics { heading() }
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
@@ -2926,7 +2932,7 @@ fun ChatScreen(
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().semantics { paneTitle = L.common.files },
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
@@ -2943,7 +2949,7 @@ fun ChatScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable {
+                                            .clickable(role = Role.Button) {
                                                 val newText = inputState.text.substring(0, atIndex) + "@${file.path} "
                                                 inputState.setTextAndPlaceCursorAtEnd(newText)
                                             }
@@ -2952,7 +2958,7 @@ fun ChatScreen(
                                     ) {
                                         Icon(
                                             imageVector = if (file.isDir) Icons.Default.Folder else Icons.Default.Description,
-                                            contentDescription = null,
+                                            contentDescription = if (file.isDir) L.files.fileKinds.folder else null,
                                             tint = ClaudeTerracotta,
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -3007,7 +3013,8 @@ fun ChatScreen(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                             )
                         }
                     }
@@ -3058,7 +3065,8 @@ fun ChatScreen(
                                     fontWeight = FontWeight.Medium,
                                     color = if (isReconnecting) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onErrorContainer,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 )
                             }
                             if (!isReconnecting) {
@@ -3732,7 +3740,7 @@ fun ChatScreen(
                             modifier = Modifier
                                 .padding(top = 12.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable {
+                                .clickable(role = Role.Button) {
                                     restoreSheetFor = action.message to cp
                                     pendingMessageAction = null
                                 }
@@ -4244,10 +4252,13 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { showArtifactsDrawer = false }
+                // a tap outside the panel closes it. A plain tap detector, not .clickable: that would fold all of the
+                // panel's text into this one TalkBack item. TalkBack gets its own "Close" item instead.
+                .pointerInput(Unit) { detectTapGestures(onTap = { showArtifactsDrawer = false }) }
+                .semantics {
+                    contentDescription = L.common.close
+                    onClick(label = L.common.close) { showArtifactsDrawer = false; true }
+                }
         ) {
             AnimatedVisibility(
                 visible = showArtifactsDrawer,
@@ -4263,10 +4274,8 @@ fun ChatScreen(
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()
                     .fillMaxWidth(0.85f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { /* Absorb clicks */ }
+                    // absorbs taps so they don't reach the backdrop (no semantics: TalkBack reads the panel's items one by one)
+                    .pointerInput(Unit) { detectTapGestures(onTap = {}) }
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -4415,7 +4424,7 @@ fun ChatToastBanner(
                 fontSize = 13.5.sp,
                 fontWeight = FontWeight.Medium,
                 lineHeight = 18.sp,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )

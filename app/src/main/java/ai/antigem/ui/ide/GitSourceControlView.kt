@@ -37,6 +37,11 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import ai.antigem.ui.components.a11yMinTouchTarget
+import ai.antigem.ui.components.gitStatusSpokenName
+import ai.antigem.ui.components.rememberTalkBackOn
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +52,8 @@ fun GitSourceControlView(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // bigger row buttons while TalkBack is on
+    val talkBackOn = rememberTalkBackOn()
 
     var status by remember { mutableStateOf<GitStatusResponse?>(null) }
     var branches by remember { mutableStateOf<List<GitBranchInfo>>(emptyList()) }
@@ -543,7 +550,7 @@ fun GitSourceControlView(
                             actions = {
                                 IconButton(
                                     onClick = { showUnstageAllDialog = true },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
                                 ) {
                                     Icon(imageVector = Icons.Default.Remove, contentDescription = L.ide.gitSourceControlView.unstageAll, modifier = Modifier.size(14.dp))
                                 }
@@ -564,7 +571,8 @@ fun GitSourceControlView(
                                     }
                                 },
                                 actionIcon = Icons.Default.Remove,
-                                actionDesc = L.ide.gitSourceControlView.unstage
+                                actionDesc = L.ide.gitSourceControlView.unstage,
+                                talkBackOn = talkBackOn
                             )
                         }
                     }
@@ -583,7 +591,7 @@ fun GitSourceControlView(
                                 Row {
                                     IconButton(
                                         onClick = { showDiscardAllDialog = true },
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
                                     ) {
                                         Icon(imageVector = Icons.Default.Undo, contentDescription = L.ide.gitSourceControlView.discardAll, modifier = Modifier.size(13.dp), tint = ai.antigem.theme.AppColors.danger)
                                     }
@@ -595,7 +603,7 @@ fun GitSourceControlView(
                                                 refreshGitData()
                                             }
                                         },
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
                                     ) {
                                         Icon(imageVector = Icons.Default.Add, contentDescription = L.ide.gitSourceControlView.stageAll, modifier = Modifier.size(14.dp), tint = ai.antigem.theme.AppColors.success)
                                     }
@@ -620,7 +628,8 @@ fun GitSourceControlView(
                                 actionDesc = L.ide.gitSourceControlView.stage,
                                 onDiscard = {
                                     pendingDiscardFile = file.path
-                                }
+                                },
+                                talkBackOn = talkBackOn
                             )
                         }
                     }
@@ -639,7 +648,7 @@ fun GitSourceControlView(
                                 Row {
                                     IconButton(
                                         onClick = { showDiscardAllUntrackedDialog = true },
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
                                     ) {
                                         Icon(imageVector = Icons.Default.Undo, contentDescription = L.ide.gitSourceControlView.discardAllUntracked, modifier = Modifier.size(13.dp), tint = ai.antigem.theme.AppColors.danger)
                                     }
@@ -651,7 +660,7 @@ fun GitSourceControlView(
                                                 refreshGitData()
                                             }
                                         },
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
                                     ) {
                                         Icon(imageVector = Icons.Default.Add, contentDescription = L.ide.gitSourceControlView.stageAllUntracked, modifier = Modifier.size(14.dp), tint = ai.antigem.theme.AppColors.success)
                                     }
@@ -676,7 +685,9 @@ fun GitSourceControlView(
                                 actionDesc = L.ide.gitSourceControlView.stage,
                                 onDiscard = {
                                     pendingDiscardFile = file.path
-                                }
+                                },
+                                untracked = true,
+                                talkBackOn = talkBackOn
                             )
                         }
                     }
@@ -1487,7 +1498,10 @@ private fun GitFileRow(
     onAction: () -> Unit,
     actionIcon: androidx.compose.ui.graphics.vector.ImageVector,
     actionDesc: String,
-    onDiscard: (() -> Unit)? = null
+    onDiscard: (() -> Unit)? = null,
+    /** A row of the Untracked list: the bridge marks those "U", which elsewhere means a conflict. */
+    untracked: Boolean = false,
+    talkBackOn: Boolean = false
 ) {
     val fileName = remember(file.path) { File(file.path).name }
     val parentDir = remember(file.path) { File(file.path).parent ?: "" }
@@ -1511,7 +1525,9 @@ private fun GitFileRow(
         // Status badge (M, A, D, U)
         Surface(
             shape = RoundedCornerShape(3.dp),
-            color = statusBg
+            color = statusBg,
+            // TalkBack: the status as a word ("Modified"), not the letter
+            modifier = Modifier.clearAndSetSemantics { contentDescription = gitStatusSpokenName(file.status, untracked) }
         ) {
             Text(
                 text = file.status,
@@ -1547,7 +1563,7 @@ private fun GitFileRow(
         if (onDiscard != null) {
             IconButton(
                 onClick = onDiscard,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Undo,
@@ -1560,7 +1576,7 @@ private fun GitFileRow(
 
         IconButton(
             onClick = onAction,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(24.dp)
         ) {
             Icon(
                 imageVector = actionIcon,
@@ -1715,7 +1731,12 @@ private fun CommitLogRow(
                                     .padding(vertical = 3.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(shape = RoundedCornerShape(3.dp), color = badgeBg) {
+                                Surface(
+                                    shape = RoundedCornerShape(3.dp),
+                                    color = badgeBg,
+                                    // TalkBack: the status as a word ("Renamed"), not "R100"
+                                    modifier = Modifier.clearAndSetSemantics { contentDescription = gitStatusSpokenName(fileChange.status) }
+                                ) {
                                     Text(
                                         text = fileChange.status,
                                         fontSize = 9.sp,

@@ -33,6 +33,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
@@ -146,7 +153,24 @@ fun MessageBubble(
                         .widthIn(max = 320.dp)
                         .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { showUserActions = !showUserActions }
+                        // TalkBack: the actions under the bubble are also in its actions menu (no need to open the row)
+                        .semantics {
+                            customActions = buildList {
+                                add(CustomAccessibilityAction(L.common.copy) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Copied Prompt", message.content))
+                                    Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
+                                    true
+                                })
+                                add(CustomAccessibilityAction(L.components.messageBubble.editPrompt) { onEdit(message); true })
+                                add(CustomAccessibilityAction(L.components.messageBubble.retryPrompt) { onRetry(message); true })
+                                val payload = message.rawContent ?: message.rawPayload
+                                if (!payload.isNullOrBlank()) {
+                                    add(CustomAccessibilityAction(L.components.messageBubble.viewRawRequestPayload) { onViewRawPayload?.invoke(payload); true })
+                                }
+                            }
+                        }
+                        .clickable(onClickLabel = if (showUserActions) L.components.a11y.hideMessageActions else L.components.a11y.showMessageActions) { showUserActions = !showUserActions }
                         .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
                     SelectionContainer {
@@ -419,7 +443,27 @@ fun UserMessageBubble(
                 .bringIntoViewRequester(bubbleBringIntoView)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { showUserActions = !showUserActions }
+                // TalkBack: the actions under the bubble are also in its actions menu (no need to open the row)
+                .semantics {
+                    customActions = buildList {
+                        add(CustomAccessibilityAction(L.common.copy) {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Copied Prompt", message.content))
+                            Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
+                            true
+                        })
+                        add(CustomAccessibilityAction(L.components.messageBubble.viewFullPrompt) { showFullPrompt = true; true })
+                        if (canEdit) add(CustomAccessibilityAction(L.components.messageBubble.undoAndEditPrompt) { onEdit(message); true })
+                        if (checkpoint != null && onRestoreCheckpoint != null) {
+                            add(CustomAccessibilityAction(L.components.messageBubble.restoreToBeforeThisMessage) { onRestoreCheckpoint(message); true })
+                        }
+                        val payload = message.rawContent ?: message.rawPayload
+                        if (isDevModeEnabled && !payload.isNullOrBlank()) {
+                            add(CustomAccessibilityAction(L.components.messageBubble.viewRawRequestPayload) { onViewRawPayload?.invoke(payload); true })
+                        }
+                    }
+                }
+                .clickable(onClickLabel = if (showUserActions) L.components.a11y.hideMessageActions else L.components.a11y.showMessageActions) { showUserActions = !showUserActions }
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -513,18 +557,23 @@ fun UserMessageBubble(
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
+                                    // TalkBack: "Expanded" / "Collapsed"
+                                    .semantics { stateDescription = if (isTextExpanded) L.components.a11y.expanded else L.components.a11y.collapsed }
+                                    .clickable(role = Role.Button) {
                                         if (isTextExpanded) collapseRequests++
                                         isTextExpanded = !isTextExpanded
                                     }
                                     .padding(vertical = 2.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                val toggleText = if (isTextExpanded) L.components.messageBubble.showLess else L.components.messageBubble.showMoreLinecountLines(lineCount)
                                 Text(
-                                    text = if (isTextExpanded) L.components.messageBubble.showLess else L.components.messageBubble.showMoreLinecountLines(lineCount),
+                                    text = toggleText,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = ClaudeTerracotta
+                                    color = ClaudeTerracotta,
+                                    // read without the ▲ / ▼ ("black down-pointing triangle")
+                                    modifier = Modifier.clearAndSetSemantics { contentDescription = toggleText.replace("▲", "").replace("▼", "").trim() }
                                 )
                             }
                         }
@@ -549,7 +598,7 @@ fun UserMessageBubble(
                 modifier = Modifier
                     .padding(top = 5.dp, end = 2.dp)
                     .clip(RoundedCornerShape(50))
-                    .clickable { onRestoreCheckpoint(message) }
+                    .clickable(role = Role.Button) { onRestoreCheckpoint(message) }
                     .padding(horizontal = 8.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -876,7 +925,9 @@ private fun WaitingDotsText(phrase: String) {
         fontSize = 12.5.sp,
         fontWeight = FontWeight.SemiBold,
         color = ClaudeTerracotta,
-        letterSpacing = 0.2.sp
+        letterSpacing = 0.2.sp,
+        // the dots change every half second: TalkBack gets the phrase only
+        modifier = Modifier.clearAndSetSemantics { contentDescription = phrase }
     )
 }
 
@@ -924,11 +975,22 @@ fun TokenUsageTelemetryPill(
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.12f else 0.18f)),
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .clickable { showDetails = true }
+            .clickable(onClickLabel = L.common.details, role = Role.Button) { showDetails = true }
     ) {
         // one line, always: the model name gives way (…) before anything wraps
         Row(
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier
+                .padding(horizontal = 7.dp, vertical = 3.dp)
+                // TalkBack: exact counts in words, not "inbox tray 12k, outbox tray 3k, high voltage…"
+                .clearAndSetSemantics {
+                    contentDescription = buildList {
+                        add(L.components.a11y.tokenUsage(usage.promptTokens, usage.outputTokens))
+                        if (usage.cachedTokens > 0) add("${L.components.tokenUsageDetails.cacheRead} ${usage.cachedTokens} ($cachePct%)")
+                        if (usage.durationMs > 0) add("${L.components.tokenUsageDetails.time} ${formatDuration(usage.durationMs)}")
+                        usage.model?.takeIf { it.isNotBlank() }?.let { add("${L.components.tokenUsageDetails.model} ${shortModelName(it)}") }
+                        if (usage.isEstimated) add(L.components.tokenUsageDetails.tokenCountsAreEstimates)
+                    }.joinToString(", ")
+                },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -1011,6 +1073,8 @@ fun ContextSummaryCheckpointBanner(
             .fillMaxWidth()
             .padding(bottom = 8.dp)
             .clip(RoundedCornerShape(12.dp))
+            // TalkBack: "Expanded" / "Collapsed"
+            .semantics { stateDescription = if (expanded) L.components.a11y.expanded else L.components.a11y.collapsed }
             .clickable { expanded = !expanded },
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1026,13 +1090,20 @@ fun ContextSummaryCheckpointBanner(
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = ClaudeTerracotta,
-                    modifier = Modifier.weight(1f)
+                    // read without the 🧠 ("brain")
+                    modifier = Modifier.weight(1f).clearAndSetSemantics {
+                        contentDescription = L.components.messageBubble.contextCompactedHistorySummarized.replace("🧠", "").trim()
+                    }
                 )
                 Text(
                     text = if (expanded) "Hide ▲" else L.components.messageBubble.showDetails,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    // read without the ▲ / ▼
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = if (expanded) L.common.hide else L.components.messageBubble.showDetails.replace("▼", "").trim()
+                    }
                 )
             }
 
@@ -1119,7 +1190,7 @@ private fun UserMessageImageItem(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable {
+            .clickable(onClickLabel = L.components.a11y.viewImage) {
                 when {
                     finalUri.isNotBlank() -> onImageClick(finalUri)
                     // image kept only as data (e.g. a reopened Claude chat)
@@ -1232,7 +1303,7 @@ private fun UserMessageDocumentItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable {
+            .clickable(onClickLabel = L.components.messageBubble.openName(attachment.name)) {
                 if (attachment.reference && attachment.path.isNotBlank()) {
                     // a file on the agent's machine (sent by path): opened like any file link (encoded, the handler decodes)
                     fileLinkHandler.onOpenFile(java.net.URLEncoder.encode(attachment.path, "UTF-8"))

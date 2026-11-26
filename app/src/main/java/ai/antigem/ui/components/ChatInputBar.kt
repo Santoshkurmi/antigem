@@ -55,6 +55,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import android.net.Uri
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -667,6 +673,13 @@ fun ChatInputBar(
                                     if (isRecordingPaused) ai.antigem.theme.AppColors.warning
                                     else ai.antigem.theme.AppColors.danger.copy(alpha = pulseAlpha)
                                 )
+                                // TalkBack says "Recording" / "Recording paused" (remembered: the pulse redraws this every frame)
+                                .then(remember(isRecordingPaused) {
+                                    Modifier.semantics {
+                                        contentDescription = if (isRecordingPaused) L.components.a11y.recordingPaused else L.components.a11y.recording
+                                        liveRegion = LiveRegionMode.Polite
+                                    }
+                                })
                         )
 
                         Spacer(modifier = Modifier.width(6.dp))
@@ -829,7 +842,7 @@ fun ChatInputBar(
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }
                                     )
 
                                     // Pause / Resume button
@@ -903,7 +916,8 @@ fun ChatInputBar(
                                         text = L.components.chatInputBar.transcribingAudioViaAgyHub,
                                         fontSize = 12.sp,
                                         color = ClaudeTerracotta,
-                                        fontWeight = FontWeight.Medium
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                     )
                                 }
                             }
@@ -1000,7 +1014,7 @@ fun ChatInputBar(
                                         // Clickable preview + name container
                                         Row(
                                             modifier = Modifier
-                                                .clickable {
+                                                .clickable(role = Role.Button, onClickLabel = L.common.open) {
                                                     if (att.reference && !isImg) {
                                                         // a file on the agent's machine: opened like any file link (encoded, the handler decodes);
                                                         // still copying: nothing to open yet
@@ -1064,7 +1078,7 @@ fun ChatInputBar(
                                                 ) {
                                                     AsyncImage(
                                                         model = imgSource,
-                                                        contentDescription = att.name,
+                                                        contentDescription = null,
                                                         contentScale = ContentScale.Crop,
                                                         modifier = Modifier.fillMaxSize()
                                                     )
@@ -1129,7 +1143,7 @@ fun ChatInputBar(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Close,
-                                                contentDescription = L.common.remove,
+                                                contentDescription = L.components.a11y.removeName(att.name),
                                                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                                 modifier = Modifier.size(13.dp)
                                             )
@@ -1147,7 +1161,7 @@ fun ChatInputBar(
                                 .fillMaxWidth()
                                 .padding(horizontal = 6.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable(onClick = onOpenModelSelector)
+                                .clickable(role = Role.Button, onClickLabel = L.components.chatInputBar.switchModel, onClick = onOpenModelSelector)
                                 .padding(horizontal = 4.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -1244,6 +1258,10 @@ fun ChatInputBar(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(6.dp))
                                                 .background(badgeColor.copy(alpha = 0.15f))
+                                                // TalkBack: "48.8% left" / "75% left this week" instead of "7 d 75%"
+                                                .clearAndSetSemantics {
+                                                    contentDescription = if (quota?.pillIsWeekly == true) L.components.a11y.quotaLeftWeekly(pctText) else L.components.a11y.quotaLeft(pctText)
+                                                }
                                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
                                             Text(

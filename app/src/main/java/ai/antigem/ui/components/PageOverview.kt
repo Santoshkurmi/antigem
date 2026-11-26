@@ -85,6 +85,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -333,7 +341,8 @@ fun PageOverview(
                             text = L.components.pageOverview.pages,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.semantics { heading() }
                         )
                         Text(
                             text = L.components.pageOverview.tapToOpenHoldAndDrag,
@@ -411,7 +420,8 @@ private fun LayoutSwitch(selected: String, onSelect: (String) -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-            .padding(2.dp),
+            .padding(2.dp)
+            .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         OverviewLayouts.forEach { (id, label, icon) ->
@@ -421,7 +431,8 @@ private fun LayoutSwitch(selected: String, onSelect: (String) -> Unit) {
                     .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isSelected) ClaudeTerracotta.copy(alpha = 0.16f) else Color.Transparent)
-                    .clickable(onClickLabel = label) { if (!isSelected) onSelect(id) },
+                    // selectable: TalkBack says which layout is on (same tap and ripple as clickable)
+                    .selectable(selected = isSelected, role = Role.RadioButton) { if (!isSelected) onSelect(id) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -514,6 +525,18 @@ private class OverviewReorder(initial: List<String>) {
         if (now != orderAtStart) onDropped(now)
     }
 
+    /** TalkBack's "Move earlier / later": the tile swaps places with its neighbour, saved like a drop. */
+    fun step(id: String, by: Int): Boolean {
+        if (draggedId != null) return false
+        val from = order.indexOf(id)
+        val to = from + by
+        if (from < 0 || to !in order.indices) return false
+        order.removeAt(from)
+        order.add(to, id)
+        onDropped(order.toList())
+        return true
+    }
+
     /** A hold that ended without moving still releases like a tap: that one doesn't open the page. */
     fun clickAllowed(): Boolean = draggedId == null && SystemClock.uptimeMillis() - endedAt > 300
 
@@ -526,6 +549,14 @@ private fun Modifier.reorderTile(id: String, reorder: OverviewReorder): Modifier
     .zIndex(if (reorder.draggedId == id) 1f else 0f)
     // before the lift below: the tile's own place, not where it is dragged to
     .onGloballyPositioned { reorder.placed(id, it) }
+    // hold-and-drag is touch only: TalkBack gets "Move earlier" / "Move later" in its actions menu
+    .semantics {
+        val i = reorder.order.indexOf(id)
+        customActions = buildList {
+            if (i > 0) add(CustomAccessibilityAction(L.components.a11y.moveEarlier) { reorder.step(id, -1) })
+            if (i >= 0 && i < reorder.order.lastIndex) add(CustomAccessibilityAction(L.components.a11y.moveLater) { reorder.step(id, 1) })
+        }
+    }
     .pointerInput(id, reorder) {
         detectDragGesturesAfterLongPress(
             onDragStart = { at -> reorder.start(id, at) },
@@ -659,7 +690,12 @@ private fun PageCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(onClickLabel = L.components.pageOverview.openLabel(page.label), onClick = onClick)
+            // TalkBack: "Current page" on the page shown now (a tap on it just closes the overview)
+            .semantics { if (isCurrent) stateDescription = L.components.a11y.currentPage }
+            .clickable(
+                onClickLabel = if (isCurrent) L.components.pageOverview.closePageOverview else L.components.pageOverview.openLabel(page.label),
+                onClick = onClick
+            )
     ) {
         Column {
             // The top of the page as it looked when it was left (or its icon before it has a picture)
@@ -776,7 +812,12 @@ private fun FitPageCard(
         else BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
         modifier = modifier
             .clip(shape)
-            .clickable(onClickLabel = L.components.pageOverview.openLabel(page.label), onClick = onClick)
+            // TalkBack: "Current page" on the page shown now (a tap on it just closes the overview)
+            .semantics { if (isCurrent) stateDescription = L.components.a11y.currentPage }
+            .clickable(
+                onClickLabel = if (isCurrent) L.components.pageOverview.closePageOverview else L.components.pageOverview.openLabel(page.label),
+                onClick = onClick
+            )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (shot != null) {
@@ -847,7 +888,12 @@ private fun PageRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(onClickLabel = L.components.pageOverview.openLabel(page.label), onClick = onClick)
+            // TalkBack: "Current page" on the page shown now (a tap on it just closes the overview)
+            .semantics { if (isCurrent) stateDescription = L.components.a11y.currentPage }
+            .clickable(
+                onClickLabel = if (isCurrent) L.components.pageOverview.closePageOverview else L.components.pageOverview.openLabel(page.label),
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),

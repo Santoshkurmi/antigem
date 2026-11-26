@@ -1,7 +1,7 @@
 package ai.antigem.ui.opencode
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,7 +104,8 @@ fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit,
                             shape = RoundedCornerShape(14.dp),
                             color = if (isOn) OpenCodeAccent.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface,
                             border = BorderStroke(1.dp, if (isOn) OpenCodeAccent.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp)).clickable {
+                            // selectable: TalkBack says "Selected" / "Not selected" (same tap and ripple as clickable)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(14.dp)).selectable(selected = isOn, role = Role.RadioButton) {
                                 backend.selectModel(m.id)
                                 onDismiss()
                             }

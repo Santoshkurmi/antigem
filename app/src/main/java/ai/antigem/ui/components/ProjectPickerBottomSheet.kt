@@ -29,11 +29,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.data.daemon.ProjectItem
@@ -68,14 +72,13 @@ fun ProjectPickerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val currentOnDismiss by rememberUpdatedState(onDismiss)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                ),
+                // a tap outside the card closes it. A raw tap, not clickable: TalkBack would get one big unlabeled
+                // button over the screen (Back closes the dialog for it)
+                .pointerInput(Unit) { detectTapGestures { currentOnDismiss() } },
             contentAlignment = Alignment.Center
         ) {
             Surface(
@@ -87,11 +90,9 @@ fun ProjectPickerDialog(
                     .widthIn(max = 400.dp)
                     .fillMaxWidth(0.90f)
                     .fillMaxHeight(0.72f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {} // consume clicks on the dialog itself
-                    )
+                    // consume taps on the dialog itself (a raw tap: a clickable made the whole card one TalkBack
+                    // item whose double-tap did nothing)
+                    .pointerInput(Unit) { detectTapGestures { } }
             ) {
                 Column(
                     modifier = Modifier
@@ -125,7 +126,8 @@ fun ProjectPickerDialog(
                                 text = L.components.projectPickerBottom.selectWorkspace,
                                 fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.semantics { heading() }
                             )
                             Text(
                                 text = L.components.projectPickerBottom.projectscountAvailableWorkspaceValue(projects.size, if (projects.size == 1) "" else "s"),
@@ -188,6 +190,8 @@ fun ProjectPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
+                                // TalkBack: "Selected" / "Not selected"
+                                .semantics { this.selected = isSelected }
                                 .clickable {
                                     onSelectProject(null)
                                     onDismiss()
@@ -252,7 +256,8 @@ fun ProjectPickerDialog(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Check,
-                                            contentDescription = L.common.selected,
+                                            // the row already says "Selected"
+                                            contentDescription = null,
                                             tint = Color.White,
                                             modifier = Modifier.size(15.dp)
                                         )
@@ -277,6 +282,7 @@ fun ProjectPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
+                                .semantics { this.selected = isSelected }
                                 .clickable {
                                     onSelectProject(proj)
                                     onDismiss()
@@ -345,7 +351,8 @@ fun ProjectPickerDialog(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Check,
-                                            contentDescription = L.common.selected,
+                                            // the row already says "Selected"
+                                            contentDescription = null,
                                             tint = Color.White,
                                             modifier = Modifier.size(15.dp)
                                         )

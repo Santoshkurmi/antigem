@@ -18,8 +18,6 @@
     <string name="widget_chats_description">Your newest or pinned chats, live: what\'s working and what\'s done</string>
     <string name="widget_actions_label">Quick actions</string>
     <string name="widget_actions_description">One-tap buttons: new chats, Terminal, Browser, Code, Files and more</string>
-    <string name="widget_chat_label">One chat</string>
-    <string name="widget_chat_description">One chat with its status and latest reply, with Open and Reply</string>
     <string name="widget_scripts_label">Scripts</string>
     <string name="widget_scripts_description">Run your ~/.shortcuts scripts, like Termux:Widget</string>
 </resources>

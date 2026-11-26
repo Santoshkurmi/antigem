@@ -31,12 +31,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -67,7 +65,6 @@ import androidx.lifecycle.lifecycleScope
 import ai.antigem.data.homescreen.HomeAction
 import ai.antigem.data.homescreen.HomeChat
 import ai.antigem.data.homescreen.HomeIcons
-import ai.antigem.data.homescreen.HomeLinks
 import ai.antigem.data.homescreen.HomePrefs
 import ai.antigem.data.homescreen.HomeSnapshot
 import ai.antigem.data.preferences.AuthPreferences
@@ -81,7 +78,7 @@ import ai.antigem.i18n.L
 
 /**
  * A widget's setup screen, opened when it is placed (and from its settings on Android 12+): which chats the Chats
- * widget lists, the Quick actions widget's buttons, or the chat the One chat widget shows.
+ * widget lists or the Quick actions widget's buttons.
  */
 class WidgetConfigActivity : ComponentActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -96,16 +93,6 @@ class WidgetConfigActivity : ComponentActivity() {
         if (kind == null) {
             finish()
             return
-        }
-        // a One chat widget placed from the app already knows its chat
-        if (kind == WidgetKind.CHAT && savedInstanceState == null) {
-            HomeWidgets.takePendingChat(this)?.let { (id, agent, title) ->
-                lifecycleScope.launch {
-                    runCatching { HomeWidgets.applyChat(this@WidgetConfigActivity, widgetId, id, agent, title) }
-                    done()
-                }
-                return
-            }
         }
         if (kind == WidgetKind.SCRIPTS) {
             done()
@@ -125,7 +112,6 @@ class WidgetConfigActivity : ComponentActivity() {
                         when (kind) {
                             WidgetKind.CHATS -> ChatsSetup()
                             WidgetKind.ACTIONS -> ActionsSetup()
-                            WidgetKind.CHAT -> ChatPicker()
                             WidgetKind.SCRIPTS -> Unit
                         }
                     }
@@ -298,43 +284,6 @@ class WidgetConfigActivity : ComponentActivity() {
                 Text(a.description, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             trailing()
-        }
-    }
-
-    // ------------------------------------------------------------------ One chat
-
-    @Composable
-    private fun ChatPicker() {
-        val snap by HomeSnapshot.state.collectAsState()
-        var query by remember { mutableStateOf("") }
-        val chats = (snap?.chats ?: emptyList()).filter { query.isBlank() || it.title.contains(query, true) || it.project.contains(query, true) }
-        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            OutlinedTextField(
-                value = query, onValueChange = { query = it }, singleLine = true,
-                leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                placeholder = { Text(L.homescreen.widgetConfigActivity.searchChats) },
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            )
-            if (snap?.loaded != true || snap?.chats.isNullOrEmpty()) {
-                Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(L.homescreen.widgetConfigActivity.noChatsYet, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(L.homescreen.widgetConfigActivity.openAntigemOnceSoYourChats, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = { startActivity(HomeLinks.intent(this@WidgetConfigActivity, HomeLinks.Target.OpenPage(HomeLinks.Page.CHAT))) }) { Text(L.homescreen.widgetConfigActivity.openAntigem) }
-                }
-                return@Column
-            }
-            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(chats, key = { it.id }) { c -> ChatPickRow(c) { pick(c) } }
-            }
-        }
-    }
-
-    private fun pick(c: HomeChat) {
-        lifecycleScope.launch {
-            runCatching { HomeWidgets.applyChat(this@WidgetConfigActivity, widgetId, c.id, c.agent, c.title) }
-            done()
         }
     }
 }

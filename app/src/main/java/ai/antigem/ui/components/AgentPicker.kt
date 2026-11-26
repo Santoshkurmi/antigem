@@ -2,7 +2,8 @@ package ai.antigem.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,7 +73,8 @@ fun AgentPicker(
             .clip(shape)
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), shape)
             .horizontalScroll(rememberScrollState())
-            .padding(3.dp),
+            .padding(3.dp)
+            .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -82,7 +85,8 @@ fun AgentPicker(
                 modifier = Modifier
                     .clip(RoundedCornerShape(17.dp))
                     .background(if (isSelected) accent.copy(alpha = 0.16f) else Color.Transparent)
-                    .clickable { onSelect(agent) }
+                    // selectable: TalkBack says which agent is chosen (same tap and ripple as clickable)
+                    .selectable(selected = isSelected, role = Role.Tab) { onSelect(agent) }
                     .padding(horizontal = 14.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

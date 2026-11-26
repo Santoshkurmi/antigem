@@ -18,6 +18,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -74,7 +77,8 @@ fun ThinkingSelectorBottomSheet(
                         text = L.models.thinkingSelectorBottom.thinkingReasoningLevel,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() }
                     )
                     Text(
                         text = L.models.thinkingSelectorBottom.configureReasoningDepthAndTokenBudget,
@@ -99,6 +103,8 @@ fun ThinkingSelectorBottomSheet(
                         .fillMaxWidth()
                         .padding(vertical = 5.dp)
                         .clip(RoundedCornerShape(14.dp))
+                        // TalkBack: "Selected" / "Not selected"
+                        .semantics { selected = isSelected }
                         .clickable {
                             selectedLevel = level
                             if (level != ThinkingLevel.CUSTOM) {
@@ -148,7 +154,8 @@ fun ThinkingSelectorBottomSheet(
                             if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Outlined.Check,
-                                    contentDescription = L.common.selected,
+                                    // the card already says "Selected"
+                                    contentDescription = null,
                                     tint = ClaudeTerracotta,
                                     modifier = Modifier.size(20.dp)
                                 )

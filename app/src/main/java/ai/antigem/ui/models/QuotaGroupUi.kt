@@ -43,6 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -115,7 +118,7 @@ fun QuotaGroupHeader(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).semantics { heading() }
             )
             Text(
                 if (count == 1) "1 model" else L.models.quotaGroupUi.countModels(count),
@@ -234,7 +237,9 @@ fun GroupMoveButton(
                     }
                 },
                 leadingIcon = { CheckSlot(!isMoved, accent) },
-                onClick = { open = false; onPick(null) }
+                onClick = { open = false; onPick(null) },
+                // the check mark is only visual: TalkBack says "Selected" / "Not selected"
+                modifier = Modifier.semantics { selected = !isMoved }
             )
             HorizontalDivider(color = muted.copy(alpha = 0.08f))
             groups.forEach { g ->
@@ -247,7 +252,8 @@ fun GroupMoveButton(
                         }
                     },
                     leadingIcon = { CheckSlot(isMoved && g.id == current?.id, accent) },
-                    onClick = { open = false; onPick(g.id) }
+                    onClick = { open = false; onPick(g.id) },
+                    modifier = Modifier.semantics { selected = isMoved && g.id == current?.id }
                 )
             }
         }

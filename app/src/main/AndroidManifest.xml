@@ -396,17 +396,6 @@
                 android:resource="@xml/widget_actions_info" />
         </receiver>
         <receiver
-            android:name="ai.antigem.ui.homescreen.ChatWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_chat_label">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_chat_info" />
-        </receiver>
-        <receiver
             android:name="ai.antigem.ui.homescreen.ScriptsWidgetReceiver"
             android:exported="true"
             android:label="@string/widget_scripts_label">
@@ -417,10 +406,6 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_scripts_info" />
         </receiver>
-        <!-- A One chat widget placed from the app: the launcher tells which widget it became -->
-        <receiver
-            android:name="ai.antigem.ui.homescreen.HomeWidgetPinReceiver"
-            android:exported="false" />
 
         <!-- Holds the ADB pairing notification (code entry) while the user is in Developer options -->
         <service
