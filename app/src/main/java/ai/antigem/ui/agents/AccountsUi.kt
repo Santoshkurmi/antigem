@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SwitchAccount
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -224,6 +225,8 @@ fun AccountsDialog(
 ) {
     // the agent whose Sign out was tapped: asks first
     var confirmSignOut by remember { mutableStateOf<AgentKind?>(null) }
+    // Antigravity saved accounts (save / switch / add / delete) in a popup, without going through Settings
+    var showAgyAccounts by remember { mutableStateOf(false) }
     // `agy --version`, asked from the bridge (this phone's or the server's) each time the dialog opens
     val agyCli by ai.antigem.data.remote.BridgeInfo.agyCli.collectAsState()
     LaunchedEffect(Unit) { ai.antigem.data.remote.BridgeInfo.refreshAgyCli() }
@@ -278,6 +281,9 @@ fun AccountsDialog(
                             onAgySettings()
                             onDismiss()
                         }
+                        SectionButton(L.agents.agyAccountsUi.switch, Icons.Outlined.SwitchAccount) {
+                            showAgyAccounts = true
+                        }
                     }
                 }
 
@@ -320,6 +326,22 @@ fun AccountsDialog(
                 codex?.let { entry ->
                     if (agy != null || claude != null || openCode != null) Spacer(Modifier.height(12.dp))
                     CodexAccountSection(entry, codexEmail, codexFacts, { confirmSignOut = AgentKind.CODEX }, onCodexSettings, onDismiss)
+                }
+            }
+        }
+    }
+    if (showAgyAccounts && agy != null) {
+        Dialog(onDismissRequest = { showAgyAccounts = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(10.dp)) {
+                    // same card as Settings > Antigravity > Account & CLI: save, switch, add, delete, with its prompts
+                    AgyAccountsCard(agy, agyAuth)
+                    TextButton(onClick = { showAgyAccounts = false }, modifier = Modifier.align(Alignment.End)) { Text(L.common.close) }
                 }
             }
         }
