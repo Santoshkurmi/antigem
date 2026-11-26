@@ -74,3 +74,14 @@ agy_ide_bridge/pkg/buildinfo/version.json
 security_assesment.md
 # Chat RAM study and fix notes (local working notes)
 chat_issue.md
+# Separate projects with their own git repos (no longer submodules of this repo)
+/termux-x11/
+/termux-api/
+/antigem-vscode/
+/antigem-chrome-extension/
+/antigem_mini_apps/
+/antigem_plugins/
+/antigem_languages/
+/antigem_website/
+/my_website/
+/website/
