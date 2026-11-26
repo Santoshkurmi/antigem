@@ -36,6 +36,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,7 +78,7 @@ fun BridgeVersionDialog() {
     }
     AlertDialog(
         onDismissRequest = { BridgeInfo.snooze(b) },
-        title = { Text(L.agents.bridgeUi.updateTheIdeBridge, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+        title = { Text(L.agents.bridgeUi.updateTheIdeBridge, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.semantics { heading() }) },
         text = { Text(text, fontSize = 13.sp, lineHeight = 18.sp) },
         confirmButton = {
             if (cmp < 0) {
@@ -120,13 +125,13 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(L.agents.bridgeUi.antigravityCliAgy, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                if (checking) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text(L.agents.bridgeUi.antigravityCliAgy, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f).semantics { heading() })
+                if (checking) CircularProgressIndicator(Modifier.size(18.dp).semantics { contentDescription = L.common.checking }, strokeWidth = 2.dp)
                 else IconButton(onClick = { BridgeInfo.refreshAgyCli() }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
             }
             val running = job?.running == true
             when {
-                error != null -> Text(error!!, fontSize = 12.sp, color = Color.Red)
+                error != null -> Text(error!!, fontSize = 12.sp, color = Color.Red, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                 cli == null -> Text(L.common.checking, fontSize = 12.5.sp, color = subtle)
                 cli!!.installed -> {
                     Text(cli!!.version.ifBlank { L.agents.bridgeUi.installedVersionUnknown }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -174,7 +179,8 @@ fun AgyCliCard(modifier: Modifier = Modifier) {
                 Text(
                     "${j.kind}: " + if (j.running) L.agents.bridgeUi.running else L.agents.bridgeUi.finishedExitExitcode(j.exitCode),
                     fontSize = 12.sp,
-                    color = if (!j.running && j.exitCode != 0) Color.Red else subtle
+                    color = if (!j.running && j.exitCode != 0) Color.Red else subtle,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                 )
                 Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -217,7 +223,7 @@ fun AgyAccountCard(
         modifier = modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(14.dp)) {
-            Text(L.common.account, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text(L.common.account, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(6.dp))
             when {
                 entry == null -> Text(L.common.checking, fontSize = 12.5.sp, color = subtle)
@@ -242,7 +248,7 @@ fun AgyAccountCard(
                 }
                 // signing in: Check (the browser sign-in finished) or Cancel
                 entry.pending && entry.action != null -> {
-                    entry.detail?.let { Text(it, fontSize = 12.5.sp, color = subtle) }
+                    entry.detail?.let { Text(it, fontSize = 12.5.sp, color = subtle, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // tapped: shows "Checking…" until the sign-in state changes (agy needs a few seconds after the browser)
@@ -255,7 +261,7 @@ fun AgyAccountCard(
                     }
                 }
                 else -> {
-                    Text(entry.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = entry.color)
+                    Text(entry.label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = entry.color, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     entry.detail?.let { Text(it, fontSize = 12.sp, color = subtle, maxLines = 4) }
                     Text(L.agents.bridgeUi.signInIsAvailableOnceAntigravity, fontSize = 11.5.sp, color = subtle, modifier = Modifier.padding(top = 4.dp))
                 }

@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
@@ -153,8 +154,10 @@ fun MessageBubble(
                         .widthIn(max = 320.dp)
                         .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        // TalkBack: the actions under the bubble are also in its actions menu (no need to open the row)
+                        // TalkBack: the actions under the bubble are also in its actions menu (no need to open the row).
+                        // A heading: TalkBack's heading navigation jumps prompt to prompt in a long chat (the reply follows each)
                         .semantics {
+                            heading()
                             customActions = buildList {
                                 add(CustomAccessibilityAction(L.common.copy) {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -443,8 +446,10 @@ fun UserMessageBubble(
                 .bringIntoViewRequester(bubbleBringIntoView)
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                // TalkBack: the actions under the bubble are also in its actions menu (no need to open the row)
+                // TalkBack: the actions under the bubble are also in its actions menu (no need to open the row).
+                // A heading: TalkBack's heading navigation jumps prompt to prompt in a long chat (the reply follows each)
                 .semantics {
+                    heading()
                     customActions = buildList {
                         add(CustomAccessibilityAction(L.common.copy) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

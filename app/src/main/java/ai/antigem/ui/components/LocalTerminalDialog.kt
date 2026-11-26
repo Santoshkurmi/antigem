@@ -554,6 +554,14 @@ fun LocalTerminalContent(
                                 isFocusable = true
                                 isFocusableInTouchMode = true
                                 addReadOutputA11yAction { a11yTranscript = it }
+                                // the sessions drawer only opens by an edge swipe, which TalkBack can't do: an action for it
+                                // in TalkBack's actions menu (nothing changes on screen or for touch)
+                                if (hasSessionsDrawer) {
+                                    androidx.core.view.ViewCompat.addAccessibilityAction(this, L.components.a11y.openTerminalSessions) { _, _ ->
+                                        drawerState.open()
+                                        true
+                                    }
+                                }
 
                                 val createClient: () -> TerminalViewClient = {
                                     object : TerminalViewClient {

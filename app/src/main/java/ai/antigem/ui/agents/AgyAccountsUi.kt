@@ -36,6 +36,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -133,14 +139,14 @@ fun AgyAccountsCard(
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(L.agents.agyAccountsUi.savedAccounts, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text(L.agents.agyAccountsUi.savedAccounts, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f).semantics { heading() })
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp).semantics { contentDescription = L.common.loading }, strokeWidth = 2.dp)
             }
             Spacer(Modifier.height(6.dp))
             val st = state
             when {
                 st == null && error != null -> {
-                    Text(error.orEmpty(), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
+                    Text(error.orEmpty(), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     TextButton(onClick = { AgyAccounts.refresh() }) { Text(L.common.retry) }
                 }
                 st == null -> Text(L.common.loading, fontSize = 12.5.sp, color = subtle)
@@ -156,7 +162,7 @@ fun AgyAccountsCard(
                     // signed in with a login that has no saved copy
                     if (st.current.signedIn && !st.current.saved) {
                         Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(st.current.email.ifBlank { L.agents.agyAccountsUi.signedInAccount }, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(L.agents.agyAccountsUi.signedInNowNotSaved, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.tertiary)
@@ -170,8 +176,8 @@ fun AgyAccountsCard(
                     }
                     st.accounts.forEach { acc ->
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), modifier = Modifier.size(30.dp)) {
+                        Row(Modifier.semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically) {
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), modifier = Modifier.size(30.dp).clearAndSetSemantics { }) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(acc.name.trim().take(1).uppercase().ifBlank { "?" }, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
                                 }
@@ -209,7 +215,7 @@ fun AgyAccountsCard(
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedButton(enabled = !busy, onClick = { addAccount() }) { Text(L.agents.agyAccountsUi.addAccount) }
-                        if (error != null) Text(error.orEmpty(), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 2)
+                        if (error != null) Text(error.orEmpty(), fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error, maxLines = 2, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
                 }
             }
@@ -219,7 +225,7 @@ fun AgyAccountsCard(
     ask?.let { a ->
         AlertDialog(
             onDismissRequest = { ask = null },
-            title = { Text(a.title) },
+            title = { Text(a.title, modifier = Modifier.semantics { heading() }) },
             text = { Text(a.text) },
             confirmButton = {
                 TextButton(onClick = { ask = null; a.onConfirm() }) {

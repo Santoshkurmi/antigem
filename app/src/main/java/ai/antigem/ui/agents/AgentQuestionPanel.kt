@@ -67,6 +67,7 @@ import ai.antigem.ui.components.formatSelectionsSummary
 import ai.antigem.ui.components.label
 import ai.antigem.ui.components.rememberTalkBackOn
 import ai.antigem.i18n.L
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -210,7 +211,8 @@ fun AgentQuestionPanel(
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 0.8.sp,
                                 color = accent,
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                // read in its own case: TalkBack spells some all-caps words letter by letter
+                                modifier = Modifier.padding(bottom = 4.dp).semantics { contentDescription = d }
                             )
                         }
                     }

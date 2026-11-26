@@ -16,6 +16,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -133,7 +138,8 @@ fun IncomingShareDialog(
         is ShareStep.Saving -> AlertDialog(
             onDismissRequest = {},
             icon = { Icon(Icons.Outlined.Download, null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text(if (s.total > 1) L.files.incomingShare.savingValueOfTotal(s.index + 1, s.total) else L.files.incomingShare.saving, fontWeight = FontWeight.SemiBold) },
+            // live region: TalkBack says "Saving 2 of 3" as each file starts
+            title = { Text(if (s.total > 1) L.files.incomingShare.savingValueOfTotal(s.index + 1, s.total) else L.files.incomingShare.saving, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(s.name, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
@@ -202,7 +208,7 @@ fun IncomingShareDialog(
                 Column(Modifier.padding(20.dp)) {
                     Text(
                         if (single != null) L.files.incomingShare.fileReceived else L.files.incomingShare.itemscountFilesReceived(items.size),
-                        fontSize = 21.sp, fontWeight = FontWeight.SemiBold
+                        fontSize = 21.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() }
                     )
                     Text(
                         if (single != null) L.files.incomingShare.whatWouldYouLikeToDo else L.files.incomingShare.formatsizeInTotalWhatWouldYou(FileKinds.formatSize(totalSize)),
@@ -249,7 +255,9 @@ fun IncomingShareDialog(
 @Composable
 private fun IncomingPreview(item: IncomingItem) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(10.dp),
+        // one TalkBack stop per file: name, kind and size together
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerLowest).padding(10.dp)
+            .semantics(mergeDescendants = true) { },
         verticalAlignment = Alignment.CenterVertically
     ) {
         val kind = item.kind
@@ -281,7 +289,8 @@ private fun ShareOption(icon: ImageVector, title: String, subtitle: String, reco
         shape = RoundedCornerShape(16.dp),
         color = if (recommended) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surfaceContainerLow,
         border = if (recommended) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)) else null,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        // TalkBack: "Recommended" (the highlight alone showed it)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).semantics { if (recommended) stateDescription = L.common.recommended }
     ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {

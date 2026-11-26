@@ -73,6 +73,11 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -295,6 +300,11 @@ fun TerminalSessionsDrawer(
                     .fillMaxSize()
                     .drawBehind { drawRect(Color.Black.copy(alpha = 0.5f * state.fraction)) }
                     .pointerInput(state) { detectTapGestures { state.close() } }
+                    // TalkBack: the area beside the drawer reads "Close sessions drawer", double-tap closes it
+                    .semantics {
+                        contentDescription = L.components.terminalSessionsDrawer.closeDrawer
+                        onClick { state.close(); true }
+                    }
             )
             Surface(
                 modifier = Modifier
@@ -357,6 +367,7 @@ fun TerminalSessionsDrawer(
                                 onNewSession()
                                 state.close()
                             },
+                            onLongClickLabel = L.components.terminalSessionsDrawer.newBashSession,
                             onLongClick = {
                                 onNewBashSession()
                                 state.close()
@@ -393,6 +404,12 @@ private fun DrawerSessionRow(
             .heightIn(min = 52.dp)
             .background(if (isActive) ClaudeTerracotta.copy(alpha = 0.18f) else Color.Transparent)
             .clickable(onClickLabel = L.components.terminalSessionsDrawer.switchToThisSession, onClick = onClick)
+            // TalkBack: which session is shown and which has ended (colour and strike-through showed it)
+            .semantics {
+                this.selected = isActive
+                if (exited) stateDescription =
+                    if (isActive) L.components.terminalSessionsDrawer.selectedEnded else L.components.terminalSessionsDrawer.sessionEnded
+            }
             .padding(start = 14.dp, end = 2.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -410,7 +427,7 @@ private fun DrawerSessionRow(
         IconButton(onClick = onRename, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.Outlined.Edit,
-                contentDescription = L.components.terminalSessionsDrawer.renameSession,
+                contentDescription = L.components.terminalSessionsDrawer.renameSessionName(title),
                 tint = AppColors.editorText.copy(alpha = 0.75f),
                 modifier = Modifier.size(18.dp)
             )
@@ -419,7 +436,7 @@ private fun DrawerSessionRow(
         IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.Outlined.Delete,
-                contentDescription = L.components.terminalSessionsDrawer.closeSession,
+                contentDescription = L.components.terminalSessionsDrawer.closeSessionName(title),
                 tint = AppColors.danger.copy(alpha = 0.85f),
                 modifier = Modifier.size(18.dp)
             )
@@ -433,13 +450,15 @@ private fun DrawerButton(
     label: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** What TalkBack calls the long press ("New Bash session" instead of "long press"). */
+    onLongClickLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     Box(
         modifier = modifier
             .fillMaxHeight()
-            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(enabled = enabled, onClick = onClick, onLongClickLabel = onLongClickLabel, onLongClick = onLongClick),
         contentAlignment = Alignment.Center
     ) {
         Text(

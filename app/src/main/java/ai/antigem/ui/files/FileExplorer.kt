@@ -40,6 +40,18 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -666,7 +678,7 @@ fun FileExplorer(
                             IconButton(onClick = { if (!goBack()) onClose() }) {
                                 Icon(if (inDialog && history.isEmpty()) Icons.Outlined.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = L.common.back)
                             }
-                            Column(Modifier.weight(1f).padding(start = 2.dp)) {
+                            Column(Modifier.weight(1f).padding(start = 2.dp).semantics(mergeDescendants = true) { heading() }) {
                                 if (title != null) Text(title, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(folderName, fontSize = if (title != null) 18.sp else 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -692,7 +704,9 @@ fun FileExplorer(
                                         text = { Text(L.files.fileExplorer.showHiddenFiles) },
                                         leadingIcon = { Icon(if (settings.showHidden) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) },
                                         trailingIcon = { Checkbox(checked = settings.showHidden, onCheckedChange = null) },
-                                        onClick = { ExplorerPrefs.update { it.copy(showHidden = !it.showHidden) } }
+                                        onClick = { ExplorerPrefs.update { it.copy(showHidden = !it.showHidden) } },
+                                        // TalkBack: "Show hidden files, checkbox, checked" (the Checkbox has no click of its own)
+                                        modifier = Modifier.semantics { this.role = Role.Checkbox; toggleableState = ToggleableState(settings.showHidden) }
                                     )
                                     DropdownMenuItem(text = { Text(L.files.fileExplorer.sortView) }, leadingIcon = { Icon(Icons.Outlined.Sort, null) }, onClick = { menuOpen = false; viewOptionsOpen = true })
                                     DropdownMenuItem(text = { Text(L.common.refresh) }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) }, onClick = { menuOpen = false; reload(silent = false) })
@@ -759,11 +773,15 @@ fun FileExplorer(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
                     ) {
                         Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.inverseOnSurface)
+                            // the text says what is going on: the spinner isn't a second TalkBack stop
+                            CircularProgressIndicator(Modifier.size(16.dp).clearAndSetSemantics { }, strokeWidth = 2.dp, color = MaterialTheme.colorScheme.inverseOnSurface)
                             Spacer(Modifier.width(12.dp))
                             Text(
                                 (busy ?: "") + (busyProgress?.let { "  ${(it * 100).toInt()}%" } ?: ""),
-                                color = MaterialTheme.colorScheme.inverseOnSurface, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                color = MaterialTheme.colorScheme.inverseOnSurface, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                // TalkBack says the step ("Copying 3 items…") when it changes, not every percent (the progress
+                                // bar under the top bar has the percentage)
+                                modifier = Modifier.clearAndSetSemantics { busy?.let { contentDescription = it }; liveRegion = LiveRegionMode.Polite }
                             )
                         }
                     }
@@ -836,7 +854,7 @@ fun FileExplorer(
                 ) {
                     Button(onClick = { ai.antigem.data.local.TermuxStorageSetupManager.requestStoragePermission(context) }) { Text(L.common.allow) }
                 }
-                !loaded && loadError == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                !loaded && loadError == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.semantics { contentDescription = L.common.loading }) }
                 !loaded -> EmptyState(Icons.Outlined.CloudOff, L.files.fileExplorer.filesAreNotAvailable, loadError ?: "") {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(onClick = { scope.launch { loadError = null; load(path, null) } }) { Text(L.common.retry) }
@@ -845,7 +863,7 @@ fun FileExplorer(
                 }
                 searching && deep && deepLoading && deepResults == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(Modifier.clearAndSetSemantics { })
                         Spacer(Modifier.height(12.dp))
                         Text(L.files.fileExplorer.searchingAllSubfoldersOfFoldername(folderName), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -1309,8 +1327,9 @@ private fun PickSelectionBar(
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.clearSelection) }
-        Text(L.files.fileExplorer.countSelected(count), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = L.files.fileExplorer.selectAllFiles) }
+        // live region: TalkBack says "3 selected" as files are picked
+        Text(L.files.fileExplorer.countSelected(count), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
+        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = if (allSelected) L.files.fileExplorer.deselectAll else L.files.fileExplorer.selectAllFiles) }
         Button(onClick = onPick, enabled = count > 0, modifier = Modifier.padding(end = 8.dp)) { Text("$label ($count)") }
     }
 }
@@ -1330,8 +1349,9 @@ private fun SelectionBar(
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClear) { Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.clearSelection) }
-        Text(L.files.fileExplorer.countSelected(count), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = L.common.selectAll) }
+        // live region: TalkBack says "3 selected" as entries are picked
+        Text(L.files.fileExplorer.countSelected(count), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite })
+        IconButton(onClick = onSelectAll) { Icon(if (allSelected) Icons.Outlined.Deselect else Icons.Outlined.SelectAll, contentDescription = if (allSelected) L.files.fileExplorer.deselectAll else L.common.selectAll) }
         IconButton(onClick = onCopy) { Icon(Icons.Outlined.ContentCopy, contentDescription = L.common.copy) }
         IconButton(onClick = onCut) { Icon(Icons.Outlined.ContentCut, contentDescription = L.files.fileExplorer.cut) }
         IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = L.common.delete, tint = MaterialTheme.colorScheme.error) }
@@ -1373,7 +1393,7 @@ private fun SearchBar(
                 modifier = Modifier.weight(1f).padding(end = 8.dp).focusRequester(focus)
             )
         }
-        Row(Modifier.padding(start = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(start = 16.dp, bottom = 8.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !deep, onClick = { onDeep(false) }, label = { Text(L.files.fileExplorer.thisFolder) })
             FilterChip(selected = deep, onClick = { onDeep(true) }, label = { Text(L.files.fileExplorer.allSubfolders) }, leadingIcon = { Icon(Icons.Outlined.AccountTree, null, Modifier.size(16.dp)) })
         }
@@ -1469,7 +1489,7 @@ private fun SummaryFooter(text: String) {
 /** The two tabs while the bridge is on another machine: its files, and this phone's. */
 @Composable
 private fun SideTabs(side: ExplorerSide, bridgeName: String, enabled: Boolean, onSide: (ExplorerSide) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         @Composable
         fun Tab(s: ExplorerSide, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier) {
             val on = s == side
@@ -1479,7 +1499,8 @@ private fun SideTabs(side: ExplorerSide, bridgeName: String, enabled: Boolean, o
                 shape = RoundedCornerShape(12.dp),
                 color = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = androidx.compose.foundation.BorderStroke(1.dp, if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                modifier = modifier.height(38.dp)
+                // TalkBack: "Selected, This phone, tab" (the colour alone showed it)
+                modifier = modifier.height(38.dp).semantics { this.selected = on; this.role = Role.Tab }
             ) {
                 Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Icon(icon, null, tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
@@ -1528,7 +1549,8 @@ private fun FolderTabs(
                     shape = RoundedCornerShape(12.dp),
                     color = if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = androidx.compose.foundation.BorderStroke(1.dp, if (on) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                    modifier = Modifier.height(36.dp)
+                    // TalkBack: which tab is shown (the colour alone showed it)
+                    modifier = Modifier.height(36.dp).semantics { this.selected = on; this.role = Role.Tab }
                 ) {
                     Row(Modifier.padding(start = 10.dp, end = if (tabs.size > 1) 2.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -1549,7 +1571,7 @@ private fun FolderTabs(
                         )
                         if (tabs.size > 1) {
                             IconButton(onClick = { onClose(i) }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.closeTab, modifier = Modifier.size(14.dp),
+                                Icon(Icons.Outlined.Close, contentDescription = L.files.fileExplorer.closeTabName(t.label), modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }

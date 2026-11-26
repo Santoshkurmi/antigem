@@ -40,6 +40,12 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 import ai.antigem.i18n.L
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 
 @Composable
 fun AppUpdateDialog(
@@ -101,7 +107,7 @@ fun AppUpdateDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.RocketLaunch,
-                            contentDescription = L.common.update,
+                            contentDescription = null,
                             tint = primaryColor,
                             modifier = Modifier.size(22.dp)
                         )
@@ -114,7 +120,8 @@ fun AppUpdateDialog(
                             text = L.updater.appUpdate.newUpdateAvailable,
                             color = onSurfaceColor,
                             fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.semantics { heading() }
                         )
                         Text(
                             text = if (updateInfo.isCritical) L.updater.appUpdate.criticalRelease else L.updater.appUpdate.releaseUpdate,
@@ -137,7 +144,13 @@ fun AppUpdateDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // TalkBack: one sentence instead of "v2.0.4", "v2.0.5" with an unspoken arrow between
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clearAndSetSemantics {
+                            contentDescription = L.updater.appUpdate.fromVersionToVersion(updateInfo.currentVersionName, updateInfo.versionName)
+                        }
+                    ) {
                         Text(
                             text = "v${updateInfo.currentVersionName}",
                             color = onSurfaceVariantColor,
@@ -170,7 +183,8 @@ fun AppUpdateDialog(
                     color = onSurfaceVariantColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
+                    letterSpacing = 0.8.sp,
+                    modifier = Modifier.semantics { heading() }
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -338,7 +352,8 @@ fun AppUpdateDialog(
                                 text = L.updater.appUpdate.downloadFailedMessage(state.message),
                                 color = QuotaRed,
                                 fontSize = 11.5.sp,
-                                maxLines = 2
+                                maxLines = 2,
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                             )
                         }
                         Spacer(modifier = Modifier.height(10.dp))
@@ -368,7 +383,7 @@ fun AppUpdateDialog(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
-                            contentDescription = "GitHub",
+                            contentDescription = null, // the text next to it says GitHub
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))

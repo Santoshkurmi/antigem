@@ -61,6 +61,9 @@ import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.label
 import ai.antigem.ui.components.rememberTalkBackOn
 import ai.antigem.i18n.L
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -377,7 +380,10 @@ fun AgentActionPill(text: String, color: Color, onClick: () -> Unit, spokenLabel
         shape = RoundedCornerShape(14.dp),
         color = color.copy(alpha = 0.14f),
         border = BorderStroke(1.dp, color.copy(alpha = 0.35f)),
-        modifier = if (spokenLabel != null) Modifier.semantics { contentDescription = spokenLabel } else Modifier
+        modifier = Modifier.semantics {
+            this.role = Role.Button
+            if (spokenLabel != null) contentDescription = spokenLabel
+        }
     ) {
         Text(
             text,
@@ -526,7 +532,8 @@ fun AgentSetupPrompt(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.semantics { heading() }
+            // read out when it changes (starting -> signed out -> ready)
+            modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite }
         )
         Spacer(Modifier.height(8.dp))
         Text(

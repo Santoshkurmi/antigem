@@ -35,6 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,7 +84,7 @@ fun ClaudeLoginDialog(account: ClaudeAccountManager, onDismiss: () -> Unit) {
             onDismiss()
         },
         shape = RoundedCornerShape(18.dp),
-        title = { Text(L.claude.login.signInToClaudeCode, fontWeight = FontWeight.Bold) },
+        title = { Text(L.claude.login.signInToClaudeCode, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val l = login
@@ -105,15 +110,15 @@ fun ClaudeLoginDialog(account: ClaudeAccountManager, onDismiss: () -> Unit) {
                         Text(L.claude.login.anthropicConsoleApiBilling)
                     }
                     if (busy) Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(Modifier.size(16.dp).clearAndSetSemantics { }, strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
-                        Text(L.common.starting, fontSize = 12.5.sp)
+                        Text(L.common.starting, fontSize = 12.5.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = ClaudeAccent)
+                        CircularProgressIndicator(Modifier.size(16.dp).clearAndSetSemantics { }, strokeWidth = 2.dp, color = ClaudeAccent)
                         Spacer(Modifier.width(10.dp))
-                        Text(L.claude.login.waitingForYouToApproveIn, fontSize = 13.sp)
+                        Text(L.claude.login.waitingForYouToApproveIn, fontSize = 13.sp, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
                     OutlinedButton(onClick = { open(l.automatic_url) }, modifier = Modifier.fillMaxWidth()) {
                         androidx.compose.material3.Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(18.dp))
