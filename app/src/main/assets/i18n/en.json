@@ -7697,7 +7697,12 @@
     "settings.dialog.appearanceSubtitle": "Chat text size, agent steps, message stats, header icons and the app switcher",
     "settings.adbConnect.turnItOffWhenUnused": "Turn it off again when unused",
     "settings.adbConnect.turnItOffWhenUnusedHint": "When AntiGem turned Wireless debugging on, it turns it off again after this long without agents using adb, so the phone doesn't stay open to adb on Wi-Fi. Off: it stays on. If you turned it on yourself, it's always left alone.",
-    "settings.adbConnect.idleMinutes": "{n} min"
+    "settings.adbConnect.idleMinutes": "{n} min",
+    "settings.dialog.crashThisApp": "Crash this app",
+    "settings.dialog.crashThisAppWarning": "For testing the crash screen only. Don't tap this: the app closes at once and anything not saved is lost.",
+    "settings.dialog.crashNow": "Crash now",
+    "crash.buddy.tapOrPetToCheerUp": "Tap or pet it to cheer it up",
+    "crash.buddy.buddyDescription": "A sad little cat with a band-aid. Tap it to cheer it up."
   },
   "notes": {
     "settings.language.aiOff": "Segmented button: the agent picks its reply language",

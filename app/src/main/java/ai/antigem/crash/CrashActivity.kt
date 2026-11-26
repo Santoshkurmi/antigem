@@ -11,15 +11,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -61,22 +52,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.cos
-import kotlin.math.sin
 import ai.antigem.i18n.L
 
 /**
@@ -204,7 +186,13 @@ private fun CrashScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(12.dp))
-        DizzyBlob(Modifier.size(190.dp))
+        CrashBuddy(Modifier.size(width = 240.dp, height = 200.dp))
+        Text(
+            L.crash.buddy.tapOrPetToCheerUp,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
+        Spacer(Modifier.height(10.dp))
         Text(
             L.crash.activity.oopsAntigemTrippedOverSomething,
             style = MaterialTheme.typography.headlineSmall,
@@ -298,103 +286,4 @@ private fun CrashScreen(
 private fun ButtonIcon(icon: ImageVector) {
     Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
     Spacer(Modifier.width(8.dp))
-}
-
-/** A round little character that bobs, blinks, sweats and has stars circling its head. */
-@Composable
-private fun DizzyBlob(modifier: Modifier = Modifier) {
-    val t = rememberInfiniteTransition(label = "dizzyBlob")
-    val bob by t.animateFloat(
-        0f, 1f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob"
-    )
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "spin")
-    val blink by t.animateFloat(
-        1f, 1f,
-        infiniteRepeatable(keyframes {
-            durationMillis = 3400
-            1f at 0
-            1f at 3050
-            0.1f at 3150
-            1f at 3250
-        }),
-        label = "blink"
-    )
-    val drop by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1700, easing = LinearEasing)), label = "drop")
-    val ink = MaterialTheme.colorScheme.onBackground
-
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        val cx = w / 2f
-        val r = w * 0.27f
-        val cy = h * 0.6f - bob * h * 0.06f
-
-        // shadow: smaller while the body is up
-        val s = 1f - bob * 0.3f
-        drawOval(
-            ink.copy(alpha = 0.12f),
-            topLeft = Offset(cx - r * s, h * 0.93f - r * 0.1f),
-            size = Size(r * 2 * s, r * 0.2f)
-        )
-
-        rotate(degrees = (bob - 0.5f) * 10f, pivot = Offset(cx, cy)) {
-            drawCircle(Terracotta, r, Offset(cx, cy))
-            drawCircle(Color.White.copy(alpha = 0.25f), r * 0.22f, Offset(cx - r * 0.45f, cy - r * 0.5f)) // shine
-            // cheeks
-            drawCircle(Color(0x66FF6F91), r * 0.13f, Offset(cx - r * 0.58f, cy + r * 0.18f))
-            drawCircle(Color(0x66FF6F91), r * 0.13f, Offset(cx + r * 0.58f, cy + r * 0.18f))
-            // eyes (blinking)
-            val eyeW = r * 0.17f
-            val eyeH = r * 0.28f * blink
-            listOf(-1f, 1f).forEach { side ->
-                drawOval(
-                    Color(0xFF2B2B2B),
-                    topLeft = Offset(cx + side * r * 0.33f - eyeW / 2, cy - r * 0.12f - eyeH / 2),
-                    size = Size(eyeW, eyeH)
-                )
-            }
-            // wobbly frown
-            val mouth = Path().apply {
-                moveTo(cx - r * 0.24f, cy + r * 0.42f)
-                cubicTo(cx - r * 0.1f, cy + r * 0.22f, cx + r * 0.1f, cy + r * 0.22f, cx + r * 0.24f, cy + r * 0.42f)
-            }
-            drawPath(mouth, Color(0xFF2B2B2B), style = Stroke(width = r * 0.08f, cap = StrokeCap.Round))
-            // sweat drop sliding down and fading
-            drawDrop(cx + r * 0.78f, cy - r * 0.55f + drop * r * 0.55f, r * 0.11f, Color(0xFF7EC8F2).copy(alpha = 1f - drop))
-        }
-
-        // stars circling the head
-        repeat(3) { i ->
-            val a = Math.toRadians((spin + i * 120f).toDouble())
-            drawStar(
-                cx + cos(a).toFloat() * r * 0.85f,
-                cy - r * 1.2f + sin(a).toFloat() * r * 0.22f,
-                r * (0.12f + 0.04f * sin(a).toFloat()),
-                Color(0xFFFFC94D)
-            )
-        }
-    }
-}
-
-private fun DrawScope.drawStar(x: Float, y: Float, radius: Float, color: Color) {
-    val path = Path()
-    for (i in 0 until 10) {
-        val rr = if (i % 2 == 0) radius else radius * 0.45f
-        val a = Math.toRadians(-90.0 + i * 36.0)
-        val px = x + cos(a).toFloat() * rr
-        val py = y + sin(a).toFloat() * rr
-        if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-    }
-    path.close()
-    drawPath(path, color)
-}
-
-private fun DrawScope.drawDrop(x: Float, y: Float, r: Float, color: Color) {
-    val path = Path().apply {
-        moveTo(x, y - r * 1.7f)
-        cubicTo(x + r, y - r * 0.4f, x + r, y + r, x, y + r)
-        cubicTo(x - r, y + r, x - r, y - r * 0.4f, x, y - r * 1.7f)
-        close()
-    }
-    drawPath(path, color)
 }

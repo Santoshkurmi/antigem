@@ -8785,6 +8785,45 @@ private fun DiagnosticsSubScreen(
                 }
             }
         }
+
+        // Crash this app: a real crash on purpose, to see the crash screen and its report (release builds too)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = L.settings.dialog.crashThisApp,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = L.settings.dialog.crashThisAppWarning,
+                    fontSize = 11.5.sp,
+                    color = ai.antigem.theme.AppColors.danger,
+                    lineHeight = 16.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    // thrown on the main thread, so it goes to CrashHandler like any real crash
+                    onClick = { throw RuntimeException("Test crash from Settings > Diagnostics & Performance > Crash this app") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ai.antigem.theme.AppColors.danger)
+                ) {
+                    Text(
+                        text = L.settings.dialog.crashNow,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
     }
 }
 
