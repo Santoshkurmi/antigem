@@ -126,6 +126,7 @@ import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -134,6 +135,77 @@ import ai.antigem.ui.cloud.cloudProjectsSection
 import ai.antigem.i18n.L
 
 enum class ScrollDirection { UP, DOWN }
+
+/**
+ * Keeps the end of the chat on screen while the agent works ([working]): the scroll is requested in the same
+ * composition as the new rows, so it applies in the same layout pass and the end never drops below the screen while a
+ * reply grows. It reads the auto-scroll and dragging flags itself: when they flip (every scroll starts and ends with
+ * them) only this recomposes, not the chat screen.
+ */
+@Composable
+private fun FollowTail(
+    listState: LazyListState,
+    // the rows themselves, not their count: a reply growing inside its last row makes a new list of the same size,
+    // and the end must be pinned again for it
+    rows: List<ChatFeedItem>,
+    working: Boolean,
+    shouldAutoScroll: () -> Boolean,
+    isUserDragging: () -> Boolean
+) {
+    if (rows.isNotEmpty() && working && shouldAutoScroll() && !isUserDragging()) {
+        SideEffect { listState.requestScrollToItem(rows.size) }
+    }
+}
+
+/**
+ * The floating jump-to-top / jump-to-bottom button. It reads the scroll flags itself (shown, direction, at the top,
+ * at the bottom), so while scrolling only the button redraws when they change, not the chat screen.
+ */
+@Composable
+private fun ChatJumpButton(
+    showScrollButton: () -> Boolean,
+    scrollDirection: () -> ScrollDirection,
+    isAtTop: () -> Boolean,
+    isAtBottom: () -> Boolean,
+    rowCount: Int,
+    modifier: Modifier,
+    onJump: (toTop: Boolean) -> Unit
+) {
+    val showUpArrow = showScrollButton() && scrollDirection() == ScrollDirection.UP && !isAtTop()
+    val showDownArrow = showScrollButton() && scrollDirection() == ScrollDirection.DOWN && !isAtBottom()
+    val isVisible = (showUpArrow || showDownArrow) && rowCount > 2
+
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn() + scaleIn(initialScale = 0.8f),
+        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+        modifier = modifier
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .clickable { onJump(showUpArrow) },
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            shadowElevation = 6.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Icon(
+                    imageVector = if (showUpArrow) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (showUpArrow) L.chat.screen.jumpToTop else L.chat.screen.jumpToBottom,
+                    tint = ClaudeTerracotta,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
 
 
 
@@ -1026,7 +1098,7 @@ fun ChatScreen(
     }
 
     // Determine whether user is scrolled near the bottom (within the last item)
-    val isAtBottom by remember(listState) {
+    val isAtBottomState = remember(listState) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
@@ -1040,6 +1112,7 @@ fun ChatScreen(
             }
         }
     }
+    val isAtBottom by isAtBottomState
 
     val isAtTop by remember(listState) {
         derivedStateOf {
@@ -1150,18 +1223,23 @@ fun ChatScreen(
         }
     }
 
-    // Re-enable auto-scroll whenever the user scrolls back to the bottom
-    LaunchedEffect(isAtBottom) {
-        if (isAtBottom) {
-            shouldAutoScroll = true
+    // Re-enable auto-scroll whenever the user scrolls back to the bottom. Watched as a flow, not read by the screen:
+    // a flag read here would rebuild the whole screen each time it flips while scrolling
+    LaunchedEffect(listState) {
+        snapshotFlow { isAtBottomState.value }.collect { atBottom ->
+            if (atBottom) {
+                shouldAutoScroll = true
+            }
         }
     }
 
-    // Hide scroll button after scroll stops
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress && showScrollButton) {
-            delay(4000)
-            showScrollButton = false
+    // Hide scroll button after scroll stops (a new scroll cancels the wait, as before)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collectLatest { scrolling ->
+            if (!scrolling && showScrollButton) {
+                delay(4000)
+                showScrollButton = false
+            }
         }
     }
 
@@ -1241,10 +1319,13 @@ fun ChatScreen(
 
     // Applied in the same layout pass as the new content (not a frame later), so the end of the chat (the working
     // row) never drops below the screen while the reply grows: the output grows above it
-    val followTail = feedItems.isNotEmpty() && (isRunningOrStreaming || tailFinishing) && shouldAutoScroll && !isUserDragging
-    if (followTail) {
-        SideEffect { listState.requestScrollToItem(feedItems.size) }
-    }
+    FollowTail(
+        listState = listState,
+        rows = feedItems,
+        working = isRunningOrStreaming || tailFinishing,
+        shouldAutoScroll = { shouldAutoScroll },
+        isUserDragging = { isUserDragging }
+    )
 
     // The Claude Code-style working row: under the reply for as long as the agent works, but not while it waits for
     // the user (an approval or a question)
@@ -1371,7 +1452,14 @@ fun ChatScreen(
         }
     )
 
-    val fileLinkHandler = remember(scope, conversations, currentConv?.id, listState, feedItems.size, isAtBottom) {
+    // What the link handler needs, as it is when a link is tapped. The handler itself is made once: it goes to every
+    // row through a static composition local, so a new one rebuilt the whole screen (it was made again whenever
+    // "at bottom" flipped, a row was added or the chat list refreshed, which made scrolling and streaming stutter)
+    val linkRows by rememberUpdatedState(feedItems)
+    val linkListState by rememberUpdatedState(listState)
+    val linkAtBottomState by rememberUpdatedState(isAtBottomState)
+    val linkFileOpener by rememberUpdatedState(fileLinkOpener)
+    val fileLinkHandler = remember(scope) {
         FileLinkHandler(
             onOpenFile = { rawUrl ->
                 try {
@@ -1389,7 +1477,7 @@ fun ChatScreen(
                             activeMarkdownDoc = cleanPath to content
                         }
                     } else {
-                        fileLinkOpener.open(cleanPath)
+                        linkFileOpener.open(cleanPath)
                     }
                 } catch (e: Exception) {
                     Log.e("ChatScreen", "Error opening file link $rawUrl", e)
@@ -1406,8 +1494,8 @@ fun ChatScreen(
                 if (target != null) {
                     val currentId = currentConv?.id
                     if (!currentId.isNullOrBlank() && !currentId.equals(target.id, ignoreCase = true)) {
-                        if (feedItems.isNotEmpty()) {
-                            ConversationScrollCache.save(currentId, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, isAtBottom)
+                        if (linkRows.isNotEmpty()) {
+                            ConversationScrollCache.save(currentId, linkListState.firstVisibleItemIndex, linkListState.firstVisibleItemScrollOffset, linkAtBottomState.value)
                         }
                         conversationBackStack.add(currentId)
                     }
@@ -2589,52 +2677,28 @@ fun ChatScreen(
                         }
                     }
 
-                    // Floating Scroll Up / Scroll Down Button (Instant Movement)
-                    val showUpArrow = showScrollButton && scrollDirection == ScrollDirection.UP && !isAtTop
-                    val showDownArrow = showScrollButton && scrollDirection == ScrollDirection.DOWN && !isAtBottom
-                    val isVisible = (showUpArrow || showDownArrow) && feedItems.size > 2
-                                            
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isVisible,
-                        enter = fadeIn() + scaleIn(initialScale = 0.8f),
-                        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                    // Floating Scroll Up / Scroll Down Button (Instant Movement). It reads the scroll flags itself, so only
+                    // the button redraws when they change, not this whole area (see ChatJumpButton)
+                    ChatJumpButton(
+                        showScrollButton = { showScrollButton },
+                        scrollDirection = { scrollDirection },
+                        isAtTop = { isAtTop },
+                        isAtBottom = { isAtBottom },
+                        rowCount = feedItems.size,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 12.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    showScrollButton = false
-                                    scope.launch {
-                                        if (showUpArrow) {
-                                            listState.scrollToItem(0)
-                                        } else {
-                                            listState.scrollToItem(feedItems.size)
-                                        }
-                                    }
-                                },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 6.dp,
-                            shadowElevation = 6.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Icon(
-                                    imageVector = if (showUpArrow) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = if (showUpArrow) L.chat.screen.jumpToTop else L.chat.screen.jumpToBottom,
-                                    tint = ClaudeTerracotta,
-                                    modifier = Modifier.size(22.dp)
-                                )
+                            .padding(end = 16.dp, bottom = 12.dp),
+                        onJump = { toTop ->
+                            showScrollButton = false
+                            scope.launch {
+                                if (toTop) {
+                                    listState.scrollToItem(0)
+                                } else {
+                                    listState.scrollToItem(feedItems.size)
+                                }
                             }
                         }
-                    }
+                    )
 
                     // Floating Slash Commands & Skills Autocomplete Suggestions
                     val slash = slashTrigger
