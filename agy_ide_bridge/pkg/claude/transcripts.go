@@ -509,6 +509,9 @@ func scanLines(r io.Reader, fn func(off int64, line []byte)) error {
 
 // DeleteSession removes a session's transcript and its side folder (subagents, tool results).
 func (m *Manager) DeleteSession(id string) error {
+	if IsSubagentID(id) {
+		return m.deleteSubagent(id)
+	}
 	// a dying CLI flushes its transcript on exit: stop it completely before deleting
 	m.mu.Lock()
 	s := m.sessions[id]
@@ -525,12 +528,16 @@ func (m *Manager) DeleteSession(id string) error {
 	if path == "" {
 		return nil
 	}
+	_ = m.forgetSubagentTitles(subagentIDsOf(path))
 	_ = os.RemoveAll(strings.TrimSuffix(path, ".jsonl"))
 	return os.Remove(path)
 }
 
-// RenameSession appends a custom-title entry, the same way the CLI's /rename does.
+// RenameSession appends a custom-title entry, the same way the CLI's /rename does (a subagent: see renameSubagent).
 func (m *Manager) RenameSession(id, title string) error {
+	if IsSubagentID(id) {
+		return m.renameSubagent(id, title)
+	}
 	path := m.FindTranscript(id)
 	if path == "" {
 		return os.ErrNotExist

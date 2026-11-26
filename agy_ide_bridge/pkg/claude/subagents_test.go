@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,10 +72,10 @@ func TestSubagentsAreListedUnderTheirChatAndReadable(t *testing.T) {
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &resp) != nil || !resp.Success || len(resp.Entries) != 2 {
 		t.Fatalf("GET subagent history: %d %s", rec.Code, rec.Body.String())
 	}
-	// anything else on a subagent is refused
+	// a subagent can only be read, renamed and deleted
 	for _, req := range []*http.Request{
-		httptest.NewRequest(http.MethodPost, "/api/claude/sessions/agent-abc/title", nil),
-		httptest.NewRequest(http.MethodDelete, "/api/claude/sessions/agent-abc", nil),
+		httptest.NewRequest(http.MethodPost, "/api/claude/sessions/agent-abc/restart", nil),
+		httptest.NewRequest(http.MethodPost, "/api/claude/sessions/agent-abc/fork", strings.NewReader(`{"new_id":"`+sid+`"}`)),
 		httptest.NewRequest(http.MethodGet, "/api/claude/sessions/agent-../history", nil),
 	} {
 		rec := httptest.NewRecorder()
@@ -82,5 +83,42 @@ func TestSubagentsAreListedUnderTheirChatAndReadable(t *testing.T) {
 		if rec.Code == http.StatusOK {
 			t.Fatalf("%s %s must be refused: %s", req.Method, req.URL.Path, rec.Body.String())
 		}
+	}
+
+	// rename: listed under the new title, the transcript untouched
+	before, _ := os.ReadFile(filepath.Join(sub, "agent-abc.jsonl"))
+	rec = httptest.NewRecorder()
+	m.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/claude/sessions/agent-abc/title", strings.NewReader(`{"title":"Renamed"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rename subagent: %d %s", rec.Code, rec.Body.String())
+	}
+	if after, _ := os.ReadFile(filepath.Join(sub, "agent-abc.jsonl")); string(after) != string(before) {
+		t.Fatal("renaming a subagent must not write into its transcript")
+	}
+	renamed := false
+	for _, s := range m.ListSessions() {
+		renamed = renamed || (s.ID == "agent-abc" && s.Title == "Renamed")
+	}
+	if !renamed {
+		t.Fatal("the renamed subagent must be listed under its new title")
+	}
+
+	// delete: the subagent and the one it started go; the chat stays
+	rec = httptest.NewRecorder()
+	m.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/claude/sessions/agent-abc", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete subagent: %d %s", rec.Code, rec.Body.String())
+	}
+	for _, f := range []string{"agent-abc.jsonl", "agent-abc.meta.json", "agent-def.jsonl", "agent-def.meta.json"} {
+		if _, err := os.Stat(filepath.Join(sub, f)); !os.IsNotExist(err) {
+			t.Fatalf("%s must be deleted", f)
+		}
+	}
+	left := m.ListSessions()
+	if len(left) != 1 || left[0].ID != sid {
+		t.Fatalf("only the chat must be left: %+v", left)
+	}
+	if len(m.subagentTitles()) != 0 {
+		t.Fatal("a deleted subagent's title must be forgotten")
 	}
 }

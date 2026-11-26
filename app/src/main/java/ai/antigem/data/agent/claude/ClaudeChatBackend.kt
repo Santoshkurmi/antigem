@@ -411,13 +411,26 @@ class ClaudeChatBackend(
     }
 
     override fun deleteConversation(id: String) {
-        _conversations.value = _conversations.value.filter { it.id != id }
+        // a subagent goes with the subagents it started (the bridge deletes them too)
+        val gone = mutableSetOf(id)
+        if (ClaudeTranscript.isSubagentId(id)) {
+            var added = true
+            while (added) {
+                added = _conversations.value.any { c -> c.parentConversationId in gone && gone.add(c.id) }
+            }
+        }
+        _conversations.value = _conversations.value.filter { it.id !in gone }
         synchronized(localConversations) { localConversations.remove(id) }
         backendScope.launch(worker) {
             if (attachedId == id) detachLocked()
-            client.delete(id).onFailure { Log.w(TAG, "delete $id failed: ${it.message}") }
+            client.delete(id)
+                .mapCatching { if (!it.success) error(it.error ?: "the bridge refused") }
+                .onFailure {
+                    Log.w(TAG, "delete $id failed: ${it.message}")
+                    refreshSessions()  // what is still there comes back
+                }
         }
-        if (store.currentConversation.value?.id == id) startNewChat()
+        if (store.currentConversation.value?.id in gone) startNewChat()
     }
 
     /** Copies the chat on the bridge (it is a chat of its own right away) and opens the copy. */
@@ -876,8 +889,10 @@ class ClaudeChatBackend(
 
     fun renameConversation(id: String, title: String) {
         val clean = title.trim().ifBlank { return }
-        _conversations.value = _conversations.value.map { if (it.id == id) it.copy(title = clean) else it }
-        store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = it.copy(title = clean) }
+        // a subagent is listed under its role, which is its title
+        fun renamed(c: Conversation) = c.copy(title = clean, subagentRole = c.subagentRole?.let { clean })
+        _conversations.value = _conversations.value.map { if (it.id == id) renamed(it) else it }
+        store.currentConversation.value?.let { if (it.id == id) store.currentConversation.value = renamed(it) }
         backendScope.launch {
             client.rename(id, clean).onFailure { Log.w(TAG, "rename failed: ${it.message}") }
             refreshSessions()

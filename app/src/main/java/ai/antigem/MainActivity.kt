@@ -38,7 +38,7 @@ enum class AppViewMode {
     FILES,
     /** The Run screen: a folder's commands and their live output (runs keep going on other screens) */
     RUN
-}
+} 
 
 class MainActivity : ComponentActivity() {
 

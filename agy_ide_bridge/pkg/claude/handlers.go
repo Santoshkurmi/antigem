@@ -103,8 +103,11 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 		action = parts[1]
 	}
 	if subagentIDRe.MatchString(id) {
-		// a subagent's transcript ("agent-<id>") can only be read
-		if action != "history" || r.Method != http.MethodGet {
+		// a subagent's transcript ("agent-<id>") can be read, renamed and deleted (it cannot be resumed)
+		readIt := action == "history" && r.Method == http.MethodGet
+		renameIt := action == "title" && r.Method == http.MethodPost
+		deleteIt := action == "" && r.Method == http.MethodDelete
+		if !readIt && !renameIt && !deleteIt {
 			writeJSON(w, http.StatusForbidden, map[string]interface{}{"success": false, "error": "a subagent chat is read-only"})
 			return
 		}

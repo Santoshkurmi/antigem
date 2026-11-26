@@ -1832,8 +1832,8 @@ private fun ChatHistoryItemRow(
             )
         }
 
-        // a read-only chat (a Claude Code subagent) has nothing to do but open it
-        if (!conv.readOnly) Box {
+        // a read-only chat (a Claude Code subagent) gets a shorter menu: copy id, rename, export, share and delete
+        if (!conv.readOnly || isClaudeConv) Box {
             IconButton(
                 onClick = { menuExpanded = true },
                 modifier = Modifier.size(26.dp)
@@ -1906,7 +1906,7 @@ private fun ChatHistoryItemRow(
                         AppToastHelper.showToast(L.drawer.chatHistoryDrawer.conversationIdCopied, ChatToastType.SUCCESS)
                     }
                 )
-                DropdownMenuItem(
+                if (!conv.readOnly) DropdownMenuItem(
                     text = { Text(L.drawer.chatHistoryDrawer.forkConversation, fontSize = 13.5.sp) },
                     leadingIcon = {
                         Icon(
@@ -1938,7 +1938,7 @@ private fun ChatHistoryItemRow(
                         }
                     )
                 }
-                if (isClaudeConv && claudeActions != null) {
+                if (isClaudeConv && claudeActions != null && !conv.readOnly) {
                     DropdownMenuItem(
                         text = { Text(L.drawer.chatHistoryDrawer.restartChat, fontSize = 13.5.sp) },
                         leadingIcon = {
@@ -2039,7 +2039,7 @@ private fun ChatHistoryItemRow(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
-                if (claudeActions != null) {
+                if (claudeActions != null && !conv.readOnly) {
                     DropdownMenuItem(
                         text = { Text(if (conv.archived) L.drawer.chatHistoryDrawer.unarchive else L.drawer.chatHistoryDrawer.archive, fontSize = 13.5.sp) },
                         leadingIcon = {
@@ -2057,7 +2057,8 @@ private fun ChatHistoryItemRow(
                         }
                     )
                 }
-                DropdownMenuItem(
+                // a running subagent is still being written: the bridge refuses to delete it
+                if (!conv.readOnly || !conv.isRunning) DropdownMenuItem(
                     text = {
                         Text(
                             L.drawer.chatHistoryDrawer.deleteConversation2,
