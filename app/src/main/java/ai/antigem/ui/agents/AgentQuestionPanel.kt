@@ -61,10 +61,21 @@ import ai.antigem.domain.model.ChoiceQuestion
 import ai.antigem.domain.model.ToolCall
 import ai.antigem.domain.model.ToolType
 import ai.antigem.domain.model.ChatMessage
+import ai.antigem.ui.components.a11yMinTouchTarget
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.formatSelectionsSummary
 import ai.antigem.ui.components.label
+import ai.antigem.ui.components.rememberTalkBackOn
 import ai.antigem.i18n.L
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected as semanticSelected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 /** A question an agent is waiting on (Claude's AskUserQuestion, Antigravity's ask-choice step). */
 class PendingQuestion(val agent: AgentKind, val toolCall: ToolCall, val messageId: String)
@@ -94,6 +105,7 @@ fun AgentQuestionPanel(
     val questions = questionnaire.questions
     if (questions.isEmpty()) return
     val accent = question.agent.accent()
+    val talkBackOn = rememberTalkBackOn()
 
     // state survives recomposition but resets for the next question set
     val selected = remember(question.toolCall.id) { mutableStateMapOf<String, Set<String>>() }
@@ -137,7 +149,15 @@ fun AgentQuestionPanel(
                 ) { Icon(Icons.AutoMirrored.Outlined.HelpOutline, null, tint = accent, modifier = Modifier.size(19.dp)) }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(L.agents.agentQuestion.labelHasValue(question.agent.label(), if (questions.size > 1) "${questions.size} questions" else L.agents.agentQuestion.aQuestion), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        L.agents.agentQuestion.labelHasValue(
+                            question.agent.label(),
+                            if (questions.size > 1) L.agents.agentQuestion.questionsCount(questions.size) else L.agents.agentQuestion.aQuestion
+                        ),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.semantics { heading() }
+                    )
                     if (questions.size > 1) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
                             questions.forEachIndexed { i, q ->
@@ -156,11 +176,16 @@ fun AgentQuestionPanel(
                                 )
                             }
                             Spacer(Modifier.width(4.dp))
-                            Text("${page + 1} of ${questions.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                            Text(
+                                L.agents.agentQuestion.pageProgress(page + 1, questions.size),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                            )
                         }
                     }
                 }
-                IconButton(onClick = onCancel, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = onCancel, modifier = Modifier.a11yMinTouchTarget(talkBackOn).size(30.dp)) {
                     Icon(Icons.Outlined.Close, L.agents.agentQuestion.dismissQuestion, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
                 }
             }
@@ -189,7 +214,13 @@ fun AgentQuestionPanel(
                             )
                         }
                     }
-                    Text(q.prompt, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 20.sp)
+                    Text(
+                        q.prompt,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 20.sp,
+                        modifier = Modifier.semantics { heading() }
+                    )
                     q.description?.takeIf { it.length > 28 }?.let {
                         Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.padding(top = 2.dp))
                     }
@@ -282,7 +313,13 @@ private fun OptionCard(label: String, description: String?, selected: Boolean, m
         shape = shape,
         color = if (selected) accent.copy(alpha = 0.1f) else Color.Transparent,
         border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) accent.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics {
+                role = if (multi) Role.Checkbox else Role.RadioButton
+                if (multi) toggleableState = ToggleableState(selected)
+                else semanticSelected = selected
+            }
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             // radio / checkbox

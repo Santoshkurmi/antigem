@@ -56,9 +56,16 @@ import ai.antigem.data.remote.AgyHubClient
 import ai.antigem.data.remote.SystemConnectionState
 import ai.antigem.data.remote.SystemStatus
 import ai.antigem.domain.model.AgentKind
+import ai.antigem.ui.components.a11yMinTouchTarget
 import ai.antigem.ui.components.accent
 import ai.antigem.ui.components.label
+import ai.antigem.ui.components.rememberTalkBackOn
 import ai.antigem.i18n.L
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 
 /** One agent's health: drives the split status dot, its popup, the accounts dialog and the new-chat picker. */
 data class AgentStatusEntry(
@@ -300,7 +307,7 @@ fun AgentMark(agent: AgentKind, modifier: Modifier = Modifier, size: Dp = 32.dp,
     val accent = agent.accent()
     Box(modifier.size(size)) {
         Box(
-            Modifier.size(size).clip(CircleShape).background(accent.copy(alpha = 0.15f)),
+            Modifier.size(size).clip(CircleShape).background(accent.copy(alpha = 0.15f)).clearAndSetSemantics { },
             contentAlignment = Alignment.Center
         ) {
             when (agent) {
@@ -331,7 +338,7 @@ fun AgentStatusRow(entry: AgentStatusEntry, modifier: Modifier = Modifier, onAct
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         AgentMark(entry.agent, size = 34.dp, statusColor = entry.color)
         Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(entry.agent.label(), fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(6.dp))
@@ -350,21 +357,27 @@ fun AgentStatusRow(entry: AgentStatusEntry, modifier: Modifier = Modifier, onAct
         }
         entry.action?.let { action ->
             Spacer(Modifier.width(8.dp))
-            AgentActionPill(action.label, entry.agent.accent()) {
-                action.onClick()
-                onActionDone()
-            }
+            AgentActionPill(
+                text = action.label,
+                color = entry.agent.accent(),
+                onClick = {
+                    action.onClick()
+                    onActionDone()
+                },
+                spokenLabel = "${entry.agent.label()}, ${action.label}"
+            )
         }
     }
 }
 
 @Composable
-fun AgentActionPill(text: String, color: Color, onClick: () -> Unit) {
+fun AgentActionPill(text: String, color: Color, onClick: () -> Unit, spokenLabel: String? = null) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
         color = color.copy(alpha = 0.14f),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.35f))
+        border = BorderStroke(1.dp, color.copy(alpha = 0.35f)),
+        modifier = if (spokenLabel != null) Modifier.semantics { contentDescription = spokenLabel } else Modifier
     ) {
         Text(
             text,
@@ -387,6 +400,7 @@ fun AgentStatusIndicator(
     modifier: Modifier = Modifier
 ) {
     var open by remember { mutableStateOf(false) }
+    val talkBackOn = rememberTalkBackOn()
     val agy = entries.find { it.agent == AgentKind.AGY }
     val claude = entries.find { it.agent == AgentKind.CLAUDE }
     val openCode = entries.find { it.agent == AgentKind.OPENCODE }
@@ -394,7 +408,16 @@ fun AgentStatusIndicator(
     // one slice per enabled agent
     val colors = listOfNotNull(agy, claude, openCode, codex).map { it.color }
     Box(
-        modifier = modifier.size(36.dp).clip(CircleShape).clickable { open = true },
+        modifier = modifier
+            .a11yMinTouchTarget(talkBackOn)
+            .size(36.dp)
+            .clip(CircleShape)
+            .semantics {
+                contentDescription = L.components.a11y.agentStatusValue(
+                    entries.joinToString { "${it.agent.label()}: ${it.label}" }
+                )
+            }
+            .clickable(role = Role.Button) { open = true },
         contentAlignment = Alignment.Center
     ) {
         AgentStatusDot(
@@ -433,7 +456,9 @@ fun AgentStatusMenu(
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp)
+                .semantics { heading() }
         )
         Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             entries.forEach { AgentStatusRow(it) { onDismiss() } }
@@ -445,7 +470,7 @@ fun AgentStatusMenu(
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable {
+                .clickable(role = Role.Button) {
                     onDismiss()
                     onOpenServerLogs()
                 }
@@ -461,7 +486,7 @@ fun AgentStatusMenu(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clickable {
+                    .clickable(role = Role.Button) {
                         onDismiss()
                         onRestartServer()
                     }
@@ -496,7 +521,13 @@ fun AgentSetupPrompt(
     ) {
         AgentMark(agent, size = 60.dp, statusColor = statusColor)
         Spacer(Modifier.height(16.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.semantics { heading() }
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             message,
