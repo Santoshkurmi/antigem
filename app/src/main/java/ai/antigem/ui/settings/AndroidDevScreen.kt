@@ -18,6 +18,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +34,7 @@ import ai.antigem.data.androiddev.AndroidDevManager.Component
 import ai.antigem.data.androiddev.AndroidDevManager.Framework
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
 import kotlinx.coroutines.delay
 import ai.antigem.i18n.L
 
@@ -308,9 +314,9 @@ private fun FrameworkRow(f: Framework, state: AndroidDevManager.State, checked: 
     val ready = state.ready(f)
     val missing = AndroidDevManager.componentsFor(f).filter { it !in state.installed }
     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.03f)) {
-        Row(Modifier.fillMaxWidth().clickable(enabled = !busy && !ready) { onCheck(!checked) }.padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.Top) {
+        Row(Modifier.fillMaxWidth().clickable(enabled = !busy && !ready) { onCheck(!checked) }.semantics { if (!ready) { role = Role.Checkbox; toggleableState = ToggleableState(checked) } }.padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.Top) {
             if (ready) Icon(Icons.Outlined.CheckCircle, L.common.ready, tint = QuotaGreen, modifier = Modifier.padding(12.dp).size(22.dp))
-            else Checkbox(checked = checked, enabled = !busy, onCheckedChange = onCheck)
+            else Checkbox(checked = checked, enabled = !busy, onCheckedChange = onCheck, modifier = Modifier.mergedIntoRow())
             Column(Modifier.weight(1f).padding(top = 10.dp, end = 8.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(f.label, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
                 Text(

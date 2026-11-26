@@ -58,6 +58,8 @@ import ai.antigem.i18n.L
 import ai.antigem.i18n.LanguageManager
 import ai.antigem.i18n.LanguageRepo
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -808,7 +810,7 @@ private fun LanguageDetailsSheet(
     val installed = info != null
     val onScreen = info != null && info.id == LanguageManager.currentId
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack()) {
         Column(
             Modifier.fillMaxWidth().bouncyVerticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -1138,9 +1140,9 @@ private fun LanguageInfoDialog(
                 OutlinedTextField(variant, { variant = it.take(40) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     label = { Text(L.settings.language.variantLabel) }, placeholder = { Text(L.settings.language.variantHint) },
                     supportingText = { Text(L.settings.language.variantAbout) })
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(rtl, { rtl = it })) {
                     Text(L.settings.language.rtl, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Switch(checked = rtl, onCheckedChange = { rtl = it })
+                    Switch(checked = rtl, onCheckedChange = { rtl = it }, modifier = Modifier.mergedIntoRow())
                 }
                 if (languages != null) {
                     Text(L.settings.language.startFrom, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)

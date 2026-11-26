@@ -182,7 +182,7 @@ fun NetworkInspectorDialog(
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
-                                    Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Clear, contentDescription = L.common.clear, modifier = Modifier.size(14.dp))
                                 }
                             }
                         },

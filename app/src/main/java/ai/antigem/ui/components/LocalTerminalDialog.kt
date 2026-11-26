@@ -1253,6 +1253,8 @@ private fun ExtraKey(
 
     Surface(
         modifier = keyModifier
+            // TalkBack: the key's full name, a double-tap presses it, CTRL / ALT say their state
+            .terminalKeySemantics(label, isActive, isLocked, currentOnClick, currentOnLongClick)
             .height(34.dp)
             .clip(RoundedCornerShape(5.dp)),
         color = backgroundColor,

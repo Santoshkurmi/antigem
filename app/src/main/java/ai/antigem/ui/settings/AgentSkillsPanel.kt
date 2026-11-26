@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,8 @@ import ai.antigem.theme.QuotaRed
 import ai.antigem.ui.claude.ClaudeCard
 import ai.antigem.ui.components.AppToastHelper
 import ai.antigem.ui.components.ChatToastType
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
 
@@ -210,10 +213,11 @@ fun AgentSkillsPanel(agent: AgentKind, accent: Color, onChanged: () -> Unit = {}
                 }
                 res.skills.forEach { s ->
                     HorizontalDivider(Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                    Row(verticalAlignment = Alignment.Top) {
+                    Row(verticalAlignment = Alignment.Top, modifier = Modifier.toggleRowSemantics(picked[s.path] == true, { picked[s.path] = it }, role = Role.Checkbox, enabled = !installing)) {
                         Checkbox(
                             checked = picked[s.path] == true, onCheckedChange = { picked[s.path] = it }, enabled = !installing,
-                            colors = CheckboxDefaults.colors(checkedColor = accent)
+                            colors = CheckboxDefaults.colors(checkedColor = accent),
+                            modifier = Modifier.mergedIntoRow()
                         )
                         Column(Modifier.weight(1f).padding(top = 10.dp)) {
                             Text(s.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)

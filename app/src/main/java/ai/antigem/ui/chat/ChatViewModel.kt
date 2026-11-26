@@ -723,11 +723,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun revertAndEditLastUserMessage(targetMsg: ChatMessage, onRestored: (String) -> Unit) {
         val restart = restartIfFirst(targetMsg.id)
-        val restored: (String) -> Unit = { restart?.invoke(); restoreAttachedFiles(it); onRestored(editableText(it)) }
+        var restoredText: String? = null
+        val restored: (String) -> Unit = {
+            restart?.invoke()
+            restoreAttachedFiles(it)
+            val text = editableText(it)
+            restoredText = text
+            onRestored(text)
+        }
         if (isCodexActive) codexBackend.editMessage(targetMsg.id, restored)
         else if (isOpenCodeActive) openCodeBackend.editMessage(targetMsg.id, restoreFiles = false, restored)
         else if (isClaudeActive) claudeBackend.editMessage(targetMsg.id, restoreCode = false, restored)
-        else agyBackend.revertAndEditLastUserMessage(targetMsg, restored)
+        else {
+            val before = currentConversation.value?.id
+            agyBackend.revertAndEditLastUserMessage(targetMsg, restored)
+            // Taking back the first prompt makes Antigravity start a new chat (the old one has nothing left). The input
+            // box keeps one draft per chat and loads the new chat's (empty) one when the chat changes, so the text put
+            // back above vanished: it becomes the new chat's draft, and the box shows it there.
+            val after = currentConversation.value?.id
+            val text = restoredText
+            if (after != null && after != before && !text.isNullOrEmpty()) {
+                setDraft(after, androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length)))
+            }
+        }
     }
 
     /** Claude: edit a sent prompt in a copy of the chat that ends before it; optionally restore the files changed since. */

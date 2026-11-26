@@ -1,6 +1,8 @@
 package ai.antigem.ui.jarvis
 
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.Manifest
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -787,13 +789,13 @@ private fun JCard(bg: Color, border: BorderStroke, title: String, content: @Comp
 
 @Composable
 private fun JSwitch(title: String, subtitle: String?, checked: Boolean, enabledSwitch: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().toggleRowSemantics(checked, onChange, enabled = enabledSwitch), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         }
         Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabledSwitch)
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabledSwitch, modifier = Modifier.mergedIntoRow())
     }
 }
 

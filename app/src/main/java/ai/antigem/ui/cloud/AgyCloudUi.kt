@@ -80,6 +80,13 @@ import ai.antigem.theme.GeminiBlue
 import exa.language_server_pb.RemoteResource
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 private val subtleAlpha = 0.6f
 
@@ -150,11 +157,11 @@ fun AgyCloudSettingsCard(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(enabled, { AgyCloud.setEnabled(it) })) {
                     Icon(Icons.Outlined.Cloud, null, tint = GeminiBlue, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(L.cloud.agyCloudUi.cloudAgents, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Switch(checked = enabled, onCheckedChange = { AgyCloud.setEnabled(it) })
+                    Switch(checked = enabled, onCheckedChange = { AgyCloud.setEnabled(it) }, modifier = Modifier.mergedIntoRow())
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -568,10 +575,11 @@ private fun CloudProjectEditor(
                             val on = r.resource_id in picked
                             Row(
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                    .clickable { picked = if (on) picked - r.resource_id else picked + r.resource_id },
+                                    .clickable { picked = if (on) picked - r.resource_id else picked + r.resource_id }
+                                    .semantics { role = Role.Checkbox; toggleableState = ToggleableState(on) },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Checkbox(checked = on, onCheckedChange = { picked = if (on) picked - r.resource_id else picked + r.resource_id })
+                                Checkbox(checked = on, onCheckedChange = { picked = if (on) picked - r.resource_id else picked + r.resource_id }, modifier = Modifier.mergedIntoRow())
                                 Column(Modifier.weight(1f)) {
                                     Text(r.display_name.ifBlank { r.resource_id }, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     if (r.is_private) Text(L.cloud.agyCloudUi.private, fontSize = 10.5.sp, color = subtle())

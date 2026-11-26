@@ -2,6 +2,8 @@ package ai.antigem.ui.settings
 
 import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.ClaudeAccent
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
@@ -39,6 +41,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -1775,7 +1782,7 @@ private fun AppearanceSubScreen(
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(groupAgentSteps, onToggleGroupAgentSteps),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1795,6 +1802,7 @@ private fun AppearanceSubScreen(
                     }
                     Switch(
                         checked = groupAgentSteps,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = onToggleGroupAgentSteps,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
@@ -1854,7 +1862,8 @@ private fun AppearanceSubScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .toggleRowSemantics(showMessageStats, onToggleShowMessageStats),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1874,6 +1883,7 @@ private fun AppearanceSubScreen(
                 }
                 Switch(
                     checked = showMessageStats,
+                    modifier = Modifier.mergedIntoRow(),
                     onCheckedChange = onToggleShowMessageStats,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
@@ -2141,19 +2151,20 @@ private fun AppearanceSubScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            val onToggleSwitcherItem: (Boolean) -> Unit = { checked ->
+                                val updated = if (checked) {
+                                    currentItems + itemId
+                                } else {
+                                    if (currentItems.size > 1) currentItems.filter { it != itemId } else currentItems
+                                }
+                                onSetFloatingSwitcherItems(updated)
+                            }
+                            Row(Modifier.toggleRowSemantics(isEnabled, onToggleSwitcherItem, role = Role.Checkbox), verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
                                     checked = isEnabled,
-                                    onCheckedChange = { checked ->
-                                        val updated = if (checked) {
-                                            currentItems + itemId
-                                        } else {
-                                            if (currentItems.size > 1) currentItems.filter { it != itemId } else currentItems
-                                        }
-                                        onSetFloatingSwitcherItems(updated)
-                                    },
+                                    onCheckedChange = onToggleSwitcherItem,
                                     colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(24.dp).mergedIntoRow()
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(itemIcon, contentDescription = null, tint = if (isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
@@ -2242,8 +2253,19 @@ private fun AppearanceSubScreen(
                     .fillMaxWidth()
                     .padding(16.dp)
             ) {
+                val onToggleTerminalLauncher: (Boolean) -> Unit = { enable ->
+                    isTerminalLauncherEnabled = enable
+                    ai.antigem.data.preferences.TerminalLauncherManager.applyLauncherSetting(
+                        context = context,
+                        enabled = enable,
+                        style = terminalLauncherStyle
+                    )
+                    coroutineScope.launch {
+                        authPrefs.setTerminalLauncherEnabled(enable)
+                    }
+                }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(isTerminalLauncherEnabled, onToggleTerminalLauncher),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2263,17 +2285,8 @@ private fun AppearanceSubScreen(
                     }
                     Switch(
                         checked = isTerminalLauncherEnabled,
-                        onCheckedChange = { enable ->
-                            isTerminalLauncherEnabled = enable
-                            ai.antigem.data.preferences.TerminalLauncherManager.applyLauncherSetting(
-                                context = context,
-                                enabled = enable,
-                                style = terminalLauncherStyle
-                            )
-                            coroutineScope.launch {
-                                authPrefs.setTerminalLauncherEnabled(enable)
-                            }
-                        },
+                        modifier = Modifier.mergedIntoRow(),
+                        onCheckedChange = onToggleTerminalLauncher,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = ClaudeTerracotta
@@ -2609,14 +2622,15 @@ private fun ChatHeaderIconsCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        val onToggleShortcutItem: (Boolean) -> Unit = { checked ->
+                            onSetItems(if (checked) currentItems + itemId else currentItems.filter { it != itemId })
+                        }
+                        Row(Modifier.toggleRowSemantics(isEnabled, onToggleShortcutItem, role = Role.Checkbox), verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
                                 checked = isEnabled,
-                                onCheckedChange = { checked ->
-                                    onSetItems(if (checked) currentItems + itemId else currentItems.filter { it != itemId })
-                                },
+                                onCheckedChange = onToggleShortcutItem,
                                 colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(24.dp).mergedIntoRow()
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(itemIcon, contentDescription = null, tint = if (isEnabled) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
@@ -3145,7 +3159,7 @@ private fun McpSubScreen(
                 ) {
                     // Title and toggle row
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().toggleRowSemantics(server.isEnabled, { onToggleServer(server.name, it) }),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -3208,6 +3222,7 @@ private fun McpSubScreen(
 
                         Switch(
                             checked = server.isEnabled,
+                            modifier = Modifier.mergedIntoRow(),
                             onCheckedChange = { onToggleServer(server.name, it) },
                             colors = SwitchDefaults.colors(checkedThumbColor = ClaudeTerracotta, checkedTrackColor = ClaudeTerracotta.copy(alpha = 0.4f))
                         )
@@ -4147,7 +4162,7 @@ private fun TerminalSubScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().then(if (!remoteMode) Modifier.toggleRowSemantics(useSshTerminal, { onToggleUseSshTerminal(it) }) else Modifier),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -4167,6 +4182,7 @@ private fun TerminalSubScreen(
                     }
                     if (!remoteMode) Switch(
                         checked = useSshTerminal,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = { onToggleUseSshTerminal(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
@@ -4426,7 +4442,7 @@ private fun TerminalSubScreen(
 
                 // Floating session pill on/off
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(sessionPillEnabled, { enabled -> coroutineScope.launch { terminalPrefs.saveTerminalSessionPillEnabled(enabled) } }),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -4441,6 +4457,7 @@ private fun TerminalSubScreen(
                     }
                     Switch(
                         checked = sessionPillEnabled,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = { enabled -> coroutineScope.launch { terminalPrefs.saveTerminalSessionPillEnabled(enabled) } },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
@@ -4484,7 +4501,7 @@ private fun TerminalSubScreen(
 
                 // Keyboard input mode: text mode (keyboard toolbar + clipboard) or key presses only (TYPE_NULL)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(charBasedInput, { enabled -> coroutineScope.launch { terminalPrefs.saveTerminalCharBasedInput(enabled) } }),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -4499,6 +4516,7 @@ private fun TerminalSubScreen(
                     }
                     Switch(
                         checked = charBasedInput,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = { enabled -> coroutineScope.launch { terminalPrefs.saveTerminalCharBasedInput(enabled) } },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
@@ -5038,7 +5056,7 @@ private fun BackupsSubScreen(
                             IconButton(onClick = { showBackupPasswordText = !showBackupPasswordText }) {
                                 Icon(
                                     imageVector = if (showBackupPasswordText) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
+                                    contentDescription = if (showBackupPasswordText) L.components.a11y.hidePassword else L.components.a11y.showPassword,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -5095,10 +5113,11 @@ private fun BackupsSubScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .clickable { envBackupIncludeSecrets = !envBackupIncludeSecrets }
+                            .semantics { role = Role.Checkbox; toggleableState = ToggleableState(envBackupIncludeSecrets) }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(checked = envBackupIncludeSecrets, onCheckedChange = { envBackupIncludeSecrets = it })
+                        Checkbox(checked = envBackupIncludeSecrets, onCheckedChange = { envBackupIncludeSecrets = it }, modifier = Modifier.mergedIntoRow())
                         Column(modifier = Modifier.weight(1f)) {
                             Text(L.settings.dialog.includeSshKeysAndSignIns, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                             Text(
@@ -5177,7 +5196,7 @@ private fun BackupsSubScreen(
                             IconButton(onClick = { showRestorePasswordText = !showRestorePasswordText }) {
                                 Icon(
                                     imageVector = if (showRestorePasswordText) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
+                                    contentDescription = if (showRestorePasswordText) L.components.a11y.hidePassword else L.components.a11y.showPassword,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -5911,6 +5930,7 @@ private fun ProjectsBackupRestoreDialog(
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .clickable { toggleNode() }
+                                                .semantics { role = Role.Checkbox; toggleableState = ToggleableState(isSelected) }
                                         ) {
                                             Row(
                                                 modifier = Modifier.padding(10.dp),
@@ -5921,7 +5941,7 @@ private fun ProjectsBackupRestoreDialog(
                                                     checked = isSelected,
                                                     onCheckedChange = { toggleNode() },
                                                     colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
-                                                    modifier = Modifier.size(20.dp)
+                                                    modifier = Modifier.size(20.dp).mergedIntoRow()
                                                 )
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     FlowRow(
@@ -6190,6 +6210,7 @@ private fun ProjectsBackupRestoreDialog(
 
                         // Optional: Custom Root Target Directory
                         Row(
+                            modifier = Modifier.toggleRowSemantics(useCustomRestoreDir, { useCustomRestoreDir = it }, role = Role.Checkbox),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -6197,7 +6218,7 @@ private fun ProjectsBackupRestoreDialog(
                                 checked = useCustomRestoreDir,
                                 onCheckedChange = { useCustomRestoreDir = it },
                                 colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(20.dp).mergedIntoRow()
                             )
                             Text(L.settings.dialog.restoreToCustomParentDirectory, fontSize = 12.sp)
                         }
@@ -6880,7 +6901,12 @@ private fun DataProtectionSubScreen(
             border = cardBorder
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                val onToggleShield: (Boolean) -> Unit = { enabled ->
+                    ManageSpaceActivity.setShieldEnabled(context, enabled)
+                    isShieldEnabled = ManageSpaceActivity.isShieldEnabled(context)
+                }
                 Row(
+                    modifier = Modifier.toggleRowSemantics(isShieldEnabled, onToggleShield),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -6913,10 +6939,8 @@ private fun DataProtectionSubScreen(
                     }
                     Switch(
                         checked = isShieldEnabled,
-                        onCheckedChange = { enabled ->
-                            ManageSpaceActivity.setShieldEnabled(context, enabled)
-                            isShieldEnabled = ManageSpaceActivity.isShieldEnabled(context)
-                        }
+                        modifier = Modifier.mergedIntoRow(),
+                        onCheckedChange = onToggleShield
                     )
                 }
 
@@ -7548,7 +7572,7 @@ private fun CommandsSubScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(activeSandbox, { onSetGlobalTerminalSandbox(it) }),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -7569,6 +7593,7 @@ private fun CommandsSubScreen(
                     }
                     Switch(
                         checked = activeSandbox,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = { onSetGlobalTerminalSandbox(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
@@ -7580,7 +7605,7 @@ private fun CommandsSubScreen(
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(requireApprovalForFileEdits, onSetRequireApprovalForFileEdits),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -7601,6 +7626,7 @@ private fun CommandsSubScreen(
                     }
                     Switch(
                         checked = requireApprovalForFileEdits,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = onSetRequireApprovalForFileEdits,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
@@ -8435,8 +8461,11 @@ private fun DiagnosticsSubScreen(
             border = cardBorder
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                val onToggleNetworkInspector: (Boolean) -> Unit = { targetState ->
+                    pendingInspectorRestart = targetState
+                }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(isNetworkInspectorEnabled, onToggleNetworkInspector),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -8475,9 +8504,8 @@ private fun DiagnosticsSubScreen(
                     }
                     Switch(
                         checked = isNetworkInspectorEnabled,
-                        onCheckedChange = { targetState ->
-                            pendingInspectorRestart = targetState
-                        },
+                        modifier = Modifier.mergedIntoRow(),
+                        onCheckedChange = onToggleNetworkInspector,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = ai.antigem.theme.AppColors.info
@@ -8500,7 +8528,7 @@ private fun DiagnosticsSubScreen(
 
                     // Floating Inspector Bubble toggle
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().toggleRowSemantics(isFloatingNetworkInspectorEnabled, onToggleFloatingNetworkInspector),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -8519,6 +8547,7 @@ private fun DiagnosticsSubScreen(
                         }
                         Switch(
                             checked = isFloatingNetworkInspectorEnabled,
+                            modifier = Modifier.mergedIntoRow(),
                             onCheckedChange = onToggleFloatingNetworkInspector,
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
@@ -8564,7 +8593,7 @@ private fun DiagnosticsSubScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().toggleRowSemantics(isFloatingDiagnosticsEnabled, onToggleFloatingDiagnostics),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -8603,6 +8632,7 @@ private fun DiagnosticsSubScreen(
                     }
                     Switch(
                         checked = isFloatingDiagnosticsEnabled,
+                        modifier = Modifier.mergedIntoRow(),
                         onCheckedChange = onToggleFloatingDiagnostics,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,

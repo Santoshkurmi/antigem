@@ -54,6 +54,8 @@ import ai.antigem.theme.AppColors
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import ai.antigem.ui.updater.AppUpdateDialog
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
@@ -260,7 +262,7 @@ private fun CardTitle(icon: ImageVector, title: String) {
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().toggleRowSemantics(checked, onCheckedChange),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -276,7 +278,8 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheck
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = QuotaGreen)
+            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = QuotaGreen),
+            modifier = Modifier.mergedIntoRow()
         )
     }
 }

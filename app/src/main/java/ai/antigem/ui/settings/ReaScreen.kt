@@ -27,6 +27,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +43,7 @@ import ai.antigem.data.rea.ReaManager
 import ai.antigem.data.rea.ReaManager.Component
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
@@ -532,12 +538,13 @@ private fun SwitchRow(title: String, text: String, checked: Boolean, enabled: Bo
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clickable(enabled = enabled) { onChange(!checked) }
+            .semantics { role = Role.Switch; toggleableState = ToggleableState(checked) }
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
             Text(text, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         }
-        Switch(checked = checked, enabled = enabled, onCheckedChange = onChange)
+        Switch(checked = checked, enabled = enabled, onCheckedChange = onChange, modifier = Modifier.mergedIntoRow())
     }
 }
 
@@ -807,8 +814,8 @@ internal fun ReaServerDialog(
                         if (tokens != null && tokens > 40_000) Text(L.settings.rea.thatIsALotAgentsGet, fontSize = 11.5.sp, color = Amber)
                     }
                 }
-                Row(verticalAlignment = Alignment.Top, modifier = Modifier.clickable { fullSchemas = !fullSchemas }) {
-                    Checkbox(checked = fullSchemas, onCheckedChange = { fullSchemas = it })
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.clickable { fullSchemas = !fullSchemas }.semantics { role = Role.Checkbox; toggleableState = ToggleableState(fullSchemas) }) {
+                    Checkbox(checked = fullSchemas, onCheckedChange = { fullSchemas = it }, modifier = Modifier.mergedIntoRow())
                     Column(Modifier.padding(top = 12.dp)) {
                         Text(L.settings.rea.fullOutputSchemas, fontSize = 13.sp)
                         Text(

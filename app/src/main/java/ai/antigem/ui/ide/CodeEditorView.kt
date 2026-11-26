@@ -172,6 +172,23 @@ class CodeEditorView @JvmOverloads constructor(
         }
     }
 
+    /** Number of lines in the file (at least 1). */
+    fun lineCount(): Int = editor.lineCount.coerceAtLeast(1)
+
+    /**
+     * Puts the cursor at the start of [line] (1-based; clamped to the file) and scrolls it into view. Only moves the
+     * cursor: the text isn't copied or set again.
+     */
+    fun goToLine(line: Int) {
+        try {
+            val target = (line - 1).coerceIn(0, lineCount() - 1)
+            editor.setSelection(target, 0)
+            editor.ensureSelectionVisible()
+        } catch (e: Exception) {
+            Log.e(TAG, "goToLine error", e)
+        }
+    }
+
     fun canUndo(): Boolean = editor.canUndo()
     fun canRedo(): Boolean = editor.canRedo()
     fun getText(): String = editor.text.toString()

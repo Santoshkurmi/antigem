@@ -42,6 +42,13 @@ import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.label
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 /**
  * Settings → Project checkpoints: on / off / per project, how long checkpoints are kept, and every project's
@@ -205,8 +212,8 @@ fun ProjectCheckpointsScreen() {
             text = {
                 Column {
                     Text(L.checkpoint.projectCheckpoints.everyCheckpointOfNameIsDeleted(p.name, formatBytes(p.sizeBytes)), fontSize = 14.sp, lineHeight = 20.sp)
-                    Row(Modifier.padding(top = 10.dp).clickable { forget = !forget }, verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = forget, onCheckedChange = { forget = it })
+                    Row(Modifier.padding(top = 10.dp).clickable { forget = !forget }.semantics { role = Role.Checkbox; toggleableState = ToggleableState(forget) }, verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = forget, onCheckedChange = { forget = it }, modifier = Modifier.mergedIntoRow())
                         Text(L.checkpoint.projectCheckpoints.alsoForgetMyAnswerForThis, fontSize = 13.5.sp)
                     }
                 }
@@ -271,7 +278,7 @@ private fun ProjectCard(
     }
     Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(switchOn, onToggle, enabled = mode != CheckpointSettings.MODE_OFF && p.exists)) {
                 Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.Folder, null, tint = color, modifier = Modifier.size(19.dp))
                 }
@@ -280,7 +287,7 @@ private fun ProjectCard(
                     Text(p.name, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(p.path, fontSize = 11.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Switch(checked = switchOn, enabled = mode != CheckpointSettings.MODE_OFF && p.exists, onCheckedChange = onToggle)
+                Switch(checked = switchOn, enabled = mode != CheckpointSettings.MODE_OFF && p.exists, onCheckedChange = onToggle, modifier = Modifier.mergedIntoRow())
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

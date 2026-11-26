@@ -94,6 +94,8 @@ import ai.antigem.ui.components.OpenCodeAccent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 
 /** Subscriptions people sign in with most, shown as quick tiles (id → tile title and hint). */
 private val QUICK get() = listOf(
@@ -327,7 +329,7 @@ private fun ModelsCard(backend: OpenCodeChatBackend) {
                     val visible = models.filter { query.isBlank() || it.displayName.contains(query, true) || it.id.contains(query, true) }
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
                         items(visible, key = { it.id }) { m ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.fillMaxWidth().padding(vertical = 1.dp).toggleRowSemantics(m.id !in hiddenModels, { backend.setModelEnabled(m.id, it) }, enabled = providerOn), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(
                                         m.displayName, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -337,7 +339,7 @@ private fun ModelsCard(backend: OpenCodeChatBackend) {
                                 }
                                 Switch(
                                     checked = m.id !in hiddenModels, onCheckedChange = { backend.setModelEnabled(m.id, it) },
-                                    enabled = providerOn, colors = switchColors
+                                    enabled = providerOn, colors = switchColors, modifier = Modifier.mergedIntoRow()
                                 )
                             }
                         }

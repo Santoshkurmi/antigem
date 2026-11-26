@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import ai.antigem.ui.components.hiddenWhileOffscreen
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import ai.antigem.AppViewMode
@@ -172,6 +173,8 @@ fun FloatingChatWindow(
                                     alpha = if (isVisible) 1f else 0f
                                     translationX = if (isVisible) 0f else -20000f
                                 }
+                                // hidden: out of TalkBack's and the keyboard's reach (draws the same)
+                                .hiddenWhileOffscreen(currentViewMode == AppViewMode.CHAT)
                         ) {
                             ChatScreen(
                                 viewModel = viewModel,
@@ -193,6 +196,8 @@ fun FloatingChatWindow(
                                     alpha = if (isVisible) 1f else 0f
                                     translationX = if (isVisible) 0f else 20000f
                                 }
+                                // hidden: out of TalkBack's and the keyboard's reach (draws the same)
+                                .hiddenWhileOffscreen(currentViewMode == AppViewMode.IDE)
                         ) {
                             IdeScreen(
                                 viewModel = viewModel,
@@ -215,6 +220,8 @@ fun FloatingChatWindow(
                                     alpha = if (isVisible) 1f else 0f
                                     translationX = if (isVisible) 0f else 20000f
                                 }
+                                // hidden: out of TalkBack's and the keyboard's reach (draws the same)
+                                .hiddenWhileOffscreen(currentViewMode == AppViewMode.TERMINAL)
                         ) {
                             val terminalSessions by ai.antigem.data.local.LocalTerminalManager.sessions.collectAsState()
                             if (currentViewMode == AppViewMode.TERMINAL || (hasEverOpenedTerminal && terminalSessions.isNotEmpty())) {
@@ -239,6 +246,8 @@ fun FloatingChatWindow(
                                     alpha = if (isVisible) 1f else 0f
                                     translationX = if (isVisible) 0f else 20000f
                                 }
+                                // hidden: out of TalkBack's and the keyboard's reach (draws the same)
+                                .hiddenWhileOffscreen(currentViewMode == AppViewMode.BROWSER)
                         ) {
                             BrowserScreen(
                                 isVisible = currentViewMode == AppViewMode.BROWSER,

@@ -2,6 +2,8 @@ package ai.antigem.ui.onboarding
 
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.ui.components.GemmyPreview
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -110,7 +112,7 @@ fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp).toggleRowSemantics(enabled, { enabled = it }),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -133,7 +135,8 @@ fun GemmyIntroDialog(onConfirm: (enabled: Boolean) -> Unit) {
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = ClaudeTerracotta
-                            )
+                            ),
+                            modifier = Modifier.mergedIntoRow()
                         )
                     }
                 }

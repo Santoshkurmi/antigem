@@ -18,6 +18,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +31,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import ai.antigem.data.context.GlobalContext
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import ai.antigem.i18n.L
 
 /** The row on Settings → Agents that opens [GlobalContextScreen]. */
@@ -82,7 +89,7 @@ fun GlobalContextScreen() {
         // ----- built-in -----
         Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.toggleRowSemantics(builtInOn, { GlobalContext.setBuiltInEnabled(it) }), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(L.settings.globalContext.builtInContext, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -91,7 +98,7 @@ fun GlobalContextScreen() {
                             Text(L.settings.globalContext.byAntigemReadOnlyFirstMessage, fontSize = 12.sp, color = muted)
                         }
                     }
-                    Switch(checked = builtInOn, onCheckedChange = { GlobalContext.setBuiltInEnabled(it) })
+                    Switch(checked = builtInOn, onCheckedChange = { GlobalContext.setBuiltInEnabled(it) }, modifier = Modifier.mergedIntoRow())
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -239,7 +246,7 @@ private fun EntryEditor(
                 WhenOption(L.settings.globalContext.everyMessage, L.settings.globalContext.forRulesTheAgentMustNever, everyMessage) { everyMessage = true }
                 Spacer(Modifier.height(10.dp))
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { forJarvis = !forJarvis }.padding(vertical = 6.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { forJarvis = !forJarvis }.semantics { role = Role.Switch; toggleableState = ToggleableState(forJarvis) }.padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -250,7 +257,7 @@ private fun EntryEditor(
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    Switch(checked = forJarvis, onCheckedChange = { forJarvis = it })
+                    Switch(checked = forJarvis, onCheckedChange = { forJarvis = it }, modifier = Modifier.mergedIntoRow())
                 }
             }
         },

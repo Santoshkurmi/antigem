@@ -1,5 +1,6 @@
 package ai.antigem.ui.ide
 
+import ai.antigem.ui.components.terminalKeySemantics
 import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -515,6 +516,8 @@ private fun IdeTermKey(
 
     Surface(
         modifier = keyModifier
+            // TalkBack: the key's full name, a double-tap presses it, CTRL / ALT say their state
+            .terminalKeySemantics(label, isActive, isLocked, currentOnClick, currentOnLongClick)
             .height(32.dp)
             .clip(RoundedCornerShape(6.dp)),
         color = backgroundColor,

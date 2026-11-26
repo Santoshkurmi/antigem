@@ -4,6 +4,8 @@ import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.theme.ClaudeTerracotta
 import ai.antigem.ui.components.PageOverviewPillIcon
 import ai.antigem.ui.components.floatingSwitcherHandleIcon
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -202,7 +204,7 @@ private fun SettingSwitchRow(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().toggleRowSemantics(checked, onCheckedChange),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -226,7 +228,8 @@ private fun SettingSwitchRow(
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = ClaudeTerracotta
-            )
+            ),
+            modifier = Modifier.mergedIntoRow()
         )
     }
 }

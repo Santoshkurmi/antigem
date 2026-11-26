@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -40,6 +42,8 @@ fun ThinkingSelectorBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // full height while TalkBack is on (half height as before otherwise)
+        sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack(),
         containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
         dragHandle = { BottomSheetDefaults.DragHandle() },
@@ -48,6 +52,8 @@ fun ThinkingSelectorBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // scrolls only when it doesn't fit (very large font sizes)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
         ) {

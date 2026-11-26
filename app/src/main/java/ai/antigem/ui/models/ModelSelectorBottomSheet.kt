@@ -113,8 +113,9 @@ fun ModelSelectorBottomSheet(
     }
     // the status bar's height, read once: it does not change while the sheet moves
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    // opens at half height like the Claude Code picker; swipe up (or scroll the list) for the full list
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    // opens at half height like the Claude Code picker; swipe up (or scroll the list) for the full list.
+    // Full height while TalkBack is on (a half-open sheet needs a two-finger drag there).
+    val sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack()
     val scope = rememberCoroutineScope()
 
     ModalBottomSheet(

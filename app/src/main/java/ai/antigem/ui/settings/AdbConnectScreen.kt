@@ -1,6 +1,8 @@
 package ai.antigem.ui.settings
 
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -256,24 +258,24 @@ private fun AdbSection(cardBg: Color, cardBorder: BorderStroke) {
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(state.autoReconnect, AdbConnectManager::setAutoReconnect)) {
                 Column(Modifier.weight(1f)) {
                     Text(L.settings.adbConnect.reconnectAutomatically, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                     Hint(L.settings.adbConnect.whenWirelessDebuggingTurnsOnAgain)
                 }
                 Spacer(Modifier.width(8.dp))
-                Switch(checked = state.autoReconnect, onCheckedChange = AdbConnectManager::setAutoReconnect)
+                Switch(checked = state.autoReconnect, onCheckedChange = AdbConnectManager::setAutoReconnect, modifier = Modifier.mergedIntoRow())
             }
             if (AdbConnectManager.isWirelessDebuggingSupported()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(state.autoWireless && state.secureSettings, { AdbConnectManager.setAutoWireless(it) }, enabled = !state.grantingSecureSettings)) {
                     Column(Modifier.weight(1f)) {
                         Text(L.settings.adbConnect.turnWirelessDebuggingOnByItself, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                         Hint(L.settings.adbConnect.afterARebootOrWhenWi)
                     }
                     Spacer(Modifier.width(8.dp))
                     if (state.grantingSecureSettings) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else Switch(checked = state.autoWireless && state.secureSettings, onCheckedChange = { AdbConnectManager.setAutoWireless(it) })
+                    else Switch(checked = state.autoWireless && state.secureSettings, onCheckedChange = { AdbConnectManager.setAutoWireless(it) }, modifier = Modifier.mergedIntoRow())
                 }
                 if (state.autoWireless && !state.secureSettings) {
                     Text(L.settings.adbConnect.thePermissionIsGoneItIs,

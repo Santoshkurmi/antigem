@@ -42,6 +42,8 @@ import ai.antigem.data.voice.AgyVoicePreferences
 import ai.antigem.data.voice.VoiceCallLauncher
 import ai.antigem.ui.components.AppToastHelper
 import ai.antigem.ui.components.ChatToastType
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import ai.antigem.i18n.L
 
 /**
@@ -109,14 +111,15 @@ fun AgyVoiceCallSettingsCard(modifier: Modifier = Modifier) {
         }
         Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val onToggleBubble: (Boolean) -> Unit = { on ->
+                    AgyVoicePreferences.setBubble(on)
+                    if (on && !canDraw) openOverlaySettings()
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(bubbleOn, onToggleBubble)) {
                     Icon(Icons.Outlined.BubbleChart, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(L.voice.agyVoiceCallSettings.floatingCallWindow, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                    Switch(checked = bubbleOn, onCheckedChange = { on ->
-                        AgyVoicePreferences.setBubble(on)
-                        if (on && !canDraw) openOverlaySettings()
-                    })
+                    Switch(checked = bubbleOn, onCheckedChange = onToggleBubble, modifier = Modifier.mergedIntoRow())
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(

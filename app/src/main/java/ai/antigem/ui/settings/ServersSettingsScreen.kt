@@ -1,6 +1,8 @@
 package ai.antigem.ui.settings
 
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -66,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -548,8 +551,8 @@ internal fun ServersSubScreen(
                     OutlinedTextField(profileName, { profileName = it }, label = { Text(L.settings.serversSettings.profileName) }, singleLine = true, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth())
                     if (remote) {
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            androidx.compose.material3.Checkbox(checked = profileWithSecrets, onCheckedChange = { profileWithSecrets = it })
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(profileWithSecrets, { profileWithSecrets = it }, role = Role.Checkbox)) {
+                            androidx.compose.material3.Checkbox(checked = profileWithSecrets, onCheckedChange = { profileWithSecrets = it }, modifier = Modifier.mergedIntoRow())
                             Column {
                                 Text(L.settings.serversSettings.includeSshPasswordAndKey, fontSize = 13.sp)
                                 Text(L.settings.serversSettings.offByDefaultAnyoneUsingThis, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))

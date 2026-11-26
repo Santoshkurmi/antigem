@@ -5,11 +5,13 @@ import ai.antigem.i18n.L
 import ai.antigem.ui.components.PetPreview
 import ai.antigem.ui.components.PetSession
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
 import ai.antigem.ui.components.pet.PetKind
 import ai.antigem.ui.components.pet.PetLook
 import ai.antigem.ui.components.pet.PetPower
 import ai.antigem.ui.components.pet.PetSettings
 import ai.antigem.ui.components.rememberPetPreviewController
+import ai.antigem.ui.components.toggleRowSemantics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,6 +65,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,7 +114,14 @@ fun PetsSettingsScreen(onEditPet: (PetKind) -> Unit) {
     Column(Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp)) {
         // ----- on / off, with the current pet -----
         Surface(shape = RoundedCornerShape(18.dp), color = cardColor, modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            val onTogglePet: (Boolean) -> Unit = { on ->
+                scope.launch {
+                    state.prefs.setGemmyEnabled(on)
+                    state.prefs.setHasSeenGemmyIntro(true) // decided here: no need for the intro dialog anymore
+                }
+                if (on) PetSession.hidden.value = false
+            }
+            Row(Modifier.padding(start = 6.dp, end = 14.dp, top = 6.dp, bottom = 6.dp).toggleRowSemantics(state.enabled, onTogglePet), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
                         .size(96.dp)
@@ -123,13 +137,8 @@ fun PetsSettingsScreen(onEditPet: (PetKind) -> Unit) {
                 }
                 Switch(
                     checked = state.enabled,
-                    onCheckedChange = { on ->
-                        scope.launch {
-                            state.prefs.setGemmyEnabled(on)
-                            state.prefs.setHasSeenGemmyIntro(true) // decided here: no need for the intro dialog anymore
-                        }
-                        if (on) PetSession.hidden.value = false
-                    }
+                    onCheckedChange = onTogglePet,
+                    modifier = Modifier.mergedIntoRow()
                 )
             }
         }
@@ -487,7 +496,7 @@ private fun RowDivider() {
 @Composable
 private fun SwitchRow(title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.semantics { role = Role.Switch; toggleableState = ToggleableState(checked) }.padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -495,7 +504,7 @@ private fun SwitchRow(title: String, sub: String?, checked: Boolean, onChange: (
             if (sub != null) Text(sub, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.width(10.dp))
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, modifier = Modifier.mergedIntoRow())
     }
 }
 

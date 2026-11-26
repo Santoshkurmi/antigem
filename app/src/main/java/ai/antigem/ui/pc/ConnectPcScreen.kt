@@ -32,6 +32,8 @@ import ai.antigem.ui.components.bouncyVerticalScroll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 
 /** The pairing port VS Code uses when the user types the address by hand (it is shown next to the code there). */
 private const val DEFAULT_PAIR_PORT = 1250
@@ -123,7 +125,10 @@ fun ConnectPcScreen(cardBg: Color, cardBorder: BorderStroke) {
     ) {
         // the feature switch: on only makes it available, it does not connect
         Card(cardBg, cardBorder) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            val onToggleEnabled: (Boolean) -> Unit = { on ->
+                if (!on && active != null) confirmOff = true else PcConnect.setEnabled(on)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(enabled, onToggleEnabled)) {
                 Box(Modifier.size(38.dp).background(PcAccent.copy(alpha = 0.14f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Outlined.Computer, null, tint = PcAccent, modifier = Modifier.size(22.dp))
                 }
@@ -136,9 +141,7 @@ fun ConnectPcScreen(cardBg: Color, cardBorder: BorderStroke) {
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                Switch(checked = enabled, onCheckedChange = { on ->
-                    if (!on && active != null) confirmOff = true else PcConnect.setEnabled(on)
-                })
+                Switch(checked = enabled, onCheckedChange = onToggleEnabled, modifier = Modifier.mergedIntoRow())
             }
             if (!enabled) Hint(L.pc.connectPc.turningThisOnAddsAPc)
         }
@@ -566,7 +569,7 @@ fun PcQuickSheet(onDismiss: () -> Unit, onManage: () -> Unit) {
     var switchTarget by remember { mutableStateOf<PairedPc?>(null) }
     var switchBack by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack()) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(L.pc.connectPc.connectToPc, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {

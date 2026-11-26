@@ -1,6 +1,8 @@
 package ai.antigem.ui.settings
 
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import ai.antigem.ui.browser.BrowserExtension
 import ai.antigem.ui.browser.BrowserExtensionManager
@@ -174,8 +177,8 @@ fun WebViewExtensionsScreen(onChanged: () -> Unit) {
                 BrowserExtension.Location.INSTALLED -> L.settings.webViewExtensions.deletesThePluginFromDirpath(extension.dirPath)
             })
             Text(L.settings.webViewExtensions.ifYouAddedItInMcp, style = MaterialTheme.typography.bodySmall)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = deleteData, onCheckedChange = { deleteData = it })
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(deleteData, { deleteData = it }, role = Role.Checkbox)) {
+                Checkbox(checked = deleteData, onCheckedChange = { deleteData = it }, modifier = Modifier.mergedIntoRow())
                 Text(L.settings.webViewExtensions.alsoDeleteItsStoredDataOtherwise, style = MaterialTheme.typography.bodySmall)
             }
         } },

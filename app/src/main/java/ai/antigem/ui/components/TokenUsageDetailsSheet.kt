@@ -76,6 +76,8 @@ fun TokenUsageDetailsSheet(usage: TokenUsage, onViewPayload: (() -> Unit)?, onDi
     val c = ai.antigem.theme.AppColors
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // full height while TalkBack is on (half height as before otherwise)
+        sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack(),
         containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)

@@ -73,6 +73,8 @@ fun permissionModeIcon(mode: String): ImageVector = when (mode) {
 internal fun ClaudePickerSheet(title: String, detail: String, onDismiss: () -> Unit, agent: AgentKind = AgentKind.CLAUDE, content: @Composable ColumnScope.() -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // full height while TalkBack is on (half height as before otherwise)
+        sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack(),
         containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)

@@ -5,6 +5,8 @@ import ai.antigem.data.local.chroot.ChrootBind
 import ai.antigem.data.local.chroot.ChrootManager
 import ai.antigem.theme.AppColors
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -141,8 +144,8 @@ internal fun ChrootFoldersEditor(user: String, binds: List<ChrootBind>, onChange
             Text(L.settings.chrootFoldersEditor.n2WhereItShowsUpInside, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
             OutlinedTextField(target, { target = it.trim(); targetEdited = true }, label = { Text(L.settings.chrootFoldersEditor.pathInsideUbuntu) }, singleLine = true,
                 placeholder = { Text("/home/$user/photos or /mnt/photos") }, modifier = Modifier.fillMaxWidth())
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(readOnly, { readOnly = it }, colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(readOnly, { readOnly = it }, role = Role.Checkbox)) {
+                Checkbox(readOnly, { readOnly = it }, colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta), modifier = Modifier.mergedIntoRow())
                 Text(L.settings.chrootFoldersEditor.readOnlyUbuntuCanReadBut, fontSize = 12.sp, color = AppColors.onBackground)
             }
             val src = source.trim().trimEnd('/')

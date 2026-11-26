@@ -82,6 +82,12 @@ import ai.antigem.data.ide.RunConfiguration
 import ai.antigem.data.local.LocalTerminalManager
 import ai.antigem.ui.browser.BrowserSessionManager
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,6 +123,7 @@ fun IdeScreen(
     var canUndo by remember { mutableStateOf(false) }
     var canRedo by remember { mutableStateOf(false) }
     var showFindBar by remember { mutableStateOf(false) }
+    var showGoToLine by remember { mutableStateOf(false) }
     var findQuery by remember { mutableStateOf("") }
     var isCaseSensitive by remember { mutableStateOf(false) }
     var searchMatchCount by remember { mutableIntStateOf(0) }
@@ -526,12 +533,14 @@ fun IdeScreen(
                                             Checkbox(
                                                 checked = isWordWrap,
                                                 onCheckedChange = { isWordWrap = it },
-                                                modifier = Modifier.size(20.dp)
+                                                // TalkBack: one item (the menu row says the state), not a second stop
+                                                modifier = Modifier.size(20.dp).mergedIntoRow()
                                             )
                                         },
                                         onClick = {
                                             isWordWrap = !isWordWrap
-                                        }
+                                        },
+                                        modifier = Modifier.semantics { role = Role.Checkbox; toggleableState = ToggleableState(isWordWrap) }
                                     )
 
                                     // Find / Search in File
@@ -549,6 +558,24 @@ fun IdeScreen(
                                             showFindBar = true
                                         }
                                     )
+
+                                    // Go to Line (only while the code editor is showing)
+                                    if (currentEditorView != null && !showMarkdownPreview) {
+                                        DropdownMenuItem(
+                                            text = { Text(L.ide.screen.goToLine, fontSize = 13.sp) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.FormatListNumbered,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showMoreOptionsMenu = false
+                                                showGoToLine = true
+                                            }
+                                        )
+                                    }
 
                                     // SVG Source / Graphic Preview Toggle
                                     if (isSvgFile) {
@@ -1527,6 +1554,57 @@ fun IdeScreen(
                 }
             }
 
+            // Go to Line dialog: moves the editor's cursor only (no text copy, no recomposition of the editor)
+            if (showGoToLine) {
+                val editorView = currentEditorView
+                if (editorView == null) {
+                    showGoToLine = false
+                } else {
+                    val maxLine = remember(editorView) { editorView.lineCount() }
+                    var lineInput by remember { mutableStateOf("") }
+                    val lineNumber = lineInput.toIntOrNull()
+                    val canGo = lineNumber != null && lineNumber >= 1
+                    val goToLine = {
+                        if (lineNumber != null && lineNumber >= 1) {
+                            editorView.goToLine(lineNumber)
+                            showGoToLine = false
+                        }
+                    }
+                    AlertDialog(
+                        onDismissRequest = { showGoToLine = false },
+                        title = { Text(L.ide.screen.goToLine, fontWeight = FontWeight.Bold) },
+                        text = {
+                            OutlinedTextField(
+                                value = lineInput,
+                                onValueChange = { v -> lineInput = v.filter { it.isDigit() }.take(9) },
+                                label = { Text(L.ide.screen.lineNumberRange(maxLine)) },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Go
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { goToLine() }),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = { goToLine() },
+                                enabled = canGo,
+                                colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta)
+                            ) {
+                                Text(L.ide.screen.go)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showGoToLine = false }) {
+                                Text(L.common.cancel)
+                            }
+                        }
+                    )
+                }
+            }
+
             // Unsaved Tab Close Confirmation Dialog
             if (tabToClose != null) {
                 val closingTarget = tabToClose!!
@@ -1972,8 +2050,9 @@ private fun AddRunProfileDialog(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable { isDefault = !isDefault }
+                        .semantics { role = Role.Checkbox; toggleableState = ToggleableState(isDefault) }
                 ) {
-                    Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
+                    Checkbox(checked = isDefault, onCheckedChange = { isDefault = it }, modifier = Modifier.mergedIntoRow())
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(L.ide.screen.setAsDefaultRunProfile, fontSize = 12.5.sp)
                 }

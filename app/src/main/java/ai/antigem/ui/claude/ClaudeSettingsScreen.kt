@@ -112,6 +112,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import ai.antigem.i18n.L
 import ai.antigem.ui.components.label
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 
 /** Pages of the Claude Code settings. */
 enum class ClaudeSettingsPage(private val titleText: () -> String, private val subtitleText: () -> String) {
@@ -416,13 +418,13 @@ private fun DefaultsPage(deps: ClaudeSettingsDeps) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(thinking, { deps.config.setValue("alwaysThinkingEnabled", JsonPrimitive(it)) })) {
             Column(Modifier.weight(1f)) {
                 SectionTitle(L.common.thinking)
                 Hint(L.claude.settings.reasonBeforeAnswering)
             }
             Switch(checked = thinking, onCheckedChange = { deps.config.setValue("alwaysThinkingEnabled", JsonPrimitive(it)) },
-                colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent))
+                colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent), modifier = Modifier.mergedIntoRow())
         }
     }
 
@@ -486,7 +488,10 @@ private fun PermissionsPage(deps: ClaudeSettingsDeps) {
     val sandbox by deps.config.sandbox.collectAsState()
     LaunchedEffect(Unit) { deps.config.loadSandbox() }
     ClaudeCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.toggleRowSemantics(sandbox?.enabled == true, { deps.config.setSandboxEnabled(it) }, enabled = sandbox?.available == true)
+        ) {
             Column(Modifier.weight(1f)) {
                 SectionTitle(L.claude.settings.sandboxCommands)
                 Hint(
@@ -501,7 +506,8 @@ private fun PermissionsPage(deps: ClaudeSettingsDeps) {
                 checked = sandbox?.enabled == true,
                 enabled = sandbox?.available == true,
                 onCheckedChange = { deps.config.setSandboxEnabled(it) },
-                colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent)
+                colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent),
+                modifier = Modifier.mergedIntoRow()
             )
         }
     }

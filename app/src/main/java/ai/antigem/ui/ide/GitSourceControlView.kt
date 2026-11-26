@@ -31,6 +31,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -907,12 +913,14 @@ fun GitSourceControlView(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { configIsGlobal = !configIsGlobal }
+                            .semantics { role = Role.Checkbox; toggleableState = ToggleableState(configIsGlobal) }
                             .padding(vertical = 4.dp)
                     ) {
                         Checkbox(
                             checked = configIsGlobal,
                             onCheckedChange = { configIsGlobal = it },
-                            colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta)
+                            colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta),
+                            modifier = Modifier.mergedIntoRow()
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Column {

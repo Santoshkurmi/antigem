@@ -60,6 +60,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -69,6 +74,7 @@ import androidx.compose.ui.window.DialogProperties
 import ai.antigem.R
 import ai.antigem.data.preferences.TerminalLauncherManager
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.ui.components.mergedIntoRow
 import ai.antigem.i18n.L
 
 @Composable
@@ -228,6 +234,7 @@ fun TerminalLauncherOnboardingDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { isEnabled = !isEnabled }
+                            .semantics { role = Role.Switch; toggleableState = ToggleableState(isEnabled) }
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -253,7 +260,8 @@ fun TerminalLauncherOnboardingDialog(
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = ClaudeTerracotta
-                            )
+                            ),
+                            modifier = Modifier.mergedIntoRow()
                         )
                     }
                 }

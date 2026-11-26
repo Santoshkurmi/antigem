@@ -37,6 +37,13 @@ import ai.antigem.data.daemon.ProjectItem
 import ai.antigem.data.files.*
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 // ---------------- places ----------------
 
@@ -328,10 +335,10 @@ internal fun OpenWithSheet(
             }
             if (ext.isNotBlank()) {
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { remember = !remember }.padding(vertical = 4.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { remember = !remember }.semantics { role = Role.Checkbox; toggleableState = ToggleableState(remember) }.padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Checkbox(checked = remember, onCheckedChange = { remember = it })
+                    Checkbox(checked = remember, onCheckedChange = { remember = it }, modifier = Modifier.mergedIntoRow())
                     Text(L.files.explorerDialogs.alwaysOpenExtFilesThisWay(ext), fontSize = 13.5.sp)
                 }
             }
@@ -378,10 +385,10 @@ internal fun DeleteConfirmDialog(entries: List<ExplorerEntry>, onConfirm: () -> 
                 Text(L.files.explorerDialogs.thisIsPermanentDeletedFilesCannot, fontSize = 13.5.sp, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
                 if (needsAck) {
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { ack = !ack },
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { ack = !ack }.semantics { role = Role.Checkbox; toggleableState = ToggleableState(ack) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(checked = ack, onCheckedChange = { ack = it }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error))
+                        Checkbox(checked = ack, onCheckedChange = { ack = it }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error), modifier = Modifier.mergedIntoRow())
                         Text(L.files.explorerDialogs.iUnderstandDeletePermanently, fontSize = 13.5.sp)
                     }
                 }
@@ -470,7 +477,7 @@ internal fun NameDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CreateSheet(allowProject: Boolean, onFolder: () -> Unit, onFile: () -> Unit, onProject: () -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack()) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 28.dp)) {
             Text(L.common.create, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, bottom = 8.dp))
             SheetRow(Icons.Outlined.CreateNewFolder, L.files.explorerDialogs.folder, tint = MaterialTheme.colorScheme.primary, onClick = onFolder)
@@ -558,17 +565,18 @@ internal fun DetailsSheet(entry: ExplorerEntry, onCopyPath: (String) -> Unit, on
                 if (s.symlinkTarget.isNotBlank()) DetailRow(L.files.explorerDialogs.linksTo, s.symlinkTarget, mono = true)
                 // the bridge's machine only (Android storage has no Unix permissions to change)
                 if (!s.isDir && side == ExplorerSide.BRIDGE) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val onToggleExecutable: (Boolean) -> Unit = { on ->
+                        scope.launch {
+                            FileExplorerApi.chmod(entry.path, if (on) "755" else "644")
+                            reload++
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).toggleRowSemantics(s.executable, onToggleExecutable), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(L.files.explorerDialogs.executable, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             Text(L.files.explorerDialogs.letsScriptsAndProgramsRunChmod, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Switch(checked = s.executable, onCheckedChange = { on ->
-                            scope.launch {
-                                FileExplorerApi.chmod(entry.path, if (on) "755" else "644")
-                                reload++
-                            }
-                        })
+                        Switch(checked = s.executable, onCheckedChange = onToggleExecutable, modifier = Modifier.mergedIntoRow())
                     }
                 }
             }
@@ -692,7 +700,7 @@ internal fun ArchiveSheet(entry: ExplorerEntry, onExtractHere: () -> Unit, onExt
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ViewOptionsSheet(settings: ExplorerSettings, onChange: ((ExplorerSettings) -> ExplorerSettings) -> Unit, onForgetChoices: () -> Unit, rememberedCount: Int, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack()) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(L.files.explorerDialogs.sortView, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Text(L.files.explorerDialogs.sortBy, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
@@ -722,12 +730,12 @@ internal fun ViewOptionsSheet(settings: ExplorerSettings, onChange: ((ExplorerSe
 
 @Composable
 private fun SwitchRow(title: String, checked: Boolean, subtitle: String? = null, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onChange(!checked) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { onChange(!checked) }.semantics { role = Role.Switch; toggleableState = ToggleableState(checked) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 15.sp)
             if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, modifier = Modifier.mergedIntoRow())
     }
 }
 

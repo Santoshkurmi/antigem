@@ -18,6 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.data.rea.ReaManager
 import ai.antigem.theme.QuotaGreen
+import ai.antigem.ui.components.mergedIntoRow
 import ai.antigem.i18n.L
 
 /**
@@ -321,9 +327,10 @@ private fun ToolRow(name: String, checked: Boolean, tool: ReaManager.Tool?, also
         shape = RoundedCornerShape(10.dp),
         color = if (checked) MaterialTheme.colorScheme.primary.copy(alpha = 0.07f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.03f),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle)
+            .semantics { role = Role.Checkbox; toggleableState = ToggleableState(checked) }
     ) {
         Row(Modifier.padding(end = 12.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.Top) {
-            Checkbox(checked = checked, onCheckedChange = { onToggle() })
+            Checkbox(checked = checked, onCheckedChange = { onToggle() }, modifier = Modifier.mergedIntoRow())
             Column(Modifier.weight(1f).padding(top = 10.dp, bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(name, fontSize = 12.5.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium)
                 if (tool == null) {

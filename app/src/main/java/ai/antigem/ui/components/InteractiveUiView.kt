@@ -290,15 +290,13 @@ fun InteractiveUiView(
                         .fillMaxWidth()
                         .heightIn(min = 220.dp, max = 420.dp)
                 ) {
-                    key(reloadKey, isDark) {
-                        // kept alive while the chat is open (ChatWebViewCache): scrolling back keeps the app's state
-                        KeptWebView(
-                            part = "app",
-                            factory = { ctx -> newBlockWebView(ctx, blockOrigin, kept = true, zoom = false) },
-                            update = { view -> updateBlockWebView(view, blockOrigin, site, pageKey, load) },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    // kept alive while the chat is open (ChatWebViewCache): scrolling back keeps the app's state
+                    KeptWebView(
+                        part = "app",
+                        factory = { ctx -> newBlockWebView(ctx, blockOrigin, kept = true, zoom = false) },
+                        update = { view -> updateBlockWebView(view, blockOrigin, site, pageKey, load) },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             } else {
                 // Source Code Inspector

@@ -74,6 +74,8 @@ import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.theme.GeminiTheme
 import ai.antigem.theme.isSystemInDarkThemeRobust
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.launch
 import ai.antigem.i18n.L
 
@@ -237,9 +239,9 @@ class WidgetConfigActivity : ComponentActivity() {
                     }
                 }
                 item {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).toggleRowSemantics(labels, { labels = it }), verticalAlignment = Alignment.CenterVertically) {
                         Text(L.homescreen.widgetConfigActivity.showNamesUnderTheButtons, modifier = Modifier.weight(1f))
-                        Switch(checked = labels, onCheckedChange = { labels = it })
+                        Switch(checked = labels, onCheckedChange = { labels = it }, modifier = Modifier.mergedIntoRow())
                     }
                 }
                 item { SectionLabel(L.homescreen.widgetConfigActivity.onTheWidgetAsManyAs) }

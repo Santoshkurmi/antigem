@@ -30,7 +30,9 @@ import ai.antigem.data.render.RenderComponent
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.MarkdownBlockView
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
 import ai.antigem.ui.components.parseMarkdownBlocks
+import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import ai.antigem.i18n.L
@@ -152,7 +154,7 @@ fun StemRenderingScreen() {
             Column(Modifier.padding(vertical = 6.dp)) {
                 RenderComponent.entries.forEachIndexed { i, c ->
                     if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 14.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp).toggleRowSemantics(c in active, { RenderBundle.setEnabled(c, it) }, enabled = !c.fromBundle || installed), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(c.title, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             Text(c.summary, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
@@ -168,7 +170,8 @@ fun StemRenderingScreen() {
                         Switch(
                             checked = c in active,
                             onCheckedChange = { RenderBundle.setEnabled(c, it) },
-                            enabled = !c.fromBundle || installed
+                            enabled = !c.fromBundle || installed,
+                            modifier = Modifier.mergedIntoRow()
                         )
                     }
                 }
@@ -179,12 +182,12 @@ fun StemRenderingScreen() {
         Spacer(Modifier.height(22.dp))
         Surface(shape = RoundedCornerShape(16.dp), color = cardColor, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(tellAgents, { RenderBundle.setTellAgents(it) })) {
                     Column(Modifier.weight(1f)) {
                         Text(L.settings.stemRendering.tellAgentsAboutTheseBlocks, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(L.settings.stemRendering.globalContextFirstMessageOfEach, fontSize = 12.sp, color = muted)
                     }
-                    Switch(checked = tellAgents, onCheckedChange = { RenderBundle.setTellAgents(it) })
+                    Switch(checked = tellAgents, onCheckedChange = { RenderBundle.setTellAgents(it) }, modifier = Modifier.mergedIntoRow())
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(

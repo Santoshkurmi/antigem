@@ -16,6 +16,8 @@ import ai.antigem.data.local.chroot.ChrootSource
 import ai.antigem.data.local.chroot.UbuntuRelease
 import ai.antigem.theme.AppColors
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
@@ -78,6 +80,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -434,17 +437,17 @@ fun ChrootSetupScreen(
 
                 // ---------------- packages
                 ChrootSection(L.settings.chrootSetup.packages, L.settings.chrootSetup.installedWithAptRightAfterThe, Icons.Outlined.Inventory2) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                        Checkbox(true, null, enabled = false)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp).toggleRowSemantics(true, null, role = Role.Checkbox, enabled = false)) {
+                        Checkbox(true, null, enabled = false, modifier = Modifier.mergedIntoRow())
                         Column(Modifier.weight(1f)) {
                             Text(ChrootPackageBundle.ESSENTIALS.title + " (always)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
                             Text(ChrootPackageBundle.ESSENTIALS.description, fontSize = 11.sp, color = AppColors.textSecondary)
                         }
                     }
                     ChrootPackageBundle.entries.filter { it != ChrootPackageBundle.ESSENTIALS }.forEach { b ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).toggleRowSemantics(b in bundles, { on -> bundles = if (on) bundles + b else bundles - b }, role = Role.Checkbox)) {
                             Checkbox(b in bundles, { on -> bundles = if (on) bundles + b else bundles - b },
-                                colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta))
+                                colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta), modifier = Modifier.mergedIntoRow())
                             Column(Modifier.weight(1f)) {
                                 Text(b.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
                                 Text(b.description, fontSize = 11.sp, color = AppColors.textSecondary)

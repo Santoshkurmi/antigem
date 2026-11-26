@@ -19,6 +19,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,6 +35,8 @@ import ai.antigem.data.memory.MemoryBridgeClient
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.label
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -128,12 +135,12 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
         // ----- master switch -----
         Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.toggleRowSemantics(enabled, { AgentMemory.setEnabled(it) }), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(L.settings.agentMemory.agentMemory, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(L.settings.agentMemory.sharedByEveryAgent, fontSize = 12.sp, color = muted)
                     }
-                    Switch(checked = enabled, onCheckedChange = { AgentMemory.setEnabled(it) })
+                    Switch(checked = enabled, onCheckedChange = { AgentMemory.setEnabled(it) }, modifier = Modifier.mergedIntoRow())
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -162,11 +169,11 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
                     AgentKind.entries.forEach { agent ->
                         val on = agent in agents
                         Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { AgentMemory.setAgent(agent, !on) }.padding(vertical = 2.dp),
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { AgentMemory.setAgent(agent, !on) }.semantics { role = Role.Switch; toggleableState = ToggleableState(on) }.padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(agent.label(), fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Switch(checked = on, onCheckedChange = { AgentMemory.setAgent(agent, it) })
+                            Switch(checked = on, onCheckedChange = { AgentMemory.setAgent(agent, it) }, modifier = Modifier.mergedIntoRow())
                         }
                     }
                 }
@@ -199,7 +206,7 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
             // ----- chat history -----
             Spacer(Modifier.height(12.dp))
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(14.dp).toggleRowSemantics(saveHistory, { AgentMemory.setSaveHistory(it) }), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(L.settings.agentMemory.saveChatHistory, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text(
@@ -208,7 +215,7 @@ fun AgentMemoryScreen(onOpenHistory: (() -> Unit)? = null) {
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    Switch(checked = saveHistory, onCheckedChange = { AgentMemory.setSaveHistory(it) })
+                    Switch(checked = saveHistory, onCheckedChange = { AgentMemory.setSaveHistory(it) }, modifier = Modifier.mergedIntoRow())
                 }
             }
             if (onOpenHistory != null) {

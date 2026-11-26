@@ -96,6 +96,12 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 /** A built-inn OpenCode provider (integration) and the saved connections the user made for it. */
 private data class Integration(val id: String, val name: String, val keyLogin: Boolean, val envNames: List<String>, val connections: List<Pair<String, String>>)
@@ -653,9 +659,9 @@ private fun CustomProviderDialog(backend: OpenCodeChatBackend, initial: OpenCode
 private fun ProviderModelRow(model: OpenCodeCustomModel, added: OpenCodeCustomModel?, onToggle: () -> Unit, onChange: (OpenCodeCustomModel) -> Unit) {
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
     val cur = added ?: model
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle)) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).semantics { role = Role.Checkbox; toggleableState = ToggleableState(added != null) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = added != null, onCheckedChange = { onToggle() })
+            Checkbox(checked = added != null, onCheckedChange = { onToggle() }, modifier = Modifier.mergedIntoRow())
             Column(Modifier.weight(1f)) {
                 val title = model.name?.takeIf { it.isNotBlank() && it != model.id }
                 Text(title ?: model.id, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

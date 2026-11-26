@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 
 /**
  * Settings → Files in other apps: AntiGem's home and the Ubuntu chroot's home in Android's file picker
@@ -167,7 +169,7 @@ private fun PathText(path: String) {
 
 @Composable
 private fun SwitchLine(title: String, subtitle: String?, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).toggleRowSemantics(checked, onChange, enabled = enabled), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(
                 title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
@@ -178,6 +180,6 @@ private fun SwitchLine(title: String, subtitle: String?, checked: Boolean, enabl
             }
         }
         Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled, modifier = Modifier.mergedIntoRow())
     }
 }

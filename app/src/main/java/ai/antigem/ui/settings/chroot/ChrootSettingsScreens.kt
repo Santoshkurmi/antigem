@@ -16,6 +16,8 @@ import ai.antigem.data.local.chroot.ChrootScripts
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.theme.AppColors
 import ai.antigem.theme.ClaudeTerracotta
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +75,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -667,9 +670,9 @@ private fun ChrootPackagesSection(install: ChrootInstall, cardBg: Color, cardBor
     val names = extra.split(Regex("[\\s,]+")).filter { it.isNotBlank() }
     ChrootSection(L.settings.chrootSettingsScreens.packages, "apt inside the chroot (as root)", Icons.Outlined.Inventory2, AppColors.success, cardBg, cardBorder) {
         ChrootPackageBundle.entries.forEach { b ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().toggleRowSemantics(b in bundles, { on -> bundles = if (on) bundles + b else bundles - b }, role = Role.Checkbox)) {
                 Checkbox(b in bundles, { on -> bundles = if (on) bundles + b else bundles - b },
-                    colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta))
+                    colors = CheckboxDefaults.colors(checkedColor = ClaudeTerracotta), modifier = Modifier.mergedIntoRow())
                 Column(Modifier.weight(1f)) {
                     Text(b.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = AppColors.onBackground)
                     Text(b.description, fontSize = 11.sp, color = AppColors.textSecondary)

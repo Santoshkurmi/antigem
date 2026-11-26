@@ -82,6 +82,8 @@ import ai.antigem.ui.agents.SheetSectionLabel
 import ai.antigem.ui.components.ClaudeAccent
 import kotlinx.coroutines.delay
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 
 /** Accent of the model sheet's n-th plan group: Claude's own for "All models", then one hue per model limit. */
 private fun claudeGroupColor(index: Int): Color = when (index) {
@@ -300,6 +302,8 @@ fun ClaudeModelSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // full height while TalkBack is on (half height as before otherwise)
+        sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack(),
         containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -495,14 +499,14 @@ fun ClaudeModelSheet(
             SheetSectionLabel(L.common.reasoning)
             Surface(shape = RoundedCornerShape(14.dp), color = cardColor, modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(thinking, { backend.setThinking(it) })) {
                         Icon(Icons.Outlined.Lightbulb, null, tint = if (thinking) ClaudeAccent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                             Text(L.common.thinking, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             Text(L.claude.chatControls.reasonBeforeAnsweringShownAsA, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
                         }
-                        Switch(checked = thinking, onCheckedChange = { backend.setThinking(it) }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent))
+                        Switch(checked = thinking, onCheckedChange = { backend.setThinking(it) }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent), modifier = Modifier.mergedIntoRow())
                     }
                     if (info?.supportsFastMode == true) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))

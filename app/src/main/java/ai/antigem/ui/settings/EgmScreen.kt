@@ -27,6 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -35,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import ai.antigem.data.egm.EgmManager
 import ai.antigem.theme.QuotaGreen
 import ai.antigem.ui.components.bouncyVerticalScroll
+import ai.antigem.ui.components.mergedIntoRow
 import ai.antigem.i18n.L
 
 /** The EGM row of Settings → Agents, with what is installed. */
@@ -217,9 +223,9 @@ fun EgmScreen(cardBg: Color, cardBorder: BorderStroke) {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().clickable(enabled = canChange) {
                         EgmManager.update { s -> s.copy(reviewers = if (checked) s.reviewers - p else s.reviewers + p) }
-                    }
+                    }.semantics { role = Role.Checkbox; toggleableState = ToggleableState(checked) }
                 ) {
-                    Checkbox(checked = checked, enabled = canChange, onCheckedChange = null)
+                    Checkbox(checked = checked, enabled = canChange, onCheckedChange = null, modifier = Modifier.mergedIntoRow())
                     Spacer(Modifier.width(6.dp))
                     Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
                         Text(p.label, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
@@ -400,12 +406,13 @@ private fun EgmSwitchRow(title: String, text: String, checked: Boolean, onChange
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clickable { onChange(!checked) }
+            .semantics { role = Role.Switch; toggleableState = ToggleableState(checked) }
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
             Text(text, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, modifier = Modifier.mergedIntoRow())
     }
 }
 

@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
+import ai.antigem.ui.components.hiddenWhileOffscreen
 import androidx.compose.ui.graphics.toArgb
 
 import androidx.compose.ui.input.pointer.pointerInput
@@ -647,6 +648,8 @@ fun BrowserScreen(
                                 alpha = if (isActive && !isHomePage) 1f else 0f
                                 translationX = if (isActive && !isHomePage) 0f else -20000f
                             }
+                            // a background tab: out of TalkBack's and the keyboard's reach (draws the same)
+                            .hiddenWhileOffscreen(isActive && !isHomePage)
                     ) {
                         AndroidView(
                             factory = { ctx ->
@@ -673,6 +676,10 @@ fun BrowserScreen(
                                     container.addView(wv)
                                 }
                                 tab.webView = wv
+                                // the page inside a WebView isn't in Compose's tree: hide a background tab's from TalkBack here
+                                container.importantForAccessibility =
+                                    if (tabOnScreen) android.view.View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                                    else android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                                 wv.setBackgroundColor(android.graphics.Color.WHITE)
                                 @Suppress("DEPRECATION")
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {

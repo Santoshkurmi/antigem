@@ -89,6 +89,12 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 /** Group key of the pinned chats when grouping by workspace (can't clash with a folder name). */
 private const val PINNED_GROUP = "\u0000pinned"
@@ -509,8 +515,9 @@ fun ChatHistoryDrawer(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(top = 8.dp).clickable { stopChrootOnExit = !stopChrootOnExit }
+                                .semantics { role = Role.Checkbox; toggleableState = ToggleableState(stopChrootOnExit) }
                         ) {
-                            Checkbox(checked = stopChrootOnExit, onCheckedChange = { stopChrootOnExit = it })
+                            Checkbox(checked = stopChrootOnExit, onCheckedChange = { stopChrootOnExit = it }, modifier = Modifier.mergedIntoRow())
                             Text(
                                 if (stopChrootOnExit) L.drawer.chatHistoryDrawer.alsoStopTheUbuntuChrootIts
                                 else L.drawer.chatHistoryDrawer.alsoStopTheUbuntuChrootOff,

@@ -70,6 +70,8 @@ import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.chat.ChatViewModelHolder
 import ai.antigem.ui.components.AppToastHelper
 import ai.antigem.ui.components.ChatToastType
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.flow.MutableStateFlow
 import ai.antigem.i18n.L
 
@@ -175,12 +177,12 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
         }
 
         Section(Icons.Outlined.TouchApp, L.homescreen.settings.appIconMenu) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(recentOn, { HomePrefs.setRecentInMenu(it) })) {
                 Column(Modifier.weight(1f)) {
                     Text(L.homescreen.settings.newestChats, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Hint(L.homescreen.settings.longPressTheAntigemIconYour)
                 }
-                Switch(checked = recentOn, onCheckedChange = { HomePrefs.setRecentInMenu(it) })
+                Switch(checked = recentOn, onCheckedChange = { HomePrefs.setRecentInMenu(it) }, modifier = Modifier.mergedIntoRow())
             }
         }
 
@@ -238,12 +240,12 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(hideTitles, { HomePrefs.setHideTitles(it); HomeWidgets.refreshAll(context) })) {
                 Column(Modifier.weight(1f)) {
                     Text(L.homescreen.settings.hideChatNames, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Hint(L.homescreen.settings.widgetsShowClaudeCodeChatAnd)
                 }
-                Switch(checked = hideTitles, onCheckedChange = { HomePrefs.setHideTitles(it); HomeWidgets.refreshAll(context) })
+                Switch(checked = hideTitles, onCheckedChange = { HomePrefs.setHideTitles(it); HomeWidgets.refreshAll(context) }, modifier = Modifier.mergedIntoRow())
             }
         }
 

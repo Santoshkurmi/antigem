@@ -97,6 +97,13 @@ import ai.antigem.theme.QuotaGreen
 import ai.antigem.theme.QuotaRed
 import ai.antigem.ui.components.ClaudeAccent
 import ai.antigem.i18n.L
+import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.toggleRowSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 
 private const val OPENROUTER_BASE_URL = "https://openrouter.ai/api"
 
@@ -617,8 +624,8 @@ private fun ProviderEditor(
                                 placeholder = { Text("https://api.example.com/v1/models") }, modifier = Modifier.fillMaxWidth()
                             )
                         } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Switch(checked = freeOnly, onCheckedChange = { freeOnly = it }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent))
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(freeOnly, { freeOnly = it })) {
+                                Switch(checked = freeOnly, onCheckedChange = { freeOnly = it }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent), modifier = Modifier.mergedIntoRow())
                                 Spacer(Modifier.width(10.dp))
                                 Text(L.claude.providers.onlyFreeModelsThatCanCall, fontSize = 12.5.sp)
                             }
@@ -711,7 +718,7 @@ private fun ProviderEditor(
                             L.claude.providers.sonnetOpusAndSubagentRequestsAre,
                             fontSize = 11.sp, color = muted
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(sendThinking, { sendThinking = it })) {
                             Column(Modifier.weight(1f)) {
                                 Text(L.claude.providers.sendAThinkingBudget, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                 Text(
@@ -719,7 +726,7 @@ private fun ProviderEditor(
                                     fontSize = 11.sp, color = muted
                                 )
                             }
-                            Switch(checked = sendThinking, onCheckedChange = { sendThinking = it }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent))
+                            Switch(checked = sendThinking, onCheckedChange = { sendThinking = it }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent), modifier = Modifier.mergedIntoRow())
                         }
                         if (sendThinking) {
                             OutlinedTextField(
@@ -750,12 +757,12 @@ private fun ProviderEditor(
                             modifier = Modifier.fillMaxWidth(),
                             supportingText = { Text(L.claude.providers.rateLimitsRejectedKeysAndNetwork) }
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.toggleRowSemantics(disableBetas, { disableBetas = it })) {
                             Column(Modifier.weight(1f)) {
                                 Text(L.claude.providers.disableExperimentalBetas, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                 Text(L.claude.providers.turnOnIfTheProviderAnswers, fontSize = 11.sp, color = muted)
                             }
-                            Switch(checked = disableBetas, onCheckedChange = { disableBetas = it }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent))
+                            Switch(checked = disableBetas, onCheckedChange = { disableBetas = it }, colors = SwitchDefaults.colors(checkedTrackColor = ClaudeAccent), modifier = Modifier.mergedIntoRow())
                         }
                     }
 
@@ -923,12 +930,14 @@ private fun FetchedModelsDialog(
                         val added = m.id in existing
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                .clickable(enabled = !added) { picked = if (m.id in picked) picked - m.id else picked + m.id },
+                                .clickable(enabled = !added) { picked = if (m.id in picked) picked - m.id else picked + m.id }
+                                .semantics { role = Role.Checkbox; toggleableState = ToggleableState(added || m.id in picked) },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(
                                 checked = added || m.id in picked, onCheckedChange = null, enabled = !added,
-                                colors = CheckboxDefaults.colors(checkedColor = ClaudeAccent)
+                                colors = CheckboxDefaults.colors(checkedColor = ClaudeAccent),
+                                modifier = Modifier.mergedIntoRow()
                             )
                             Spacer(Modifier.width(6.dp))
                             Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
