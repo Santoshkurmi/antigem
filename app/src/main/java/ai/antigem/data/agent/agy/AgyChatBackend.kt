@@ -2384,6 +2384,8 @@ class AgyChatBackend(
     /**
      * Each model's quota from its group (the user's choice in the model picker, else the automatic one). A group
      * without a 5-hour limit (Argon) has none here: the pill falls back to its weekly limit, never a made-up 5h.
+     * A used-up weekly limit (shown as 0%) wins over the 5h choice: the model can't run until it resets, while the
+     * 5h window may still read 100%.
      */
     private fun recomputeQuotas() {
         val summary = _quotaSummary.value ?: return
@@ -2391,7 +2393,11 @@ class AgyChatBackend(
         val overrides = ai.antigem.domain.model.ModelGroupPrefs.overrides(ai.antigem.domain.model.QuotaAgent.AGY).value
         val pill = ai.antigem.domain.model.ModelGroupPrefs.pillWindow(ai.antigem.domain.model.QuotaAgent.AGY).value
         _quotas.value = _availableModels.value.mapNotNull { model ->
-            ai.antigem.domain.model.AgyQuotaGroups.groupOf(model, groups, overrides)?.toModelQuota(model.id, pill)
+            val group = ai.antigem.domain.model.AgyQuotaGroups.groupOf(model, groups, overrides) ?: return@mapNotNull null
+            // under 0.05% left reads as "0.0%" in the pill
+            val weeklyEmpty = group.tightestWeekly?.let { it.remaining * 100f < 0.05f } == true
+            val window = if (weeklyEmpty) ai.antigem.domain.model.QuotaPillWindow.WEEKLY else pill
+            group.toModelQuota(model.id, window)
         }
     }
 
