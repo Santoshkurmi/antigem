@@ -88,6 +88,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         .map { it?.agent ?: AgentKind.AGY }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AgentKind.AGY)
 
+    init {
+        // the open chat's agent, for the crash report (only when it changes)
+        viewModelScope.launch {
+            store.currentConversation.map { it?.agent?.name ?: "none" }.distinctUntilChanged()
+                .collect { ai.antigem.crash.CrashBreadcrumbs.chatAgent = it }
+        }
+    }
+
     private val isClaudeActive get() = store.currentConversation.value?.agent == AgentKind.CLAUDE
     private val isOpenCodeActive get() = store.currentConversation.value?.agent == AgentKind.OPENCODE
     private val isCodexActive get() = store.currentConversation.value?.agent == AgentKind.CODEX

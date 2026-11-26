@@ -243,11 +243,19 @@ fun Modifier.pageSnapshotSource(mode: AppViewMode, enabled: Boolean): Modifier {
 class PageChangeState(initial: AppViewMode, private val onLeave: (AppViewMode) -> Unit) : MutableState<AppViewMode> {
     private val state = mutableStateOf(initial)
 
+    init {
+        // the pages shown before a crash, for the crash report
+        ai.antigem.crash.CrashBreadcrumbs.add("page ${initial.name}")
+    }
+
     override var value: AppViewMode
         get() = state.value
         set(newValue) {
             val old = state.value
-            if (newValue != old) onLeave(old)
+            if (newValue != old) {
+                ai.antigem.crash.CrashBreadcrumbs.add("page ${old.name} -> ${newValue.name}")
+                onLeave(old)
+            }
             state.value = newValue
         }
 
