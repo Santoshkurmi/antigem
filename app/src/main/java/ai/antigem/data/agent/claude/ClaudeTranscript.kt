@@ -1,5 +1,7 @@
 package ai.antigem.data.agent.claude
 
+import ai.antigem.data.media.InlineMediaStore
+import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.domain.model.ChatAttachment
 import ai.antigem.domain.model.ChatMessage
 import ai.antigem.domain.model.ChoiceOption
@@ -609,6 +611,9 @@ class ClaudeTranscript {
         val text = contentText(r.content)
         val isError = r.is_error == true
         tool.output = toolOutput(tool, text, structured)
+        // the output is made: keep only the small fields the card still shows (a Write's whole file, an Edit's old and
+        // new text are not kept for the rest of the chat)
+        tool.input = slimInput(tool.name, tool.input)
         tool.progress = null
         tool.status = when {
             !isError -> "SUCCESS"
@@ -755,6 +760,19 @@ class ClaudeTranscript {
 
         /** Internal tools that are not interesting to show as cards. */
         private val HIDDEN_TOOLS = setOf("ToolSearch")
+
+        /** Tools whose whole input is shown after they ran (a todo list, a plan, questions): kept as it is. */
+        private val SHOWN_INPUT_TOOLS = setOf("TodoWrite", "ExitPlanMode", "AskUserQuestion")
+
+        /** The input fields [describeTool] reads; everything else of a finished tool's input is dropped. */
+        private val DESCRIBED_KEYS = setOf("command", "file_path", "notebook_path", "pattern", "path", "query", "url", "description")
+
+        /** A finished tool's input with only what its card shows ([describeTool]). */
+        private fun slimInput(name: String, input: JsonObject?): JsonObject? {
+            if (input == null || name in SHOWN_INPUT_TOOLS) return input
+            if (input.keys.all { it in DESCRIBED_KEYS }) return input
+            return JsonObject(input.filterKeys { it in DESCRIBED_KEYS })
+        }
 
         fun toolTypeFor(name: String): ToolType = when {
             name == "Bash" || name == "BashOutput" || name == "KillShell" -> ToolType.BASH
@@ -935,22 +953,30 @@ class ClaudeTranscript {
 
         private fun ClaudeContentBlock.toAttachment(uuid: String, index: Int): ChatAttachment? {
             val src = source ?: return null
+            // a bridge asked for media=refs saved the prompt's picture as a file of the chat: shown from there
+            val savedPath = src.path?.takeIf { src.type == "path" && it.isNotBlank() }
+            val savedUrl = savedPath?.let {
+                AuthPreferences.currentBridgeHttpUrl.trimEnd('/') + "/api/claude/attachments/raw?path=" +
+                    java.net.URLEncoder.encode(it, "UTF-8")
+            }
             return when (type) {
-                "image" -> ChatAttachment(
+                "image" -> InlineMediaStore.stored(ChatAttachment(
                     id = "${uuid}_att_$index",
                     name = "image_${index + 1}",
                     path = "",
                     isImage = true,
+                    url = savedUrl,
                     mimeType = src.media_type,
-                    base64 = src.data
-                )
-                "document" -> ChatAttachment(
+                    base64 = if (src.type == "base64") src.data else null
+                ))
+                "document" -> InlineMediaStore.stored(ChatAttachment(
                     id = "${uuid}_att_$index",
                     name = title ?: "document_${index + 1}",
                     path = "",
+                    url = savedUrl,
                     mimeType = src.media_type,
                     base64 = if (src.type == "base64") src.data else null
-                )
+                ))
                 else -> null
             }
         }

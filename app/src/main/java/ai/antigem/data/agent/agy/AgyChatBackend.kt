@@ -1237,12 +1237,9 @@ class AgyChatBackend(
                                     lastFrameAtMs.set(android.os.SystemClock.elapsedRealtime())
 
                                     val update = resp.update
-                                    val statusStr = update?.status?.name ?: ""
-                                    val stepsCount = update?.main_trajectory_update?.steps_update?.steps?.size ?: 0
-                                    Log.d("CHAT_OPEN_DEBUG", "📥 [ChatViewModel Stream Frame] convId=$conversationId, isFirstChunk=$isFirstChunk, status=$statusStr, stepsCount=$stepsCount")
                                     val historyChunk = isFirstChunk
                                     isFirstChunk = false
-                                    val turns = if (update != null) trajectoryEngine.ingestAgentStateUpdate(update) else emptyList()
+                                    if (update != null) trajectoryEngine.ingestAgentStateUpdate(update)
                                     val msgs = trajectoryEngine.toChatMessages(conversationId)
 
 
@@ -1265,23 +1262,13 @@ class AgyChatBackend(
                                         }
                                         refreshQueuedMessages(conversationId)
 
-                                        Log.d("CHAT_OPEN_DEBUG", "✨ [ChatViewModel State Update] convId=$conversationId, turnsCount=${turns.size}, msgsCount=${msgs.size}, isRunning=$isRunning, isWaiting=$isWaiting")
-
                                         _messages.value = msgs
                                         if (historyChunk) adoptChatModelFromHistory(conversationId, msgs)
-                                        if (msgs.isNotEmpty()) {
-                                            ai.antigem.ui.chat.ChatFeedCache.prewarm(msgs)
-
-                                            msgs.flatMap { it.toolCalls }.filter {
-                                                it.toolType == ai.antigem.domain.model.ToolType.GENERATE_IMAGE && it.output.isNotBlank()
-                                            }.forEach { tc ->
-                                                ai.antigem.data.remote.HubMediaResolver.resolveMediaUri(application, tc.output, agyHubClient, hubUrl)
-                                            }
-                                            msgs.flatMap { it.attachments }.filter { it.isImage && it.path.isNotBlank() }.forEach { att ->
-                                                val rawUri = if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}"
-                                                ai.antigem.data.remote.HubMediaResolver.resolveMediaUri(application, rawUri, agyHubClient, hubUrl)
-                                            }
-                                        }
+                                    }
+                                    if (msgs.isNotEmpty() && activeStreamConversationId == conversationId) {
+                                        // off the main thread: parse the newest replies before the list draws them
+                                        backendScope.launch(Dispatchers.Default) { ai.antigem.ui.chat.ChatFeedCache.prewarm(msgs) }
+                                        prefetchChatImages(conversationId, msgs, hubUrl)
                                     }
                                 }
                             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -1535,6 +1522,62 @@ class AgyChatBackend(
     }
 
     /** The model each chat was last given (the picker shows it when the chat is opened). */
+    /**
+     * Fetches the newest images of the open chat ([PREFETCH_IMAGES] at most: generated images and attached pictures)
+     * into the app's image cache ahead of time, so they show at once when the list reaches them. Each image is fetched
+     * once per chat visit, in the background (never holding up the stream); one that failed is tried again after a
+     * minute at the earliest. Older images are fetched when the list shows them (the cards resolve their own image).
+     */
+    private fun prefetchChatImages(conversationId: String, msgs: List<ChatMessage>, hubUrl: String) {
+        val sources = ArrayList<String>()
+        for (i in msgs.indices.reversed()) {
+            val m = msgs[i]
+            for (tc in m.toolCalls) {
+                val out = tc.output
+                if (tc.toolType == ai.antigem.domain.model.ToolType.GENERATE_IMAGE && out.isNotBlank() &&
+                    !out.startsWith("data:") && !out.startsWith("http")) sources.add(out)
+            }
+            for (att in m.attachments) {
+                if (!att.isImage || att.path.isBlank() || !att.localUri.isNullOrBlank()) continue
+                sources.add(if (att.path.startsWith("file://") || att.path.startsWith("http")) att.path else "file://${att.path}")
+            }
+            if (sources.size >= PREFETCH_IMAGES) break
+        }
+        if (sources.isEmpty()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        val todo = synchronized(prefetchLock) {
+            if (prefetchConversationId != conversationId) {
+                prefetchConversationId = conversationId
+                prefetchedImages.clear()
+                prefetchFailedAt.clear()
+            }
+            sources.take(PREFETCH_IMAGES).distinct().filter { src ->
+                val failedAt = prefetchFailedAt[src]
+                (failedAt == null || now - failedAt > PREFETCH_RETRY_MS) && prefetchedImages.add(src)
+            }
+        }
+        if (todo.isEmpty()) return
+        backendScope.launch(Dispatchers.IO) {
+            for (src in todo) {
+                if (activeStreamConversationId != conversationId) return@launch
+                ai.antigem.data.remote.HubMediaResolver.resolveMediaUri(application, src, agyHubClient, hubUrl)
+                if (!ai.antigem.data.remote.HubMediaResolver.isLocalOrCached(application, src)) {
+                    synchronized(prefetchLock) {
+                        if (prefetchConversationId == conversationId) {
+                            prefetchedImages.remove(src)
+                            prefetchFailedAt[src] = android.os.SystemClock.elapsedRealtime()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private val prefetchLock = Any()
+    private var prefetchConversationId: String? = null
+    private val prefetchedImages = HashSet<String>()
+    private val prefetchFailedAt = HashMap<String, Long>()
+
     private val chatModels = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     fun rememberChatModel(chatId: String, modelId: String) {
@@ -2288,7 +2331,6 @@ class AgyChatBackend(
                 rawPayload = rawPayload ?: existing.rawPayload
             )
             _messages.value = list
-            android.util.Log.d("PERF_TRACE", "🌊 [Streaming Emit] ID=${msgId.take(8)}, len=${content.length}, isStreaming=$isStreaming")
         } else {
             val conv = _currentConversation.value
             if (conv != null) {
@@ -2781,3 +2823,8 @@ class AgyChatBackend(
         ai.antigem.data.remote.AgyAccounts.replyRunning = { false }
     }
 }
+
+/** How many of the newest images of an Antigravity chat are fetched ahead of time (see prefetchChatImages). */
+private const val PREFETCH_IMAGES = 8
+/** An image that could not be fetched ahead of time is not tried again sooner than this. */
+private const val PREFETCH_RETRY_MS = 60_000L

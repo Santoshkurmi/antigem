@@ -1,6 +1,5 @@
 package ai.antigem.domain.chat
 
-import android.util.Log
 import ai.antigem.domain.model.ArtifactSnapshot
 import ai.antigem.domain.model.ChatAttachment
 import ai.antigem.domain.model.ChoiceQuestionnaire
@@ -60,6 +59,23 @@ class TrajectoryEngine {
 
     // Tier 2: Sparse step map for the active turn currently receiving live chunks
     private val activeStepsMap = LinkedHashMap<Int, Step>()
+
+    /**
+     * The blocks of each active step, by step object: a frame replaces only the steps that changed, so the others are
+     * not extracted again (their text, tool output, pictures). Rebuilt with only the current steps every time the
+     * turns are read, so replaced steps never pile up.
+     */
+    private class StepBlocks(val stepIndex: Int, val streaming: Boolean, val responded: Boolean, val trajectoryId: String, val blocks: List<TurnBlock>)
+    @Volatile private var stepBlocksCache = java.util.IdentityHashMap<Step, StepBlocks>()
+
+    /**
+     * The message made from each turn last time, by turn object: finished turns don't change, so their messages (and
+     * their joined text) are made once and the very same objects go to the UI again, which then skips them.
+     */
+    @Volatile private var messageCache = java.util.IdentityHashMap<ChatTurn, ChatMessage>()
+
+    /** When a user step without a timestamp was first seen, so its time doesn't move on every frame. */
+    private val firstSeenAt = java.util.concurrent.ConcurrentHashMap<Int, Long>()
 
     val userRespondedStepIndices = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
 
@@ -144,6 +160,9 @@ class TrajectoryEngine {
         completedTurns.clear()
         activeStepsMap.clear()
         pendingUserTurn = null
+        stepBlocksCache = java.util.IdentityHashMap()
+        messageCache = java.util.IdentityHashMap()
+        firstSeenAt.clear()
         _turns.value = emptyList()
         _artifacts.value = emptyList()
     }
@@ -240,8 +259,6 @@ class TrajectoryEngine {
         for (s in effectiveSteps) {
             s.user_input?.tags?.forEach { if (it.startsWith(CLIENT_MSG_TAG_PREFIX)) seenClientTags.add(it) }
         }
-
-        Log.d("CHAT_OPEN_DEBUG", "⚙️ [TrajectoryEngine.ingestAgentStateUpdate] convId=$conversationId, trajId=$trajectoryId, status=$status, termination=$liveTerminationReason, stepsCount=${effectiveSteps.size}")
 
         if (effectiveSteps.isNotEmpty()) {
             val isInitialFullSync = (effectiveIndices.firstOrNull() == 0) || (completedTurns.isEmpty() && activeStepsMap.isEmpty())
@@ -442,7 +459,7 @@ class TrajectoryEngine {
 
     /**
      * Ingests live incremental deltas (Chunks 1..N).
-     * Only touches activeStepsMap. Completed past turns are NEVER re-parsed.
+     * Touches activeStepsMap; a completed turn only gets the late change of one of its own steps (updateEarlierTurnStep).
      */
     private fun ingestIncrementalDeltas(indices: List<Int>, steps: List<Step>, totalLength: Int) {
         if (totalLength in 1..activeStepsMap.size) {
@@ -467,10 +484,47 @@ class TrajectoryEngine {
 
                 activeTurnStartStep = stepIndex + 1
                 activeStepsMap.clear()
-            } else {
+            } else if (!updateEarlierTurnStep(stepIndex, step)) {
                 activeStepsMap[stepIndex] = step
             }
         }
+    }
+
+    /**
+     * A step of an earlier turn that changed after the next prompt was sent (a tool still running when the reply
+     * ended, which finished or failed later) is updated in its own turn. Before, it went into the running turn's steps:
+     * the old turn kept showing it running until the chat was loaded again, and its card showed a second time under
+     * the newest reply. False (the step belongs to the running turn) when it is not before the running turn's first
+     * step, or waits for the user (approvals and questions are handled with the running turn's steps, as before).
+     */
+    private fun updateEarlierTurnStep(stepIndex: Int, step: Step): Boolean {
+        if (stepIndex >= activeTurnStartStep || activeStepsMap.containsKey(stepIndex)) return false
+        if (step.status == CortexStepStatus.CORTEX_STEP_STATUS_WAITING || step.requested_interaction != null) return false
+        // the reply that shows this step, else the reply after the last prompt before it
+        var target = completedTurns.indexOfLast { t -> t is ChatTurn.Assistant && t.blocks.any { it.stepIndex == stepIndex } }
+        if (target < 0) {
+            var i = completedTurns.indexOfLast { it is ChatTurn.User && it.stepIndex < stepIndex } + 1
+            while (i < completedTurns.size) {
+                val t = completedTurns[i]
+                if (t is ChatTurn.User) break
+                if (t is ChatTurn.Assistant) {
+                    target = i
+                    break
+                }
+                i++
+            }
+        }
+        if (target < 0) return false
+        val turn = completedTurns[target] as ChatTurn.Assistant
+        val blocks = mutableListOf<TurnBlock>()
+        extractStepBlocks(step, stepIndex, isStreaming = false, blocks = blocks)
+        // a step with nothing to show that wasn't shown before: nothing changes
+        if (blocks.isEmpty() && turn.blocks.none { it.stepIndex == stepIndex }) return true
+        // a new turn object: the message made from the old one is not reused (see messageCache)
+        completedTurns[target] = turn.copy(
+            blocks = (turn.blocks.filterNot { it.stepIndex == stepIndex } + blocks).sortedBy { it.stepIndex }
+        )
+        return true
     }
 
     /** The model that generated a turn: the last step that names one (the enum name, as in AiModel.id). */
@@ -613,6 +667,8 @@ class TrajectoryEngine {
 
         val activeBlocks = mutableListOf<TurnBlock>()
         var waitingFound = false
+        val lastBlocks = stepBlocksCache
+        val nextBlocks = java.util.IdentityHashMap<Step, StepBlocks>(activeStepsMap.size * 2)
 
         for ((stepIndex, step) in activeStepsMap.toSortedMap()) {
             val isStepRunning = step.status == CortexStepStatus.CORTEX_STEP_STATUS_RUNNING ||
@@ -631,8 +687,21 @@ class TrajectoryEngine {
                 waitingFound = true
             }
 
-            extractStepBlocks(step, stepIndex, isStreaming = isStepRunning && isRunning, blocks = activeBlocks)
+            val streaming = isStepRunning && isRunning
+            val responded = userRespondedStepIndices.contains(stepIndex)
+            val known = lastBlocks[step]
+            val entry = if (known != null && known.stepIndex == stepIndex && known.streaming == streaming &&
+                known.responded == responded && known.trajectoryId == trajectoryId) {
+                known
+            } else {
+                val blocks = mutableListOf<TurnBlock>()
+                extractStepBlocks(step, stepIndex, isStreaming = streaming, blocks = blocks)
+                StepBlocks(stepIndex, streaming, responded, trajectoryId, blocks)
+            }
+            nextBlocks[step] = entry
+            activeBlocks.addAll(entry.blocks)
         }
+        stepBlocksCache = nextBlocks
 
         isWaitingInteraction = waitingFound
 
@@ -672,6 +741,8 @@ class TrajectoryEngine {
         val currentTurns = getTurns()
         val messages = mutableListOf<ChatMessage>()
         val seenMsgIds = mutableSetOf<String>()
+        val lastMessages = messageCache
+        val nextMessages = java.util.IdentityHashMap<ChatTurn, ChatMessage>(currentTurns.size * 2)
 
         for (turn in currentTurns) {
             when (turn) {
@@ -681,23 +752,41 @@ class TrajectoryEngine {
                         continue
                     }
                     seenMsgIds.add(uId)
-                    messages.add(
-                        ChatMessage(
-                            id = uId,
-                            conversationId = convId,
-                            role = MessageRole.USER,
-                            content = turn.text,
-                            attachments = turn.attachments,
-                            stepIndex = turn.stepIndex,
-                            createdAt = turn.createdAt ?: System.currentTimeMillis(),
-                            rawContent = turn.rawText,
-                            viaVoice = turn.viaVoice,
-                            voiceLine = turn.voiceLine,
-                            checkpointKey = turn.clientMessageId
-                        )
+                    val known = lastMessages[turn]
+                    val msg = if (known != null && known.id == uId && known.conversationId == convId) known else ChatMessage(
+                        id = uId,
+                        conversationId = convId,
+                        role = MessageRole.USER,
+                        content = turn.text,
+                        attachments = turn.attachments,
+                        stepIndex = turn.stepIndex,
+                        createdAt = turn.createdAt ?: firstSeenAt.getOrPut(turn.stepIndex) { System.currentTimeMillis() },
+                        rawContent = turn.rawText,
+                        viaVoice = turn.viaVoice,
+                        voiceLine = turn.voiceLine,
+                        checkpointKey = turn.clientMessageId
                     )
+                    nextMessages[turn] = msg
+                    messages.add(msg)
                 }
                 is ChatTurn.Assistant -> {
+                    var aId = turn.turnId.ifBlank { "asst_${convId}_$activeTurnStartStep" }
+                    var counter = 1
+                    while (seenMsgIds.contains(aId)) {
+                        aId = "${turn.turnId}_$counter"
+                        counter++
+                    }
+                    seenMsgIds.add(aId)
+                    // a finished turn's message is made once; one with an approval card follows the user's answer
+                    val cacheable = turn.blocks.none { it is TurnBlock.Permission }
+                    val usageModel = turn.modelId?.let { modelDisplayName(it) }
+                    val known = if (cacheable) lastMessages[turn] else null
+                    if (known != null && known.id == aId && known.conversationId == convId &&
+                        (turn.tokenUsage == null || usageModel == null || known.tokenUsage?.model == usageModel)) {
+                        nextMessages[turn] = known
+                        messages.add(known)
+                        continue
+                    }
                     val thoughts = mutableListOf<String>()
                     var maxDuration: Long? = null
                     val toolCalls = mutableListOf<ToolCall>()
@@ -784,15 +873,7 @@ class TrajectoryEngine {
                     val combinedContent = contentParts.joinToString("\n\n").trim()
                     val combinedThought = thoughts.joinToString("\n\n").trim().takeIf { it.isNotBlank() }
 
-                    var aId = turn.turnId.ifBlank { "asst_${convId}_$activeTurnStartStep" }
-                    var counter = 1
-                    while (seenMsgIds.contains(aId)) {
-                        aId = "${turn.turnId}_$counter"
-                        counter++
-                    }
-                    seenMsgIds.add(aId)
-
-                    messages.add(
+                    val msg = (
                         ChatMessage(
                             id = aId,
                             conversationId = convId,
@@ -802,14 +883,16 @@ class TrajectoryEngine {
                             thoughtDurationMs = maxDuration,
                             toolCalls = toolCalls,
                             isStreaming = turn.isStreaming,
-                            tokenUsage = turn.tokenUsage?.let { u -> turn.modelId?.let { u.copy(model = modelDisplayName(it)) } ?: u },
+                            tokenUsage = turn.tokenUsage?.let { u -> usageModel?.let { u.copy(model = it) } ?: u },
                             modelId = turn.modelId
                         )
                     )
+                    if (cacheable) nextMessages[turn] = msg
+                    messages.add(msg)
                 }
             }
         }
-        Log.d("CHAT_OPEN_DEBUG", "📋 [TrajectoryEngine.toChatMessages] convId=$convId produced ${messages.size} messages from ${currentTurns.size} turns (roles: ${messages.map { it.role }})")
+        messageCache = nextMessages
         return messages
     }
 
@@ -1115,17 +1198,19 @@ class TrajectoryEngine {
                 val metaSummary = meta?.tool_summary ?: ""
                 command = if (prompt.isNotBlank()) prompt else if (metaSummary.isNotBlank()) metaSummary else "generate_image"
                 val inlineBytes = genImg?.generated_media?.inline_data
-                val inlineBase64 = if (inlineBytes != null && inlineBytes.size > 0) inlineBytes.base64() else ""
                 val imageBase64 = genImg?.generated_image?.base64_data?.takeIf { it.isNotBlank() } ?: ""
 
+                // the picture is kept as a file (the card shows file:// images); a data uri only if it cannot be stored
                 output = when {
-                    inlineBase64.isNotBlank() -> {
+                    inlineBytes != null && inlineBytes.size > 0 -> {
                         val mime = genImg?.generated_media?.mime_type?.takeIf { it.isNotBlank() } ?: "image/png"
-                        "data:$mime;base64,$inlineBase64"
+                        ai.antigem.data.media.InlineMediaStore.fileForBytes(inlineBytes.toByteArray(), mime)
+                            ?.let { "file://${it.absolutePath}" }
+                            ?: "data:$mime;base64,${inlineBytes.base64()}"
                     }
                     imageBase64.isNotBlank() -> {
                         val mime = genImg?.generated_image?.mime_type?.takeIf { it.isNotBlank() } ?: "image/png"
-                        "data:$mime;base64,$imageBase64"
+                        ai.antigem.data.media.InlineMediaStore.storedDataUri("data:$mime;base64,$imageBase64")
                     }
                     genImg?.generated_media?.uri?.isNotBlank() == true -> {
                         genImg.generated_media.uri
@@ -1371,7 +1456,8 @@ class TrajectoryEngine {
             }
         }
 
-        return list
+        // pictures and voice notes sent as data: kept as files, the message holds only their path
+        return ai.antigem.data.media.InlineMediaStore.stored(list)
     }
 
     private fun extractTitleFromSystemMessage(msgText: String): String {

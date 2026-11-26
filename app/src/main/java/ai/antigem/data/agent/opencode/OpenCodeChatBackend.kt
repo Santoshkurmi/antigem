@@ -296,7 +296,7 @@ class OpenCodeChatBackend(
         backendScope.launch {
             if (_state.value != OpenCodeState.READY) refreshStatus()
             refreshSessions()
-            backendScope.launch(worker) { attachedId?.takeIf { it in created }?.let { reload(it) } }
+            backendScope.launch(worker) { attachedId?.takeIf { it in created }?.let { reload(it, latestOnly = true) } }
         }
     }
 
@@ -598,12 +598,20 @@ class OpenCodeChatBackend(
         }
     }
 
-    /** Loads the chat's messages, pending approvals and questions from OpenCode (on [worker]). */
-    private suspend fun reload(id: String) {
+    /**
+     * Loads the chat's messages, pending approvals and questions from OpenCode (on [worker]).
+     *
+     * [latestOnly] (a reply just ended, the app came back, the event stream reconnected): only what may have changed is
+     * read, the newest page of messages, and merged into what the chat already shows, instead of every message of the
+     * chat again. When that page doesn't reach back to a message already shown (more changed than one page), the rest
+     * is read as in a full load.
+     */
+    private suspend fun reload(id: String, latestOnly: Boolean = false) {
         val reloadStartedAt = System.nanoTime()
         val items = mutableListOf<JsonObject>()
         var res = client.get("/session/$id/message?limit=200&order=desc")
         var pages = 0
+        var merge = false
         while (true) {
             val body = res.getOrElse { e ->
                 if (attachedId == id) _conversationError.value = L.agent.openCodeChatBackend.couldNotLoadThisChatMessage(e.message)
@@ -613,6 +621,11 @@ class OpenCodeChatBackend(
             items.addAll(page)
             val next = body.o("cursor").str("next")
             if (page.isEmpty() || next.isNullOrBlank() || ++pages >= 10) break
+            // the newest page reaches back to what is shown: nothing older changed
+            if (latestOnly && pages == 1 && attachedId == id && transcript.reachesKnown(page)) {
+                merge = true
+                break
+            }
             res = client.get("/session/$id/message?limit=200&cursor=${java.net.URLEncoder.encode(next, "UTF-8")}")
         }
         val active = client.get("/session/active").getOrNull().obj().o("data")?.containsKey(id) == true
@@ -623,7 +636,7 @@ class OpenCodeChatBackend(
         // a turn started while this was loading (a message sent right after the last reply): the snapshot is older than
         // what is on screen, and the turn's end loads it again
         if (!active && transcript.isTurnActive && turnStartedAt > reloadStartedAt) return
-        transcript.loadHistory(items, active)
+        if (merge) transcript.mergeHistory(items, active) else transcript.loadHistory(items, active)
         transcript.pendingPermissions.clear()
         transcript.pendingForms.clear()
         for (p in perms) permissionOf(p)?.let { transcript.addPermission(it) }
@@ -665,7 +678,7 @@ class OpenCodeChatBackend(
     /** Everything that may have been missed while the event stream was down. */
     private suspend fun resync() {
         refreshSessions()
-        attachedId?.takeIf { it in createdSnapshot() }?.let { reload(it) }
+        attachedId?.takeIf { it in createdSnapshot() }?.let { reload(it, latestOnly = true) }
     }
 
     override fun sendMessage(content: String) {
@@ -759,7 +772,8 @@ class OpenCodeChatBackend(
     }
 
     private fun attachmentPart(a: ChatAttachment, files: MutableList<JsonObject>, notes: MutableList<String>) {
-        val b64 = a.base64
+        // its own data, or (a picture shown from a saved file) the file's
+        val b64 = ai.antigem.data.media.InlineMediaStore.base64Of(a)
         // a file by path is already listed in the message's text; only an image's shrunk copy is sent itself
         if (a.reference && b64.isNullOrBlank()) return
         val mime = a.mimeType ?: if (a.isImage) "image/png" else "application/octet-stream"
@@ -1202,7 +1216,7 @@ class OpenCodeChatBackend(
                 val id = sid
                 backendScope.launch(worker) {
                     delay(400)
-                    if (attachedId == id && !transcript.isTurnActive) reload(id)
+                    if (attachedId == id && !transcript.isTurnActive) reload(id, latestOnly = true)
                     scheduleRefresh()
                 }
                 return

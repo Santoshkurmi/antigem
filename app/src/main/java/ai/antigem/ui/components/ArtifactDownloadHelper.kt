@@ -160,9 +160,8 @@ object ArtifactDownloadHelper {
     }
 
     private suspend fun resolveFileBytes(context: Context, source: String): ByteArray? {
-        // 1. In-memory media cache
-        val memKey = HubMediaResolver.normalizeKey(source)
-        HubMediaResolver.getImageBytes(memKey)?.let { return it }
+        // 1. Media already fetched into the app cache
+        HubMediaResolver.cachedFile(source)?.let { f -> runCatching { f.readBytes() }.getOrNull()?.let { return it } }
 
         // 2. Base64 data URL
         if (source.startsWith("data:")) {

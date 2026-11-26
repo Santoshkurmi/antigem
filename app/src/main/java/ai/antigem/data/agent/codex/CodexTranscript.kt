@@ -94,6 +94,7 @@ class CodexTranscript(var threadId: String = "") {
     fun reset(id: String) {
         threadId = id
         turns.clear()
+        made = HashMap()
         localPrompts.clear()
         errorCards.clear()
         awaitingStart = false
@@ -103,10 +104,36 @@ class CodexTranscript(var threadId: String = "") {
     // ------------------------------------------------------------------ history
 
     /** Replaces everything with stored turns (oldest first). [active]: the thread has a turn running. */
-    fun loadHistory(stored: List<JsonObject>, active: Boolean) {
+    fun loadHistory(stored: List<JsonObject>, active: Boolean) = applyHistory(stored, active, partial = false)
+
+    /**
+     * True when [page] (the newest stored turns, newest first as Codex lists them) reaches back to a turn this
+     * transcript already holds: then [mergeHistory] with it is enough, nothing between is missing.
+     */
+    fun reachesKnown(page: List<JsonObject>): Boolean {
+        val oldest = page.lastOrNull()?.str("id") ?: return false
+        return turns.containsKey(oldest)
+    }
+
+    /**
+     * Brings the transcript up to date with the newest stored turns only ([stored], oldest first; see [reachesKnown]):
+     * they replace what is held from the oldest of them on (a turn removed there since, e.g. rolled back elsewhere,
+     * goes too), older turns stay as they are. Everything else as in [loadHistory].
+     */
+    fun mergeHistory(stored: List<JsonObject>, active: Boolean) = applyHistory(stored, active, partial = true)
+
+    private fun applyHistory(stored: List<JsonObject>, active: Boolean, partial: Boolean) {
         // usage and model of turns seen live survive a reload (history has neither; [applyMeta] adds Codex's record)
         val previous = LinkedHashMap(turns)
         turns.clear()
+        if (partial) {
+            // the turns before the page's oldest stay as they are
+            val pageIds = stored.mapNotNull { it.str("id") }.toHashSet()
+            for ((id, t) in previous) {
+                if (id in pageIds) break
+                turns[id] = t
+            }
+        }
         for (t in stored) {
             val turn = turnOf(t)
             previous[turn.id]?.let { p -> turn.usage = p.usage; turn.model = p.model }
@@ -168,6 +195,27 @@ class CodexTranscript(var threadId: String = "") {
         t.long("durationMs")?.let { turn.durationMs = it }
     }
 
+    /**
+     * A user message's pictures sent as data URLs are kept as files (see InlineMediaStore): each such part becomes
+     * {"type":"image", [STORED_IMAGE_KEY]: "file://…", "mime": …}, so the transcript doesn't hold their data for the
+     * whole chat. [o] itself when it has none (or they cannot be stored).
+     */
+    private fun withStoredImages(o: JsonObject): JsonObject {
+        val content = o["content"] as? JsonArray ?: return o
+        if (content.none { (it as? JsonObject)?.let { p -> p.str("type") == "image" && p.str("url")?.startsWith("data:") == true } == true }) return o
+        var changed = false
+        val parts = content.map { el ->
+            val p = el as? JsonObject ?: return@map el
+            val url = p.str("url")
+            if (p.str("type") != "image" || url == null || !url.startsWith("data:") || !url.contains(";base64,")) return@map p
+            val stored = ai.antigem.data.media.InlineMediaStore.storedDataUri(url)
+            if (stored == url) return@map p
+            changed = true
+            JsonObject(p - "url" + mapOf(STORED_IMAGE_KEY to JsonPrimitive(stored), "mime" to JsonPrimitive(url.substringAfter("data:").substringBefore(';'))))
+        }
+        return if (changed) JsonObject(o + ("content" to JsonArray(parts))) else o
+    }
+
     private fun itemOf(o: JsonObject): Item {
         val item = Item(o.str("id").orEmpty(), o.str("type").orEmpty(), o)
         fillFromJson(item, o)
@@ -175,8 +223,8 @@ class CodexTranscript(var threadId: String = "") {
     }
 
     private fun fillFromJson(item: Item, o: JsonObject) {
-        item.json = o
         item.type = o.str("type") ?: item.type
+        item.json = if (item.type == "userMessage") withStoredImages(o) else o
         o.long("startedAtMs")?.let { item.startedAt = it }
         o.long("completedAtMs")?.let { item.completedAt = it }
         when (item.type) {
@@ -410,10 +458,27 @@ class CodexTranscript(var threadId: String = "") {
         val out = mutableListOf<ChatMessage>()
         val group = mutableListOf<Item>()
         var groupTurn: Turn? = null
+        val lastMade = made
+        val nextMade = HashMap<String, Made>(lastMade.size + 8)
+        fun reuse(key: String, fingerprint: Long, make: () -> ChatMessage): ChatMessage {
+            val known = lastMade[key]
+            val msg = if (known != null && known.fingerprint == fingerprint && known.message.conversationId == conversationId) known.message else make()
+            nextMade[key] = Made(fingerprint, msg)
+            return msg
+        }
         fun flush(turnEnd: Boolean) {
             val t = groupTurn
             if (t != null && (group.isNotEmpty() || (turnEnd && (t.error != null || (question != null && question.turnId == t.id))))) {
-                out.add(assistantMessage(conversationId, t, group.toList(), turnEnd, awaiting, question))
+                val items = group.toList()
+                // a running turn, or one waiting for an approval or an answer, depends on more than its items: made anew
+                val settled = t.status != "inProgress" && items.none { it.id in awaiting } && !(question != null && question.turnId == t.id)
+                out.add(
+                    if (settled) {
+                        reuse(items.firstOrNull()?.id ?: "turn_${t.id}", fingerprint(t, items, turnEnd)) {
+                            assistantMessage(conversationId, t, items, turnEnd, awaiting, question)
+                        }
+                    } else assistantMessage(conversationId, t, items, turnEnd, awaiting, question)
+                )
             }
             group.clear()
         }
@@ -423,7 +488,7 @@ class CodexTranscript(var threadId: String = "") {
                 when (item.type) {
                     "userMessage" -> {
                         flush(false)
-                        out.add(userMessage(conversationId, item, t))
+                        out.add(reuse(item.id, fingerprint(t, listOf(item), false)) { userMessage(conversationId, item, t) })
                     }
                     "contextCompaction" -> {
                         flush(false)
@@ -436,6 +501,7 @@ class CodexTranscript(var threadId: String = "") {
             }
             flush(true)
         }
+        made = nextMade
         for (lp in localPrompts.values) {
             val (text, files) = ai.antigem.data.files.AttachedFiles.extract(lp.text, "local_" + lp.clientId)
             out.add(ChatMessage(id = "local_" + lp.clientId, conversationId = conversationId, role = MessageRole.USER,
@@ -447,6 +513,46 @@ class CodexTranscript(var threadId: String = "") {
                 content = errorMarker(e.first, e.second, null), createdAt = at))
         }
         return out
+    }
+
+    /** A message made last time and what it was made from ([fingerprint]), by message id. */
+    private class Made(val fingerprint: Long, val message: ChatMessage)
+
+    /**
+     * Messages made by the last [toChatMessages]. A prompt, or a reply of a finished turn that waits for nothing, whose
+     * turn and items did not change since is handed out again as the very same object: the chat then skips it instead
+     * of joining its text and comparing it again on every update. Anything that changes (a late item, a status, a
+     * reload that makes new items) changes the fingerprint, and it is made anew.
+     */
+    private var made = HashMap<String, Made>()
+
+    /**
+     * What a message is made from, as one number: the turn and its items (by object), their state and the length of
+     * their texts. A text replaced (not appended to) comes with a new item json, which is part of it too. Cheap: no
+     * text is read.
+     */
+    private fun fingerprint(t: Turn, items: List<Item>, turnEnd: Boolean): Long {
+        var h = 0x5bd1e9955bd1e995L
+        fun mixLong(v: Long) {
+            h = (h xor v) * -0x61c8864680b583ebL
+            h = h xor (h ushr 31)
+        }
+        fun mixInt(v: Int) = mixLong(v.toLong())
+        fun mixRef(v: Any?) = mixLong(if (v == null) 0L else System.identityHashCode(v).toLong())
+        fun mixStr(v: String?) = mixLong((v?.hashCode() ?: 0).toLong())
+        mixRef(t); mixStr(t.id); mixStr(t.status); mixRef(t.error); mixRef(t.usage); mixStr(t.model); mixStr(model)
+        mixLong(t.durationMs ?: -1L); mixLong(t.startedAt ?: -1L); mixLong(t.completedAt ?: -1L); mixRef(t.plan)
+        mixInt(if (turnEnd) 1 else 0)
+        mixInt(items.size)
+        for (item in items) {
+            mixRef(item); mixStr(item.type); mixRef(item.json)
+            mixInt(item.text.length); mixInt(item.reasoning.length); mixInt(item.output.length)
+            mixInt(item.summary.size)
+            for (part in item.summary) { mixRef(part); mixInt(part.length) }
+            mixInt(if (item.streaming) 1 else 0)
+            mixLong(item.startedAt ?: -1L); mixLong(item.completedAt ?: -1L)
+        }
+        return h
     }
 
     private fun attachmentsSuffix(names: List<String>) = names.takeIf { it.isNotEmpty() }?.let { "\n\n📎 " + it.joinToString(", ") }.orEmpty()
@@ -467,7 +573,12 @@ class CodexTranscript(var threadId: String = "") {
                         mimeType = ai.antigem.data.files.AttachedFiles.mimeOf(path)
                     )
                 }
-                "image" -> p.str("url")?.takeIf { it.startsWith("data:") && it.contains(";base64,") }?.let { url ->
+                "image" -> p.str(STORED_IMAGE_KEY)?.let { file ->
+                    // kept as a file when the message came in (see withStoredImages)
+                    ai.antigem.domain.model.ChatAttachment(
+                        id = "${item.id}_img_$i", name = "image", path = "", isImage = true, localUri = file, mimeType = p.str("mime")
+                    )
+                } ?: p.str("url")?.takeIf { it.startsWith("data:") && it.contains(";base64,") }?.let { url ->
                     ai.antigem.domain.model.ChatAttachment(
                         id = "${item.id}_img_$i", name = "image", path = "", isImage = true,
                         mimeType = url.substringAfter("data:").substringBefore(';'), base64 = url.substringAfter(";base64,")
@@ -479,7 +590,7 @@ class CodexTranscript(var threadId: String = "") {
         val names = parts.mapNotNull { p ->
             when (p.str("type")) {
                 "localAudio" -> p.str("path")?.substringAfterLast('/')
-                "image" -> if (p.str("url")?.startsWith("data:") == true) null else "image"
+                "image" -> if (p.str("url")?.startsWith("data:") == true || p.str(STORED_IMAGE_KEY) != null) null else "image"
                 "mention" -> "@" + p.str("name").orEmpty()
                 "skill" -> "$" + p.str("name").orEmpty()
                 else -> null
@@ -689,3 +800,6 @@ class CodexTranscript(var threadId: String = "") {
         }
     }
 }
+
+/** Key of an image part of a user message whose data URL was kept as a file (its `file://` uri). */
+private const val STORED_IMAGE_KEY = "antigemStoredFile"

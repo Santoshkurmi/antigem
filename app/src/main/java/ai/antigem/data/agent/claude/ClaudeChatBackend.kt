@@ -1701,7 +1701,8 @@ class ClaudeChatBackend(
         val blocks = mutableListOf<ClaudeContentBlock>()
         val notes = mutableListOf<String>()
         for (a in atts) {
-            val b64 = a.base64
+            // its own data, or (a picture shown from a saved file) the file's
+            val b64 = ai.antigem.data.media.InlineMediaStore.base64Of(a)
             if (a.reference && b64.isNullOrBlank()) continue
             val mime = a.mimeType?.lowercase().orEmpty()
             if (b64.isNullOrBlank()) {

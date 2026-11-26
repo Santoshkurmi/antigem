@@ -519,7 +519,6 @@ object IdeApiClient {
     }
 
     suspend fun patchFile(path: String, startLine: Int, endLine: Int, replacement: String): Boolean = withContext(Dispatchers.IO) {
-        ai.antigem.data.remote.HubMediaResolver.invalidateDocument(path)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -539,7 +538,6 @@ object IdeApiClient {
     }
 
     suspend fun createFileOrDir(path: String, isDir: Boolean): Boolean = withContext(Dispatchers.IO) {
-        ai.antigem.data.remote.HubMediaResolver.invalidateDocument(path)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -556,7 +554,6 @@ object IdeApiClient {
     }
 
     suspend fun deleteFileOrDir(path: String): Boolean = withContext(Dispatchers.IO) {
-        ai.antigem.data.remote.HubMediaResolver.invalidateDocument(path)
         try {
             val payload = JSONObject().apply {
                 put("path", path)
@@ -572,8 +569,6 @@ object IdeApiClient {
     }
 
     suspend fun renameFileOrDir(path: String, newPath: String): Boolean = withContext(Dispatchers.IO) {
-        ai.antigem.data.remote.HubMediaResolver.invalidateDocument(path)
-        ai.antigem.data.remote.HubMediaResolver.invalidateDocument(newPath)
         try {
             val payload = JSONObject().apply {
                 put("path", path)

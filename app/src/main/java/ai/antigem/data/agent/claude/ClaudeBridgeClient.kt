@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import java.util.concurrent.TimeUnit
@@ -86,7 +87,32 @@ class ClaudeBridgeClient(
             return get<ClaudeSubagentHistoryResponse>("/sessions/$parent/subagents/$agentId/history")
                 .map { ClaudeHistoryResponse(success = it.success, entries = it.entries, error = it.error) }
         }
-        return get("/sessions/$sessionId/history" + if (full) "?full=1" else "")
+        // media=refs: pictures come as files of the chat, not base64 (a bridge without it sends them as before)
+        return streamed("/sessions/$sessionId/history?media=refs" + if (full) "&full=1" else "")
+    }
+
+    /**
+     * Like [get], but a successful answer is decoded straight from the network stream: a long chat's history is never
+     * read into one big string first. Errors are handled exactly as in [call].
+     */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private suspend inline fun <reified T> streamed(path: String): Result<T> = withContext(Dispatchers.IO) {
+        runCatching {
+            bridge.client.newCall(Request.Builder().url(url(path)).get().build()).execute().use { resp ->
+                val body = resp.body
+                if (resp.isSuccessful && body != null && body.contentType()?.subtype == "json") {
+                    return@use body.byteStream().buffered(64 * 1024).use { ClaudeJson.decodeFromStream<T>(it) }
+                }
+                val text = body?.string().orEmpty()
+                val isJson = text.trimStart().startsWith("{")
+                if (resp.code == 404 && !isJson) throw ClaudeBridgeOutdatedException()
+                if (resp.code == 503 && text.contains("\"disabled\":true")) {
+                    throw ClaudeBridgeOutdatedException("The local server was started with Claude Code turned off. Restart it to use Claude.")
+                }
+                if (!resp.isSuccessful && !isJson) error("HTTP ${resp.code}" + text.trim().take(120).let { if (it.isBlank()) "" else ": $it" })
+                ClaudeJson.decodeFromString<T>(text)
+            }
+        }
     }
 
     /**

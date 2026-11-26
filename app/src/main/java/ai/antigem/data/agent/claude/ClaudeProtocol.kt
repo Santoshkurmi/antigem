@@ -142,7 +142,9 @@ data class ClaudeContentBlock(
 data class ClaudeBlockSource(
     val type: String,
     val media_type: String? = null,
-    val data: String? = null
+    val data: String? = null,
+    /** type "path": the bridge saved the picture as a file of the chat (`/history?media=refs`). */
+    val path: String? = null
 )
 
 // ---------------------------------------------------------------- incoming (claude → app)

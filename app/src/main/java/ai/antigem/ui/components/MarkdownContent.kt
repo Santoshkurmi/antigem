@@ -550,7 +550,8 @@ fun MarkdownContent(
     }
 }
 
-private val mathDrawableCache = android.util.LruCache<Int, JLatexMathDrawable>(150)
+/** Built formulas by exact LaTeX, colour and size (a hash key could hand one formula's drawing to another). */
+private val mathDrawableCache = android.util.LruCache<String, JLatexMathDrawable>(150)
 
 /**
  * 100% Native Android Canvas JLaTeXMath Renderer:
@@ -582,7 +583,7 @@ fun NativeMathView(
     }
     val isChem = texLatex != cleanLatex
 
-    val cacheKey = texLatex.hashCode() * 31 + textColor * 7 + textSizePx.toInt()
+    val cacheKey = remember(texLatex, textColor, textSizePx) { "$textColor|${textSizePx.toInt()}|$texLatex" }
     val jLatexDrawable = remember(texLatex, textColor, textSizePx, isDark) {
         mathDrawableCache.get(cacheKey) ?: run {
             // Throwable, not Exception: a recursive \newcommand overflows the stack (StackOverflowError is an Error);
@@ -2315,7 +2316,25 @@ private val INLINE_MARKDOWN_PATTERN: Pattern = Pattern.compile(
 )
 
 object MarkdownTextCache {
-    private val cache = android.util.LruCache<Int, FormattedInlineResult>(600)
+    /** Room for formatted text, in estimated bytes: thousands of normal paragraphs, few giant ones. */
+    private const val MAX_BYTES = 8 * 1024 * 1024
+
+    /** The exact text and style flags (not a hash: two texts whose hashes collide never share a result). */
+    private data class Key(val text: String, val isDark: Boolean, val isStrikethrough: Boolean)
+
+    private val cache = object : android.util.LruCache<Key, FormattedInlineResult>(MAX_BYTES) {
+        override fun sizeOf(key: Key, value: FormattedInlineResult): Int {
+            val str = value.annotatedString
+            val chars = key.text.length.toLong() + str.length
+            val spans = str.spanStyles.size.toLong() + str.paragraphStyles.size + value.inlineContent.size * 4
+            return (chars * 2 + spans * 48 + 64).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        }
+    }
+
+    /** Drops part of the cache (Android is short of memory): [fraction] of the room is kept. */
+    fun trim(fraction: Float) {
+        cache.trimToSize((MAX_BYTES * fraction).toInt())
+    }
 
     fun prewarm(text: String, isDark: Boolean = true) {
         getOrCompute(text, isStrikethrough = false, isDark = isDark, density = null, fileLinkHandler = null)
@@ -2342,7 +2361,7 @@ object MarkdownTextCache {
             return FormattedInlineResult(str, emptyMap())
         }
 
-        val cacheKey = text.hashCode() * 31 + (if (isDark) 1 else 0) * 7 + (if (isStrikethrough) 2 else 0)
+        val cacheKey = Key(text, isDark, isStrikethrough)
         return cache.get(cacheKey) ?: run {
             val res = buildRichAnnotatedString(text, isStrikethrough, isDark, density, fileLinkHandler)
             cache.put(cacheKey, res)

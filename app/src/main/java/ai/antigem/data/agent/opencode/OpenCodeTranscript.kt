@@ -46,6 +46,8 @@ class OpenCodeTranscript(var sessionId: String = "") {
     class Part(val key: String, val kind: Kind) {
         enum class Kind { TEXT, REASONING, TOOL }
         val text = StringBuilder()
+        /** Bumped when [text] is replaced (not appended to): with its length it tells whether the text changed. */
+        var textRev = 0
         var streaming = false
         // tool
         var toolName: String = ""
@@ -134,6 +136,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
     fun reset(id: String) {
         sessionId = id
         messages.clear()
+        made = HashMap()
         pendingPermissions.clear()
         pendingForms.clear()
         isTurnActive = false
@@ -154,13 +157,56 @@ class OpenCodeTranscript(var sessionId: String = "") {
         val storedIds = items.mapNotNull { it.str("id") }.toHashSet()
         val keep = messages.values.filter { (it.local || it.pending) && it.id !in storedIds }
         messages.clear()
-        val sorted = items.sortedWith(compareBy({ it.o("time").long("created") ?: 0L }, { it.str("id") ?: "" }))
+        val sorted = items.sortedWith(STORED_ORDER)
         for (m in sorted) applyStored(m)
         if (keep.isNotEmpty()) {
             val merged = (messages.values + keep).sortedBy { it.created }
             messages.clear()
             for (m in merged) messages[m.id] = m
         }
+        isTurnActive = active
+        if (!active) {
+            for (msg in messages.values) for (part in msg.parts) {
+                part.streaming = false
+                if (part.kind == Part.Kind.TOOL && part.toolStatus == "RUNNING") part.toolStatus = "TERMINATED"
+            }
+        }
+    }
+
+    /**
+     * True when [page] (the newest stored messages) reaches back to a message this transcript already holds from the
+     * stored list: then [mergeHistory] with it is enough, nothing between is missing.
+     */
+    fun reachesKnown(page: List<JsonObject>): Boolean {
+        val oldest = page.filter { it.str("type") in MESSAGE_TYPES }.minWithOrNull(STORED_ORDER) ?: return false
+        val known = messages[oldest.str("id") ?: return false] ?: return false
+        return !known.local && !known.pending
+    }
+
+    /**
+     * Brings the transcript up to date with the newest stored messages only ([items], see [reachesKnown]): they replace
+     * what is held from the oldest of them on (a message removed there since, e.g. by a revert in another client, goes
+     * too), older messages stay as they are. Prompts sent a moment ago and the app's own error cards stay until the
+     * stored list has them, as in [loadHistory].
+     */
+    fun mergeHistory(items: List<JsonObject>, active: Boolean) {
+        val sorted = items.sortedWith(STORED_ORDER)
+        val from = sorted.firstOrNull { it.str("type") in MESSAGE_TYPES }?.o("time").long("created")
+        if (from == null) {
+            loadHistory(items, active)
+            return
+        }
+        val storedIds = items.mapNotNull { it.str("id") }.toHashSet()
+        val held = messages.values.iterator()
+        while (held.hasNext()) {
+            val m = held.next()
+            if (m.id in storedIds || (!m.local && !m.pending && m.created > from)) held.remove()
+        }
+        for (m in sorted) applyStored(m)
+        // the merged messages came last: back in time order (a stable sort keeps the stored order of equal times)
+        val ordered = messages.values.sortedBy { it.created }
+        messages.clear()
+        for (m in ordered) messages[m.id] = m
         isTurnActive = active
         if (!active) {
             for (msg in messages.values) for (part in msg.parts) {
@@ -187,7 +233,8 @@ class OpenCodeTranscript(var sessionId: String = "") {
                         id = "${id}_img_$i", name = f.str("name") ?: "image", path = "", isImage = true, mimeType = mime, base64 = data
                     )
                 }
-                msg.images = images
+                // their data is kept as files: the message holds only the paths for the rest of the chat
+                msg.images = ai.antigem.data.media.InlineMediaStore.stored(images)
                 msg.attachmentNames = files.filter { f -> !(f.str("mime").orEmpty().startsWith("image/") && !f.str("data").isNullOrBlank()) }
                     .mapNotNull { it.str("name") ?: it.str("uri")?.substringAfterLast('/') }
                 messages[id] = msg
@@ -348,7 +395,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                     type.endsWith(".started") -> part.streaming = true
                     type.endsWith(".delta") -> { part.text.append(d.str("delta").orEmpty()); part.streaming = true }
                     else -> {
-                        d.str("text")?.let { part.text.setLength(0); part.text.append(it) }
+                        d.str("text")?.let { part.text.setLength(0); part.text.append(it); part.textRev++ }
                         part.streaming = false
                     }
                 }
@@ -526,21 +573,49 @@ class OpenCodeTranscript(var sessionId: String = "") {
 
     // ------------------------------------------------------------------ output
 
+    /** A message made last time and what it was made from ([fingerprint]), by the id of its first OpenCode message. */
+    private class Made(val fingerprint: Long, val message: ChatMessage)
+
+    /**
+     * Messages made by the last [toChatMessages]. A prompt, or a finished reply that is not the newest and has no tool
+     * still running, whose OpenCode messages did not change since is handed out again as the very same object: the
+     * chat then skips it instead of joining its text and comparing it again on every update. Anything that changes
+     * (a late tool result, an error, a reload that makes new messages) changes the fingerprint, and it is made anew.
+     */
+    private var made = HashMap<String, Made>()
+
     fun toChatMessages(conversationId: String): List<ChatMessage> {
         val out = mutableListOf<ChatMessage>()
         val group = mutableListOf<Msg>()
+        val lastMade = made
+        val nextMade = HashMap<String, Made>(lastMade.size + 8)
+        fun reuse(key: String, fingerprint: Long, make: () -> ChatMessage): ChatMessage {
+            val known = lastMade[key]
+            val msg = if (known != null && known.fingerprint == fingerprint && known.message.conversationId == conversationId) known.message else make()
+            nextMade[key] = Made(fingerprint, msg)
+            return msg
+        }
         // [trailing]: the replies after the last prompt (only those can be the one streaming now)
         fun flush(trailing: Boolean = false) {
-            if (group.isNotEmpty()) out.add(assistantMessage(conversationId, group.toList(), trailing))
+            if (group.isNotEmpty()) {
+                val steps = group.toList()
+                // the newest reply and one with a tool still running depend on more than its messages (the running
+                // turn, a question form): always made anew
+                val settled = !trailing && steps.none { m -> m.parts.any { it.kind == Part.Kind.TOOL && it.toolStatus == "RUNNING" } }
+                out.add(
+                    if (settled) reuse(steps.first().id, fingerprint(steps)) { assistantMessage(conversationId, steps, false) }
+                    else assistantMessage(conversationId, steps, trailing)
+                )
+            }
             group.clear()
         }
         for (m in messages.values) {
             when (m.role) {
                 "user" -> {
                     flush()
-                    // files sent by path are listed in the message's hidden text: shown as cards
-                    val (text, files) = ai.antigem.data.files.AttachedFiles.extract(m.text, m.id)
-                    out.add(
+                    out.add(reuse(m.id, fingerprint(listOf(m))) {
+                        // files sent by path are listed in the message's hidden text: shown as cards
+                        val (text, files) = ai.antigem.data.files.AttachedFiles.extract(m.text, m.id)
                         ChatMessage(
                             id = m.id,
                             conversationId = conversationId,
@@ -549,7 +624,7 @@ class OpenCodeTranscript(var sessionId: String = "") {
                             attachments = m.images + files,
                             createdAt = m.created
                         )
-                    )
+                    })
                 }
                 "summary" -> {
                     flush()
@@ -559,12 +634,56 @@ class OpenCodeTranscript(var sessionId: String = "") {
             }
         }
         flush(trailing = true)
+        made = nextMade
         // the last assistant block streams while the turn runs
         if (isTurnActive) {
             val i = out.indexOfLast { it.role == MessageRole.ASSISTANT }
             if (i >= 0 && i == out.lastIndex) out[i] = out[i].copy(isStreaming = true, tokenUsage = null)
         }
         return out
+    }
+
+    /**
+     * What a message is made from, as one number: the OpenCode messages and parts (by object), their state and the
+     * length of their text (a text replaced, not appended to, bumps [Part.textRev]). Cheap: no text is read.
+     */
+    private fun fingerprint(steps: List<Msg>): Long {
+        var h = -0x3c5a3c5a3c5a3c5bL
+        fun mixLong(v: Long) {
+            h = (h xor v) * -0x61c8864680b583ebL
+            h = h xor (h ushr 31)
+        }
+        fun mixInt(v: Int) = mixLong(v.toLong())
+        fun mixBool(v: Boolean) = mixLong(if (v) 1L else 0L)
+        fun mixRef(v: Any?) = mixLong(if (v == null) 0L else System.identityHashCode(v).toLong())
+        fun mixStr(v: String?) = mixLong((v?.hashCode() ?: 0).toLong())
+        for (m in steps) {
+            mixRef(m)
+            mixLong(m.created)
+            mixRef(m.text); mixInt(m.text.length)
+            mixRef(m.attachmentNames)
+            mixRef(m.images)
+            mixStr(m.model); mixStr(m.agent)
+            mixLong(m.inputTokens); mixLong(m.outputTokens); mixLong(m.reasoningTokens); mixLong(m.cacheRead); mixLong(m.cacheWrite)
+            mixLong(m.cost.toRawBits())
+            mixLong(m.completed ?: -1L)
+            mixStr(m.finish); mixRef(m.error); mixRef(m.errorTitle)
+            mixBool(m.errorAuth); mixBool(m.pending); mixBool(m.local)
+            mixInt(m.parts.size)
+            for (p in m.parts) {
+                mixRef(p)
+                mixInt(p.text.length); mixInt(p.textRev)
+                mixBool(p.streaming)
+                mixStr(p.toolName); mixStr(p.toolStatus)
+                mixRef(p.toolInput)
+                mixRef(p.toolOutput); mixInt(p.toolOutput.length)
+                mixRef(p.toolError)
+                mixLong(p.startedAt ?: -1L); mixLong(p.endedAt ?: -1L); mixInt(p.exitCode ?: Int.MIN_VALUE)
+                mixBool(p.awaitingPermission)
+                mixRef(p.toolAnswers)
+            }
+        }
+        return h
     }
 
     private fun assistantMessage(conversationId: String, steps: List<Msg>, trailing: Boolean): ChatMessage {
@@ -787,6 +906,12 @@ class OpenCodeTranscript(var sessionId: String = "") {
     companion object {
         /** Retries of a busy / rate-limited provider before the app stops the turn (OpenCode itself keeps going). */
         const val MAX_RETRIES = 3
+
+        /** Stored items that are messages (others, like the idle marker, only change the message before them). */
+        private val MESSAGE_TYPES = setOf("user", "assistant", "compaction", "summary")
+
+        /** The order of the stored list: oldest first, ties by id. */
+        private val STORED_ORDER: Comparator<JsonObject> = compareBy({ it.o("time").long("created") ?: 0L }, { it.str("id") ?: "" })
 
         private val UNSAFE_ID = Regex("[^A-Za-z0-9_-]")
 

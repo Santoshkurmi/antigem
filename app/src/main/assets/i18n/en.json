@@ -1799,6 +1799,9 @@
     "components.agentToolCallCard.promptCommand": "Prompt: {command}",
     "components.agentToolCallCard.outputCopied": "Output copied",
     "components.agentToolCallCard.copyOutput": "Copy Output",
+    "components.agentToolCallCard.showingLinesOfTotal": "Showing {shown} of {total} lines",
+    "components.agentToolCallCard.longLinesShortened": "Long lines shortened",
+    "components.agentToolCallCard.openFullOutput": "Open full output",
     "components.agentToolCallCard.readingFileContents": "Reading file contents...",
     "components.agentToolCallCard.applyingFileModifications": "Applying file modifications...",
     "components.agentToolCallCard.scanningDirectory": "Scanning directory...",
@@ -2415,6 +2418,10 @@
     "components.queuedMessagesCard.sendsWhenTheAgentIsDone": "Sends when the agent is done",
     "components.queuedMessagesCard.sendNowValue": "Send now: {value}",
     "components.queuedMessagesCard.deleteValue": "Delete: {value}",
+    "components.toolOutput.lineCount": {
+      "one": "{count} line",
+      "other": "{count} lines"
+    },
     "components.rawPayload.rawRequestPayload": "Raw Request Payload",
     "components.rawPayload.wrapOn": "Wrap: ON",
     "components.rawPayload.wrapOff": "Wrap: OFF",

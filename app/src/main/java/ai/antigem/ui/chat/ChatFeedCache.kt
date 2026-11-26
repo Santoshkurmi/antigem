@@ -74,6 +74,22 @@ object StepGroups {
 
     private val IMAGE_FILE = Regex(".*\\.(png|jpe?g|webp|gif)(\\?.*)?$", RegexOption.IGNORE_CASE)
 
+    /**
+     * Forgets the timers of the step groups of these messages (their chat's parsed items were dropped from
+     * [ChatFeedCache]), so the timer maps don't grow for the whole app session. A group's key is
+     * "steps_block_<messageId>_<blockIndex>".
+     */
+    fun forget(messageIds: Collection<String>) {
+        if (messageIds.isEmpty()) return
+        val ids = messageIds.toHashSet()
+        fun owner(key: String): String? =
+            if (key.startsWith(GROUP_KEY_PREFIX)) key.substring(GROUP_KEY_PREFIX.length).substringBeforeLast('_') else null
+        startedAt.keys.removeAll { owner(it) in ids }
+        endedAt.keys.removeAll { owner(it) in ids }
+    }
+
+    private const val GROUP_KEY_PREFIX = "steps_block_"
+
     fun isStep(item: ChatFeedItem): Boolean {
         if (item !is ChatFeedItem.AssistantBlock) return false
         return when (val block = item.block) {
@@ -153,13 +169,90 @@ object StepGroups {
 }
 
 object ChatFeedCache {
-    val cache = ConcurrentHashMap<String, List<ChatFeedItem>>()
+    /**
+     * How many chats keep their parsed items: the open one and the ones visited just before it, so switching back
+     * and forth stays instant. Chats beyond that are dropped (they parse again, like a first open, when reopened).
+     */
+    private const val MAX_CHATS = 3
 
-    fun getOrParse(msg: ChatMessage): List<ChatFeedItem> {
-        val cacheKey = "${msg.id}_${msg.content.hashCode()}_${msg.toolCalls.hashCode()}_${msg.thoughtText?.hashCode() ?: 0}_${msg.tokenUsage?.hashCode() ?: 0}"
-        val cached = cache[cacheKey]
-        if (cached != null) return cached
+    /**
+     * The parsed items of one message, for one version of it: [content]/[tools]/[thought]/[usage] are the hashes the
+     * version is recognised by (a message that changes gets a new slot that replaces this one, so old versions are
+     * never kept). [message] is the exact object parsed last: the same object again is a hit without any hashing.
+     */
+    private class Slot(
+        val message: ChatMessage,
+        val content: Int,
+        val tools: Int,
+        val thought: Int,
+        val usage: Int,
+        val items: List<ChatFeedItem>
+    ) {
+        /** Theme the inline text and code of [items] were prewarmed for: 0 = not yet, 1 = light, 2 = dark. */
+        @Volatile var warmed = 0
+    }
 
+    private class ChatSlots {
+        /** message id → its slot */
+        val slots = ConcurrentHashMap<String, Slot>()
+        /** When the chat list last drew this chat (0 = only prewarmed, never drawn): the least recent goes first. */
+        var shownAt = 0L
+    }
+
+    /** conversation id → its parsed messages; guarded by itself. */
+    private val chats = HashMap<String, ChatSlots>()
+    private var showCounter = 0L
+    /** The chat the list draws now: never dropped. */
+    @Volatile private var currentChat: String? = null
+
+    /** The slots of [conversationId]; [shown]: the chat list is drawing it (it becomes the current chat). */
+    private fun slotsFor(conversationId: String, shown: Boolean): ConcurrentHashMap<String, Slot> {
+        val dropped = ArrayList<ChatSlots>(1)
+        val slots = synchronized(chats) {
+            val chat = chats.getOrPut(conversationId) { ChatSlots() }
+            if (shown) {
+                chat.shownAt = ++showCounter
+                currentChat = conversationId
+            }
+            // over the limit: drop the chats drawn longest ago (prewarmed-only ones first), never this or the current one
+            while (chats.size > MAX_CHATS) {
+                val victim = chats.entries
+                    .filter { it.key != conversationId && it.key != currentChat }
+                    .minByOrNull { it.value.shownAt } ?: break
+                chats.remove(victim.key)
+                dropped.add(victim.value)
+            }
+            chat.slots
+        }
+        dropped.forEach { StepGroups.forget(it.slots.keys) }
+        return slots
+    }
+
+    fun getOrParse(msg: ChatMessage): List<ChatFeedItem> = getOrParse(msg, slotsFor(msg.conversationId, shown = false))
+
+    private fun getOrParse(msg: ChatMessage, slots: ConcurrentHashMap<String, Slot>): List<ChatFeedItem> =
+        slotOf(msg, slots).items
+
+    private fun slotOf(msg: ChatMessage, slots: ConcurrentHashMap<String, Slot>): Slot {
+        val slot = slots[msg.id]
+        // the very same message object as last time (Claude and Antigravity reuse unchanged messages): nothing to check
+        if (slot != null && slot.message === msg) return slot
+        val content = msg.content.hashCode()
+        val tools = msg.toolCalls.hashCode()
+        val thought = msg.thoughtText?.hashCode() ?: 0
+        val usage = msg.tokenUsage?.hashCode() ?: 0
+        if (slot != null && slot.content == content && slot.tools == tools && slot.thought == thought && slot.usage == usage) {
+            // an equal copy: keep the parsed items, remember the new object for the fast path
+            return Slot(msg, content, tools, thought, usage, slot.items).also {
+                it.warmed = slot.warmed
+                slots[msg.id] = it
+            }
+        }
+        // new or changed: parse it; the new slot replaces the old version
+        return Slot(msg, content, tools, thought, usage, parse(msg)).also { slots[msg.id] = it }
+    }
+
+    private fun parse(msg: ChatMessage): List<ChatFeedItem> {
         val msgItems = mutableListOf<ChatFeedItem>()
         when (msg.role) {
             MessageRole.SUMMARY -> {
@@ -200,8 +293,20 @@ object ChatFeedCache {
             }
             else -> {}
         }
-        cache[cacheKey] = msgItems
         return msgItems
+    }
+
+    /**
+     * The last parse of a reply that is still coming in: the list is often rebuilt while that reply did not change
+     * (another state changed), and then its text is not parsed again.
+     */
+    private class StreamingParse(val messageId: String, val text: String, val toolCalls: List<ai.antigem.domain.model.ToolCall>, val blocks: List<MarkdownBlock>)
+    @Volatile private var lastStreamingParse: StreamingParse? = null
+
+    private fun parseStreaming(messageId: String, text: String, toolCalls: List<ai.antigem.domain.model.ToolCall>): List<MarkdownBlock> {
+        val last = lastStreamingParse
+        if (last != null && last.messageId == messageId && last.text == text && last.toolCalls == toolCalls) return last.blocks
+        return parseMarkdownBlocks(text, toolCalls).also { lastStreamingParse = StreamingParse(messageId, text, toolCalls, it) }
     }
 
     /**
@@ -212,38 +317,33 @@ object ChatFeedCache {
     fun prewarm(messages: List<ChatMessage>, windowSize: Int = 12, isDark: Boolean = true) {
         if (messages.isEmpty()) return
         val targetMessages = if (messages.size > windowSize) messages.takeLast(windowSize) else messages
+        val theme = if (isDark) 2 else 1
+        var slotsChat: String? = null
+        var slots: ConcurrentHashMap<String, Slot>? = null
         for (msg in targetMessages) {
-            if (!msg.isStreaming) {
-                val items = getOrParse(msg)
-                for (item in items) {
-                    if (item is ChatFeedItem.AssistantBlock) {
-                        when (val block = item.block) {
-                            is MarkdownBlock.Code -> {
-                                CodeBlockCache.prewarm(block.code, block.language)
-                            }
-                            is MarkdownBlock.Paragraph -> {
-                                MarkdownTextCache.prewarm(block.text, isDark)
-                            }
-                            is MarkdownBlock.Header -> {
-                                MarkdownTextCache.prewarm(block.text, isDark)
-                            }
-                            is MarkdownBlock.Bullet -> {
-                                MarkdownTextCache.prewarm(block.text, isDark)
-                            }
-                            is MarkdownBlock.Numbered -> {
-                                MarkdownTextCache.prewarm(block.text, isDark)
-                            }
-                            is MarkdownBlock.Blockquote -> {
-                                MarkdownTextCache.prewarm(block.text, isDark)
-                            }
-                            is MarkdownBlock.Task -> {
-                                MarkdownTextCache.prewarm(block.text, isDark)
-                            }
-                            else -> {}
-                        }
+            if (msg.isStreaming) continue
+            if (slots == null || slotsChat != msg.conversationId) {
+                slotsChat = msg.conversationId
+                slots = slotsFor(msg.conversationId, shown = false)
+            }
+            val slot = slotOf(msg, slots)
+            // this version's text and code were already prepared for this theme
+            if (slot.warmed == theme) continue
+            for (item in slot.items) {
+                if (item is ChatFeedItem.AssistantBlock) {
+                    when (val block = item.block) {
+                        is MarkdownBlock.Code -> CodeBlockCache.prewarm(block.code, block.language)
+                        is MarkdownBlock.Paragraph -> MarkdownTextCache.prewarm(block.text, isDark)
+                        is MarkdownBlock.Header -> MarkdownTextCache.prewarm(block.text, isDark)
+                        is MarkdownBlock.Bullet -> MarkdownTextCache.prewarm(block.text, isDark)
+                        is MarkdownBlock.Numbered -> MarkdownTextCache.prewarm(block.text, isDark)
+                        is MarkdownBlock.Blockquote -> MarkdownTextCache.prewarm(block.text, isDark)
+                        is MarkdownBlock.Task -> MarkdownTextCache.prewarm(block.text, isDark)
+                        else -> {}
                     }
                 }
             }
+            slot.warmed = theme
         }
     }
 
@@ -262,6 +362,9 @@ object ChatFeedCache {
     ): List<ChatFeedItem> {
         val result = ArrayList<ChatFeedItem>(messages.size * 3)
         val seenKeys = HashSet<String>()
+        // the chat being drawn: its parsed messages are kept (and it is never the one dropped)
+        val chatId = messages.firstOrNull()?.conversationId
+        val chatSlots = chatId?.let { slotsFor(it, shown = true) }
 
         fun addItem(item: ChatFeedItem) {
             if (seenKeys.add(item.key)) {
@@ -311,7 +414,7 @@ object ChatFeedCache {
             // only the first reply after a prompt may put a divider before that prompt
             if (msg.role == MessageRole.ASSISTANT) promptStart = -1
             if (!msg.isStreaming) {
-                val parsed = getOrParse(msg)
+                val parsed = getOrParse(msg, if (chatSlots != null && msg.conversationId == chatId) chatSlots else slotsFor(msg.conversationId, shown = false))
                 for (item in parsed) {
                     addItem(item)
                 }
@@ -330,7 +433,7 @@ object ChatFeedCache {
                     msg.content
                 }
                 if (contentToParse.isNotEmpty() || msg.toolCalls.isNotEmpty()) {
-                    val blocks = parseMarkdownBlocks(contentToParse, msg.toolCalls)
+                    val blocks = parseStreaming(msg.id, contentToParse, msg.toolCalls)
                     for (i in blocks.indices) {
                         addItem(ChatFeedItem.AssistantBlock(
                             messageId = msg.id,
@@ -348,11 +451,43 @@ object ChatFeedCache {
         }
         // calls after the last prompt (or a call going on now) close the chat
         while (nextCall < voiceCalls.size) addCall(voiceCalls[nextCall++])
+        // messages gone from the chat (rewind, fork, compaction): drop their parsed items now and then
+        if (chatSlots != null && chatSlots.size > messages.size + PRUNE_SLACK) {
+            val ids = HashSet<String>(messages.size * 2)
+            messages.forEach { ids.add(it.id) }
+            val gone = chatSlots.keys.filter { it !in ids }
+            gone.forEach { chatSlots.remove(it) }
+            StepGroups.forget(gone)
+        }
         return result
     }
 
+    /** Extra slots a chat may hold before the ones of messages no longer in it are dropped. */
+    private const val PRUNE_SLACK = 32
+
+    /** Drops every parsed message (all chats). */
     fun clear() {
-        cache.clear()
+        val dropped = synchronized(chats) {
+            val all = chats.values.toList()
+            chats.clear()
+            all
+        }
+        lastStreamingParse = null
+        dropped.forEach { StepGroups.forget(it.slots.keys) }
+    }
+
+    /**
+     * Drops the parsed messages of every chat except the one drawn now (Android is short of memory, or the app went to
+     * the background); the open chat keeps everything, so its list stays smooth.
+     */
+    fun trimToCurrent() {
+        val keep = currentChat
+        val dropped = synchronized(chats) {
+            val gone = chats.filterKeys { it != keep }
+            gone.keys.forEach { chats.remove(it) }
+            gone.values.toList()
+        }
+        dropped.forEach { StepGroups.forget(it.slots.keys) }
     }
 
     private fun dayKey(millis: Long): String {

@@ -42,7 +42,36 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
                 )
             }
             .build()
-        return coil.ImageLoader.Builder(this).okHttpClient(client).build()
+        return coil.ImageLoader.Builder(this)
+            .okHttpClient(client)
+            // decoded pictures kept for instant redraw: a share of the heap, not Coil's default quarter (with largeHeap
+            // that quarter of the large heap could hold well over 100 MB of chat screenshots)
+            .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(IMAGE_MEMORY_SHARE).build() }
+            .build()
+    }
+
+    /**
+     * Android is short of memory, or the app went to the background: drops what can be rebuilt without the user
+     * noticing. The open chat keeps its parsed messages (its list stays smooth); other chats' parsed messages go, and
+     * the formatted-text / code caches shrink. Coil and the chat's web views trim themselves.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        @Suppress("DEPRECATION")
+        val keep = when {
+            // in the background and Android wants memory back
+            level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> 0.25f
+            // the app's screen was just left: only other chats go (coming back must stay instant)
+            level == android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> 1f
+            // on screen, but the phone is running low
+            level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> 0.5f
+            else -> return
+        }
+        ai.antigem.ui.chat.ChatFeedCache.trimToCurrent()
+        if (keep < 1f) {
+            ai.antigem.ui.components.CodeBlockCache.trim(keep)
+            ai.antigem.ui.components.MarkdownTextCache.trim(keep)
+        }
     }
 
     override fun onCreate() {
@@ -53,6 +82,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         if (ai.antigem.crash.CrashHandler.isCrashProcess(this)) return
         // loads the saved server addresses, Remote mode and the SSH key into memory before anything connects
         ai.antigem.data.preferences.AuthPreferences(this)
+        // where chat pictures that arrive as data are kept as files (its trim runs in the background)
+        ai.antigem.data.media.InlineMediaStore.init(this)
         // the chosen light / dark themes and the custom ones, before the first screen draws
         ai.antigem.theme.ThemeManager.init(this)
         // the app language (Settings → Language), from its cache, before the first screen draws
@@ -179,3 +210,6 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         const val RELEASE_CERT_SHA256 = "CCF2C681063BA941641519E4EAC7F024E92880CCD06EED5070DAA9717380F315"
     }
 }
+
+/** Share of the app's memory class Coil may use for decoded images (its default is 0.25). */
+private const val IMAGE_MEMORY_SHARE = 0.15

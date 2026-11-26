@@ -29,7 +29,8 @@ val LocalWebViewSlot = staticCompositionLocalOf<String?> { null }
  * a block scrolled away and back doesn't build, load and draw its page again. A block's view is parked (paused, off
  * screen) when it scrolls away and handed back when it returns.
  *
- * So it can't run the phone out of memory: at most [MAX_PARKED] views are parked (the least recently seen go first);
+ * So it can't run the phone out of memory: at most [maxParked] views are parked (the least recently seen go first:
+ * [MAX_PARKED] on a phone with a large heap, half that on a smaller one);
  * every parked view is let go when Android says memory is low, or before a new view is built while memory is low; a
  * view whose renderer died is dropped (and built again if it is on screen) instead of crashing the app. Everything is
  * destroyed by [close], when the chat is left.
@@ -44,6 +45,9 @@ class ChatWebViewCache(context: Context) {
 
     private val appContext = context.applicationContext
     private val activityManager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+
+    /** Parked views kept for this phone: [MAX_PARKED] with a large heap of 512 MB or more, half that below it. */
+    private val maxParked = activityManager?.let { if (it.isLowRamDevice || it.largeMemoryClass < 512) MAX_PARKED / 2 else MAX_PARKED } ?: MAX_PARKED
 
     /** Access order: the first entries are the least recently seen. */
     private val entries = LinkedHashMap<String, Entry>(16, 0.75f, true)
@@ -62,7 +66,7 @@ class ChatWebViewCache(context: Context) {
                 level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND -> dropParked(0)
                 level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> Unit
                 level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> dropParked(0)
-                level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE -> dropParked(MAX_PARKED / 2)
+                level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE -> dropParked(maxParked / 2)
             }
         }
 
@@ -126,7 +130,7 @@ class ChatWebViewCache(context: Context) {
         entry.owner = null
         runCatching { view.onPause() }
         dlog("release PARK slot=${slot} ${wvInfo(view)} parked=${entries.values.count { !it.inUse }}")
-        dropParked(if (isMemoryLow()) 0 else MAX_PARKED)
+        dropParked(if (isMemoryLow()) 0 else maxParked)
     }
 
     fun height(slot: String): Int? = heights[slot]
@@ -205,7 +209,7 @@ class ChatWebViewCache(context: Context) {
             }
         }
 
-        /** Parked (off screen) views kept per chat. */
+        /** Parked (off screen) views kept per chat on a phone with a large heap (see maxParked). */
         const val MAX_PARKED = 12
 
         private val owners = WeakHashMap<WebView, ChatWebViewCache>()

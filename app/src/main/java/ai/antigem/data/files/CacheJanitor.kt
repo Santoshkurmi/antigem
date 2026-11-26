@@ -16,7 +16,7 @@ object CacheJanitor {
     private const val PART_MAX_AGE_MS = 60L * 60 * 1000
     private const val MIN_INTERVAL_MS = 60_000L
 
-    val FOLDERS = listOf("bridge-media", "claude-attachments", "explorer_open")
+    val FOLDERS = listOf("bridge-media", "claude-attachments", "explorer_open", ai.antigem.data.remote.HubMediaResolver.HUB_MEDIA_DIR)
 
     @Volatile private var lastRun = 0L
 

@@ -291,7 +291,7 @@ class CodexChatBackend(
         backendScope.launch {
             if (_state.value != CodexState.READY) refreshStatus()
             refreshThreads()
-            backendScope.launch(worker) { attachedId?.takeIf { it in created }?.let { reload(it) } }
+            backendScope.launch(worker) { attachedId?.takeIf { it in created }?.let { reload(it, latestOnly = true) } }
         }
     }
 
@@ -631,8 +631,14 @@ class CodexChatBackend(
         }
     }
 
-    /** Loads the chat's turns (without loading the thread in Codex: reading needs no subscription). On [worker]. */
-    private suspend fun reload(id: String, restoreChoices: Boolean = false) {
+    /**
+     * Loads the chat's turns (without loading the thread in Codex: reading needs no subscription). On [worker].
+     *
+     * [latestOnly] (a reply just ended, the app came back, the event stream reconnected): only the newest page of turns
+     * is read and merged into what the chat already shows, instead of every turn again. When that page doesn't reach
+     * back to a turn already shown (more changed than one page), the rest is read as in a full load.
+     */
+    private suspend fun reload(id: String, restoreChoices: Boolean = false, latestOnly: Boolean = false) {
         val reloadStartedAt = System.nanoTime()
         val read = client.rpc("thread/read", buildJsonObject { put("threadId", id) }).getOrElse { e ->
             if (attachedId == id) _conversationError.value = L.agent.codexChatBackend.couldNotLoadThisChatMessage(e.message)
@@ -641,6 +647,7 @@ class CodexChatBackend(
         val turns = mutableListOf<JsonObject>()
         var cursor: String? = null
         var pages = 0
+        var merge = false
         do {
             val page = client.rpc("thread/turns/list", buildJsonObject {
                 put("threadId", id); put("limit", 30); put("itemsView", "full"); put("sortDirection", "desc")
@@ -649,8 +656,14 @@ class CodexChatBackend(
                 if (attachedId == id) _conversationError.value = L.agent.codexChatBackend.couldNotLoadThisChatMessage(e.message)
                 return
             }.obj()
-            turns.addAll(page.a("data").orEmpty().mapNotNull { it.obj() })
+            val pageTurns = page.a("data").orEmpty().mapNotNull { it.obj() }
+            turns.addAll(pageTurns)
             cursor = page.str("nextCursor")
+            // the newest page reaches back to what is shown: nothing older changed
+            if (latestOnly && pages == 0 && cursor != null && attachedId == id && transcript.reachesKnown(pageTurns)) {
+                merge = true
+                break
+            }
         } while (cursor != null && ++pages < 4)
         if (attachedId != id) return
         val active = read.o("status").str("type") == "active"
@@ -660,7 +673,7 @@ class CodexChatBackend(
         val meta = client.turnsMeta(id).getOrNull()
         if (attachedId != id || wantedId != id) return
         transcript.model = read.str("model")
-        transcript.loadHistory(turns.asReversed(), active)
+        if (merge) transcript.mergeHistory(turns.asReversed(), active) else transcript.loadHistory(turns.asReversed(), active)
         meta?.let { transcript.applyMeta(it) }
         if (restoreChoices) {
             // the picker shows what the chat last ran on: its newest turn's model and effort (the thread's own setting
@@ -814,7 +827,8 @@ class CodexChatBackend(
     }
 
     private suspend fun attachmentInput(a: ChatAttachment, project: String, inputs: MutableList<JsonObject>, notes: MutableList<String>) {
-        val b64 = a.base64
+        // its own data, or (a picture shown from a saved file) the file's
+        val b64 = ai.antigem.data.media.InlineMediaStore.base64Of(a)
         // a file by path is already listed in the message's text; only an image's shrunk copy is sent itself
         if (a.reference && b64.isNullOrBlank()) return
         if (b64.isNullOrBlank()) {
@@ -1480,7 +1494,7 @@ class CodexChatBackend(
             val id = tid
             backendScope.launch(worker) {
                 delay(500)
-                if (attachedId == id && !transcript.isTurnActive) reload(id)
+                if (attachedId == id && !transcript.isTurnActive) reload(id, latestOnly = true)
                 scheduleRefresh()
             }
             return
@@ -1587,7 +1601,7 @@ class CodexChatBackend(
     /** Everything that may have been missed while the event stream was down (on [worker]). */
     private suspend fun resync() {
         scheduleRefresh()
-        attachedId?.takeIf { it in createdSnapshot() }?.let { reload(it) }
+        attachedId?.takeIf { it in createdSnapshot() }?.let { reload(it, latestOnly = true) }
     }
 
     private fun scheduleRefresh() {

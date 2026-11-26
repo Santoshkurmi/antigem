@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -29,7 +30,8 @@ var upgrader = websocket.Upgrader{
 //	GET    /api/claude/info[?refresh=1]         `initialize` response (models, commands, account)
 //	POST   /api/claude/auth/logout              `claude auth logout`
 //	GET    /api/claude/sessions                 session list for the sidebar
-//	GET    /api/claude/sessions/{id}/history    main-chain transcript entries + live state (?full=1: also the live part)
+//	GET    /api/claude/sessions/{id}/history    main-chain transcript entries + live state (?full=1: also the live part;
+//	                                            ?media=refs: pictures as files, not base64, see history_media.go)
 //	POST   /api/claude/sessions/{id}/title      {"title": "..."}
 //	POST   /api/claude/sessions/{id}/archive    {"archived": true|false} (kept by the bridge, see archive.go)
 //	POST   /api/claude/sessions/{id}/kill       stop the process
@@ -146,18 +148,17 @@ func (m *Manager) handleSessionREST(w http.ResponseWriter, r *http.Request, rest
 				cut = &at
 			}
 		}
-		var entries []json.RawMessage
-		var err error
-		if maxBytes < 0 {
-			entries = []json.RawMessage{}
-		} else {
-			entries, err = m.History(id, maxBytes, cut)
+		// media=refs: pictures leave the entries (prompt images become files of the chat), see history_media.go
+		mediaRefs := r.URL.Query().Get("media") == "refs"
+		plan := &historyPlan{}
+		if maxBytes >= 0 {
+			var err error
+			if plan, err = m.planHistory(id, maxBytes, cut); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+				return
+			}
 		}
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "entries": entries, "state": st, "model_ref": m.SessionModelRef(id)})
+		m.writeHistory(w, id, plan, st, mediaRefs)
 	case action == "title" && r.Method == http.MethodPost:
 		var body struct {
 			Title string `json:"title"`
@@ -423,6 +424,50 @@ func (m *Manager) handleInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	// the mode new chats start in (read fresh: settings.json may have changed since the cached initialize)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "info": info, "default_mode": m.defaultPermissionMode()})
+}
+
+// writeHistory streams a /history answer: the same JSON object as before ({entries, state, model_ref, success}), but
+// written one entry at a time, so a long chat is never built in memory as a whole. A read error midway ends the
+// entries and reports success false with the error.
+func (m *Manager) writeHistory(w http.ResponseWriter, id string, plan *historyPlan, st SessionState, mediaRefs bool) {
+	state, err := json.Marshal(st)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+	modelRef, _ := json.Marshal(m.SessionModelRef(id))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	bw := bufio.NewWriterSize(w, 64<<10)
+	defer bw.Flush()
+	bw.WriteString(`{"state":`)
+	bw.Write(state)
+	bw.WriteString(`,"model_ref":`)
+	bw.Write(modelRef)
+	bw.WriteString(`,"entries":[`)
+	first := true
+	err = plan.each(func(raw []byte) error {
+		if mediaRefs {
+			raw = m.historyWithMediaRefs(id, raw)
+		}
+		if !json.Valid(raw) {
+			return nil // a damaged line is left out, as the old full read did (it could not be returned as JSON)
+		}
+		if !first {
+			bw.WriteByte(',')
+		}
+		first = false
+		_, werr := bw.Write(raw)
+		return werr
+	})
+	if err != nil {
+		msg, _ := json.Marshal(err.Error())
+		bw.WriteString(`],"success":false,"error":`)
+		bw.Write(msg)
+		bw.WriteString("}")
+		return
+	}
+	bw.WriteString(`],"success":true}`)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {

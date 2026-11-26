@@ -73,9 +73,9 @@ fun FullScreenImageDialog(
 
     val finalUri = resolvedUri.ifBlank { imageUrl }
     val coilData: Any? = remember(finalUri, memKey) {
-        val cachedBytes = ai.antigem.data.remote.HubMediaResolver.getImageBytes(memKey)
+        val cachedFile = ai.antigem.data.remote.HubMediaResolver.cachedFile(memKey)
         when {
-            cachedBytes != null -> cachedBytes
+            cachedFile != null -> cachedFile
             finalUri.startsWith("data:image/") -> {
                 try {
                     val b64 = finalUri.substringAfter("base64,")

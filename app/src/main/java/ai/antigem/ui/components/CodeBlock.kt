@@ -217,8 +217,22 @@ fun CodeBlock(
         CodeBlockExpansionCache.setExpanded(codeKey, next)
     }
 
-    val cachedCode = remember(code, language) {
-        CodeBlockCache.getOrCompute(code, language)
+    // a very long block is highlighted off the main thread (shown plain for a moment) so it never stalls scrolling
+    var cachedCode by remember(code, language) {
+        mutableStateOf(
+            CodeBlockCache.getIfPresent(code, language)
+                ?: if (code.length <= CodeBlockCache.ASYNC_HIGHLIGHT_CHARS) CodeBlockCache.getOrCompute(code, language)
+                else CodeBlockCache.plain(code)
+        )
+    }
+    if (code.length > CodeBlockCache.ASYNC_HIGHLIGHT_CHARS) {
+        LaunchedEffect(code, language) {
+            if (CodeBlockCache.getIfPresent(code, language) !== cachedCode) {
+                cachedCode = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    CodeBlockCache.getOrCompute(code, language)
+                }
+            }
+        }
     }
     val lineCount = cachedCode.lineCount
     val isLongCode = cachedCode.isLongCode
@@ -751,18 +765,53 @@ data class CachedCodeBlock(
 )
 
 object CodeBlockCache {
-    private val cache = android.util.LruCache<Int, CachedCodeBlock>(400)
+    /** Blocks longer than this are highlighted off the main thread (see CodeBlock). */
+    const val ASYNC_HIGHLIGHT_CHARS = 40_000
+
+    /** Room for highlighted blocks, in estimated bytes: hundreds of normal blocks, only a few giant ones. */
+    private const val MAX_BYTES = 16 * 1024 * 1024
+
+    /** The exact code and language (not a hash: two blocks whose hashes collide never share a result). */
+    private data class Key(val code: String, val language: String)
+
+    private val cache = object : android.util.LruCache<Key, CachedCodeBlock>(MAX_BYTES) {
+        override fun sizeOf(key: Key, value: CachedCodeBlock): Int = estimateBytes(key, value)
+    }
+
+    private fun estimateBytes(key: Key, value: CachedCodeBlock): Int {
+        // the key's text, the highlighted text and its preview (2 bytes a char at most), plus each colour span
+        val chars = key.code.length.toLong() + value.fullText.length + (if (value.isLongCode) value.previewText.length else 0)
+        val spans = value.fullText.spanStyles.size.toLong() + (if (value.isLongCode) value.previewText.spanStyles.size else 0)
+        return (chars * 2 + spans * 48 + 64).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
+
+    private fun keyOf(code: String, language: String) = Key(code, language.lowercase().trim())
 
     fun prewarm(code: String, language: String) {
         getOrCompute(code, language)
     }
 
+    /** The highlighted block when it is cached, without computing it. */
+    fun getIfPresent(code: String, language: String): CachedCodeBlock? = cache.get(keyOf(code, language))
+
+    /** [code] without colours (instant), shown while a very long block is highlighted in the background. */
+    fun plain(code: String): CachedCodeBlock = split(AnnotatedString(code))
+
     fun getOrCompute(code: String, language: String): CachedCodeBlock {
-        val t0 = System.nanoTime()
-        val key = code.hashCode() * 31 + language.lowercase().trim().hashCode()
+        val key = keyOf(code, language)
         val hit = cache.get(key)
         if (hit != null) return hit
-        val full = highlightSyntax(code, language.lowercase().trim())
+        val cached = split(highlightSyntax(code, key.language))
+        cache.put(key, cached)
+        return cached
+    }
+
+    /** Drops part of the cache (Android is short of memory): [fraction] of the room is kept. */
+    fun trim(fraction: Float) {
+        cache.trimToSize((MAX_BYTES * fraction).toInt())
+    }
+
+    private fun split(full: AnnotatedString): CachedCodeBlock {
         val raw = full.text
         var lines = 1
         var endOfPreview = raw.length
@@ -778,9 +827,7 @@ object CodeBlockCache {
         }
         val isLong = lines > CODE_PREVIEW_LINES
         val preview = if (isLong) full.subSequence(0, endOfPreview) else full
-        val cached = CachedCodeBlock(full, preview, lines, isLong)
-        cache.put(key, cached)
-        return cached
+        return CachedCodeBlock(full, preview, lines, isLong)
     }
 }
 

@@ -210,8 +210,7 @@ object ImageDownloadHelper {
     }
 
     private suspend fun resolveImageBytes(context: Context, source: String): ByteArray? {
-        val memKey = HubMediaResolver.normalizeKey(source)
-        HubMediaResolver.getImageBytes(memKey)?.let { return it }
+        HubMediaResolver.cachedFile(source)?.let { f -> runCatching { f.readBytes() }.getOrNull()?.let { return it } }
 
         if (source.startsWith("data:image/")) {
             val b64 = source.substringAfter("base64,")
@@ -257,6 +256,17 @@ object ImageDownloadHelper {
                 Base64.decode(b64, Base64.DEFAULT)
             } catch (_: Exception) {
                 null
+            }
+        }
+        // fetched into the app cache (images are cached as files, not kept in memory)
+        if (resolved.startsWith("file://")) {
+            val f = File(resolved.removePrefix("file://"))
+            if (f.isFile && f.canRead()) {
+                return try {
+                    f.readBytes()
+                } catch (_: Exception) {
+                    null
+                }
             }
         }
 

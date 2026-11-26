@@ -135,7 +135,7 @@ object TrajectoryParser {
                                 val isImg = mime.startsWith("image/") || cleanPath.endsWith(".png", true) || cleanPath.endsWith(".jpg", true) || cleanPath.endsWith(".jpeg", true) || cleanPath.endsWith(".webp", true) || cleanPath.endsWith(".gif", true) || cleanPath.endsWith(".svg", true)
                                 val desc = mObj.optString("description", if (isAud) "Voice note" else if (isImg) "Image" else "Attachment")
                                 userAttachments.add(
-                                    ChatAttachment(
+                                    ai.antigem.data.media.InlineMediaStore.stored(ChatAttachment(
                                         id = "att_${conversationId}_${stepIndex}_$mIdx",
                                         name = desc,
                                         path = cleanPath,
@@ -144,7 +144,7 @@ object TrajectoryParser {
                                         durationSeconds = dur,
                                         mimeType = mime.ifBlank { if (isAud) "audio/mp4" else if (isImg) "image/jpeg" else "" },
                                         base64 = inline.ifBlank { null }
-                                    )
+                                    ))
                                 )
                             }
                         }
@@ -798,7 +798,7 @@ object TrajectoryParser {
             val mimeType = gm?.optString("mimeType", "image/jpeg")?.ifBlank { "image/jpeg" } ?: "image/jpeg"
             val inlineData = gm?.optString("inlineData", gm.optString("inline_data", "")) ?: ""
             val rawUri = gm?.optString("uri", "")?.ifBlank { gi.optString("uri", "") } ?: ""
-            val output = if (inlineData.isNotBlank()) "data:$mimeType;base64,$inlineData" else rawUri
+            val output = if (inlineData.isNotBlank()) ai.antigem.data.media.InlineMediaStore.storedDataUri("data:$mimeType;base64,$inlineData") else rawUri
             return ToolCall(
                 id = makeToolId("tool_genimg_"),
                 name = "generate_image",

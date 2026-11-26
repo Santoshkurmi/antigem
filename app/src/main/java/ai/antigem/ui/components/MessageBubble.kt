@@ -1092,9 +1092,9 @@ private fun UserMessageImageItem(
     // a bridge file needs the authenticated fetch above; Coil alone would be refused
     val finalUri = resolvedUri.ifBlank { if (HubMediaResolver.isBridgeFileUrl(rawUri)) "" else rawUri }
     val coilData: Any? = remember(finalUri, attachment.base64, memKey) {
-        val cachedBytes = HubMediaResolver.getImageBytes(memKey)
+        val cachedFile = HubMediaResolver.cachedFile(memKey)
         when {
-            cachedBytes != null -> cachedBytes
+            cachedFile != null -> cachedFile
             finalUri.startsWith("data:image/") -> {
                 try {
                     val b64 = finalUri.substringAfter("base64,")

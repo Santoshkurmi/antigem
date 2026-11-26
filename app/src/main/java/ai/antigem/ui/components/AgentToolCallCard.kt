@@ -106,6 +106,7 @@ fun AgentToolCallCard(
         mutableStateOf(isImageOutput && toolCall.output.isNotBlank() && !HubMediaResolver.isLocalOrCached(context, toolCall.output))
     }
     var showFullScreenViewer by remember { mutableStateOf(false) }
+    var showFullOutput by remember { mutableStateOf(false) }
 
     LaunchedEffect(toolCall.output, isImageOutput) {
         if (isImageOutput && toolCall.output.isNotBlank()) {
@@ -356,10 +357,9 @@ fun AgentToolCallCard(
         if (isImageOutput && !isRunning && (toolCall.output.isNotBlank() || isSuccess)) {
             val displayUri = resolvedImageUri.ifBlank { toolCall.output }
             val coilData: Any? = remember(displayUri, resolvedImageUri) {
-                    val memKey = HubMediaResolver.normalizeKey(toolCall.output)
-                    val cachedBytes = HubMediaResolver.getImageBytes(memKey)
+                    val cachedFile = HubMediaResolver.cachedFile(toolCall.output)
                     when {
-                        cachedBytes != null -> cachedBytes
+                        cachedFile != null -> cachedFile
                         displayUri.startsWith("data:image/") -> {
                             try {
                                 val b64 = displayUri.substringAfter("base64,")
@@ -585,8 +585,11 @@ fun AgentToolCallCard(
                             color = Color.Gray
                         )
                     } else {
+                        // a long output shows its start here (laying out all of it would stall the chat); the whole of it
+                        // opens in a viewer that only draws the lines on screen
+                        val preview = remember(toolCall.output) { toolOutputPreview(toolCall.output) }
                         Text(
-                            text = toolCall.output,
+                            text = preview.text,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.sp,
                             lineHeight = 16.sp,
@@ -595,10 +598,46 @@ fun AgentToolCallCard(
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState())
                         )
+                        if (preview.shortened) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { showFullOutput = true }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (preview.shownLines < preview.totalLines) {
+                                        L.components.agentToolCallCard.showingLinesOfTotal(preview.shownLines, preview.totalLines)
+                                    } else {
+                                        L.components.agentToolCallCard.longLinesShortened
+                                    },
+                                    fontSize = 10.5.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = L.components.agentToolCallCard.openFullOutput,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ClaudeTerracotta
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    if (showFullOutput) {
+        ToolOutputDialog(
+            title = toolCall.command,
+            output = toolCall.output,
+            onDismiss = { showFullOutput = false }
+        )
     }
 
     if (showFullScreenViewer) {
