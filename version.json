@@ -20,19 +20,11 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 144,
-    "version_name": "2.0.5-beta.7",
+    "version_code": 145,
+    "version_name": "2.0.5-beta.8",
     "changelog": [
-      "Antigravity: when a model's weekly limit is used up, the chat shows \"7d 0%\" instead of the 5-hour share, which could still read 100% while the model can't run",
-      "Added a Switch account button for Antigravity in the accounts dialog (tap your profile): save, switch, add or delete accounts without opening Settings",
-      "Long chats full of images use much less memory: pictures and voice notes are kept as files instead of in memory",
-      "Chats open faster and stay smooth: the message list is built in the background, scrolling no longer redraws the whole screen, and home-screen widgets no longer slow the chat while an agent is answering",
-      "\"Clauding\" now shows only in Claude Code chats while the agent works",
-      "Better TalkBack and keyboard support across the app: labelled buttons and keys, show/hide password buttons, and hidden pages are no longer read out",
-      "Added Go to Line in the IDE's editor menu",
-      "Fixed a crash in app previews",
-      "Fixed first message undo causing empty in input box for agy",
-      "Added rename,delete and export of claude code subagents too"
+      "More TalkBack support: the chat says when a reply is finished, when the agent needs your approval or asks a question; your prompts are headings so you can jump between them; choices and tabs say which one is selected; sign-in, setup and more screens read clearly",
+      "Fixed the app running out of memory: the chat home-screen widget is removed for now. It isn't needed much right now; it could be fixed, but we decided to remove it"
 
     
     ]
