@@ -31,7 +31,8 @@
       "Better TalkBack and keyboard support across the app: labelled buttons and keys, show/hide password buttons, and hidden pages are no longer read out",
       "Added Go to Line in the IDE's editor menu",
       "Fixed a crash in app previews",
-      "Fixed first message undo causing empty in input box for agy"
+      "Fixed first message undo causing empty in input box for agy",
+      "Added rename,delete and export of claude code subagents too"
 
     
     ]
