@@ -2272,6 +2272,8 @@
     "components.a11y.lockOrUnlock": "Lock or unlock",
     "components.a11y.showPassword": "Show password",
     "components.a11y.hidePassword": "Hide password",
+    "components.a11y.agentsStatus": "Agents status",
+    "components.a11y.viewArtifacts": { "one": "View 1 artifact", "other": "View {count} artifacts" },
     "components.a11y.expanded": "Expanded",
     "components.a11y.collapsed": "Collapsed",
     "components.a11y.agentStatusValue": "Agent status: {value}",

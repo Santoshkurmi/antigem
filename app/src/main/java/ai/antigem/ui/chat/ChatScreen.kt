@@ -143,6 +143,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ai.antigem.ui.cloud.cloudProjectsSection
+import ai.antigem.ui.components.hiddenWhileOffscreen
 import ai.antigem.i18n.L
 
 enum class ScrollDirection { UP, DOWN }
@@ -1656,8 +1657,8 @@ fun ChatScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             ModalNavigationDrawer(
                 drawerState = drawerState,
-                // while the artifacts panel is open over it, TalkBack can't wander into the chat behind it
-                modifier = if (showArtifactsDrawer) Modifier.clearAndSetSemantics { } else Modifier,
+                // while the artifacts panel or fullscreen floating terminal is open over it, keep TalkBack & D-pad focus out of the chat behind it
+                modifier = Modifier.hiddenWhileOffscreen(!showArtifactsDrawer && !(showLocalTerminalDialog && isInFloatingWindow)),
         drawerContent = {
             ChatHistoryDrawer(
                 conversations = conversations,
@@ -2043,7 +2044,11 @@ fun ChatScreen(
                                         .widthIn(max = 150.dp)
                                         .clip(RoundedCornerShape(50))
                                         .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                                        .clickable(role = Role.Button, onClickLabel = if (!isChatStarted) L.chat.screen.chooseProject else null) {
+                                        .clickable(
+                                            enabled = !isChatStarted || showStatusDot,
+                                            role = Role.Button,
+                                            onClickLabel = if (!isChatStarted) L.chat.screen.chooseProject else L.components.a11y.agentsStatus
+                                        ) {
                                             if (!isChatStarted) showProjectPickerDialog = true
                                             else if (showStatusDot) statusMenuOpen = true
                                         }
@@ -2150,7 +2155,7 @@ fun ChatScreen(
                                     if (!isChatStarted) {
                                         Icon(
                                             imageVector = Icons.Default.ArrowDropDown,
-                                            contentDescription = L.chat.screen.chooseProject,
+                                            contentDescription = null,
                                             modifier = Modifier.size(16.dp),
                                             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
@@ -2219,7 +2224,7 @@ fun ChatScreen(
                                     // a command running: a ring around the Run icon
                                     if (id == "run" && anyRunGoing) {
                                         CircularProgressIndicator(
-                                            modifier = Modifier.size(30.dp),
+                                            modifier = Modifier.size(30.dp).clearAndSetSemantics { },
                                             strokeWidth = 2.dp,
                                             color = ClaudeTerracotta
                                         )
