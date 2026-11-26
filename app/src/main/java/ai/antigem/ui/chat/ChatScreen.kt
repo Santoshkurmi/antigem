@@ -123,9 +123,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ai.antigem.ui.cloud.cloudProjectsSection
 import ai.antigem.i18n.L
 
@@ -960,14 +964,52 @@ fun ChatScreen(
     // so another chat (or coming back) starts with every pill closed
     val openStepGroups = remember(currentConv?.id) { mutableStateMapOf<String, Boolean>() }
     val expandedStepGroups = openStepGroups.keys.toSet()
-    val feedItems = remember(messages, selectedModelId, modelNameOf, voiceCallItems, groupAgentSteps, groupStepsMin, expandedStepGroups) {
-        // the date and model dividers are always on
-        val items = ChatFeedCache.buildFeedItems(messages, selectedModelId, dividers = true, modelName = modelNameOf, voiceCalls = voiceCallItems)
-        StepGroups.apply(items, groupAgentSteps, groupStepsMin, expandedStepGroups, messages)
+    val convKey = currentConv?.id ?: "empty"
+
+    // The chat's rows are built off the main thread: parsing replies (a long one again on every update while it
+    // streams, or every message when a big chat opens) never holds up drawing. Updates that come while one is being
+    // built are merged: only the newest is built. The rows arrive with the messages they were made from (FeedSnapshot),
+    // and everything below that compares messages with rows reads that snapshot, so the two never disagree.
+    val feedInput = remember(convKey, messages, selectedModelId, modelNameOf, voiceCallItems) {
+        FeedInput(convKey, messages, selectedModelId, modelNameOf, voiceCallItems)
+    }
+    val latestFeedInput by rememberUpdatedState(feedInput)
+    var builtFeed by remember { mutableStateOf<FeedSnapshot?>(null) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { latestFeedInput }
+            .conflate()
+            .collect { input ->
+                val built = withContext(Dispatchers.Default) {
+                    try {
+                        FeedSnapshot.build(input)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("ChatScreen", "Could not build the chat's rows", e)
+                        null
+                    }
+                }
+                if (built != null) builtFeed = built
+            }
+    }
+    // rows built while this chat had no messages yet (the moment it opened) don't count once its messages are here:
+    // the loading view stays until the real rows exist, never an empty list in between
+    val builtForThisChat = builtFeed?.takeIf { it.convKey == convKey && (it.messages.isNotEmpty() || messages.isEmpty()) }
+    // no rows for this chat yet (it was just opened): when every message is parsed already (coming back to it) they
+    // are built right here, so there is never a frame without them; otherwise the loading view shows until they come
+    val instantFeed = remember(feedInput, builtForThisChat == null) {
+        if (builtForThisChat == null && ChatFeedCache.allParsed(messages)) FeedSnapshot.build(feedInput) else null
+    }
+    val feedSnapshot = builtForThisChat ?: instantFeed
+    /** The messages the rows on screen were made from (the live [messages] may be a frame ahead). */
+    val rowMessages = feedSnapshot?.messages ?: emptyList()
+    val feedNotReady = feedSnapshot == null && messages.isNotEmpty()
+    // folding steps into pills parses nothing: done here, so opening or closing a pill is instant
+    val feedItems = remember(feedSnapshot, groupAgentSteps, groupStepsMin, expandedStepGroups) {
+        StepGroups.apply(feedSnapshot?.rows ?: emptyList(), groupAgentSteps, groupStepsMin, expandedStepGroups, rowMessages)
     }
 
     // Fresh LazyListState per conversation — restores saved position if returning, or initializes directly at bottom
-    val convKey = currentConv?.id ?: "empty"
     val hasFeedItems = feedItems.isNotEmpty()
     val initialSavedPos = remember(convKey) { ConversationScrollCache.get(convKey) }
     val listState = remember(convKey, hasFeedItems) {
@@ -1145,16 +1187,29 @@ fun ChatScreen(
     }
 
 
-    // Scroll to bottom when user explicitly sends a message (instant)
+    // Scroll to bottom when user explicitly sends a message (instant), and once more when the rows hold the prompt
+    // just sent (they are built off the main thread, so it may come a frame later); given up after a few seconds
+    var promptsAtSend by remember(convKey) { mutableStateOf(-1) }
     LaunchedEffect(userSentMessageTrigger) {
-        if (userSentMessageTrigger > 0 && feedItems.isNotEmpty()) {
+        if (userSentMessageTrigger > 0) {
             shouldAutoScroll = true
+            promptsAtSend = rowMessages.count { it.role == ai.antigem.domain.model.MessageRole.USER }
+            if (feedItems.isNotEmpty()) listState.scrollToItem(feedItems.size)
+            delay(3_000)
+            promptsAtSend = -1
+        }
+    }
+    LaunchedEffect(feedSnapshot) {
+        val before = promptsAtSend
+        if (before >= 0 && feedItems.isNotEmpty() &&
+            rowMessages.count { it.role == ai.antigem.domain.model.MessageRole.USER } > before) {
+            promptsAtSend = -1
             listState.scrollToItem(feedItems.size)
         }
     }
 
     // Smart auto-scroll during streaming & tool execution: follows live stream and tool calls smoothly without getting stuck
-    val lastMsg = messages.lastOrNull()
+    val lastMsg = rowMessages.lastOrNull()
     val lastToolCalls = lastMsg?.toolCalls.orEmpty()
     val isRunningOrStreaming = isActivelyRunning || (lastMsg?.isStreaming == true)
 
@@ -2085,7 +2140,9 @@ fun ChatScreen(
                     // agy missing: the hub's "agy is not installed" error is also this chat's error, and an existing chat
                     // never finishes loading. Both step aside for the empty view's "not installed" card with Install.
                     val agyMissingHere = isAgyChat && agyNotInstalled
-                    val isExistingChat = messages.isEmpty() && isExistingConversation && isLoadingConversation && !agyMissingHere
+                    val isExistingChat = (messages.isEmpty() && isExistingConversation && isLoadingConversation && !agyMissingHere) ||
+                        // the messages are here but their rows are still being built (a big chat just opened)
+                        feedNotReady
                     Log.d("CHAT_OPEN_DEBUG", "🖥️ [ChatScreen Render] convId=${currentConv?.id}, title='${currentConv?.title}', isLoading=$isLoadingConversation, isExisting=$isExistingChat, msgCount=${messages.size}, error=$conversationError, isServerStopped=$isServerStopped")
 
                     if (isAgyChat && isServerStopped && messages.isEmpty()) {
@@ -2383,8 +2440,8 @@ fun ChatScreen(
                                             onOpenChat = openJarvisLinkedChat
                                         )
                                         is ChatFeedItem.User -> {
-                                            val msgIndex = messages.indexOfFirst { it.id == feedItem.message.id }
-                                            val willDeleteOutput = msgIndex < messages.lastIndex
+                                            val msgIndex = rowMessages.indexOfFirst { it.id == feedItem.message.id }
+                                            val willDeleteOutput = msgIndex < rowMessages.lastIndex
                                             UserMessageBubble(
                                                 message = feedItem.message,
                                                 isLastUserMessage = true,
