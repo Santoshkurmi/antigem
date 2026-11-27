@@ -3,6 +3,7 @@ package ai.antigem.ui.ide
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -17,6 +18,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.viewinterop.AndroidView
 import ai.antigem.ui.components.BlockSite
 import ai.antigem.ui.components.DiskSite
@@ -60,13 +62,16 @@ internal fun HtmlFilePreview(path: String, html: String, modifier: Modifier = Mo
                 }
             },
             onRelease = { it.destroy() },
-            modifier = modifier
+            // Compose doesn't clip a native view: without this the page could draw over the path bar and tabs above it
+            modifier = modifier.clipToBounds()
         )
     }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
 private fun newPreviewWebView(ctx: android.content.Context, onGone: () -> Unit): WebView = WebView(ctx).apply {
+    // Android 12+'s pull-past-the-end stretch scales the whole view, past its own box: over the tabs until it springs back
+    overScrollMode = View.OVER_SCROLL_NEVER
     settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true

@@ -7761,7 +7761,12 @@
     "ide.activeFilePathBar.copyPath": "Copy path",
     "ide.activeFilePathBar.pathCopied": "Path copied",
     "ide.screen.previewHtml": "Preview HTML",
-    "ide.screen.editHtmlSource": "Edit HTML Source"
+    "ide.screen.editHtmlSource": "Edit HTML Source",
+    "ide.activeFilePathBar.fromAnotherAppNotSavedTo": "From another app · not saved to a folder yet",
+    "ide.activeFilePathBar.openFolder": "Open folder",
+    "ide.activeFilePathBar.openThisFilesFolderAsThe": "Open this file's folder as the project",
+    "ide.screen.openNameAsTheProject": "Open “{name}” as the project?",
+    "ide.screen.theSidebarGitAndRunWill": "The sidebar, Git and Run will use this folder. Your open tabs stay open."
   },
   "notes": {
     "settings.language.aiOff": "Segmented button: the agent picks its reply language",
