@@ -161,9 +161,28 @@ fun LocalTerminalContent(
         }
     }
 
-    val activeSession = customSession
+    var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
+
+    val wantedSession = customSession
         ?: sessions.find { it.id == activeSessionId }
         ?: sessions.firstOrNull()
+    // Another session (a new one, a switch, a closed one, the IDE's run again) replaces the terminal view. If Compose
+    // removes the view while it has the keyboard focus, Android hands the focus to the window in the middle of the
+    // frame's apply, Compose measures (and composes the extra keys) right then and crashes ("pending composition has
+    // not been applied"). So the old view gives up the focus first and the other session shows one frame later.
+    var shownSession by remember { mutableStateOf(wantedSession) }
+    LaunchedEffect(wantedSession) {
+        if (wantedSession === shownSession) return@LaunchedEffect
+        if (wantedSession?.id != shownSession?.id) {
+            // this view goes away: not focusable, so a hardware keyboard's focus can't land on it again either
+            currentTerminalView?.let {
+                it.isFocusable = false
+                it.clearFocus()
+            }
+        }
+        shownSession = wantedSession
+    }
+    val activeSession = shownSession
 
     if (activeSession == null) {
         // the first session is usually ready in well under a second: a spinner flashed for that moment makes the open
@@ -230,7 +249,6 @@ fun LocalTerminalContent(
         mutableIntStateOf((initialFontSizeSp * density.density).roundToInt().coerceIn(16, 60))
     }
 
-    var currentTerminalView by remember { mutableStateOf<TerminalView?>(null) }
     // a theme change repaints the terminal in its new colors
     val terminalThemeVersion = ai.antigem.theme.ThemeTerminal.version
     LaunchedEffect(terminalThemeVersion) { currentTerminalView?.onScreenUpdated() }

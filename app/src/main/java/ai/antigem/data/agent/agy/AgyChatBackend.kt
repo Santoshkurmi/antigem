@@ -1694,13 +1694,17 @@ class AgyChatBackend(
         }
 
         backendScope.launch {
-            val exists = _conversations.value.any { it.id == updatedConv.id }
-            val newConversations = if (exists) {
-                _conversations.value.map { if (it.id == updatedConv.id) updatedConv else it }
-            } else {
-                listOf(updatedConv) + _conversations.value
+            // under the chat lists' lock: the hub's list can add this new chat between the check and the write
+            synchronized(summariesLock) {
+                val current = _conversations.value
+                val exists = current.any { it.id == updatedConv.id }
+                val newConversations = if (exists) {
+                    current.map { if (it.id == updatedConv.id) updatedConv else it }
+                } else {
+                    listOf(updatedConv) + current
+                }
+                _conversations.value = newConversations.sortedByDescending { it.updatedAt }
             }
-            _conversations.value = newConversations.sortedByDescending { it.updatedAt }
 
             // Prepare media payload for all attachments (images, audio, files)
             val mediaList = mutableListOf<ai.antigem.data.remote.AgyHubClient.AgyMediaItem>()

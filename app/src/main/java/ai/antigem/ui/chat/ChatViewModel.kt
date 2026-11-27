@@ -903,6 +903,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         ((if (AgentKind.AGY in enabled) agy else emptyList()) + (if (AgentKind.CLAUDE in enabled) claude else emptyList()) +
             (if (AgentKind.OPENCODE in enabled) openCode else emptyList()) + (if (AgentKind.CODEX in enabled) codex else emptyList()))
             .sortedByDescending { it.updatedAt }
+            // one row per id: the sidebar keys its rows by id and Compose crashes on a repeated key (the newest copy stays)
+            .distinctBy { it.id }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**

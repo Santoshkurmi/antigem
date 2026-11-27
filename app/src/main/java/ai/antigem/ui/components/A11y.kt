@@ -5,7 +5,8 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SheetState
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -154,6 +155,11 @@ fun Modifier.a11yMinTouchTarget(talkBackOn: Boolean): Modifier =
  * A bottom sheet's state that opens at full height while TalkBack is on (half-open sheets need a two-finger drag under
  * TalkBack, and part of the list starts off-screen) and at half height as before otherwise. Read once when the sheet
  * opens: turning TalkBack on or off while a sheet is open doesn't rebuild it.
+ *
+ * Not rememberModalBottomSheetState: its half-open stop disappears when the sheet gets shorter than half the window,
+ * and if that happens while the sheet is animating there, Material3 1.5 is left with no offset and crashes
+ * ("AnchoredDraggableState was not initialized correctly"). This state always keeps the half-open stop (for a short
+ * sheet it sits where Expanded is), so it looks the same but can't lose its target.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,7 +169,11 @@ fun rememberSheetStateFullUnderTalkBack(): SheetState {
         (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager)
             ?.isTouchExplorationEnabled == true
     }
-    return rememberModalBottomSheetState(skipPartiallyExpanded = talkBackOn)
+    return rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = if (talkBackOn) setOf(SheetValue.Hidden, SheetValue.Expanded)
+        else setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded),
+    )
 }
 
 /**

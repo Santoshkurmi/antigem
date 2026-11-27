@@ -57,10 +57,16 @@ func (m *Manager) listSubagents(parents map[string]bool, live map[string]Session
 	files, _ := filepath.Glob(filepath.Join(m.ProjectsDir(), "*", "*", "subagents", subagentPrefix+"*.jsonl"))
 	titles := m.subagentTitles()
 	out := make([]SessionSummary, 0, len(files))
+	// a session folder in two projects: each subagent once, from the file findSubagentTranscript opens (the first)
+	listed := make(map[string]bool, len(files))
 	for _, f := range files {
 		// <project>/<sessionId>/subagents/agent-x.jsonl: the session folder names the chat that started it
 		sessionID := filepath.Base(filepath.Dir(filepath.Dir(f)))
 		if !parents[sessionID] {
+			continue
+		}
+		id := strings.TrimSuffix(filepath.Base(f), ".jsonl")
+		if listed[id] {
 			continue
 		}
 		fi, err := os.Stat(f)
@@ -72,7 +78,7 @@ func (m *Manager) listSubagents(parents map[string]bool, live map[string]Session
 			_ = json.Unmarshal(b, &meta)
 		}
 		sum, _ := summarizeFile(f, fi.Size(), true)
-		sum.ID = strings.TrimSuffix(filepath.Base(f), ".jsonl")
+		sum.ID = id
 		sum.Subagent = true
 		sum.AgentType = meta.AgentType
 		sum.ParentID = sessionID
@@ -97,6 +103,7 @@ func (m *Manager) listSubagents(parents map[string]bool, live map[string]Session
 			sum.Live = true
 			sum.Busy = true
 		}
+		listed[id] = true
 		out = append(out, sum)
 	}
 	return out

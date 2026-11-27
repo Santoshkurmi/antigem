@@ -73,9 +73,15 @@ func (m *Manager) ListSessions() []SessionSummary {
 	live := m.Snapshot()
 	archived := m.ArchivedSessions()
 	out := make([]SessionSummary, 0, len(files))
+	// the same session can have a transcript in two project folders: list it once (the app keys its rows by id),
+	// from the file FindTranscript opens (the first in glob order)
+	listed := make(map[string]bool, len(files))
 	for _, f := range files {
 		name := filepath.Base(f)
 		if !sessionFileRe.MatchString(name) {
+			continue
+		}
+		if listed[strings.TrimSuffix(name, ".jsonl")] {
 			continue
 		}
 		fi, err := os.Stat(f)
@@ -97,6 +103,7 @@ func (m *Manager) ListSessions() []SessionSummary {
 			sum.Live = st.Live
 			sum.Busy = st.Busy
 		}
+		listed[sum.ID] = true
 		out = append(out, sum)
 	}
 	// the subagents of the listed chats, nested under them by the app
