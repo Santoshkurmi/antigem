@@ -961,6 +961,40 @@ func (m *HubManager) Diagnostics() Diagnostics {
 	return d
 }
 
+// DebugInfo is the supervisor's state for the app's Troubleshoot page: Diagnostics plus who runs the hub (this bridge
+// or one it found already listening), the agy file it patches and whether it holds the hub's CSRF value (not the value).
+type DebugInfo struct {
+	Diagnostics
+	Port        string `json:"port"`
+	Disabled    bool   `json:"disabled"`
+	OwnPid      int    `json:"own_pid"`
+	CsrfPresent bool   `json:"csrf_present"`
+	AgyBin      string `json:"agy_bin"`
+	PatchTarget string `json:"patch_target"`
+	PatchingOn  bool   `json:"patching_on"`
+}
+
+func (m *HubManager) DebugInfo() DebugInfo {
+	d := DebugInfo{Diagnostics: m.Diagnostics(), Port: m.HubPort, Disabled: m.Disabled}
+	m.mu.Lock()
+	if m.cmd != nil && m.cmd.Process != nil && !m.isExternal && m.ownHubAliveLocked() {
+		d.OwnPid = m.cmd.Process.Pid
+	}
+	d.CsrfPresent = m.csrfToken != ""
+	d.AgyBin = m.AgyBinPath
+	d.PatchingOn = m.SecurityToken != ""
+	m.mu.Unlock()
+	d.PatchTarget = ResolvePatchTarget(d.AgyBin)
+	return d
+}
+
+// CurrentCsrf is the hub's CSRF value this bridge holds ("" when it has none), for the Troubleshoot page's test request.
+func (m *HubManager) CurrentCsrf() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.csrfToken
+}
+
 func (m *HubManager) dumpRecentLogs() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -106,7 +106,7 @@ sealed class AgyStreamEvent {
 }
 
 class AgyBridgeService(
-    val client: OkHttpClient = OkHttpClient.Builder()
+    val client: OkHttpClient = OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
         .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 12 else 5, TimeUnit.SECONDS)
         .readTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
         .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 60 else 30, TimeUnit.SECONDS)
@@ -141,7 +141,7 @@ class AgyBridgeService(
 
     // Fast-failing client for health/status checks: 500ms on this phone, a network-grade budget for a remote server
     // (a TLS handshake over mobile data cannot finish in 500ms and would make a healthy server look offline)
-    val fastClient: OkHttpClient = OkHttpClient.Builder()
+    val fastClient: OkHttpClient = OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
         .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 8000 else 500, TimeUnit.MILLISECONDS)
         .readTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
         .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
@@ -161,7 +161,7 @@ class AgyBridgeService(
 
     // Dedicated WebSocket client for live bridge monitoring with 1s connect timeout and 1s heartbeat ping
     // (remote: 10s connect and a 15s heartbeat, so mobile-network hiccups reconnect instead of flapping Offline)
-    val wsClient: OkHttpClient = OkHttpClient.Builder()
+    val wsClient: OkHttpClient = OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
         .connectTimeout(if (AuthPreferences.isRemoteEndpoint()) 10000 else 1000, TimeUnit.MILLISECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .writeTimeout(if (AuthPreferences.isRemoteEndpoint()) 10 else 3, TimeUnit.SECONDS)

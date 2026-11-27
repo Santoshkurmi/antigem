@@ -49,6 +49,13 @@ type Handler struct {
 	Hub        Broadcaster
 	OnShutdown func()
 
+	// for GET /api/debug/report (the app's Troubleshoot page): the security token (only to mask it and to test the hub
+	// with the app's header, never sent back), this run's log file, the command line and the agents turned off
+	SecToken   string
+	RunLogPath string
+	StartArgs  []string
+	AgentsOff  []string
+
 	lastLoginURL   string
 	lastLoginURLMu sync.RWMutex
 	lastLoginTime  time.Time

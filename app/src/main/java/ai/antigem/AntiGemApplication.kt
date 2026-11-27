@@ -28,7 +28,7 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
      * default client does not send. Only requests to the bridge address get it.
      */
     override fun newImageLoader(): coil.ImageLoader {
-        val client = okhttp3.OkHttpClient.Builder()
+        val client = okhttp3.OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
             .addInterceptor { chain ->
                 val req = chain.request()
                 val bridge = ai.antigem.data.preferences.AuthPreferences.currentBridgeHttpUrl.toHttpUrlOrNull()

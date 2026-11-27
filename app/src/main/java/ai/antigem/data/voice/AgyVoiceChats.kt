@@ -49,7 +49,7 @@ object AgyVoiceChats {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).callTimeout(12, TimeUnit.SECONDS).build()
+        OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector).connectTimeout(6, TimeUnit.SECONDS).callTimeout(12, TimeUnit.SECONDS).build()
     }
 
     private val _chats = MutableStateFlow<Map<String, List<VoiceChatRecord>>>(emptyMap())

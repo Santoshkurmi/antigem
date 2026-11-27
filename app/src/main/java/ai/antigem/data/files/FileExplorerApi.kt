@@ -90,7 +90,7 @@ object FileExplorerApi {
 
     /** For big uploads / downloads: auth header only, nothing that reads bodies into memory. */
     val transferClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
             .writeTimeout(10, TimeUnit.MINUTES)

@@ -122,6 +122,14 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        // Android 7-8 focus the first focusable view on their own (when the window opens and every time focus is
+        // cleared). Inside Compose that is the first text field on screen, e.g. the Browser's address bar, whose search
+        // panel and keyboard then open by themselves and come back after every Back. The plain content frame takes that
+        // focus instead, so nothing is focused until the user taps, as on Android 9+.
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {
+            findViewById<android.view.View>(android.R.id.content).isFocusableInTouchMode = true
+        }
+
         setContent {
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
             val themeMode by chatViewModel.themeMode.collectAsState(initial = initialThemeMode)

@@ -136,7 +136,7 @@ private suspend fun probeHub(url: String, edge: Pair<String, String>? = null): P
 
 /** Health + token check of the bridge, using the token typed in the field (even before it is saved). */
 private suspend fun probeBridge(base: String, token: String, edge: Pair<String, String>? = null): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-    val client = OkHttpClient.Builder()
+    val client = OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS)
         .build()
     try {

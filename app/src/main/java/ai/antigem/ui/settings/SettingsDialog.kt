@@ -161,6 +161,7 @@ enum class SettingsSection(private val titleText: () -> String, private val subt
     TERMUX_API({ "Termux:API" }, { L.settings.dialog.howTermuxApiCommandsAreHandled }),
     X11_DESKTOP({ L.settings.dialog.x11Desktop }, { L.settings.dialog.linuxDesktopAppsWithTermuxX11 }),
     UPDATES({ L.settings.dialog.updates }, { L.settings.dialog.betaUpdatesAndHowOftenAntigem }),
+    TROUBLESHOOT({ L.settings.dialog.troubleshoot }, { L.settings.dialog.troubleshootSubtitle }),
     CHANGELOG({ L.settings.dialog.whatsNew }, { L.settings.dialog.everyAntigemVersionAndWhatChanged }),
     ABOUT({ L.settings.dialog.aboutInfo }, { L.settings.dialog.appVersionPackageDetailsAndBridge });
     val title: String get() = titleText()
@@ -895,6 +896,11 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder
                     )
+                    SettingsSection.TROUBLESHOOT -> TroubleshootScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder,
+                        onNavigate = { currentSection = it }
+                    )
                 }
             }
         }
@@ -1079,6 +1085,7 @@ private fun MainSettingsMenu(
             ),
             listOf(
                 row(SettingsSection.UPDATES, Icons.Outlined.SystemUpdateAlt, c.info),
+                row(SettingsSection.TROUBLESHOOT, Icons.Outlined.HealthAndSafety, c.warning),
                 row(SettingsSection.ABOUT, Icons.Outlined.Info, c.accentAlt, "v${BuildConfig.VERSION_NAME}")
             )
         )

@@ -51,6 +51,12 @@ class FloatingChatActivity : ComponentActivity() {
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
         window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
 
+        // Android 7-8 focus the first focusable view on their own, which inside Compose is the first text field (the
+        // Browser's address bar opens its search panel by itself). The content frame takes that focus instead (see MainActivity).
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {
+            findViewById<android.view.View>(android.R.id.content).isFocusableInTouchMode = true
+        }
+
         setContent {
             val initialThemeMode = remember { chatViewModel.authPreferences.getThemeModeSync() }
             val themeMode by chatViewModel.themeMode.collectAsState(initial = initialThemeMode)

@@ -129,7 +129,14 @@ func PatchAgyHeader(binaryPath string, token string) (string, time.Duration, err
 	prefixBytes := []byte(Prefix)
 	suffixBytes := []byte(Suffix)
 
-	file, err := os.OpenFile(binaryPath, os.O_RDWR, 0755)
+	// Already patched for this token: nothing to write. Checked read-only first because Linux refuses to open a file
+	// for writing while a process runs it ("text file busy"): an agy hub still exiting after a restart, or agy open in
+	// a terminal, made the hub fail to start although the file needed no change.
+	if alreadyPatched(binaryPath, fileSize, newHeader) {
+		return newHeaderStr, time.Since(t0), nil
+	}
+
+	file, err := openForPatch(binaryPath)
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to open binary for writing: %w", err)
 	}
@@ -230,6 +237,56 @@ func PatchAgyHeader(binaryPath string, token string) (string, time.Duration, err
 	}
 
 	return newHeaderStr, time.Since(t0), nil
+}
+
+// alreadyPatched reports whether the file at path (size bytes) holds newHeader and neither agy's standard header nor
+// another token's framed one, reading it only.
+func alreadyPatched(path string, size int, newHeader []byte) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	data, err := syscall.Mmap(int(f.Fd()), 0, size, syscall.PROT_READ, syscall.MAP_SHARED)
+	if err != nil {
+		return false
+	}
+	defer syscall.Munmap(data)
+	if bytes.Contains(data, []byte(DefaultHeader)) {
+		return false
+	}
+	prefixBytes, suffixBytes := []byte(Prefix), []byte(Suffix)
+	found := false
+	for pos := 0; ; {
+		idx := bytes.Index(data[pos:], prefixBytes)
+		if idx == -1 {
+			break
+		}
+		at := pos + idx
+		if at+HeaderLen <= len(data) && bytes.Equal(data[at+HeaderLen-len(Suffix):at+HeaderLen], suffixBytes) {
+			if !bytes.Equal(data[at:at+HeaderLen], newHeader) {
+				return false
+			}
+			found = true
+		}
+		pos = at + 1
+	}
+	return found
+}
+
+// patchBusyWait: how long a write to agy waits while it is busy (an agy being stopped can take a few seconds to exit).
+const patchBusyWait = 5 * time.Second
+
+// openForPatch opens the file for writing; while Linux refuses because a process runs it, it tries again for a moment.
+func openForPatch(path string) (*os.File, error) {
+	deadline := time.Now().Add(patchBusyWait)
+	for {
+		f, err := os.OpenFile(path, os.O_RDWR, 0755)
+		if err == nil || !errors.Is(err, syscall.ETXTBSY) || time.Now().After(deadline) {
+			return f, err
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 }
 
 // UnpatchAgyHeader restores any framed 20-byte security header back to the standard DefaultHeader (x-codeium-csrf-token).

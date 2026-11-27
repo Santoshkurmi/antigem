@@ -51,7 +51,7 @@ object AgyVoicePreview {
     private val nextSample = mutableMapOf<String, Int>()
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS).build()
+        OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector).connectTimeout(8, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS).build()
     }
 
     /** Plays [voice] (the next of its samples each time). */

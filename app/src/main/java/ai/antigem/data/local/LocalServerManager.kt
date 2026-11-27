@@ -213,7 +213,8 @@ object LocalServerManager {
         }
     }
 
-    private fun resolveServerCommand(context: Context): String? {
+    /** The command that starts this phone's bridge (also shown, token hidden, on Settings → Troubleshoot). */
+    internal fun resolveServerCommand(context: Context): String? {
         val authPrefs = AuthPreferences(context)
         // the chroot is a plain Linux system with its own agent paths (Where agents run → Agent paths); blank = where
         // each agent's own installer puts it in the chroot's home

@@ -234,7 +234,7 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
     private data class RemoteEntry(val name: String, val path: String, val isDir: Boolean, val size: Long, val modTime: Long)
 
     private val http: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.MINUTES)

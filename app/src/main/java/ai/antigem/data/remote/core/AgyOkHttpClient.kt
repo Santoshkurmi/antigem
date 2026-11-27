@@ -28,7 +28,7 @@ object AgyOkHttpClient {
         val hubIsTls = hubUrl0.startsWith("https://", ignoreCase = true)
         val hubIsRemote = !AuthPreferences.isLoopbackHost(AuthPreferences.hostOf(hubUrl0))
 
-        val builder = OkHttpClient.Builder()
+        val builder = OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
             .dispatcher(dispatcher)
             .connectionPool(connectionPool)
             .protocols(

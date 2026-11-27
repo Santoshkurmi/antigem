@@ -362,6 +362,16 @@ func main() {
 	wsHub := ws.NewHub(cfg)
 	h := handlers.NewHandler(cfg, hubMgr)
 	h.SetHub(wsHub)
+	h.SecToken = secToken
+	h.StartArgs = os.Args
+	if runLogFile != nil {
+		h.RunLogPath = runLogFile.Path
+	}
+	for name, off := range map[string]bool{"antigravity": skipHub, "claude": noClaude, "opencode": noOpenCode, "codex": noCodex} {
+		if off {
+			h.AgentsOff = append(h.AgentsOff, name)
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -445,6 +455,7 @@ func main() {
 	mux.HandleFunc("/api/agy/cli/install", h.AgyCliInstallHandler)
 	mux.HandleFunc("/api/agy/cli/update", h.AgyCliUpdateHandler)
 	mux.HandleFunc("/api/agy/hub/diag", h.AgyHubDiagHandler)
+	mux.HandleFunc("/api/debug/report", h.DebugReportHandler)
 	mux.HandleFunc("/api/agy/accounts", h.AgyAccountsHandler)
 	mux.HandleFunc("/api/agy/accounts/", h.AgyAccountsHandler)
 	mux.HandleFunc("/api/models", h.ModelsHandler)

@@ -131,7 +131,7 @@ class BrowserExtensionManager private constructor() {
     private var packaged = false
     var lastError by androidx.compose.runtime.mutableStateOf<String?>(null)
         private set
-    private val http = OkHttpClient.Builder().readTimeout(210, TimeUnit.SECONDS).connectTimeout(3, TimeUnit.SECONDS).build()
+    private val http = OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector).readTimeout(210, TimeUnit.SECONDS).connectTimeout(3, TimeUnit.SECONDS).build()
 
     fun runtimeFile(context: Context) = File(context.filesDir, "browser-runtime/extension-host.mjs")
     fun hostPort() = ai.antigem.data.remote.AndroidLocalBridgeServer.DEFAULT_PORT + 100

@@ -138,7 +138,7 @@ object AgyVoiceCall {
     private var carryLog: List<String> = emptyList()
 
     private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient.Builder().proxySelector(ai.antigem.data.remote.core.LocalDirectProxySelector)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
