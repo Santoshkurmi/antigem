@@ -920,6 +920,17 @@ class MainActivity : ComponentActivity() {
     }
 
 
+    // A view the app does not own (e.g. one the system puts in the window) can leave state that
+    // cannot be read back on recreate; drop the old view state instead of crashing. Compose
+    // rememberSaveable state is restored separately (SavedStateRegistry), so it is not lost.
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        try {
+            super.onRestoreInstanceState(savedInstanceState)
+        } catch (e: RuntimeException) {
+            android.util.Log.w("MainActivity", "Skipped restoring view state", e)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         instanceRef = java.lang.ref.WeakReference(this)

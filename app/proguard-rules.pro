@@ -92,3 +92,9 @@
 
 # Shizuku starts this class by name (from this APK) in a process of its own
 -keep class ai.antigem.data.adb.DeviceShellService { <init>(...); }
+
+# Keep CREATOR on every Parcelable, so view states saved by library or system views
+# (e.g. androidx ViewPager$SavedState) can be read back when the activity is recreated
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final ** CREATOR;
+}
