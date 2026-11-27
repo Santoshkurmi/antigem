@@ -134,6 +134,29 @@ object ProtectedTexts {
         "opencode.chatUi.alwaysAllowAction",
         "opencode.chatUi.alwaysAllowValue",
         "opencode.chatUi.opencodeRemembersThisForTheProject",
-        "opencode.chatUi.tellOpencodeWhatToDoInstead"
+        "opencode.chatUi.tellOpencodeWhatToDoInstead",
+        // Private Space: what is deleted or replaced for good, and the recovery key warning
+        "privateSpace.backup.merge",
+        "privateSpace.backup.mergeHint",
+        "privateSpace.backup.replace",
+        "privateSpace.backup.replaceHint",
+        "privateSpace.backup.replaceConfirmTitle",
+        "privateSpace.backup.replaceConfirmText",
+        "privateSpace.backup.replaceWord",
+        "privateSpace.common.typeToConfirm",
+        "privateSpace.item.deleteForever",
+        "privateSpace.item.deleteForeverTitle",
+        "privateSpace.item.deleteForeverText",
+        "privateSpace.list.emptyTrash",
+        "privateSpace.list.emptyTrashTitle",
+        "privateSpace.list.emptyTrashText",
+        "privateSpace.lock.eraseTitle",
+        "privateSpace.lock.eraseText",
+        "privateSpace.lock.eraseWord",
+        "privateSpace.lock.eraseConfirm",
+        "privateSpace.recovery.warning",
+        "privateSpace.settings.deleteTitle",
+        "privateSpace.settings.deleteText",
+        "privateSpace.settings.deleteConfirm"
     )
 }

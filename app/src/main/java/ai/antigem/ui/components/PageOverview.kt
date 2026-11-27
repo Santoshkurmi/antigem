@@ -62,6 +62,7 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
@@ -159,6 +160,8 @@ object PageSnapshots {
     internal val sources = HashMap<AppViewMode, GraphicsLayer>()
 
     fun capture(activity: Activity, mode: AppViewMode) {
+        // never pictured: its card shows just its icon and whether it is locked
+        if (mode == AppViewMode.PRIVATE_SPACE) return
         val layer = sources[mode]?.takeIf { !it.isReleased && it.size.width > 0 && it.size.height > 0 }
         if (layer == null) {
             // the page hasn't been recorded yet (the overview was just turned on): a copy of the screen instead
@@ -273,6 +276,7 @@ private fun overviewPage(id: String): OverviewPage? = when (id.lowercase()) {
     "notes" -> OverviewPage("notes", AppViewMode.NOTES, L.common.notes, Icons.Outlined.EditNote)
     "files" -> OverviewPage("files", AppViewMode.FILES, L.common.files, Icons.Outlined.FolderOpen)
     "run" -> OverviewPage("run", AppViewMode.RUN, L.common.run, Icons.Outlined.PlayCircle)
+    "private" -> OverviewPage("private", AppViewMode.PRIVATE_SPACE, L.privateSpace.title, Icons.Outlined.Shield)
     else -> null
 }
 
@@ -305,8 +309,13 @@ fun PageOverview(
     onOpenPage: (String) -> Unit,
     onLayoutChange: (String) -> Unit,
     onReorder: (List<String>) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    keepScroll: Boolean = true
 ) {
+    // Where the cards and the list were scrolled: kept while the overview is closed, so it opens where it was left
+    // ([keepScroll], Settings → Appearance; off: made new each time it opens, so at the top)
+    val keptCardsScroll = rememberScrollState()
+    val keptListScroll = rememberScrollState()
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(160)) + scaleIn(initialScale = 0.94f, animationSpec = tween(180)),
@@ -316,6 +325,8 @@ fun PageOverview(
             .zIndex(998f)
     ) {
         BackHandler(enabled = visible, onBack = onDismiss)
+        val cardsScroll = if (keepScroll) keptCardsScroll else rememberScrollState()
+        val listScroll = if (keepScroll) keptListScroll else rememberScrollState()
         // The keyboard would keep typing into the hidden page (also the terminal's own View, so not Compose's controller)
         val view = LocalView.current
         LaunchedEffect(Unit) {
@@ -392,7 +403,7 @@ fun PageOverview(
                             modifier = modifier
                         )
                     }
-                    "LIST" -> PageTiles(pages, reorder, columns = 1, gap = 8.dp) { page, modifier ->
+                    "LIST" -> PageTiles(pages, reorder, columns = 1, gap = 8.dp, scrollState = listScroll) { page, modifier ->
                         PageRow(
                             page = page,
                             isCurrent = page.mode == currentViewMode,
@@ -405,7 +416,7 @@ fun PageOverview(
                         // 2 cards a row on a phone, more on wider screens (cards at least 150dp wide)
                         val gap = 10.dp
                         val columns = ((maxWidth - 24.dp + gap) / (150.dp + gap)).toInt().coerceAtLeast(1)
-                        PageTiles(pages, reorder, columns = columns, gap = gap) { page, modifier ->
+                        PageTiles(pages, reorder, columns = columns, gap = gap, scrollState = cardsScroll) { page, modifier ->
                             PageCard(
                                 page = page,
                                 isCurrent = page.mode == currentViewMode,
@@ -630,9 +641,9 @@ private fun PageTiles(
     fillHeight: Boolean = false,
     tileHeight: Dp? = null,
     bottomPadding: Dp = 24.dp,
+    scrollState: ScrollState = rememberScrollState(),
     tile: @Composable (page: OverviewPage, modifier: Modifier) -> Unit
 ) {
-    val scrollState = rememberScrollState()
     SideEffect { reorder.scroll = if (fillHeight) null else scrollState }
     Box(
         modifier = Modifier
@@ -1032,6 +1043,19 @@ private fun pageStatus(
             )
             else -> PageStatus(L.components.pageOverview.nothingRunning)
         }
+    }
+    "private" -> {
+        // read before the page was ever opened: whether a space exists comes from its file
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        remember { ai.antigem.data.privatespace.PrivateSpace.init(ctx) }
+        val status by ai.antigem.data.privatespace.PrivateSpace.status.collectAsState()
+        PageStatus(
+            when (status) {
+                ai.antigem.data.privatespace.SpaceStatus.UNLOCKED -> L.privateSpace.overview.open
+                ai.antigem.data.privatespace.SpaceStatus.LOCKED -> L.privateSpace.overview.locked
+                ai.antigem.data.privatespace.SpaceStatus.NOT_SET_UP -> L.privateSpace.overview.notSetUp
+            }
+        )
     }
     else -> PageStatus("")
 }

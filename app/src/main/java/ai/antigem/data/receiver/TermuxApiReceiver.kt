@@ -133,7 +133,10 @@ class TermuxApiReceiver : BroadcastReceiver() {
                 val targetContext = ai.antigem.MainActivity.currentInstance ?: context
                 val clipboard = targetContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                 val clip = clipboard?.primaryClip
-                val text = if (clip != null && clip.itemCount > 0) {
+                // a secret copied from Private Space: the terminal (and any agent in it) gets nothing
+                val text = if (ai.antigem.data.privatespace.PrivateSpace.isPrivateClip(clip?.description)) {
+                    ""
+                } else if (clip != null && clip.itemCount > 0) {
                     clip.getItemAt(0)?.coerceToText(targetContext)?.toString() ?: ""
                 } else {
                     ""

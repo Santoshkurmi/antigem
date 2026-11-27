@@ -523,7 +523,12 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
             }
             clipboard().setPrimaryClip(ClipData.newPlainText(app.name, p.optString("text"))); null
         }
-        "device.paste" -> { require("clipboard"); clipboard().primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString().orEmpty() }
+        "device.paste" -> {
+            require("clipboard")
+            // a secret copied from Private Space is never handed to a mini app
+            clipboard().primaryClip?.takeIf { it.itemCount > 0 && !ai.antigem.data.privatespace.PrivateSpace.isPrivateClip(it.description) }
+                ?.getItemAt(0)?.coerceToText(ctx)?.toString().orEmpty()
+        }
         "device.openUrl" -> { openUrl(p.optString("url")); null }
         "device.info" -> JSONObject().put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL).put("android", Build.VERSION.RELEASE)
             .put("sdk", Build.VERSION.SDK_INT).put("dark", host.isDark).put("locale", Locale.getDefault().toLanguageTag())

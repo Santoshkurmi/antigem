@@ -20,12 +20,19 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 146,
-    "version_name": "2.0.5-beta.9",
+    "version_code": 147,
+    "version_name": "2.0.5-beta.10",
     "changelog": [
-      "Fixed a crash when opening a new terminal session",
-      "Fixed a crash in the chat list when the same chat showed up twice",
-      "Fixed a crash in half-open bottom sheets"
+      "Added Private Space: an encrypted page for passwords, API keys, 2FA codes and private notes that AI agents can't read. Open it with a master password, fingerprint or PIN, and make encrypted backups",
+      "Added Settings → Troubleshoot: check the bridge, agents, ports and logs, and share a report",
+      "IDE: preview HTML files, and a path bar shows the open file's full path with its folders",
+      "Added provider chips to the Claude Code and OpenCode model pickers, to find a provider's models in one tap",
+      "Your community language now gets updates right in the app",
+      "The page overview remembers where you scrolled (turn it off in Settings → Appearance)",
+      "TalkBack: scrolling up in a chat now stops it from following the agent, and numbered and checklist items in replies are read as one item each",
+      "Fixed a crash when coming back to the app, and attachments going missing when editing an Antigravity message",
+      "Fixed the app showing its bridge offline on mobile data with a carrier proxy, and Antigravity sometimes failing to start with \"text file busy\"",
+      "The chat keeps following the agent when it asks for approval"
     ]
   }
 }

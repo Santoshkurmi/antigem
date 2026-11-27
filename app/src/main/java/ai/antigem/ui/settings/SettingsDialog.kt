@@ -2120,7 +2120,7 @@ private fun AppearanceSubScreen(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
-                val allAvailable = listOf("chat", "ide", "terminal", "browser", "notes", "files", "run")
+                val allAvailable = listOf("chat", "ide", "terminal", "browser", "notes", "files", "run", "private")
                 val currentItems = floatingSwitcherItems.toMutableList()
                 val displayedList = currentItems + allAvailable.filterNot { currentItems.contains(it) }
 
@@ -2134,6 +2134,7 @@ private fun AppearanceSubScreen(
                         "notes" -> L.common.notesToDos
                         "files" -> L.settings.dialog.filesFileExplorer
                         "run" -> L.settings.dialog.runBuildRunCommands
+                        "private" -> L.privateSpace.settings.switcherLabel
                         else -> itemId
                     }
                     val itemIcon = when (itemId) {
@@ -2144,6 +2145,7 @@ private fun AppearanceSubScreen(
                         "notes" -> Icons.Outlined.EditNote
                         "files" -> Icons.Outlined.FolderOpen
                         "run" -> Icons.Outlined.PlayCircle
+                        "private" -> Icons.Outlined.Shield
                         else -> Icons.Outlined.ChatBubbleOutline
                     }
 

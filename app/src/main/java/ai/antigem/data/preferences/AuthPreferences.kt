@@ -101,6 +101,7 @@ class AuthPreferences(private val context: Context) {
         val OVERVIEW_PILL_POS_X = androidx.datastore.preferences.core.floatPreferencesKey("overview_pill_pos_x")
         val OVERVIEW_PILL_POS_Y = androidx.datastore.preferences.core.floatPreferencesKey("overview_pill_pos_y")
         val PAGE_OVERVIEW_LAYOUT = stringPreferencesKey("page_overview_layout")
+        val PAGE_OVERVIEW_KEEP_SCROLL = androidx.datastore.preferences.core.booleanPreferencesKey("page_overview_keep_scroll")
         val IS_FLOATING_DIAGNOSTICS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_diagnostics_enabled")
         val IS_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_network_inspector_enabled")
         val IS_FLOATING_NETWORK_INSPECTOR_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_floating_network_inspector_enabled")
@@ -1085,25 +1086,27 @@ class AuthPreferences(private val context: Context) {
 
     val floatingSwitcherItems: Flow<List<String>> = context.dataStore.data
         .map {
-            val raw = it[FLOATING_SWITCHER_ITEMS] ?: "chat,ide,terminal,browser,notes,files"
+            val raw = it[FLOATING_SWITCHER_ITEMS] ?: "chat,ide,terminal,browser,notes,files,private"
             withNotesSwitcherItem(raw.split(",").map { s -> s.trim() }.filter { s -> s.isNotEmpty() })
         }
 
     fun getFloatingSwitcherItemsSync(): List<String> {
-        val raw = syncPrefs.getString("floating_switcher_items", "chat,ide,terminal,browser,notes,files") ?: "chat,ide,terminal,browser,notes,files"
+        val raw = syncPrefs.getString("floating_switcher_items", "chat,ide,terminal,browser,notes,files,private") ?: "chat,ide,terminal,browser,notes,files,private"
         return withNotesSwitcherItem(raw.split(",").map { it.trim() }.filter { it.isNotEmpty() })
     }
 
-    /** Lists saved before Notes / Files existed get them at the end, until the user customizes the switcher items themselves. */
+    /** Lists saved before Notes / Files / Private Space existed get them at the end, until the user customizes the switcher items themselves. */
     private fun withNotesSwitcherItem(items: List<String>): List<String> {
         val withNotes = if ("notes" in items || syncPrefs.getBoolean("floating_switcher_items_has_notes", false)) items else items + "notes"
-        return if ("files" in withNotes || syncPrefs.getBoolean("floating_switcher_items_has_files", false)) withNotes else withNotes + "files"
+        val withFiles = if ("files" in withNotes || syncPrefs.getBoolean("floating_switcher_items_has_files", false)) withNotes else withNotes + "files"
+        return if ("private" in withFiles || syncPrefs.getBoolean("floating_switcher_items_has_private", false)) withFiles else withFiles + "private"
     }
 
     suspend fun saveFloatingSwitcherItems(items: List<String>) {
         val raw = items.joinToString(",")
         syncPrefs.edit().putString("floating_switcher_items", raw)
-            .putBoolean("floating_switcher_items_has_notes", true).putBoolean("floating_switcher_items_has_files", true).apply()
+            .putBoolean("floating_switcher_items_has_notes", true).putBoolean("floating_switcher_items_has_files", true)
+            .putBoolean("floating_switcher_items_has_private", true).apply()
         context.dataStore.edit { it[FLOATING_SWITCHER_ITEMS] = raw }
     }
 
@@ -1226,6 +1229,17 @@ class AuthPreferences(private val context: Context) {
     suspend fun savePageOverviewLayout(layout: String) {
         syncPrefs.edit().putString("page_overview_layout", layout).apply()
         context.dataStore.edit { it[PAGE_OVERVIEW_LAYOUT] = layout }
+    }
+
+    /** The page overview opens where it was last scrolled (default); off: always at the top. */
+    val pageOverviewKeepScroll: Flow<Boolean> = context.dataStore.data
+        .map { it[PAGE_OVERVIEW_KEEP_SCROLL] ?: true }
+
+    fun getPageOverviewKeepScrollSync(): Boolean = syncPrefs.getBoolean("page_overview_keep_scroll", true)
+
+    suspend fun savePageOverviewKeepScroll(keep: Boolean) {
+        syncPrefs.edit().putBoolean("page_overview_keep_scroll", keep).apply()
+        context.dataStore.edit { it[PAGE_OVERVIEW_KEEP_SCROLL] = keep }
     }
 
     val isFloatingDiagnosticsEnabled: Flow<Boolean> = context.dataStore.data

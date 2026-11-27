@@ -37,7 +37,9 @@ enum class AppViewMode {
     NOTES,
     FILES,
     /** The Run screen: a folder's commands and their live output (runs keep going on other screens) */
-    RUN
+    RUN,
+    /** Private Space: passwords, API keys, 2FA and private notes, encrypted; composed only while shown */
+    PRIVATE_SPACE
 } 
 
 class MainActivity : ComponentActivity() {
@@ -219,6 +221,8 @@ class MainActivity : ComponentActivity() {
             // The page overview opens from a tap on the switcher's pill ("SWITCHER"), from its own pill ("OWN_PILL"), or is off
             val pageOverviewMode by switcherPrefs.pageOverviewMode
                 .collectAsState(initial = switcherPrefs.getPageOverviewModeSync())
+            val pageOverviewKeepScroll by switcherPrefs.pageOverviewKeepScroll
+                .collectAsState(initial = switcherPrefs.getPageOverviewKeepScrollSync())
             val switcherTapOpensOverview = pageOverviewMode == "SWITCHER"
             val overviewPillEnabled = pageOverviewMode == "OWN_PILL"
             val floatingSwitcherScale by switcherPrefs.floatingSwitcherScale
@@ -641,6 +645,19 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
+                                // Private Space (passwords, keys, private notes): composed only while it is the page shown, so nothing of
+                                // it exists off screen, and never pictured for the page overview (PageSnapshots skips it)
+                                if (currentViewMode == AppViewMode.PRIVATE_SPACE) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        ai.antigem.ui.privatespace.PrivateSpaceScreen(
+                                            onClose = {
+                                                currentViewMode =
+                                                    if (previousViewMode == AppViewMode.PRIVATE_SPACE) AppViewMode.CHAT else previousViewMode
+                                            }
+                                        )
+                                    }
+                                }
+
                                 // Floating App Switcher Across Whole App (always on; renders on top of Chat, IDE, Terminal, Browser)
                                 // Its Terminal needs a shell: SSH, server mode, or the local Linux tools (turned on here when
                                 // installed but off); without any, it offers to install the Linux tools instead.
@@ -707,6 +724,7 @@ class MainActivity : ComponentActivity() {
                                         "notes" -> AppViewMode.NOTES
                                         "files" -> AppViewMode.FILES
                                         "run" -> AppViewMode.RUN
+                                        "private" -> AppViewMode.PRIVATE_SPACE
                                         else -> null
                                     }
                                     when {
@@ -732,7 +750,8 @@ class MainActivity : ComponentActivity() {
                                     },
                                     // a tile held and dragged to a new place: the switcher's order (its panel and Settings follow)
                                     onReorder = { order -> chatViewModel.setFloatingSwitcherItems(order) },
-                                    onDismiss = { showPageOverview = false }
+                                    onDismiss = { showPageOverview = false },
+                                    keepScroll = pageOverviewKeepScroll
                                 )
                                 ai.antigem.ui.components.FloatingSwitcherWidget(
                                     currentViewMode = currentViewMode,
@@ -773,6 +792,10 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToRun = {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.RUN
+                                    },
+                                    onNavigateToPrivateSpace = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.PRIVATE_SPACE
                                     },
                                     onNavigateBack = switcherNavigateBack,
                                     onPositionSaved = { x, y ->

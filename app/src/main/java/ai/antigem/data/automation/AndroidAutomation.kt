@@ -211,9 +211,20 @@ object AndroidAutomation {
 
     // ---------------- calls ----------------
 
+    /**
+     * The only tools that work while the Private Space page is visible: they don't see or touch the screen. Every other
+     * one is refused then, also when another app is the active window (split screen, a pop-up window): "all windows"
+     * trees and waits would otherwise read the Private Space half, and taps, keys, intents or shell commands could work it.
+     */
+    private val allowedWhilePrivateSpace = setOf("android_get_status", "android_get_device_info", "android_version", "android_list_apps")
+
     suspend fun call(context: Context, name: String, args: JSONObject): JSONObject {
         notReadyMessage(context)?.let { return error(it) }
         val svc = AutomationAccessibilityService.instance ?: return error(notReadyMessage(context) ?: "Accessibility service not running")
+        // AntiGem's Private Space on screen (on its own or beside another app): tools may not read, picture or work the screen
+        if (name !in allowedWhilePrivateSpace && ai.antigem.data.privatespace.PrivateSpace.pageOpen) {
+            return error("AntiGem's Private Space is open on screen (maybe beside another app). While it is visible, phone-control tools can't read, capture or control the screen or run shell commands. Ask the user to leave the Private Space page first.")
+        }
         return runCatching {
             when (name) {
                 "android_get_status" -> status(context, svc)

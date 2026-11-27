@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
@@ -117,6 +118,7 @@ fun FloatingSwitcherWidget(
     onNavigateToNotes: () -> Unit = {},
     onNavigateToFiles: () -> Unit = {},
     onNavigateToRun: () -> Unit = {},
+    onNavigateToPrivateSpace: () -> Unit = {},
     onNavigateBack: () -> Unit = {},
     onPositionSaved: (Float, Float) -> Unit,
     onOrientationChange: (String) -> Unit = {},
@@ -182,6 +184,7 @@ fun FloatingSwitcherWidget(
             "notes" -> onNavigateToNotes()
             "files" -> onNavigateToFiles()
             "run" -> onNavigateToRun()
+            "private" -> onNavigateToPrivateSpace()
         }
     }
     // The gesture handler lives in a long-running pointerInput(Unit); always call the latest callback.
@@ -346,6 +349,7 @@ fun FloatingSwitcherWidget(
                     "notes" -> currentViewMode == AppViewMode.NOTES
                     "files" -> currentViewMode == AppViewMode.FILES
                     "run" -> currentViewMode == AppViewMode.RUN
+                    "private" -> currentViewMode == AppViewMode.PRIVATE_SPACE
                     else -> false
                 }
                 val iconVector: ImageVector = when (id) {
@@ -356,6 +360,7 @@ fun FloatingSwitcherWidget(
                     "notes" -> Icons.Outlined.EditNote
                     "files" -> Icons.Outlined.FolderOpen
                     "run" -> Icons.Outlined.PlayCircle
+                    "private" -> Icons.Outlined.Shield
                     else -> Icons.Outlined.ChatBubbleOutline
                 }
                 val contentDesc = when (id) {
@@ -366,6 +371,7 @@ fun FloatingSwitcherWidget(
                     "notes" -> L.common.notes
                     "files" -> L.common.files
                     "run" -> L.common.run
+                    "private" -> L.privateSpace.title
                     else -> itemId
                 }
                 FloatingSwitcherItemButton(
