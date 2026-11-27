@@ -7,13 +7,17 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -48,7 +52,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +66,7 @@ import ai.antigem.i18n.LanguageManager
 import ai.antigem.i18n.LanguageRepo
 import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.mergedIntoRow
+import ai.antigem.ui.components.rememberBouncyLazyScroll
 import ai.antigem.ui.components.toggleRowSemantics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,7 +92,7 @@ private fun openUrl(context: Context, url: String) {
 }
 
 /** What went wrong with the community list or a download, in the app's language. */
-private fun repoErrorText(e: Throwable?): String = when ((e as? LanguageRepo.RepoException)?.kind) {
+internal fun repoErrorText(e: Throwable?): String = when ((e as? LanguageRepo.RepoException)?.kind) {
     LanguageRepo.Kind.NOT_PUBLISHED -> L.settings.language.errNotPublished
     LanguageRepo.Kind.BAD_DATA -> L.settings.language.errBadData
     LanguageRepo.Kind.NEWER_APP -> L.settings.language.errNewerApp
@@ -94,11 +102,11 @@ private fun repoErrorText(e: Throwable?): String = when ((e as? LanguageRepo.Rep
 }
 
 /** "by Sita, Ram +2". */
-private fun byLine(authors: List<LanguageManager.Author>): String? = authors.takeIf { it.isNotEmpty() }?.let { list ->
+internal fun byLine(authors: List<LanguageManager.Author>): String? = authors.takeIf { it.isNotEmpty() }?.let { list ->
     L.settings.language.byAuthors(list.take(3).joinToString(", ") { it.name } + if (list.size > 3) " +${list.size - 3}" else "")
 }
 
-private fun shortDate(day: String): String = runCatching {
+internal fun shortDate(day: String): String = runCatching {
     val d = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(day) ?: return day
     java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(d)
 }.getOrDefault(day)
@@ -108,6 +116,9 @@ private fun shortDate(day: String): String = runCatching {
  * antigem_languages repository; the user's own languages (new, edit, import, export, share, send to the community);
  * the language agents reply in, and how to have an agent translate the app through language_mcp.
  * Downloaded and built-in languages are read-only: duplicate one to change it, so an update never overwrites edits.
+ *
+ * A lazy list (only what's on screen is drawn). Its lists are read ahead when Settings opens ([LanguageRepo.prewarm]),
+ * so the page opens complete; the community list is fetched again once the page has slid in.
  */
 @Composable
 fun LanguageScreen(onOpenTexts: (String) -> Unit) {
@@ -116,6 +127,8 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
     val languages = LanguageManager.languages
     val current = LanguageManager.currentId
     var loading by remember { mutableStateOf(languages.isEmpty()) }
+    // the spinner only when reading the list takes a while: normally Settings has read it already
+    var slowLoad by remember { mutableStateOf(false) }
     var switching by remember { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var editingInfo by remember { mutableStateOf<LanguageManager.Info?>(null) }
@@ -126,6 +139,7 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
     var details by remember { mutableStateOf<LanguageDetails?>(null) }
     var sending by remember { mutableStateOf<LanguageManager.Info?>(null) }
     var ready by remember { mutableStateOf<LanguageManager.Language?>(null) }
+    var query by remember { mutableStateOf("") }
 
     suspend fun refresh() {
         withContext(Dispatchers.IO) { runCatching { LanguageManager.refreshList() } }
@@ -133,8 +147,11 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
     }
     LaunchedEffect(Unit) {
         launch { refresh() }
-        // the community list is fetched each time the page opens: that's when updates show up
-        LanguageRepo.refresh()
+        launch { delay(300); slowLoad = true }
+        // once the page has slid in: the community list is fetched each time the page opens (that's when updates show
+        // up), unless it was fetched moments ago (the check on launch, or the last visit)
+        delay(400)
+        LanguageRepo.refresh(maxAgeMs = 2 * 60_000L)
     }
 
     fun select(id: String) {
@@ -147,7 +164,7 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
         }
     }
 
-    fun download(pack: LanguageRepo.Pack) {
+    fun download(pack: LanguageRepo.Pack, fromSheet: Boolean = false) {
         val wasInstalled = LanguageRepo.stateOf(pack.id) != LanguageRepo.State.AVAILABLE
         scope.launch {
             LanguageRepo.install(pack)
@@ -155,6 +172,8 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
                     refresh()
                     when {
                         wasInstalled -> toast(context, L.settings.language.updatedToast(lang.label))
+                        // the open sheet now offers "Use" itself
+                        fromSheet && details != null -> toast(context, L.settings.language.downloadedToast(lang.label))
                         LanguageManager.currentId != lang.id -> ready = lang
                         else -> toast(context, L.settings.language.downloadedToast(lang.label))
                     }
@@ -251,18 +270,48 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
 
     val packs = LanguageRepo.packs
     val states = LanguageRepo.states
+    val error = LanguageRepo.error
+    val loadingList = LanguageRepo.loading
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
-        Modifier.fillMaxSize().bouncyVerticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(L.settings.language.appLanguage, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Text(L.settings.language.appLanguageAbout, fontSize = 12.5.sp, lineHeight = 17.sp, color = muted)
-
-        if (loading && languages.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(28.dp)) }
+    // the community list offers what isn't on the phone yet: downloaded ones are in the list above, with their updates
+    val available = remember(packs, states) { packs.filter { (states[it.id] ?: LanguageRepo.State.AVAILABLE) == LanguageRepo.State.AVAILABLE } }
+    val shown = remember(available, query) {
+        val q = query.trim()
+        if (q.isEmpty()) available else available.filter { p ->
+            listOf(p.name, p.nativeName, p.code, p.variant).any { it.contains(q, true) } || p.authors.any { it.name.contains(q, true) || it.github.contains(q, true) }
         }
-        languages.forEach { info ->
+    }
+    val updates = remember(packs, states) { packs.count { states[it.id] == LanguageRepo.State.UPDATE } }
+    // nothing known yet: "Looking for languages…" from the first frame until the list is in, instead of a blank first
+    val checking = packs.isEmpty() && error == null && (loadingList || LanguageRepo.fetchedAt == 0L)
+    val communityNote = when {
+        checking -> null
+        packs.isEmpty() && error == null -> L.settings.language.noLanguagesYet
+        packs.isNotEmpty() && available.isEmpty() -> L.settings.language.allInstalled
+        available.isNotEmpty() && shown.isEmpty() -> L.settings.language.noMatch(query.trim())
+        else -> null
+    }
+
+    val listState = rememberLazyListState()
+    val bounce = rememberBouncyLazyScroll(listState)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize().then(bounce.modifier),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        userScrollEnabled = bounce.userScrollEnabled,
+        overscrollEffect = bounce.overscrollEffect
+    ) {
+        item(key = "head", contentType = "head") {
+            SectionTitle(Icons.Outlined.Translate, L.settings.language.appLanguage, L.settings.language.appLanguageAbout)
+        }
+        if (languages.isEmpty()) item(key = "loading", contentType = "loading") {
+            // the height of a row, so the page doesn't jump when the list comes in
+            Box(Modifier.fillMaxWidth().height(76.dp), contentAlignment = Alignment.Center) {
+                if (loading && slowLoad) CircularProgressIndicator(Modifier.size(28.dp))
+            }
+        }
+        items(languages, key = { "lang:${it.id}" }, contentType = { "language" }) { info ->
             val update = if (info.origin == LanguageManager.Origin.REPO && states[info.packId] == LanguageRepo.State.UPDATE)
                 packs.firstOrNull { it.id == info.packId } else null
             LanguageRow(
@@ -271,7 +320,7 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
                 busy = switching == info.id || info.packId in LanguageRepo.downloading,
                 update = update,
                 onSelect = { select(info.id) },
-                onUpdate = { update?.let(::download) },
+                onUpdate = { update?.let { download(it) } },
                 onAbout = { details = LanguageDetails(info = info, pack = packs.firstOrNull { it.id == info.packId && info.packId.isNotBlank() }) },
                 onOpenTexts = { onOpenTexts(info.id) },
                 onDuplicate = { duplicate(info.id) },
@@ -280,56 +329,77 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
                 onShare = { share(info) },
                 onCopy = { copyJson(info) },
                 onSend = { sending = info },
-                onDelete = { deleting = info }
+                onDelete = { deleting = info },
+                modifier = Modifier.animateItem()
             )
         }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            FilledTonalButton(onClick = { creating = true }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(L.settings.language.newLanguage, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Box(Modifier.weight(1f)) {
-                OutlinedButton(onClick = { importMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp))
+        item(key = "actions", contentType = "actions") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(onClick = { creating = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Outlined.Add, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(L.settings.language.importLanguage, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(L.settings.language.newLanguage, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                DropdownMenu(expanded = importMenu, onDismissRequest = { importMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(L.settings.language.importFromFile) },
-                        leadingIcon = { Icon(Icons.Outlined.FileOpen, null) },
-                        onClick = { importMenu = false; openLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(L.settings.language.importFromClipboard) },
-                        leadingIcon = { Icon(Icons.Outlined.ContentPaste, null) },
-                        onClick = {
-                            importMenu = false
-                            importText(runCatching { clipboard(context).primaryClip?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull())
-                        }
-                    )
+                Box(Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { importMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(L.settings.language.importLanguage, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    DropdownMenu(expanded = importMenu, onDismissRequest = { importMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(L.settings.language.importFromFile) },
+                            leadingIcon = { Icon(Icons.Outlined.FileOpen, null) },
+                            onClick = { importMenu = false; openLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(L.settings.language.importFromClipboard) },
+                            leadingIcon = { Icon(Icons.Outlined.ContentPaste, null) },
+                            onClick = {
+                                importMenu = false
+                                importText(runCatching { clipboard(context).primaryClip?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull())
+                            }
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(4.dp))
-        CommunityLanguages(
-            onDownload = ::download,
-            onUpdateAll = ::updateAll,
-            onUse = { p -> select(p.localId) },
-            onDetails = { p -> details = LanguageDetails(info = languages.firstOrNull { it.id == p.localId }, pack = p) }
-        )
-        AiReplyCard()
-        TranslateWithAiCard()
-
-        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(horizontal = 4.dp)) {
-            Icon(Icons.Outlined.Info, null, Modifier.size(16.dp).padding(top = 2.dp), tint = muted)
-            Spacer(Modifier.width(8.dp))
-            Text(L.settings.language.shareNote, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
+        item(key = "community", contentType = "community") {
+            CommunityHeader(
+                updates = updates,
+                checking = checking,
+                showSearch = available.size > 6,
+                query = query,
+                onQuery = { query = it },
+                onUpdateAll = ::updateAll
+            )
         }
-        Spacer(Modifier.height(24.dp))
+        items(shown, key = { "pack:${it.id}" }, contentType = { "pack" }) { p ->
+            PackRow(
+                pack = p,
+                busy = p.id in LanguageRepo.downloading,
+                onDownload = { download(p) },
+                onClick = { details = LanguageDetails(info = null, pack = p) },
+                modifier = Modifier.animateItem()
+            )
+        }
+        communityNote?.let { note ->
+            item(key = "community-note", contentType = "note") {
+                Text(note, fontSize = 13.sp, lineHeight = 18.sp, color = muted, modifier = Modifier.padding(horizontal = 4.dp).animateItem())
+            }
+        }
+        item(key = "community-links", contentType = "links") { CommunityLinks() }
+
+        item(key = "ai", contentType = "ai") { Box(Modifier.padding(top = 8.dp)) { AiReplyCard() } }
+        item(key = "translate", contentType = "translate") { TranslateWithAiCard() }
+        item(key = "note", contentType = "note") {
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(horizontal = 4.dp)) {
+                Icon(Icons.Outlined.Info, null, Modifier.size(16.dp).padding(top = 2.dp), tint = muted)
+                Spacer(Modifier.width(8.dp))
+                Text(L.settings.language.shareNote, fontSize = 12.sp, lineHeight = 16.sp, color = muted)
+            }
+        }
     }
 
     if (creating) {
@@ -414,11 +484,14 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
         )
     }
     details?.let { d ->
-        val info = d.info?.let { i -> languages.firstOrNull { it.id == i.id } ?: i }
+        // the installed language as it is now: after a download from the sheet it's there, with "Use"
+        val localId = d.info?.id ?: d.pack?.localId
+        val info = languages.firstOrNull { it.id == localId } ?: d.info
+        val pack = d.pack ?: info?.packId?.takeIf { it.isNotBlank() }?.let { id -> packs.firstOrNull { it.id == id } }
         LanguageDetailsSheet(
-            details = d.copy(info = info),
+            details = LanguageDetails(info = info, pack = pack),
             onDismiss = { details = null },
-            onDownload = { p -> download(p) },
+            onDownload = { p -> download(p, fromSheet = true) },
             onUse = { id -> details = null; select(id) },
             onDuplicate = { id -> details = null; duplicate(id) },
             onRemove = { i -> details = null; deleting = i },
@@ -442,6 +515,27 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
     }
 }
 
+/** A section's title: an icon, the title (a heading for TalkBack), what's in it, and anything at its end. */
+@Composable
+private fun SectionTitle(icon: ImageVector, title: String, about: String?, trailing: @Composable RowScope.() -> Unit = {}) {
+    val primary = MaterialTheme.colorScheme.primary
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 48.dp)) {
+            Box(
+                Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(primary.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) { Icon(icon, null, tint = primary, modifier = Modifier.size(18.dp)) }
+            Spacer(Modifier.width(10.dp))
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).semantics { heading() })
+            trailing()
+        }
+        if (about != null) {
+            Spacer(Modifier.height(2.dp))
+            Text(about, fontSize = 12.5.sp, lineHeight = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 private fun LanguageRow(
     info: LanguageManager.Info,
@@ -458,19 +552,25 @@ private fun LanguageRow(
     onShare: () -> Unit,
     onCopy: () -> Unit,
     onSend: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val primary = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val english = info.id == LanguageManager.ENGLISH
     val community = info.origin == LanguageManager.Origin.REPO
     var menu by remember { mutableStateOf(false) }
+    // the chosen row fades into its colors instead of switching in one frame
+    val background by animateColorAsState(
+        if (selected) primary.copy(alpha = 0.09f) else MaterialTheme.colorScheme.surfaceContainerLow, label = "languageRowBackground"
+    )
+    val edge by animateColorAsState(if (selected) primary else primary.copy(alpha = 0f), label = "languageRowEdge")
     Surface(
         onClick = onSelect,
         shape = RoundedCornerShape(16.dp),
-        color = if (selected) primary.copy(alpha = 0.09f) else MaterialTheme.colorScheme.surfaceContainerLow,
-        border = if (selected) BorderStroke(1.5.dp, primary) else null,
-        modifier = Modifier.fillMaxWidth()
+        color = background,
+        border = BorderStroke(1.5.dp, edge),
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             CodeBadge(info.code)
@@ -511,11 +611,14 @@ private fun LanguageRow(
                     }
                 }
             }
-            Spacer(Modifier.width(6.dp))
-            when {
-                busy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                update != null -> IconButton(onClick = onUpdate) { Icon(Icons.Outlined.Update, L.common.update, tint = ai.antigem.theme.AppColors.info) }
-                selected -> Icon(Icons.Outlined.CheckCircle, L.settings.language.onScreen, tint = primary)
+            Spacer(Modifier.width(4.dp))
+            // one slot for the row's state, the same width on every row: the texts don't move when it changes
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                when {
+                    busy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    update != null -> IconButton(onClick = onUpdate) { Icon(Icons.Outlined.Update, L.common.update, tint = ai.antigem.theme.AppColors.info) }
+                    selected -> Icon(Icons.Outlined.CheckCircle, L.settings.language.onScreen, tint = primary)
+                }
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, L.settings.language.more) }
@@ -581,7 +684,7 @@ private fun LanguageRow(
 }
 
 @Composable
-private fun CodeBadge(code: String, size: androidx.compose.ui.unit.Dp = 42.dp) {
+internal fun CodeBadge(code: String, size: androidx.compose.ui.unit.Dp = 42.dp) {
     val primary = MaterialTheme.colorScheme.primary
     Box(
         Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(primary.copy(alpha = 0.12f)),
@@ -594,144 +697,123 @@ private fun CodeBadge(code: String, size: androidx.compose.ui.unit.Dp = 42.dp) {
 // ============================================================ community languages
 
 /**
- * "Get more languages": the packs in the community repository with Download / Update, a search when the list grows,
- * and links to add a language. The list is fetched when the page opens ([LanguageRepo.refresh]).
+ * The head of "Get more languages": title with refresh, what it is, why the list couldn't be fetched, the updates
+ * waiting, "Looking for languages…" before the first list, and a search once the list grows. The packs follow as
+ * rows of their own. The list is fetched when the page opens ([LanguageRepo.refresh]).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CommunityLanguages(
-    onDownload: (LanguageRepo.Pack) -> Unit,
-    onUpdateAll: () -> Unit,
-    onUse: (LanguageRepo.Pack) -> Unit,
-    onDetails: (LanguageRepo.Pack) -> Unit
+private fun CommunityHeader(
+    updates: Int,
+    checking: Boolean,
+    showSearch: Boolean,
+    query: String,
+    onQuery: (String) -> Unit,
+    onUpdateAll: () -> Unit
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val packs = LanguageRepo.packs
-    val states = LanguageRepo.states
     val error = LanguageRepo.error
     val loadingList = LanguageRepo.loading
-    val current = LanguageManager.currentId
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val primary = MaterialTheme.colorScheme.primary
-    var query by remember { mutableStateOf("") }
-    val updates = packs.count { states[it.id] == LanguageRepo.State.UPDATE }
-    val shown = remember(packs, query) {
-        val q = query.trim()
-        if (q.isEmpty()) packs else packs.filter { p ->
-            listOf(p.name, p.nativeName, p.code, p.variant).any { it.contains(q, true) } || p.authors.any { it.name.contains(q, true) || it.github.contains(q, true) }
-        }
-    }
-
-    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Public, null, tint = primary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(L.settings.language.getMore, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                if (loadingList) CircularProgressIndicator(Modifier.padding(10.dp).size(20.dp), strokeWidth = 2.dp)
+    // a banner coming or going slides the rows below instead of making them jump
+    Column(Modifier.fillMaxWidth().padding(top = 14.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionTitle(Icons.Outlined.Public, L.settings.language.getMore, L.settings.language.getMoreAbout) {
+            // the same size while loading, so the title doesn't move
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                if (loadingList) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 else IconButton(onClick = { scope.launch { LanguageRepo.refresh() } }) { Icon(Icons.Outlined.Refresh, L.common.refresh) }
             }
-            Text(L.settings.language.getMoreAbout, fontSize = 12.5.sp, lineHeight = 17.sp, color = muted)
+        }
 
-            if (error != null && !loadingList) {
-                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)) {
-                    Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            repoErrorText(error) + if (packs.isNotEmpty()) "\n" + L.settings.language.showingSaved else "",
-                            fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = { scope.launch { LanguageRepo.refresh() } }) { Text(L.common.retry) }
-                    }
+        // kept while a new try runs (its Retry waits), so it doesn't blink away and back
+        if (error != null) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)) {
+                Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        repoErrorText(error) + if (packs.isNotEmpty()) "\n" + L.settings.language.showingSaved else "",
+                        fontSize = 12.5.sp, lineHeight = 17.sp, modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { scope.launch { LanguageRepo.refresh() } }, enabled = !loadingList) { Text(L.common.retry) }
                 }
             }
+        }
 
-            if (updates > 0) {
-                Surface(shape = RoundedCornerShape(12.dp), color = ai.antigem.theme.AppColors.info.copy(alpha = 0.12f)) {
-                    Row(Modifier.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Outlined.Update, null, tint = ai.antigem.theme.AppColors.info, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(L.settings.language.updatesReady(updates), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        TextButton(onClick = onUpdateAll, enabled = LanguageRepo.downloading.isEmpty()) { Text(L.settings.language.updateAll) }
-                    }
+        if (updates > 0) {
+            Surface(shape = RoundedCornerShape(12.dp), color = ai.antigem.theme.AppColors.info.copy(alpha = 0.12f)) {
+                Row(Modifier.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Update, null, tint = ai.antigem.theme.AppColors.info, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(L.settings.language.updatesReady(updates), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onUpdateAll, enabled = LanguageRepo.downloading.isEmpty()) { Text(L.settings.language.updateAll) }
                 }
             }
+        }
 
-            when {
-                packs.isEmpty() && loadingList -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(10.dp))
-                    Text(L.settings.language.checking, fontSize = 13.sp, color = muted)
-                }
-                packs.isEmpty() && error == null && LanguageRepo.fetchedAt > 0 ->
-                    Text(L.settings.language.noLanguagesYet, fontSize = 13.sp, lineHeight = 18.sp, color = muted)
+        if (checking) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(L.settings.language.checking, fontSize = 13.sp, color = muted)
             }
+        }
 
-            if (packs.size > 6) {
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true,
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Outlined.Close, null) } },
-                    placeholder = { Text(L.settings.language.searchLanguages) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (shown.isEmpty()) Text(L.settings.language.noMatch(query.trim()), fontSize = 13.sp, color = muted)
-            }
-
-            shown.forEach { p ->
-                PackRow(
-                    pack = p,
-                    state = states[p.id] ?: LanguageRepo.State.AVAILABLE,
-                    busy = p.id in LanguageRepo.downloading,
-                    onScreen = current == p.localId,
-                    onDownload = { onDownload(p) },
-                    onUse = { onUse(p) },
-                    onClick = { onDetails(p) }
-                )
-            }
-
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { openUrl(context, LanguageRepo.CONTRIBUTING) }) {
-                    Icon(Icons.Outlined.Translate, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(L.settings.language.addYourLanguage)
-                }
-                TextButton(onClick = { openUrl(context, LanguageRepo.REQUEST_FORM) }) {
-                    Text(L.settings.language.askForLanguage)
-                }
-                TextButton(onClick = { openUrl(context, LanguageRepo.PAGE) }) {
-                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(L.settings.language.viewOnGitHub)
-                }
-            }
+        if (showSearch) {
+            OutlinedTextField(
+                value = query, onValueChange = onQuery, singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Outlined.Close, null) } },
+                placeholder = { Text(L.settings.language.searchLanguages) },
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
 
+/** Under the community list: add a language, ask for one, the repository. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CommunityLinks() {
+    val context = LocalContext.current
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextButton(onClick = { openUrl(context, LanguageRepo.CONTRIBUTING) }) {
+            Icon(Icons.Outlined.Translate, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(L.settings.language.addYourLanguage)
+        }
+        TextButton(onClick = { openUrl(context, LanguageRepo.REQUEST_FORM) }) {
+            Text(L.settings.language.askForLanguage)
+        }
+        TextButton(onClick = { openUrl(context, LanguageRepo.PAGE) }) {
+            Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(L.settings.language.viewOnGitHub)
+        }
+    }
+}
+
+/** A community language that isn't on the phone yet: tap for its details, or download it. */
 @Composable
 private fun PackRow(
     pack: LanguageRepo.Pack,
-    state: LanguageRepo.State,
     busy: Boolean,
-    onScreen: Boolean,
     onDownload: () -> Unit,
-    onUse: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val primary = MaterialTheme.colorScheme.primary
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
-        Row(Modifier.padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            CodeBadge(pack.code, 38.dp)
-            Spacer(Modifier.width(10.dp))
+        Row(Modifier.padding(start = 12.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            CodeBadge(pack.code, 40.dp)
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(pack.name, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -744,7 +826,7 @@ private fun PackRow(
                     SmallChip(pack.variant, primary)
                 }
                 byLine(pack.authors)?.let { Text(it, fontSize = 11.5.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                Spacer(Modifier.height(5.dp))
+                Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { pack.percent / 100f },
                     modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
@@ -752,27 +834,21 @@ private fun PackRow(
                     trackColor = primary.copy(alpha = 0.12f),
                     drawStopIndicator = {}
                 )
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
                     L.settings.language.percentAndSize(pack.percent, android.text.format.Formatter.formatShortFileSize(context, pack.size)),
                     fontSize = 11.sp, color = muted, maxLines = 1
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            when {
-                busy -> CircularProgressIndicator(Modifier.padding(horizontal = 14.dp).size(22.dp), strokeWidth = 2.dp)
-                state == LanguageRepo.State.AVAILABLE -> FilledTonalButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp)) {
-                    Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(L.common.download, fontSize = 13.sp)
+            Spacer(Modifier.width(10.dp))
+            // the button keeps its size while downloading (its icon turns into a spinner)
+            FilledTonalButton(onClick = onDownload, enabled = !busy, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                    if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp))
                 }
-                state == LanguageRepo.State.UPDATE -> FilledTonalButton(onClick = onDownload, contentPadding = PaddingValues(horizontal = 12.dp)) {
-                    Icon(Icons.Outlined.Update, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(L.common.update, fontSize = 13.sp)
-                }
-                onScreen -> Icon(Icons.Outlined.CheckCircle, L.settings.language.onScreen, tint = primary, modifier = Modifier.padding(horizontal = 12.dp))
-                else -> TextButton(onClick = onUse) { Text(L.settings.language.use) }
+                Spacer(Modifier.width(6.dp))
+                Text(L.common.download, fontSize = 13.sp)
             }
         }
     }
@@ -781,7 +857,11 @@ private fun PackRow(
 /** What the details sheet shows: an installed language ([info]), a pack of the repository ([pack]), or both. */
 private data class LanguageDetails(val info: LanguageManager.Info?, val pack: LanguageRepo.Pack?)
 
-/** Everything about a language and the people who made it, with what can be done with it. */
+/**
+ * Everything about a language and the people who made it, with what can be done with it. Opens at its full height
+ * (no half-open stop to get past) and closes with a drag down. When it's taller than the screen its content scrolls,
+ * without the page's bounce: a drag always moves either the content or the sheet, never a spring inside it.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun LanguageDetailsSheet(
@@ -798,6 +878,7 @@ private fun LanguageDetailsSheet(
     val pack = details.pack
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val primary = MaterialTheme.colorScheme.primary
+    val success = ai.antigem.theme.AppColors.success
     val name = info?.name ?: pack?.name.orEmpty()
     val nativeName = info?.nativeName ?: pack?.nativeName.orEmpty()
     val variant = info?.variant ?: pack?.variant.orEmpty()
@@ -807,31 +888,39 @@ private fun LanguageDetailsSheet(
     val rtl = info?.rtl ?: pack?.rtl ?: false
     val state = pack?.let { LanguageRepo.stateOf(it.id) }
     val busy = pack != null && pack.id in LanguageRepo.downloading
-    val installed = info != null
     val onScreen = info != null && info.id == LanguageManager.currentId
+    // progress: on the phone's English when installed, else the repository's count
+    val translated = info?.translated ?: pack?.translated ?: 0
+    val total = info?.total ?: pack?.total ?: 0
+    val outdated = info?.outdated ?: pack?.outdated ?: 0
+    val percent = if (total <= 0) 0 else (translated * 100L / total).toInt().coerceIn(0, 100)
+    val complete = total > 0 && translated >= total
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = ai.antigem.ui.components.rememberSheetStateFullUnderTalkBack()) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
-            Modifier.fillMaxWidth().bouncyVerticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState(), overscrollEffect = null)
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // which language
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CodeBadge(code, 52.dp)
+                CodeBadge(code, 56.dp)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(name, fontSize = 20.sp, lineHeight = 25.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
                     if (nativeName.isNotBlank() && nativeName != name) Text(nativeName, fontSize = 15.sp, color = muted)
-                    Text(
-                        when (info?.origin) {
-                            LanguageManager.Origin.USER -> L.settings.language.originYours
-                            LanguageManager.Origin.APP -> L.settings.language.originBuiltIn
-                            else -> L.settings.language.originCommunity
-                        },
-                        fontSize = 12.sp, color = primary, fontWeight = FontWeight.Medium
-                    )
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SmallChip(
+                    when (info?.origin) {
+                        LanguageManager.Origin.USER -> L.settings.language.originYours
+                        LanguageManager.Origin.APP -> L.settings.language.originBuiltIn
+                        else -> L.settings.language.originCommunity
+                    },
+                    primary
+                )
+                if (onScreen) SmallChip(L.settings.language.onScreen, success)
                 if (variant.isNotBlank()) SmallChip(variant, primary)
                 SmallChip(code, muted)
                 if (rtl) SmallChip(L.settings.language.rtl, muted)
@@ -839,70 +928,104 @@ private fun LanguageDetailsSheet(
             }
             if (description.isNotBlank()) Text(description, fontSize = 14.sp, lineHeight = 20.sp)
 
-            // progress: on the phone's English when installed, else the repository's count
-            val translated = info?.translated ?: pack?.translated ?: 0
-            val total = info?.total ?: pack?.total ?: 0
-            val outdated = info?.outdated ?: pack?.outdated ?: 0
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    L.settings.languageTexts.progress(translated, total) + if (outdated > 0) "  ·  " + L.settings.language.outdatedCount(outdated) else "",
-                    fontSize = 12.5.sp, color = muted
-                )
-                LinearProgressIndicator(
-                    progress = { if (total == 0) 0f else translated.toFloat() / total },
-                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
-                    color = if (total > 0 && translated >= total) ai.antigem.theme.AppColors.success else primary,
-                    trackColor = primary.copy(alpha = 0.12f),
-                    drawStopIndicator = {}
-                )
-                val facts = listOfNotNull(
-                    pack?.updated?.takeIf { it.isNotBlank() }?.let { L.settings.language.updatedOn(shortDate(it)) },
-                    (info?.appVersion?.takeIf { it.isNotBlank() } ?: pack?.appVersion?.takeIf { it.isNotBlank() })?.let { L.settings.language.forVersion(it) },
-                    pack?.let { android.text.format.Formatter.formatShortFileSize(context, it.size) }
-                )
-                if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), fontSize = 12.sp, color = muted)
-                val basedOn = info?.basedOn?.takeIf { it.isNotBlank() } ?: pack?.basedOn?.takeIf { it.isNotBlank() }
-                basedOn?.let { b ->
-                    Text(L.settings.language.basedOnPack(LanguageRepo.packs.firstOrNull { it.id == b }?.label ?: b), fontSize = 12.sp, color = muted)
+            // how much of the app it covers
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text("$percent%", fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, color = if (complete) success else primary)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            L.settings.languageTexts.progress(translated, total) + if (outdated > 0) "  ·  " + L.settings.language.outdatedCount(outdated) else "",
+                            fontSize = 12.5.sp, lineHeight = 16.sp, color = muted, modifier = Modifier.weight(1f).padding(bottom = 4.dp)
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { if (total == 0) 0f else translated.toFloat() / total },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        color = if (complete) success else primary,
+                        trackColor = primary.copy(alpha = 0.12f),
+                        drawStopIndicator = {}
+                    )
+                    val facts = listOfNotNull(
+                        pack?.updated?.takeIf { it.isNotBlank() }?.let { L.settings.language.updatedOn(shortDate(it)) },
+                        (info?.appVersion?.takeIf { it.isNotBlank() } ?: pack?.appVersion?.takeIf { it.isNotBlank() })?.let { L.settings.language.forVersion(it) },
+                        pack?.let { android.text.format.Formatter.formatShortFileSize(context, it.size) }
+                    )
+                    if (facts.isNotEmpty()) Text(facts.joinToString("  ·  "), fontSize = 12.sp, color = muted)
+                    val basedOn = info?.basedOn?.takeIf { it.isNotBlank() } ?: pack?.basedOn?.takeIf { it.isNotBlank() }
+                    basedOn?.let { b ->
+                        Text(L.settings.language.basedOnPack(LanguageRepo.packs.firstOrNull { it.id == b }?.label ?: b), fontSize = 12.sp, color = muted)
+                    }
                 }
             }
 
-            HorizontalDivider()
-            Text(L.settings.language.authorLabel, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            if (authors.isEmpty()) Text(L.settings.language.noAuthors, fontSize = 13.sp, color = muted)
-            authors.forEach { a -> AuthorRow(a) }
+            // what to do with it: the main step full width, the rest below
+            val canDownload = pack != null && (state == LanguageRepo.State.AVAILABLE || state == LanguageRepo.State.UPDATE)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (pack != null && canDownload) {
+                    Button(
+                        onClick = { onDownload(pack) }, enabled = !busy, shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) {
+                        when {
+                            busy -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+                            state == LanguageRepo.State.UPDATE -> Icon(Icons.Outlined.Update, null, Modifier.size(18.dp))
+                            else -> Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when {
+                                busy -> L.settings.language.downloading
+                                state == LanguageRepo.State.UPDATE -> L.common.update
+                                else -> L.common.download
+                            },
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                if (info != null && !onScreen) {
+                    val use: @Composable RowScope.() -> Unit = {
+                        Icon(Icons.Outlined.CheckCircle, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(L.settings.language.use, fontWeight = FontWeight.SemiBold)
+                    }
+                    val useModifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    if (canDownload) FilledTonalButton(onClick = { onUse(info.id) }, shape = RoundedCornerShape(14.dp), modifier = useModifier, content = use)
+                    else Button(onClick = { onUse(info.id) }, shape = RoundedCornerShape(14.dp), modifier = useModifier, content = use)
+                }
+                if (info != null) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedButton(onClick = { onDuplicate(info.id) }) {
+                        Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.duplicate)
+                    }
+                    if (info.origin == LanguageManager.Origin.USER) OutlinedButton(onClick = { onSend(info) }) {
+                        Icon(Icons.Outlined.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.sendToCommunity)
+                    }
+                }
+            }
 
-            HorizontalDivider()
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                when {
-                    busy -> CircularProgressIndicator(Modifier.padding(8.dp).size(24.dp), strokeWidth = 2.dp)
-                    pack != null && state == LanguageRepo.State.AVAILABLE -> Button(onClick = { onDownload(pack) }) {
-                        Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.common.download)
-                    }
-                    pack != null && state == LanguageRepo.State.UPDATE -> Button(onClick = { onDownload(pack) }) {
-                        Icon(Icons.Outlined.Update, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.common.update)
-                    }
-                }
-                if (installed && !onScreen && info != null) FilledTonalButton(onClick = { onUse(info.id) }) { Text(L.settings.language.use) }
-                if (info != null) OutlinedButton(onClick = { onDuplicate(info.id) }) {
-                    Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.duplicate)
-                }
-                if (info != null && info.origin == LanguageManager.Origin.USER) OutlinedButton(onClick = { onSend(info) }) {
-                    Icon(Icons.Outlined.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.sendToCommunity)
-                }
+            // who made it
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(L.settings.language.authorLabel, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
+                if (authors.isEmpty()) Text(L.settings.language.noAuthors, fontSize = 13.sp, color = muted)
+                authors.forEach { a -> AuthorRow(a) }
             }
-            if (pack != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { openUrl(context, LanguageRepo.PROBLEM_FORM + "&title=" + android.net.Uri.encode("Translation problem: ${pack.label}")) }) {
-                    Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.reportProblem)
+
+            if (pack != null || info?.origin == LanguageManager.Origin.REPO) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (pack != null) {
+                        TextButton(onClick = { openUrl(context, LanguageRepo.PROBLEM_FORM + "&title=" + android.net.Uri.encode("Translation problem: ${pack.label}")) }) {
+                            Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.reportProblem)
+                        }
+                        TextButton(onClick = { openUrl(context, pack.pageUrl) }) {
+                            Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.viewFile)
+                        }
+                    }
+                    if (info != null && info.origin == LanguageManager.Origin.REPO) TextButton(onClick = { onRemove(info) }) {
+                        Icon(Icons.Outlined.Delete, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(6.dp))
+                        Text(L.common.remove, color = MaterialTheme.colorScheme.error)
+                    }
                 }
-                TextButton(onClick = { openUrl(context, pack.pageUrl) }) {
-                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(L.settings.language.viewFile)
-                }
-            }
-            if (info != null && info.origin == LanguageManager.Origin.REPO) TextButton(onClick = { onRemove(info) }) {
-                Icon(Icons.Outlined.Delete, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
-                Spacer(Modifier.width(6.dp))
-                Text(L.common.remove, color = MaterialTheme.colorScheme.error)
             }
         }
     }

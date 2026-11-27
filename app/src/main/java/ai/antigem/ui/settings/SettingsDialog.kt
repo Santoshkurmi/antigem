@@ -400,6 +400,9 @@ fun SettingsDialog(
         }
     }
 
+    // the Language page's lists are read ahead (once, off the main thread), so it opens complete instead of filling in
+    LaunchedEffect(Unit) { ai.antigem.i18n.LanguageRepo.prewarm() }
+
     val isDark = isAppInDarkTheme()
     val cardBg = ai.antigem.theme.AppColors.card
     val cardBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))

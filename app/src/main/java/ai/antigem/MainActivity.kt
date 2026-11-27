@@ -236,9 +236,26 @@ class MainActivity : ComponentActivity() {
             var pendingUpdateInfo by remember { mutableStateOf<ai.antigem.data.updater.AppUpdateInfo?>(null) }
             val updateManager = remember { ai.antigem.data.updater.AppUpdateManager(this@MainActivity) }
 
+            var appUpdateCheckDone by remember { mutableStateOf(false) }
+
             LaunchedEffect(Unit) {
                 updateManager.checkForUpdates().onSuccess { info ->
                     pendingUpdateInfo = info
+                }
+                appUpdateCheckDone = true
+            }
+
+            // The app in a community language: its update is looked for in the background at the same time, and offered
+            // only once the app's own check is done and its dialog is closed (one dialog at a time)
+            LaunchedEffect(Unit) { ai.antigem.i18n.LanguageUpdateCheck.start(this@MainActivity) }
+            val languageUpdateOffer = ai.antigem.i18n.LanguageUpdateCheck.offer
+            var languageUpdateTurn by remember { mutableStateOf(false) }
+            LaunchedEffect(appUpdateCheckDone, pendingUpdateInfo == null, languageUpdateOffer) {
+                languageUpdateTurn = false
+                if (appUpdateCheckDone && pendingUpdateInfo == null && languageUpdateOffer != null) {
+                    // a moment after the app's dialog closed, so it doesn't look like the same dialog coming back
+                    kotlinx.coroutines.delay(600)
+                    languageUpdateTurn = true
                 }
             }
 
@@ -880,6 +897,15 @@ class MainActivity : ComponentActivity() {
                                     ai.antigem.ui.updater.AppUpdateDialog(
                                         updateInfo = updateInfo,
                                         onDismiss = { pendingUpdateInfo = null }
+                                    )
+                                }
+
+                                // A newer version of the community language on screen (never together with the app's)
+                                if (languageUpdateTurn && pendingUpdateInfo == null) languageUpdateOffer?.let { offer ->
+                                    ai.antigem.ui.updater.LanguageUpdateDialog(
+                                        offer = offer,
+                                        onNotNow = { ai.antigem.i18n.LanguageUpdateCheck.notNow(this@MainActivity) },
+                                        onDone = { ai.antigem.i18n.LanguageUpdateCheck.clear() }
                                     )
                                 }
                             }

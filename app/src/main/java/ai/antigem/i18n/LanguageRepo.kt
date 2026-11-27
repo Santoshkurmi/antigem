@@ -3,7 +3,9 @@ package ai.antigem.i18n
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -21,7 +23,8 @@ import java.util.concurrent.TimeUnit
  * The repository's index.json (rebuilt by its publish workflow) lists every pack with its SHA-256; a pack is
  * languages/<code>/<id>.json, downloaded from the commit that last changed it, so the file always matches the hash.
  * Downloads are saved byte for byte by [LanguageManager.installRepoPack]: an installed pack's SHA-256 against the
- * index tells whether an update is waiting. Nothing is fetched until the Language page (or a tool) asks for the list.
+ * index tells whether an update is waiting. Nothing is fetched until the Language page (or a tool) asks for the list,
+ * or, on launch while the app is in a community language, [LanguageUpdateCheck] looks for that language's update.
  */
 object LanguageRepo {
     const val REPO = "Santoshkurmi/antigem_languages"
@@ -85,6 +88,7 @@ object LanguageRepo {
     private val client by lazy { OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build() }
     private val refreshLock = Mutex()
     private var loadedCache = false
+    @Volatile private var prewarmed = false
     /** Installed file → (length, modified, SHA-256), so a hash is computed once per file version. */
     private val hashes = HashMap<String, Triple<Long, Long, String>>()
 
@@ -108,8 +112,40 @@ object LanguageRepo {
         if (loadedCache) return
         loadedCache = true
         if (packs.isNotEmpty()) return
-        runCatching { cacheFile().takeIf { it.exists() }?.readText()?.let { packs = parse(it) } }
-        recheck()
+        runCatching { cacheFile().takeIf { it.exists() }?.readText()?.let { publish(parse(it)) } }
+    }
+
+    /**
+     * Reads the languages on the phone and the saved community list ahead of the Language page (when Settings opens),
+     * so the page opens complete instead of filling in while it slides in. Once per run; off the main thread.
+     */
+    suspend fun prewarm() {
+        if (prewarmed) return
+        prewarmed = true
+        try {
+            withContext(Dispatchers.IO) {
+                // Settings draws its first frames first
+                delay(250)
+                runCatching { LanguageManager.refreshList() }
+                refreshLock.withLock { runCatching { loadCached() } }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Settings closed right away: the next time it opens reads them
+            prewarmed = false
+            throw e
+        }
+    }
+
+    /**
+     * Shows [list] with each pack's state, in one step: the rows never show "Download" for a moment before they find
+     * out the pack is installed.
+     */
+    private fun publish(list: List<Pack>) {
+        val s = statesOf(list)
+        Snapshot.withMutableSnapshot {
+            packs = list
+            states = s
+        }
     }
 
     /**
@@ -127,10 +163,9 @@ object LanguageRepo {
                 val text = fetchIndex()
                 val list = parse(text)
                 runCatching { cacheFile().writeText(text) }
-                packs = list
+                publish(list)
                 fetchedAt = System.currentTimeMillis()
                 error = null
-                recheck()
                 Result.success(list)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -191,8 +226,12 @@ object LanguageRepo {
 
     /** Recomputes [states] from the installed files. Call off the main thread. */
     fun recheck() {
+        states = statesOf(packs)
+    }
+
+    private fun statesOf(list: List<Pack>): Map<String, State> {
         val installed = LanguageManager.repoPackIds().toSet()
-        states = packs.associate { p ->
+        return list.associate { p ->
             p.id to when {
                 p.id !in installed -> State.AVAILABLE
                 installedSha(p.id) == p.sha256 -> State.INSTALLED
