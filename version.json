@@ -20,13 +20,12 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 145,
-    "version_name": "2.0.5-beta.8",
+    "version_code": 146,
+    "version_name": "2.0.5-beta.9",
     "changelog": [
-      "More TalkBack support: the chat says when a reply is finished, when the agent needs your approval or asks a question; your prompts are headings so you can jump between them; choices and tabs say which one is selected; sign-in, setup and more screens read clearly",
-      "Fixed the app running out of memory: the chat home-screen widget is removed for now. It isn't needed much right now; it could be fixed, but we decided to remove it"
-
-    
+      "Fixed a crash when opening a new terminal session",
+      "Fixed a crash in the chat list when the same chat showed up twice",
+      "Fixed a crash in half-open bottom sheets"
     ]
   }
 }
