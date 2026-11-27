@@ -1643,6 +1643,9 @@ class AgyChatBackend(
             if (currentAtts.any { it.isAudio }) "Voice note" else if (currentAtts.any { it.isImage }) "Image" else "Attachment"
         }
         _attachments.value = emptyList()
+        // an edited message's attachments, maybe still being copied (see revertAndEditLastUserMessage)
+        val keptEdit = keptEditAttachments
+        keptEditAttachments = null
 
         val conv = _currentConversation.value ?: return
         val userMsg = ChatMessage(
@@ -1709,8 +1712,9 @@ class AgyChatBackend(
             // Prepare media payload for all attachments (images, audio, files)
             val mediaList = mutableListOf<ai.antigem.data.remote.AgyHubClient.AgyMediaItem>()
             val hubUrl = AuthPreferences.currentHubUrl
+            val kept = keptEdit?.await().orEmpty()
 
-            for (att in currentAtts) {
+            for (att in currentAtts.mapNotNull { if (kept.containsKey(it.id)) kept[it.id] else it }) {
                 // A file by path is already listed in the message's text. Its own path is never sent as Media.uri:
                 // the hub MOVES a file given that way, so only an image's shrunk copy goes (saved as a hub artifact)
                 if (att.reference && att.base64.isNullOrBlank()) continue
@@ -1914,6 +1918,52 @@ class AgyChatBackend(
     }
 
     /**
+     * Attachments of the message being edited, copied into the app's own storage (id → copy, null when the file could
+     * not be found; see [keepRestoredAttachments]). A send right after the edit waits for them.
+     */
+    @Volatile private var keptEditAttachments: kotlinx.coroutines.Deferred<Map<String, ChatAttachment?>>? = null
+
+    /**
+     * Copies the attachments put back in the input box by an edit (images, voice notes, files) into the app's media
+     * store, as a fresh pick would be: a sent attachment only points at the file the hub saved for the chat, and the
+     * hub deletes that file when the edit takes back the chat's first message. Returns id → the copy (its old path
+     * dropped, so it is sent as data again), or null when the file could not be found. A file attached by reference
+     * (a file on the agent's machine, listed in the message's text) is left out: it keeps going by its path.
+     */
+    private suspend fun keepRestoredAttachments(atts: List<ChatAttachment>, hubUrl: String): Map<String, ChatAttachment?> {
+        val kept = HashMap<String, ChatAttachment?>()
+        for (att in atts) {
+            if (att.reference || att.path.isBlank() || att.path.startsWith("content://") || att.path.startsWith("http")) continue
+            try {
+                // its data is already in the app (the step's inline data): only the old path has to go
+                val ownData = !att.base64.isNullOrBlank() ||
+                    att.localUri?.takeIf { it.startsWith("file://") }?.let { java.io.File(Uri.parse(it).path ?: "").isFile } == true
+                if (ownData) {
+                    kept[att.id] = att.copy(path = "")
+                    continue
+                }
+                val source = java.io.File(att.path).takeIf { it.isFile && it.canRead() }
+                    ?: ai.antigem.data.remote.HubMediaResolver.cachedFile(att.path)
+                    ?: ai.antigem.data.remote.HubMediaResolver.resolveMediaUri(application, att.path, agyHubClient, hubUrl)
+                        .takeIf { it.startsWith("file://") }?.let { java.io.File(it.removePrefix("file://")) }?.takeIf { it.isFile }
+                val copy = source?.let { ai.antigem.data.media.InlineMediaStore.fileForBytes(it.readBytes(), att.mimeType) }
+                if (copy == null) {
+                    Log.w("ChatViewModel", "Edit: attachment not found: ${att.name} (${att.path})")
+                    kept[att.id] = null
+                    continue
+                }
+                kept[att.id] = att.copy(path = "", localUri = "file://${copy.absolutePath}", size = if (att.size > 0) att.size else copy.length())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("ChatViewModel", "Edit: could not read attachment ${att.name}: ${e.message}")
+                kept[att.id] = null
+            }
+        }
+        return kept
+    }
+
+    /**
      * Reverts a user message: restores prompt text and attachments to the input box,
      * immediately prunes it from the local UI, and sends an undo RPC to the AGY hub daemon.
      */
@@ -1944,6 +1994,11 @@ class AgyChatBackend(
         if (targetMsg.attachments.isNotEmpty()) {
             _attachments.value = targetMsg.attachments
         }
+        // copied before the hub is asked to revert (taking back the first message deletes the files they point at)
+        val hubUrlForCopies = AuthPreferences.currentHubUrl
+        val keep = if (targetMsg.attachments.isEmpty()) null
+            else backendScope.async(Dispatchers.IO) { keepRestoredAttachments(targetMsg.attachments, hubUrlForCopies) }
+        keptEditAttachments = keep
 
         onRestored(cleanText)
 
@@ -1962,17 +2017,30 @@ class AgyChatBackend(
             val defaultWorkspaceUri = if (defaultProjPath.isNotBlank()) {
                 if (defaultProjPath.startsWith("file://")) defaultProjPath else "file://$defaultProjPath"
             } else ""
-            _currentConversation.value = Conversation(
+            val newConv = Conversation(
                 id = UUID.randomUUID().toString(),
                 title = "New Chat",
                 modelId = modelToUse,
                 sessionId = UUID.randomUUID().toString(),
                 workspaceUri = defaultWorkspaceUri
             )
+            _currentConversation.value = newConv
+            // the deleted chat's turns (and its attachments' paths, gone with it) must not carry over into the new one
+            trajectoryEngine.reset(newConv.id, force = true)
         }
 
         backendScope.launch(Dispatchers.IO) {
             val hubUrl = AuthPreferences.currentHubUrl
+            keep?.await()?.takeIf { it.isNotEmpty() }?.let { kept ->
+                val missing = kept.values.count { it == null }
+                withContext(Dispatchers.Main) {
+                    // an attachment that could not be found leaves the input box (there is nothing to send)
+                    _attachments.value = _attachments.value.mapNotNull { if (kept.containsKey(it.id)) kept[it.id] else it }
+                    if (missing > 0) {
+                        android.widget.Toast.makeText(application, L.agent.agyChatBackend.editedMessageAttachmentsMissing(missing), android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
             val modelEnum = ai.antigem.data.remote.AgyHubClient.resolveModelEnum(_selectedModelId.value)
             val res = agyHubClient.revertUserMessage(conv.id, modelEnum, targetMsg.stepIndex, hubUrl)
             if (res.isSuccess) {

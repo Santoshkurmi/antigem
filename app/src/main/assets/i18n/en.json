@@ -277,6 +277,7 @@
     "agent.agyChatBackend.couldNotArchiveError": "Could not archive: {error}",
     "agent.agyChatBackend.couldNotUnarchiveError": "Could not unarchive: {error}",
     "agent.agyChatBackend.noSpeechRecognizedInRecording": "No speech recognized in recording",
+    "agent.agyChatBackend.editedMessageAttachmentsMissing": { "one": "An attachment from the edited message couldn't be found, so it was removed. Attach it again.", "other": "{count} attachments from the edited message couldn't be found, so they were removed. Attach them again." },
     "agent.agyCloud.cloudProject": "Cloud project",
     "agent.agyCloud.cloudAgentsStartAboutAMinute": "Cloud agents start about a minute after the Antigravity server starts. Try again in a moment.",
     "agent.agyCloud.cloudAgentsAreBusyRightNow": "Cloud agents are busy right now. Try again in a few minutes.",
