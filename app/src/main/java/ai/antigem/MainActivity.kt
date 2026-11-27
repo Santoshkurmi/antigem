@@ -245,9 +245,12 @@ class MainActivity : ComponentActivity() {
                 appUpdateCheckDone = true
             }
 
-            // The app in a community language: its update is looked for in the background at the same time, and offered
-            // only once the app's own check is done and its dialog is closed (one dialog at a time)
-            LaunchedEffect(Unit) { ai.antigem.i18n.LanguageUpdateCheck.start(this@MainActivity) }
+            // The app in a community language: its update is looked for in the background each time the app comes to the
+            // foreground (at most every 30 minutes), and offered only once the app's own check is done and its dialog is
+            // closed (one dialog at a time)
+            androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_START) {
+                ai.antigem.i18n.LanguageUpdateCheck.start(this@MainActivity)
+            }
             val languageUpdateOffer = ai.antigem.i18n.LanguageUpdateCheck.offer
             var languageUpdateTurn by remember { mutableStateOf(false) }
             LaunchedEffect(appUpdateCheckDone, pendingUpdateInfo == null, languageUpdateOffer) {

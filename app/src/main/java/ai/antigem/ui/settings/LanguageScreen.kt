@@ -43,7 +43,7 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Update
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.*
@@ -616,7 +616,14 @@ private fun LanguageRow(
             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 when {
                     busy -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    update != null -> IconButton(onClick = onUpdate) { Icon(Icons.Outlined.Update, L.common.update, tint = ai.antigem.theme.AppColors.info) }
+                    // a filled, coloured button with a download arrow: clearly something to tap (a clock-like icon read as "history")
+                    update != null -> FilledTonalIconButton(
+                        onClick = onUpdate,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = ai.antigem.theme.AppColors.info.copy(alpha = 0.16f),
+                            contentColor = ai.antigem.theme.AppColors.info
+                        )
+                    ) { Icon(Icons.Outlined.Download, L.common.update) }
                     selected -> Icon(Icons.Outlined.CheckCircle, L.settings.language.onScreen, tint = primary)
                 }
             }
@@ -630,7 +637,7 @@ private fun LanguageRow(
                     )
                     if (update != null) DropdownMenuItem(
                         text = { Text(L.common.update) },
-                        leadingIcon = { Icon(Icons.Outlined.Update, null) },
+                        leadingIcon = { Icon(Icons.Outlined.Download, null) },
                         onClick = { menu = false; onUpdate() }
                     )
                     DropdownMenuItem(
@@ -741,7 +748,7 @@ private fun CommunityHeader(
         if (updates > 0) {
             Surface(shape = RoundedCornerShape(12.dp), color = ai.antigem.theme.AppColors.info.copy(alpha = 0.12f)) {
                 Row(Modifier.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Update, null, tint = ai.antigem.theme.AppColors.info, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Download, null, tint = ai.antigem.theme.AppColors.info, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(L.settings.language.updatesReady(updates), fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     TextButton(onClick = onUpdateAll, enabled = LanguageRepo.downloading.isEmpty()) { Text(L.settings.language.updateAll) }
@@ -969,7 +976,7 @@ private fun LanguageDetailsSheet(
                     ) {
                         when {
                             busy -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
-                            state == LanguageRepo.State.UPDATE -> Icon(Icons.Outlined.Update, null, Modifier.size(18.dp))
+                            state == LanguageRepo.State.UPDATE -> Icon(Icons.Outlined.Download, null, Modifier.size(18.dp))
                             else -> Icon(Icons.Outlined.CloudDownload, null, Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(8.dp))

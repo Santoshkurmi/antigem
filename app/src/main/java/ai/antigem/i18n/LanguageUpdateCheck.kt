@@ -11,8 +11,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * On app launch, while the app is shown in a community language: looks in the background for a newer version of that
- * language in the repository ([LanguageRepo]) and offers it ([offer]). MainActivity shows the offer only once the app's
+ * Each time the app comes to the foreground (at most every [MIN_INTERVAL_MS]), while the app is shown in a community
+ * language: looks in the background for a newer version of that language in the repository ([LanguageRepo]) and offers
+ * it ([offer]). MainActivity shows the offer only once the app's
  * own update check is done and its dialog is closed, so the two never show at the same time. No notification: a
  * language update isn't worth one. "Not now" skips that version (a newer one is offered again); the Language page
  * still shows the update either way.
@@ -29,17 +30,34 @@ object LanguageUpdateCheck {
     private const val SKIPPED = "skipped_update"
     /** The first screen draws before the check touches the disk and the network. */
     private const val START_DELAY_MS = 1500L
+    /**
+     * Checks at most this often. Android keeps the app's process alive after it's closed, so "once per run" meant
+     * reopening the app never checked again (and a check made before the new list was on GitHub was never redone).
+     * This also keeps a rotation or a quick return to the app from checking again.
+     */
+    private const val MIN_INTERVAL_MS = 30 * 60_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    @Volatile private var started = false
+    @Volatile private var checking = false
+    @Volatile private var lastCheckAt = 0L
 
-    /** Once per run (an activity rebuilt by a rotation doesn't check again); English and the user's own languages have no updates. */
+    /**
+     * When the app comes to the foreground (MainActivity, ON_START). English and the user's own languages have no
+     * updates; nothing is checked while an offer is still waiting to be shown.
+     */
+    @Synchronized
     fun start(context: Context) {
-        if (started) return
-        started = true
+        val now = System.currentTimeMillis()
+        if (checking || offer != null || (lastCheckAt != 0L && now - lastCheckAt < MIN_INTERVAL_MS)) return
+        checking = true
+        lastCheckAt = now
         val app = context.applicationContext
         scope.launch {
-            runCatching { check(app) }.onFailure { android.util.Log.w("LanguageUpdateCheck", "check failed", it) }
+            try {
+                runCatching { check(app) }.onFailure { android.util.Log.w("LanguageUpdateCheck", "check failed", it) }
+            } finally {
+                checking = false
+            }
         }
     }
 
@@ -47,7 +65,8 @@ object LanguageUpdateCheck {
         val id = LanguageManager.currentId
         if (!LanguageManager.isRepoId(id)) return
         delay(START_DELAY_MS)
-        LanguageRepo.refresh().getOrNull() ?: return
+        // offline or GitHub unreachable: try again the next time the app comes to the foreground
+        LanguageRepo.refresh().getOrNull() ?: run { lastCheckAt = 0L; return }
         val pack = wanted(id) ?: return
         if (prefs(context).getString(SKIPPED, null) == skipKey(pack)) return
         val from = LanguageManager.load(id)?.let { LanguageManager.info(it) }
