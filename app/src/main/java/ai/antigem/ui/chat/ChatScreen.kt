@@ -1310,6 +1310,9 @@ fun ChatScreen(
             }
     }
 
+    // TalkBack scrolls the list without a drag; read live by the observer below (TalkBack can be turned on or off while it runs)
+    val talkBackScrolls by rememberUpdatedState(talkBackOn)
+
     // Decoupled asynchronous scroll observer - only user drags can change autoscroll state
     LaunchedEffect(listState) {
         var prevIdx = listState.firstVisibleItemIndex
@@ -1329,8 +1332,9 @@ fun ChatScreen(
                 if (newDir != null && newDir != scrollDirection) {
                     scrollDirection = newDir
                 }
-                // ONLY disable auto-scroll if the USER is actively dragging/swiping upwards
-                if (isUserDragging && newDir == ScrollDirection.UP) {
+                // ONLY disable auto-scroll if the USER is actively dragging/swiping upwards; with TalkBack on, any upward
+                // scroll is the user's (TalkBack moves the list without a drag; following the tail only scrolls down)
+                if ((isUserDragging || talkBackScrolls) && newDir == ScrollDirection.UP) {
                     shouldAutoScroll = false
                 }
                 prevIdx = currentIndex

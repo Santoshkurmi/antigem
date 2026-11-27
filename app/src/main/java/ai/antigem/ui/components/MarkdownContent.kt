@@ -326,7 +326,9 @@ fun MarkdownBlockView(
             Row(
                 modifier = modifier
                     .fillMaxWidth()
-                    .padding(vertical = 2.dp, horizontal = 2.dp),
+                    .padding(vertical = 2.dp, horizontal = 2.dp)
+                    // one TalkBack stop: the number with the item's text
+                    .semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.Top
             ) {
                 Text(
@@ -353,7 +355,9 @@ fun MarkdownBlockView(
             Row(
                 modifier = modifier
                     .fillMaxWidth()
-                    .padding(vertical = 2.dp, horizontal = 2.dp),
+                    .padding(vertical = 2.dp, horizontal = 2.dp)
+                    // one TalkBack stop: done / not done with the item's text
+                    .semantics(mergeDescendants = true) {},
                 verticalAlignment = Alignment.Top
             ) {
                 Icon(
