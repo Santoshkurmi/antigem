@@ -47,9 +47,11 @@ import ai.antigem.data.agent.opencode.OpenCodeChatBackend
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.ui.agents.AgentSheetHeader
 import ai.antigem.ui.components.OpenCodeAccent
+import ai.antigem.ui.models.ProviderChip
+import ai.antigem.ui.models.ProviderFilterRow
 import ai.antigem.i18n.L
 
-/** OpenCode's model picker: every model of the connected providers, grouped by provider, with search. */
+/** OpenCode's model picker: every model of the connected providers, grouped by provider, with provider chips and search. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit, onDismiss: () -> Unit) {
@@ -58,6 +60,8 @@ fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit,
     val refreshing by backend.isRefreshingModels.collectAsState()
     val error by backend.modelsError.collectAsState()
     var query by remember { mutableStateOf("") }
+    // the provider chip last picked (blank = All); a provider that is gone or hidden shows All
+    var filter by remember { mutableStateOf(backend.prefs.pickerProvider()) }
     LaunchedEffect(Unit) { backend.refreshModels() }
 
     ModalBottomSheet(
@@ -84,9 +88,24 @@ fun OpenCodeModelSheet(backend: OpenCodeChatBackend, onOpenSettings: () -> Unit,
                 )
                 Spacer(Modifier.height(8.dp))
             }
+            // one chip per provider (in the list's order), shown once there are two; the search looks inside the picked one
+            val byProvider = models.groupBy { it.id.substringBefore('/') }
+            val chips = if (byProvider.size < 2) emptyList() else {
+                listOf(ProviderChip("", L.models.providerFilter.all, models.size)) +
+                    byProvider.map { (id, list) -> ProviderChip(id, list.first().baseName.ifBlank { id }, list.size, list.any { it.id == selected }) }
+            }
+            val shownProvider = filter.takeIf { f -> chips.any { it.key == f } }.orEmpty()
+            if (chips.isNotEmpty()) {
+                ProviderFilterRow(chips, shownProvider, OpenCodeAccent) {
+                    filter = it
+                    backend.prefs.setPickerProvider(it)
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             error?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 6.dp)) }
             val shown = models.filter {
-                query.isBlank() || it.displayName.contains(query, true) || it.id.contains(query, true) || it.description.contains(query, true)
+                (shownProvider.isEmpty() || it.id.substringBefore('/') == shownProvider) &&
+                    (query.isBlank() || it.displayName.contains(query, true) || it.id.contains(query, true) || it.description.contains(query, true))
             }
             val groups = shown.groupBy { it.baseName.ifBlank { it.id.substringBefore('/') } }
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {

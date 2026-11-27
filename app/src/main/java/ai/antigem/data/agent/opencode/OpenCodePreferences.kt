@@ -53,6 +53,13 @@ class OpenCodePreferences(context: Context) {
         _permissionMode.value = mode
     }
 
+    /** The provider chip last picked in the model picker (a provider id); blank = All. */
+    fun pickerProvider(): String = prefs.getString(KEY_PICKER_PROVIDER, "").orEmpty()
+
+    fun setPickerProvider(id: String) {
+        prefs.edit().putString(KEY_PICKER_PROVIDER, id).apply()
+    }
+
     /** The thinking level last picked for [modelId] (one of its OpenCode variants: "high", "none"…); null = its default. */
     fun variantFor(modelId: String): String? = prefs.getString(KEY_VARIANT_PREFIX + modelId, null)
 
@@ -70,6 +77,7 @@ class OpenCodePreferences(context: Context) {
         private const val KEY_MODE = "permission_mode"
         private const val KEY_HIDDEN_MODELS = "hidden_models"
         private const val KEY_HIDDEN_PROVIDERS = "hidden_providers"
+        private const val KEY_PICKER_PROVIDER = "picker_provider"
 
         /** OpenCode's own rules (its config and the agent's; most tools run without asking). */
         const val MODE_DEFAULT = "default"

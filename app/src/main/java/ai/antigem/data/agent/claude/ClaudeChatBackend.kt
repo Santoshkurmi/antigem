@@ -136,6 +136,10 @@ class ClaudeChatBackend(
     private val _providers = MutableStateFlow<List<ClaudeProvider>>(emptyList())
     val providers: StateFlow<List<ClaudeProvider>> = _providers.asStateFlow()
 
+    /** The model picker's provider chip, kept on this device (see [ClaudePreferences.pickerProvider]). */
+    fun pickerProvider(): String? = prefs.pickerProvider()
+    fun setPickerProvider(key: String) = prefs.setPickerProvider(key)
+
     private val _settingsEndpoint = MutableStateFlow<String?>(null)
     /** settings.json sends every chat to this endpoint (offered for moving into a provider). */
     val settingsEndpoint: StateFlow<String?> = _settingsEndpoint.asStateFlow()

@@ -44,10 +44,18 @@ class ClaudePreferences(context: Context) {
         _newChatAgent.value = agent
     }
 
+    /** The provider chip last picked in the model picker ("all", "claude" or "@provider"); null = never picked. */
+    fun pickerProvider(): String? = prefs.getString(KEY_PICKER_PROVIDER, null)
+
+    fun setPickerProvider(key: String) {
+        prefs.edit().putString(KEY_PICKER_PROVIDER, key).apply()
+    }
+
     private companion object {
         const val KEY_DEFAULT_MODE = "default_permission_mode"
         const val KEY_VOICE_LANGUAGE = "voice_language"
         const val KEY_NEW_CHAT_AGENT = "new_chat_agent"
         const val KEY_INFO_CACHE = "initialize_info_cache"
+        const val KEY_PICKER_PROVIDER = "picker_provider"
     }
 }
