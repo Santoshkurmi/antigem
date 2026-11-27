@@ -320,6 +320,10 @@ fun IdeScreen(
     val isMarkdownFile = activeTab != null && FileKinds.of(activeTab.name) == ai.antigem.data.files.FileKind.MARKDOWN
     var showMarkdownPreview by remember(activeTabPath) { mutableStateOf(false) }
     val isMarkdownPreview = isMarkdownFile && showMarkdownPreview
+    // an HTML tab opens as source too; the same eye button shows it as a web page
+    val isHtmlFile = activeTab != null && !activeTab.isDiff && activeExt in HTML_PREVIEW_EXTS
+    var showHtmlPreview by remember(activeTabPath) { mutableStateOf(false) }
+    val isHtmlPreview = isHtmlFile && showHtmlPreview
     var binaryWarningDialog by remember { mutableStateOf<BinaryWarningTab?>(null) }
     var tooLargeDialog by remember { mutableStateOf<TooLargeFile?>(null) }
 
@@ -487,7 +491,7 @@ fun IdeScreen(
                         )
                     },
                     actions = {
-                        val isTextFile = activeTab != null && (!isImageFile || (isSvgFile && showSvgSource)) && !isMarkdownPreview
+                        val isTextFile = activeTab != null && (!isImageFile || (isSvgFile && showSvgSource)) && !isMarkdownPreview && !isHtmlPreview
                         val isTextEditable = isTextFile && !activeTab.isReadOnly
                         var showMoreOptionsMenu by remember { mutableStateOf(false) }
 
@@ -504,6 +508,24 @@ fun IdeScreen(
                                     imageVector = if (showMarkdownPreview) Icons.Default.Code else Icons.Default.Visibility,
                                     contentDescription = if (showMarkdownPreview) L.ide.screen.editMarkdownSource else L.ide.screen.previewMarkdown,
                                     tint = if (showMarkdownPreview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        // HTML Source / Rendered Page Toggle
+                        if (isHtmlFile) {
+                            IconButton(
+                                onClick = {
+                                    if (!showHtmlPreview) showFindBar = false
+                                    showHtmlPreview = !showHtmlPreview
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (showHtmlPreview) Icons.Default.Code else Icons.Default.Visibility,
+                                    contentDescription = if (showHtmlPreview) L.ide.screen.editHtmlSource else L.ide.screen.previewHtml,
+                                    tint = if (showHtmlPreview) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -1029,6 +1051,11 @@ fun IdeScreen(
                     .fillMaxSize()
                     .background(ai.antigem.theme.AppColors.editorBg)
             ) {
+                // Where the open file is (tap to copy its full path)
+                if (activeTab != null) {
+                    ActiveFilePathBar(fullPath = realPathOf(activeTab, activeProject?.path))
+                }
+
                 // Open File Tabs Bar
                 if (openTabs.isNotEmpty()) {
                     LazyRow(
@@ -1099,7 +1126,7 @@ fun IdeScreen(
                 }
 
                 // Interactive Find in File Bar
-                if (showFindBar && activeTab != null && !isImageFile && !(isSvgFile && !showSvgSource) && !isMarkdownPreview) {
+                if (showFindBar && activeTab != null && !isImageFile && !(isSvgFile && !showSvgSource) && !isMarkdownPreview && !isHtmlPreview) {
                     LaunchedEffect(Unit) {
                         currentEditorView?.editor?.clearFocus()
                         currentEditorView?.clearFocus()
@@ -1475,6 +1502,15 @@ fun IdeScreen(
                                 )
                             }
                         }
+                    } else if (isHtmlPreview) {
+                        // the tab's current text (unsaved edits included); its CSS, JS and pictures from its folder
+                        HtmlFilePreview(
+                            path = activeTab.path,
+                            html = activeTab.content,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f)
+                        )
                     } else {
                         // the editor follows the app theme's IDE colors (re-applied when the theme changes)
                         val editorThemeColors = ai.antigem.ui.ide.EditorThemeColors.fromAppTheme()
