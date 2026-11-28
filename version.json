@@ -89,17 +89,11 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 148,
-    "version_name": "2.0.5-beta.11",
+    "version_code": 150,
+    "version_name": "2.0.6-beta.1",
     "changelog": [
-      "Home-screen scripts, like Termux:Widget: run your ~/.shortcuts scripts from the Scripts widget, a home-screen icon or \"AntiGem script\" in your launcher's widget list (Settings → Home screen). Scripts can stay in ~/scripts through a link, get their own icons from ~/.shortcuts/icons, and work in the Ubuntu chroot too",
-      "Scripts can also go in the AntiGem icon's long-press menu, and on Android 11+ be Device controls buttons that show when a background script is done",
-      "Terminal: change the extra keys above the keyboard (more rows, any keys, a ☰ key for the sessions menu, swipe-up keys, macros) and the CTRL shortcuts for sessions in Settings → Terminal → Extra keys and shortcuts. Your Termux settings can be imported",
-      "Beta updates now turn off by themselves once the next stable version is installed; turn them on again in Settings → Updates",
-      "Fixed the home-screen widgets all turning into the Chats widget after a while",
-      "The Scripts widget shows long script names in full when it's narrow",
-      "Antigravity cloud agents: fixed attachments (files up to 20 MB) and the chat list",
-      "Fixed a crash on long press in Private Space, and a crash when dragging something onto a page in the browser"
+      "Added App Text Size in Settings → Appearance: make the app's own text (settings, lists, menus, dialogs) smaller or bigger without changing other apps. Chat messages keep their own size from Chat Text Scaling. Apply restarts the screen once",
+      "The IDE's code editor now remembers your pinch zoom: it stays when you switch files or pages, and after restarting the app"
     ]
   }
 }
