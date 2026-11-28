@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -89,10 +91,18 @@ fun Modifier.terminalKeySemantics(
     isActive: Boolean,
     isLocked: Boolean,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)?
+    onLongClick: (() -> Unit)?,
+    /** The key's swipe-up key (Termux's popup): an action in TalkBack's actions menu. */
+    popupLabel: String? = null,
+    onPopup: (() -> Unit)? = null
 ): Modifier = clearAndSetSemantics {
     contentDescription = terminalKeySpokenName(label)
     role = Role.Button
+    if (popupLabel != null && onPopup != null) {
+        customActions = listOf(
+            CustomAccessibilityAction(L.components.a11y.swipeUpForName(terminalKeySpokenName(popupLabel))) { onPopup(); true }
+        )
+    }
     if (onLongClick != null) {
         stateDescription = when {
             isLocked -> L.components.a11y.keyLocked
@@ -120,6 +130,15 @@ private fun terminalKeySpokenName(label: String): String = when (label) {
     "PGDN", L.components.localTerminal.pgdn -> L.components.a11y.keyPageDown
     "CTRL", L.components.localTerminal.ctrl, L.ide.executionRunner.ctrl -> L.components.a11y.keyControl
     "ALT", L.components.localTerminal.alt, L.ide.executionRunner.alt -> L.components.a11y.keyAlt
+    "SHIFT" -> L.components.a11y.keyShift
+    "↲", "ENTER" -> L.components.a11y.keyEnter
+    "⌫", "BKSP" -> L.components.a11y.keyBackspace
+    "⌦", "DEL" -> L.components.a11y.keyDelete
+    "INS" -> L.components.a11y.keyInsert
+    "␣", "SPACE" -> L.components.a11y.keySpace
+    "☰", "DRAWER" -> L.components.a11y.keySessionsMenu
+    "⌨", "KEYBOARD" -> L.components.a11y.keyKeyboard
+    "⎘", "PASTE" -> L.components.a11y.keyPaste
     else -> label
 }
 

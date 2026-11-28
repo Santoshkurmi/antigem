@@ -11,6 +11,7 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -86,6 +87,8 @@ private fun ScriptsContent(sample: HomeScripts.Listing?) {
     val listing = sample ?: remember(tick) { HomeScripts.listing(ctx) }
     val scripts = listing.scripts
     val c = GlanceTheme.colors
+    // a narrow widget (2 cells): smaller rows, so long names show in full on two lines, like Termux:Widget
+    val compact = LocalSize.current.width < 220.dp
     Column(widgetRoot(GlanceModifier.fillMaxSize()).padding(10.dp)) {
         Row(GlanceModifier.fillMaxWidth().padding(start = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlyphDisc(30.dp, fixed(0xFF334155), R.drawable.ic_home_terminal)
@@ -121,31 +124,37 @@ private fun ScriptsContent(sample: HomeScripts.Listing?) {
             }
         } else {
             LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                items(scripts, itemId = { it.path.hashCode().toLong() }) { s -> ScriptRow(s) }
+                items(scripts, itemId = { it.path.hashCode().toLong() }) { s -> ScriptRow(s, compact) }
             }
         }
     }
 }
 
+/**
+ * One script. [compact] (a narrow widget): a small icon, the name in a smaller font on up to two lines and no
+ * "Opens a terminal tab" line (the icon tells: ▶ a terminal tab, ⏱ the background).
+ */
 @Composable
-private fun ScriptRow(s: HomeScripts.Script) {
+private fun ScriptRow(s: HomeScripts.Script, compact: Boolean) {
     val ctx = LocalContext.current
     val c = GlanceTheme.colors
-    Column(GlanceModifier.fillMaxWidth().padding(bottom = 6.dp)) {
+    Column(GlanceModifier.fillMaxWidth().padding(bottom = if (compact) 4.dp else 6.dp)) {
         Row(
-            GlanceModifier.fillMaxWidth().cornerRadius(14.dp).background(cardColor())
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+            GlanceModifier.fillMaxWidth().cornerRadius(if (compact) 10.dp else 14.dp).background(cardColor())
+                .padding(horizontal = if (compact) 6.dp else 10.dp, vertical = if (compact) 6.dp else 8.dp)
                 .clickable(open(ctx, HomeLinks.Target.Script(s.path, s.background, s.chroot))),
             verticalAlignment = Alignment.CenterVertically
         ) {
             GlyphDisc(
-                30.dp, fixed(if (s.background) 0xFF0F766E else 0xFF334155),
+                if (compact) 20.dp else 30.dp, fixed(if (s.background) 0xFF0F766E else 0xFF334155),
                 if (s.background) R.drawable.ic_home_task else R.drawable.ic_home_run
             )
-            Spacer(GlanceModifier.width(10.dp))
+            Spacer(GlanceModifier.width(if (compact) 6.dp else 10.dp))
             Column(GlanceModifier.defaultWeight()) {
-                Label(s.label, 14.sp, c.onSurface, bold = true)
-                Label(if (s.background) L.homescreen.scriptsWidget.runsInTheBackground else L.homescreen.scriptsWidget.opensATerminalTab, 11.sp, c.onSurfaceVariant)
+                Label(s.label, if (compact) 12.5.sp else 14.sp, c.onSurface, bold = !compact, maxLines = 2)
+                if (!compact) {
+                    Label(if (s.background) L.homescreen.scriptsWidget.runsInTheBackground else L.homescreen.scriptsWidget.opensATerminalTab, 11.sp, c.onSurfaceVariant)
+                }
             }
         }
     }

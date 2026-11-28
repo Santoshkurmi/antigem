@@ -76,6 +76,8 @@ class AuthPreferences(private val context: Context) {
         val TERMINAL_THEME = stringPreferencesKey("terminal_theme")
         val TERMINAL_SESSION_PILL_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("terminal_session_pill_enabled")
         val TERMINAL_DRAWER_SWIPE_AREA = stringPreferencesKey("terminal_drawer_swipe_area")
+        val TERMINAL_EXTRA_KEYS = stringPreferencesKey("terminal_extra_keys")
+        val TERMINAL_SESSION_SHORTCUTS = stringPreferencesKey("terminal_session_shortcuts")
         val TERMINAL_CHAR_BASED_INPUT = androidx.datastore.preferences.core.booleanPreferencesKey("terminal_char_based_input")
         val COMMAND_AUTO_EXECUTION_POLICY = stringPreferencesKey("command_auto_execution_policy")
         val COMMAND_SANDBOX_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("command_sandbox_enabled")
@@ -518,6 +520,31 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveTerminalDrawerSwipeArea(area: String) {
         syncPrefs.edit().putString("terminal_drawer_swipe_area", area).apply()
         context.dataStore.edit { it[TERMINAL_DRAWER_SWIPE_AREA] = area }
+    }
+
+    /**
+     * The terminal's extra-keys bar in Termux's format (rows of keys, see TerminalExtraKeys); empty = the default two
+     * rows. Changed in Settings → Terminal → Extra keys.
+     */
+    val terminalExtraKeys: Flow<String> = context.dataStore.data
+        .map { it[TERMINAL_EXTRA_KEYS] ?: "" }
+
+    fun getTerminalExtraKeysSync(): String = syncPrefs.getString("terminal_extra_keys", "") ?: ""
+
+    suspend fun saveTerminalExtraKeys(json: String) {
+        syncPrefs.edit().putString("terminal_extra_keys", json).apply()
+        context.dataStore.edit { it[TERMINAL_EXTRA_KEYS] = json }
+    }
+
+    /** The terminal's CTRL shortcuts (action → key, see TerminalExtraKeys.parseShortcuts); empty = the defaults. */
+    val terminalSessionShortcuts: Flow<String> = context.dataStore.data
+        .map { it[TERMINAL_SESSION_SHORTCUTS] ?: "" }
+
+    fun getTerminalSessionShortcutsSync(): String = syncPrefs.getString("terminal_session_shortcuts", "") ?: ""
+
+    suspend fun saveTerminalSessionShortcuts(json: String) {
+        syncPrefs.edit().putString("terminal_session_shortcuts", json).apply()
+        context.dataStore.edit { it[TERMINAL_SESSION_SHORTCUTS] = json }
     }
 
     /**

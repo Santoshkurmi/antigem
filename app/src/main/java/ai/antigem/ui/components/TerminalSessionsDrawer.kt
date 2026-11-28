@@ -471,8 +471,9 @@ private fun DrawerButton(
     }
 }
 
+/** Also the terminal's rename shortcut (LocalTerminalDialog). */
 @Composable
-private fun RenameSessionDialog(
+internal fun RenameSessionDialog(
     session: LocalPtySession,
     onRename: (String) -> Unit,
     onDismiss: () -> Unit

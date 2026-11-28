@@ -98,3 +98,9 @@
 -keepclassmembers class * implements android.os.Parcelable {
     public static final ** CREATOR;
 }
+
+# Home-screen widgets: Glance tells widget types apart by their GlanceAppWidget class name, and starts a widget
+# button's ActionCallback by its class name. v2.0.5-beta.10 merged ChatsWidget, ActionsWidget and ScriptsWidget into
+# one class, so redrawing "the Chats widgets" drew every AntiGem widget as Chats. Keep each one whole and named.
+-keep class * extends androidx.glance.appwidget.GlanceAppWidget { <init>(); }
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }

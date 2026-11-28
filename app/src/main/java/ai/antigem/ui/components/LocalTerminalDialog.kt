@@ -48,8 +48,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.PopupProperties
+import ai.antigem.data.local.ExtraKeySpec
 import ai.antigem.data.local.LocalPtySession
 import ai.antigem.data.local.LocalTerminalManager
+import ai.antigem.data.local.TerminalExtraKeys
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.theme.*
 import com.termux.terminal.KeyHandler
@@ -287,6 +289,7 @@ fun LocalTerminalContent(
     }
     var ctrlState by remember { mutableStateOf(ModifierState.OFF) }
     var altState by remember { mutableStateOf(ModifierState.OFF) }
+    var shiftState by remember { mutableStateOf(ModifierState.OFF) }
     var isTabsMenuExpanded by remember { mutableStateOf(false) }
     var sessionToClose by remember { mutableStateOf<LocalPtySession?>(null) }
 
@@ -307,6 +310,18 @@ fun LocalTerminalContent(
         .collectAsState(initial = authPreferences.getTerminalSessionPillEnabledSync())
     val drawerSwipeArea by authPreferences.terminalDrawerSwipeArea
         .collectAsState(initial = authPreferences.getTerminalDrawerSwipeAreaSync())
+    // Settings → Terminal → Extra keys (Termux's format; empty = the default two rows)
+    val extraKeysJson by authPreferences.terminalExtraKeys
+        .collectAsState(initial = authPreferences.getTerminalExtraKeysSync())
+    val extraKeyRows = remember(extraKeysJson) { TerminalExtraKeys.parseOrDefault(extraKeysJson) }
+    // CTRL + a key: new / next / previous / rename session, sessions drawer (Settings → Terminal → Extra keys)
+    val shortcutsJson by authPreferences.terminalSessionShortcuts
+        .collectAsState(initial = authPreferences.getTerminalSessionShortcutsSync())
+    val sessionShortcuts by rememberUpdatedState(
+        remember(shortcutsJson) { TerminalExtraKeys.shortcutIndex(TerminalExtraKeys.parseShortcuts(shortcutsJson)) }
+    )
+    // the session the rename shortcut asked a new name for
+    var renamingSession by remember { mutableStateOf<LocalPtySession?>(null) }
     val charBasedInput by authPreferences.terminalCharBasedInput
         .collectAsState(initial = authPreferences.getTerminalCharBasedInputSync())
     // the keyboard reads the input mode when it connects: reconnect it when the setting changes
@@ -383,10 +398,12 @@ fun LocalTerminalContent(
         var handled = false
         val ctrl = ctrlState != ModifierState.OFF
         val alt = altState != ModifierState.OFF
+        val shift = shiftState != ModifierState.OFF
         if (termView != null && keyCode != 0) {
             var keyMod = 0
             if (ctrl) keyMod = keyMod or KeyHandler.KEYMOD_CTRL
             if (alt) keyMod = keyMod or KeyHandler.KEYMOD_ALT
+            if (shift) keyMod = keyMod or KeyHandler.KEYMOD_SHIFT
             handled = termView.handleKeyCode(keyCode, keyMod)
         }
 
@@ -399,7 +416,82 @@ fun LocalTerminalContent(
         if (altState == ModifierState.ONE_SHOT) {
             altState = ModifierState.OFF
         }
+        if (shiftState == ModifierState.ONE_SHOT) {
+            shiftState = ModifierState.OFF
+        }
         termView?.requestFocus()
+    }
+
+    // A text key ("|", "~", "ls -la"): typed as if from the keyboard, so CTRL / ALT apply (CTRL + "d" is ^D), SHIFT
+    // makes letters capitals
+    fun sendTextKey(text: String) {
+        val currentPty = customSession ?: LocalTerminalManager.sessions.value.find { it.id == LocalTerminalManager.activeSessionId.value } ?: activeSession
+        if (currentPty.isExited.value) return
+        val typed = if (shiftState != ModifierState.OFF) text.uppercase() else text
+        val tv = currentTerminalView
+        if (tv != null) {
+            val ctrl = ctrlState != ModifierState.OFF
+            val alt = altState != ModifierState.OFF
+            typed.codePoints().forEach { cp -> tv.inputCodePoint(TerminalView.KEY_EVENT_SOURCE_VIRTUAL_KEYBOARD, cp, ctrl, alt) }
+        } else {
+            currentPty.write(typed)
+        }
+        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+        if (altState == ModifierState.ONE_SHOT) altState = ModifierState.OFF
+        if (shiftState == ModifierState.ONE_SHOT) shiftState = ModifierState.OFF
+        tv?.requestFocus()
+    }
+
+    // A CTRL shortcut ([codePoint] is its key): true when it was one
+    fun runSessionShortcut(ctx: Context, codePoint: Int): Boolean {
+        val action = sessionShortcuts[Character.toLowerCase(codePoint)] ?: return false
+        when (action) {
+            "create" -> LocalTerminalManager.createNewSession(ctx)
+            "next" -> LocalTerminalManager.selectNextSession(ctx)
+            "previous" -> LocalTerminalManager.selectPreviousSession(ctx)
+            "rename" -> renamingSession = LocalTerminalManager.sessions.value.find { it.id == LocalTerminalManager.activeSessionId.value }
+            "drawer" -> if (hasSessionsDrawer) {
+                if (drawerState.isShown) drawerState.close() else drawerState.open()
+            }
+            else -> return false
+        }
+        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
+        return true
+    }
+
+    // One key of the extra-keys bar (or what a swipe up on it sends)
+    fun pressExtraKey(spec: ExtraKeySpec) {
+        // Termux's macros: keys separated by spaces, CTRL / ALT / SHIFT apply to the next one ("CTRL d", "ESC : w q ENTER")
+        if (spec.macro) {
+            spec.key.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.forEach { token ->
+                when (val k = TerminalExtraKeys.normalize(token)) {
+                    "CTRL" -> ctrlState = ModifierState.ONE_SHOT
+                    "ALT" -> altState = ModifierState.ONE_SHOT
+                    "SHIFT" -> shiftState = ModifierState.ONE_SHOT
+                    else -> pressExtraKey(ExtraKeySpec(k))
+                }
+            }
+            return
+        }
+        when (val key = spec.key) {
+            "CTRL" -> ctrlState = if (ctrlState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
+            "ALT" -> altState = if (altState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
+            "SHIFT" -> shiftState = if (shiftState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
+            "DRAWER" -> if (hasSessionsDrawer) {
+                if (drawerState.isShown) drawerState.close() else drawerState.open()
+            }
+            "KEYBOARD" -> toggleKeyboard()
+            "PASTE" -> {
+                val clip = (context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.primaryClip
+                val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString()
+                val currentPty = customSession ?: LocalTerminalManager.sessions.value.find { it.id == LocalTerminalManager.activeSessionId.value } ?: activeSession
+                if (!text.isNullOrEmpty() && !currentPty.isExited.value) currentPty.paste(text)
+            }
+            else -> {
+                val code = TerminalExtraKeys.codeOf(key)
+                if (code != null) sendKeyToTerminal(code.first, code.second) else sendTextKey(key)
+            }
+        }
     }
 
     DisposableEffect(activeSession, currentTerminalView) {
@@ -647,23 +739,13 @@ fun LocalTerminalContent(
                                             }
                                             val isCtrl = e.isCtrlPressed || ctrlState != ModifierState.OFF
                                             if (isCtrl) {
-                                                when (keyCode) {
-                                                    KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_NUMPAD_1 -> {
-                                                        LocalTerminalManager.selectPreviousSession(ctx)
-                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                        return true
-                                                    }
-                                                    KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_NUMPAD_2 -> {
-                                                        LocalTerminalManager.selectNextSession(ctx)
-                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                        return true
-                                                    }
-                                                    KeyEvent.KEYCODE_T -> {
-                                                        LocalTerminalManager.createNewSession(ctx)
-                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                        return true
-                                                    }
+                                                // the key's own character (the number pad's digits too), without Ctrl
+                                                val cp = if (keyCode in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9) {
+                                                    '0'.code + (keyCode - KeyEvent.KEYCODE_NUMPAD_0)
+                                                } else {
+                                                    e.getUnicodeChar(0)
                                                 }
+                                                if (cp > 0 && runSessionShortcut(ctx, cp)) return true
                                             }
                                             return false
                                         }
@@ -681,25 +763,7 @@ fun LocalTerminalContent(
                                                     return true
                                                 }
                                             }
-                                            if (ctrlDown) {
-                                                when (codePoint.toChar()) {
-                                                    '1' -> {
-                                                        LocalTerminalManager.selectPreviousSession(ctx)
-                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                        return true
-                                                    }
-                                                    '2' -> {
-                                                        LocalTerminalManager.selectNextSession(ctx)
-                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                        return true
-                                                    }
-                                                    't', 'T' -> {
-                                                        LocalTerminalManager.createNewSession(ctx)
-                                                        if (ctrlState == ModifierState.ONE_SHOT) ctrlState = ModifierState.OFF
-                                                        return true
-                                                    }
-                                                }
-                                            }
+                                            if (ctrlDown && runSessionShortcut(ctx, codePoint)) return true
                                             return false
                                         }
                                         override fun readControlKey(): Boolean {
@@ -832,7 +896,8 @@ fun LocalTerminalContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp, vertical = 3.dp)
-                    .height(if (talkBackOn) 98.dp else 70.dp), // two rows of keys: 34dp + 2dp + 34dp (48dp each under TalkBack)
+                    // rows of 34dp (48dp under TalkBack) with 2dp between them
+                    .height(((if (talkBackOn) 48 else 34) * extraKeyRows.size + 2 * (extraKeyRows.size - 1)).coerceAtLeast(34).dp),
                 verticalAlignment = Alignment.Top
             ) { page ->
                 if (page == 1) {
@@ -846,77 +911,41 @@ fun LocalTerminalContent(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    // ROW 1: ESC | / | - | HOME | ↑ | END | PGUP
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        ExtraKey(label = "ESC", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_ESCAPE, "\u001B")
-                        }
-                        ExtraKey(label = "/", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_SLASH, "/")
-                        }
-                        ExtraKey(label = "-", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_MINUS, "-")
-                        }
-                        ExtraKey(label = "HOME", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_HOME, "\u0001")
-                        }
-                        ExtraKey(label = "↑", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_UP, "\u001B[A")
-                        }
-                        ExtraKey(label = "END", modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_MOVE_END, "\u0005")
-                        }
-                        ExtraKey(label = L.components.localTerminal.pgup, enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_UP, "\u001B[5~")
-                        }
-                    }
-
-                    // ROW 2: ↹ (TAB) | CTRL | ALT | ← | ↓ | → | PGDN
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        ExtraKey(label = "↹", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_TAB, "\t")
-                        }
-                        ExtraKey(
-                            label = L.components.localTerminal.ctrl,
-                            isActive = ctrlState != ModifierState.OFF,
-                            isLocked = ctrlState == ModifierState.LOCKED,
-                            modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn),
-                            onClick = {
-                                ctrlState = if (ctrlState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
-                            },
-                            onLongClick = {
-                                ctrlState = if (ctrlState == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED
+                    // the rows of Settings → Terminal → Extra keys (by default Termux's two: ESC / - HOME ↑ END PGUP,
+                    // ↹ CTRL ALT ← ↓ → PGDN)
+                    extraKeyRows.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            row.forEach { spec ->
+                                val keyModifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)
+                                val modifierKey = if (spec.macro) null else spec.key.takeIf { TerminalExtraKeys.isModifier(it) }
+                                if (modifierKey != null) {
+                                    // CTRL / ALT / SHIFT: a tap for the next key, a long press locks it
+                                    val state = when (modifierKey) { "CTRL" -> ctrlState; "ALT" -> altState; else -> shiftState }
+                                    val set: (ModifierState) -> Unit = { v ->
+                                        when (modifierKey) { "CTRL" -> ctrlState = v; "ALT" -> altState = v; else -> shiftState = v }
+                                    }
+                                    ExtraKey(
+                                        label = TerminalExtraKeys.label(spec),
+                                        isActive = state != ModifierState.OFF,
+                                        isLocked = state == ModifierState.LOCKED,
+                                        modifier = keyModifier,
+                                        onClick = { set(if (state == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF) },
+                                        onLongClick = { set(if (state == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED) }
+                                    )
+                                } else {
+                                    val popup = spec.popup
+                                    ExtraKey(
+                                        label = TerminalExtraKeys.label(spec),
+                                        modifier = keyModifier,
+                                        enableRepeat = TerminalExtraKeys.repeats(spec),
+                                        popupLabel = popup?.let { TerminalExtraKeys.label(it) },
+                                        onPopup = popup?.let { p -> { pressExtraKey(p) } }
+                                    ) { pressExtraKey(spec) }
+                                }
                             }
-                        )
-                        ExtraKey(
-                            label = L.components.localTerminal.alt,
-                            isActive = altState != ModifierState.OFF,
-                            isLocked = altState == ModifierState.LOCKED,
-                            modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn),
-                            onClick = {
-                                altState = if (altState == ModifierState.OFF) ModifierState.ONE_SHOT else ModifierState.OFF
-                            },
-                            onLongClick = {
-                                altState = if (altState == ModifierState.LOCKED) ModifierState.OFF else ModifierState.LOCKED
-                            }
-                        )
-                        ExtraKey(label = "←", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_LEFT, "\u001B[D")
-                        }
-                        ExtraKey(label = "↓", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_DOWN, "\u001B[B")
-                        }
-                        ExtraKey(label = "→", enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_DPAD_RIGHT, "\u001B[C")
-                        }
-                        ExtraKey(label = L.components.localTerminal.pgdn, enableRepeat = true, modifier = Modifier.weight(1f).a11yMinTouchTarget(talkBackOn)) {
-                            sendKeyToTerminal(KeyEvent.KEYCODE_PAGE_DOWN, "\u001B[6~")
                         }
                     }
                 }
@@ -1209,6 +1238,18 @@ fun LocalTerminalContent(
                 }
             )
         }
+
+        // the rename shortcut (Settings → Terminal → Extra keys)
+        renamingSession?.let { sess ->
+            RenameSessionDialog(
+                session = sess,
+                onRename = { name -> LocalTerminalManager.renameSession(sess.id, name) },
+                onDismiss = {
+                    renamingSession = null
+                    currentTerminalView?.requestFocus()
+                }
+            )
+        }
     }
 }
 
@@ -1219,57 +1260,83 @@ private fun ExtraKey(
     isLocked: Boolean = false,
     modifier: Modifier = Modifier,
     enableRepeat: Boolean = false,
+    /** Termux's popup: what a swipe up on the key sends (shown small in its corner). */
+    popupLabel: String? = null,
+    onPopup: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnPopup by rememberUpdatedState(onPopup)
     val scope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
+    var showingPopup by remember { mutableStateOf(false) }
+    val hasPopup = onPopup != null
 
-    val keyModifier = if (enableRepeat) {
-        modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                down.consume()
-                isPressed = true
-                currentOnClick()
-
-                val repeatJob = scope.launch {
-                    delay(350)
+    // One gesture for all keys: a tap; hold to repeat (arrows…: sent at once on touch, then every 55ms after 350ms);
+    // a long press (CTRL / ALT lock); a swipe up sends the popup key. A key with a popup sends on release, so the
+    // swipe can still change it. A sideways drag taken by the bar's pager (the text-box page) sends nothing.
+    val keyModifier = modifier.pointerInput(enableRepeat, hasPopup) {
+        val swipeUpPx = 16.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            down.consume()
+            isPressed = true
+            val sendOnDown = enableRepeat && !hasPopup
+            if (sendOnDown) currentOnClick()
+            var popupMode = false
+            var repeated = false
+            var longPressed = false
+            val timer = scope.launch {
+                delay(if (enableRepeat) 350L else viewConfiguration.longPressTimeoutMillis)
+                if (enableRepeat) {
+                    repeated = true
                     while (true) {
                         currentOnClick()
                         delay(55)
                     }
-                }
-
-                try {
-                    waitForUpOrCancellation()
-                } finally {
-                    repeatJob.cancel()
-                    isPressed = false
-                }
-            }
-        }
-    } else {
-        modifier.pointerInput(Unit) {
-            detectTapGestures(
-                onPress = {
-                    isPressed = true
-                    tryAwaitRelease()
-                    isPressed = false
-                },
-                onTap = {
-                    currentOnClick()
-                },
-                onLongPress = {
+                } else if (currentOnLongClick != null) {
+                    longPressed = true
                     currentOnLongClick?.invoke()
                 }
-            )
+            }
+            var released = false
+            try {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) {
+                        released = true
+                        change.consume()
+                        break
+                    }
+                    if (change.isConsumed) break
+                    if (hasPopup && !popupMode && !repeated && !longPressed && down.position.y - change.position.y > swipeUpPx) {
+                        popupMode = true
+                        showingPopup = true
+                        timer.cancel()
+                    }
+                    // the pager scrolled (it handles the event after the key)
+                    val after = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
+                    if (after.changes.any { it.id == down.id && it.isConsumed && it.pressed }) break
+                }
+            } finally {
+                timer.cancel()
+                isPressed = false
+                showingPopup = false
+            }
+            if (released) {
+                when {
+                    popupMode -> currentOnPopup?.invoke()
+                    !sendOnDown && !repeated && !longPressed -> currentOnClick()
+                }
+            }
         }
     }
 
     val backgroundColor = when {
+        showingPopup -> ClaudeTerracotta.copy(alpha = 0.45f)
         isPressed -> ai.antigem.theme.AppColors.editorLine
         isLocked -> ClaudeTerracotta.copy(alpha = 0.5f)
         isActive -> ClaudeTerracotta.copy(alpha = 0.25f)
@@ -1294,7 +1361,7 @@ private fun ExtraKey(
     Surface(
         modifier = keyModifier
             // TalkBack: the key's full name, a double-tap presses it, CTRL / ALT say their state
-            .terminalKeySemantics(label, isActive, isLocked, currentOnClick, currentOnLongClick)
+            .terminalKeySemantics(label, isActive, isLocked, currentOnClick, currentOnLongClick, popupLabel, currentOnPopup)
             .height(34.dp)
             .clip(RoundedCornerShape(5.dp)),
         color = backgroundColor,
@@ -1305,18 +1372,31 @@ private fun ExtraKey(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
+            // the swipe-up key, small in the corner (while swiping: it takes the key's place)
+            if (popupLabel != null && !showingPopup) {
+                Text(
+                    text = popupLabel,
+                    fontSize = 9.sp,
+                    color = textColor.copy(alpha = 0.55f),
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(end = 3.dp)
+                )
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = label,
+                    text = if (showingPopup && popupLabel != null) popupLabel else label,
                     // Termux's key text (Material button text): Roboto Medium 14sp, the same weight when active
                     fontSize = 14.sp,
                     fontFamily = FontFamily.SansSerif,
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.0892857143.em,
-                    color = textColor
+                    color = textColor,
+                    // many keys in a row make them narrow: one line, never wrapped
+                    maxLines = 1,
+                    softWrap = false
                 )
                 if (isLocked) {
                     Spacer(modifier = Modifier.width(3.dp))

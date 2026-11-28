@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -4511,6 +4512,29 @@ private fun TerminalSubScreen(
                         }
                     }
                 }
+
+                // The keys above the keyboard and the CTRL session shortcuts, like Termux's extra-keys / shortcut.*
+                var showExtraKeysEditor by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showExtraKeysEditor = true }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(L.settings.extraKeys.extraKeysAndShortcuts, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = L.settings.extraKeys.theKeysAboveTheKeyboardAnd,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                if (showExtraKeysEditor) ExtraKeysEditorDialog(onDismiss = { showExtraKeysEditor = false })
 
                 // Keyboard input mode: text mode (keyboard toolbar + clipboard) or key presses only (TYPE_NULL)
                 Row(

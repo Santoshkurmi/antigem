@@ -9,7 +9,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.updateAll
 import ai.antigem.BuildConfig
 import ai.antigem.data.homescreen.HomeScripts
 import ai.antigem.data.homescreen.HomeSnapshot
@@ -90,7 +89,7 @@ object HomeWidgets {
                 VoiceCallLauncher.appVisible.first { !it }
                 pending.value = false
                 HomeSnapshot.publishToWidgets()
-                runCatching { ChatsWidget().updateAll(app) }.onFailure { Log.w(TAG, "update: ${it.message}") }
+                runCatching { update(app, WidgetKind.CHATS) }.onFailure { Log.w(TAG, "update: ${it.message}") }
             }
         }
     }
@@ -103,7 +102,7 @@ object HomeWidgets {
         // the look changed: every widget is redrawn now, with the newest data
         HomeSnapshot.publishToWidgets()
         scope.launch {
-            WidgetKind.entries.forEach { k -> runCatching { k.widget().updateAll(app) } }
+            WidgetKind.entries.forEach { k -> runCatching { update(app, k) } }
         }
     }
 
@@ -113,8 +112,47 @@ object HomeWidgets {
         val app = context.applicationContext
         scope.launch {
             runCatching { HomeScripts.refresh(app) }
-            runCatching { ScriptsWidget().updateAll(app) }
+            runCatching { update(app, WidgetKind.SCRIPTS) }
         }
+    }
+
+    /**
+     * Redraws the placed [kind] widgets, found by their own receiver. Not Glance's updateAll: it finds widgets by the
+     * GlanceAppWidget's class name, and when a release build merged the widget classes (v2.0.5-beta.10) it took every
+     * AntiGem widget for a Chats widget.
+     */
+    suspend fun update(context: Context, kind: WidgetKind) {
+        val app = context.applicationContext
+        val ids = AppWidgetManager.getInstance(app).getAppWidgetIds(ComponentName(app, kind.receiver))
+        if (ids.isEmpty()) return
+        val glance = GlanceAppWidgetManager(app)
+        val widget = kind.widget()
+        ids.forEach { id -> runCatching { widget.update(app, glance.getGlanceIdBy(id)) }.onFailure { Log.w(TAG, "update $id: ${it.message}") } }
+    }
+
+    /**
+     * Once per app version: every widget redrawn through its own receiver, as Android does when one is placed. Heals
+     * widgets a build drew with another widget's content, and tells Glance again which receiver is which widget.
+     */
+    fun redrawOncePerVersion(context: Context) {
+        val app = context.applicationContext
+        val p = prefs(app)
+        if (p.getInt("redrawn_version", 0) == BuildConfig.VERSION_CODE) return
+        runCatching {
+            val awm = AppWidgetManager.getInstance(app)
+            WidgetKind.entries.forEach { k ->
+                val cn = ComponentName(app, k.receiver)
+                val ids = awm.getAppWidgetIds(cn)
+                if (ids.isNotEmpty()) {
+                    app.sendBroadcast(
+                        android.content.Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                            .setComponent(cn)
+                            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+                    )
+                }
+            }
+            p.edit().putInt("redrawn_version", BuildConfig.VERSION_CODE).apply()
+        }.onFailure { Log.w(TAG, "redraw: ${it.message}") }
     }
 
     fun count(context: Context, kind: WidgetKind): Int =

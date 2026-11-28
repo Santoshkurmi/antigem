@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
         // links are signed one by one now: shortcuts and widgets made before get their signature once
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { ai.antigem.data.homescreen.HomeLinks.resignOnce(applicationContext) }
         ai.antigem.ui.homescreen.HomeWidgets.publishPreviews(this)
+        ai.antigem.ui.homescreen.HomeWidgets.redrawOncePerVersion(this)
         // Voice call tile / shortcut: the floating call window stays away while this screen is up; the long-press menu
         // of the app icon gets "Voice call"
         lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
