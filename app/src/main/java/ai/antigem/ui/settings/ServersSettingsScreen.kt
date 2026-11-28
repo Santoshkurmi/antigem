@@ -57,6 +57,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -182,7 +183,9 @@ internal fun ServersSubScreen(
     /** Opens the Termux environment's installer. */
     onInstallTermux: () -> Unit = {},
     /** Opens the page of the Ubuntu chroot at this path. */
-    onManageChroot: (String) -> Unit = {}
+    onManageChroot: (String) -> Unit = {},
+    /** Whether the page has edits not saved yet: Settings asks before they are lost (Back, the back arrow, Done). */
+    onUnsavedChanged: (Boolean) -> Unit = {}
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -264,7 +267,6 @@ internal fun ServersSubScreen(
     var saveFeedback by remember { mutableStateOf<String?>(null) }
     var saveIsError by remember { mutableStateOf(false) }
     var showRestartDialog by remember { mutableStateOf(false) }
-    var showUnsavedDialog by remember { mutableStateOf(false) }
     var showServerLog by remember { mutableStateOf(false) }
     var showProfileMenu by remember { mutableStateOf(false) }
     var showSaveProfile by remember { mutableStateOf(false) }
@@ -372,7 +374,10 @@ internal fun ServersSubScreen(
     }
     val hasUnsavedChanges = savedSnapshot != null && snapshot() != savedSnapshot
 
-    androidx.activity.compose.BackHandler(enabled = hasUnsavedChanges) { showUnsavedDialog = true }
+    // Settings shows the "Unsaved server settings" question when the user leaves; "Discard" leaves the page, so the
+    // edits (this page's state) are dropped and the next visit starts from the saved values
+    LaunchedEffect(hasUnsavedChanges) { onUnsavedChanged(hasUnsavedChanges) }
+    DisposableEffect(Unit) { onDispose { onUnsavedChanged(false) } }
 
     val keyPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -386,60 +391,6 @@ internal fun ServersSubScreen(
                 Toast.makeText(context, L.settings.serversSettings.thatFileIsNotAPrivate, Toast.LENGTH_LONG).show()
             }
         }
-    }
-
-    if (showUnsavedDialog) {
-        AlertDialog(
-            onDismissRequest = { showUnsavedDialog = false },
-            icon = { Icon(Icons.Outlined.Info, null, tint = ClaudeTerracotta, modifier = Modifier.size(28.dp)) },
-            title = { Text(L.settings.serversSettings.unsavedServerSettings, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
-            text = {
-                Text(
-                    L.settings.serversSettings.youHaveUnsavedChangesInThe,
-                    fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showUnsavedDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
-                    shape = RoundedCornerShape(8.dp)
-                ) { Text(L.settings.serversSettings.keepEditing, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showUnsavedDialog = false
-                    remote = AuthPreferences.currentRemoteMode
-                    tunnel = AuthPreferences.currentRemoteMode && AuthPreferences.currentRemoteTunnel
-                    hubText = currentHubUrl
-                    bridgeText = currentBridgeUrl
-                    securityToken = initSecurityToken
-                    bridgeBinPath = custom(authPrefs.getAgyBridgeBinaryPathSync(), authPrefs.getDefaultBridgeBinaryPath())
-                    agyBinPath = custom(authPrefs.getAgyBinaryPathSync(), authPrefs.getDefaultAgyBinaryPath())
-                    claudeBinPath = custom(authPrefs.getClaudeBinaryPathSync(), authPrefs.getDefaultClaudeBinaryPath())
-                    openCodeBinPath = custom(authPrefs.getOpenCodeBinaryPathSync(), authPrefs.getDefaultOpenCodeBinaryPath())
-                    codexBinPath = custom(authPrefs.getCodexBinaryPathSync(), authPrefs.getDefaultCodexBinaryPath())
-                    sshKey = AuthPreferences.currentSshPrivateKey
-                    sshPassphrase = AuthPreferences.currentSshKeyPassphrase
-                    remoteBridgeBin = storedBridgeBin()
-                    remoteAgyBin = storedAgyBin()
-                    remoteClaudeBin = storedClaudeBin()
-                    remoteOpenCodeBin = storedOpenCodeBin()
-                    remoteCodexBin = storedCodexBin()
-                    remoteInstallDir = authPrefs.getRemoteInstallDirSync()
-                    listenBridge = initListenBridge; listenHub = initListenHub; listenBind = initListenBind
-                    edgeName = initEdgeName; edgeValue = initEdgeValue
-                    coroutineScope.launch {
-                        sshHost = authPrefs.termuxSshHost.first().takeIf { AuthPreferences.currentRemoteMode } ?: ""
-                        sshPort = (authPrefs.termuxSshPort.first().takeIf { AuthPreferences.currentRemoteMode } ?: 22).toString()
-                        sshUser = authPrefs.termuxSshUser.first().takeIf { AuthPreferences.currentRemoteMode } ?: ""
-                        sshPass = authPrefs.termuxSshPass.first().takeIf { AuthPreferences.currentRemoteMode } ?: ""
-                    }
-                }) { Text(L.settings.serversSettings.discardChanges, color = MaterialTheme.colorScheme.error) }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        )
     }
 
     if (showRestartDialog) {

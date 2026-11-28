@@ -393,12 +393,52 @@ fun SettingsDialog(
     // Hoisted so the main list keeps its position while a sub-section is open
     val mainMenuScrollState = rememberScrollState()
 
+    // Where agents run has edits not saved yet: every way out of it (Back, the back arrow, Done, Manage) asks first
+    var serversUnsaved by remember { mutableStateOf(false) }
+    // the way out the user took, waiting for their answer to "Unsaved server settings"
+    var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun leave(go: () -> Unit) {
+        if (serversUnsaved && currentSection == SettingsSection.SERVERS) pendingLeave = go else go()
+    }
+    pendingLeave?.let { go ->
+        AlertDialog(
+            onDismissRequest = { pendingLeave = null },
+            icon = { Icon(Icons.Outlined.Info, null, tint = ClaudeTerracotta, modifier = Modifier.size(28.dp)) },
+            title = { Text(L.settings.serversSettings.unsavedServerSettings, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
+            text = {
+                Text(
+                    L.settings.serversSettings.youHaveUnsavedChangesInThe,
+                    fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { pendingLeave = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta),
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text(L.settings.serversSettings.keepEditing, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                // leaving drops the page and its edits: the next visit shows the saved settings
+                TextButton(onClick = {
+                    pendingLeave = null
+                    serversUnsaved = false
+                    go()
+                }) { Text(L.settings.serversSettings.discardChanges, color = MaterialTheme.colorScheme.error) }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
     // Intercept system Back button
     BackHandler(enabled = true) {
-        if (currentSection != SettingsSection.MAIN) {
-            currentSection = currentSection.parent
-        } else {
-            onDismiss()
+        leave {
+            if (currentSection != SettingsSection.MAIN) {
+                currentSection = currentSection.parent
+            } else {
+                onDismiss()
+            }
         }
     }
 
@@ -453,10 +493,12 @@ fun SettingsDialog(
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        if (currentSection != SettingsSection.MAIN) {
-                            currentSection = currentSection.parent
-                        } else {
-                            onDismiss()
+                        leave {
+                            if (currentSection != SettingsSection.MAIN) {
+                                currentSection = currentSection.parent
+                            } else {
+                                onDismiss()
+                            }
                         }
                     }) {
                         Icon(
@@ -467,7 +509,7 @@ fun SettingsDialog(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(onClick = { leave(onDismiss) }) {
                         Text(
                             text = L.common.done,
                             color = ClaudeTerracotta,
@@ -590,9 +632,12 @@ fun SettingsDialog(
                         onSaveServerUrls = onSaveServerUrls,
                         onInstallTermux = onInstallLocalTools,
                         onManageChroot = { path ->
-                            chrootManagePath = path
-                            currentSection = SettingsSection.UBUNTU_CHROOT
-                        }
+                            leave {
+                                chrootManagePath = path
+                                currentSection = SettingsSection.UBUNTU_CHROOT
+                            }
+                        },
+                        onUnsavedChanged = { serversUnsaved = it }
                     )
 
                     SettingsSection.CONNECT_PC -> ai.antigem.ui.pc.ConnectPcScreen(cardBg = cardBg, cardBorder = cardBorder)
