@@ -199,7 +199,8 @@ internal fun ServersSubScreen(
     var clearHostAccepted by remember { mutableStateOf<String?>(AuthPreferences.hostOf(AuthPreferences.currentBridgeHttpUrl).takeIf {
         AuthPreferences.currentRemoteMode && !AuthPreferences.currentRemoteTunnel && AuthPreferences.currentBridgeHttpUrl.startsWith("http://") }) }
     // on this phone: the Termux environment or the rooted Ubuntu chroot
-    var phoneChroot by remember { mutableStateOf(authPrefs.isChrootModeSync()) }
+    // only the chroot and x86_64 builds have the Ubuntu chroot (the normal one has no Linux bridge for it)
+    var phoneChroot by remember { mutableStateOf(BuildConfig.HAS_CHROOT && authPrefs.isChrootModeSync()) }
     var showFactoryReset by remember { mutableStateOf(false) }
     var confirmNewPhoneKey by remember { mutableStateOf(false) }
     var hubText by remember { mutableStateOf(currentHubUrl.ifBlank { AuthPreferences.DEFAULT_HUB_URL }) }
@@ -680,7 +681,8 @@ internal fun ServersSubScreen(
                 Spacer(Modifier.height(4.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     ModeOption("AntiGem", !remote && !phoneChroot, Modifier.weight(1f)) { selectPhone(false) }
-                    ModeOption(L.common.ubuntuChroot, !remote && phoneChroot, Modifier.weight(1f)) { selectPhone(true) }
+                    // the normal build can't run the chroot: it isn't offered there
+                    if (BuildConfig.HAS_CHROOT) ModeOption(L.common.ubuntuChroot, !remote && phoneChroot, Modifier.weight(1f)) { selectPhone(true) }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(L.settings.serversSettings.yourServer, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = subtle)

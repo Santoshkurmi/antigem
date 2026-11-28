@@ -99,6 +99,8 @@ class AntiGemApplication : Application(), coil.ImageLoaderFactory {
         ai.antigem.data.adb.DeviceAccess.init(this)
         // the rooted Ubuntu chroot runtime: its installs and which one is in use (no root call here)
         ai.antigem.data.local.chroot.ChrootManager.init(this)
+        // the normal APK installed over the chroot one: back to AntiGem's environment (the chroot can't run here)
+        ai.antigem.data.local.chroot.ChrootManager.leaveIfNotInThisBuild(this)
         ai.antigem.data.ssh.SshSessionFactory.init(this)
         // Connect to PC: the paired PCs and the one in use (AuthPreferences reads the latter on its own too)
         ai.antigem.data.pc.PcConnect.init(this)

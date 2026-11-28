@@ -154,6 +154,18 @@ object ChrootManager {
         auth.applyLocalRuntimeUrls(chroot = false)
     }
 
+    /**
+     * The normal build has no Linux bridge, so the chroot can't run in it, and Settings doesn't offer it there. When
+     * the normal APK was installed over the chroot one, the phone goes back to AntiGem's own environment (once, at
+     * app start) instead of trying a chroot that can never start. The chroot and its files stay as they are, for when
+     * the chroot build is installed again.
+     */
+    fun leaveIfNotInThisBuild(context: Context) {
+        if (ai.antigem.BuildConfig.HAS_CHROOT || !AuthPreferences(context).isChrootModeSync()) return
+        Log.i(TAG, "this build has no Ubuntu chroot: the phone runs on AntiGem's environment again")
+        runBlocking { useTermux(context) }
+    }
+
     fun setSelected(context: Context, path: String) {
         init(context)
         if (_installs.value.any { it.path == path }) {

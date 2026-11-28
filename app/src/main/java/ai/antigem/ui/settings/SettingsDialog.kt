@@ -9045,6 +9045,32 @@ private fun AboutSubScreen(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
+                // which APK this is: normal (AntiGem-v….apk), chroot (-chroot.apk) or x86_64 (-x86_64.apk, has the chroot)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = L.settings.dialog.variant,
+                        fontSize = 12.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = when {
+                            BuildConfig.TARGET_ABI == "x86_64" -> "x86_64"
+                            BuildConfig.HAS_CHROOT -> "${L.settings.dialog.variantChroot} · ${BuildConfig.TARGET_ABI}"
+                            else -> "${L.settings.dialog.variantNormal} · ${BuildConfig.TARGET_ABI}"
+                        },
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

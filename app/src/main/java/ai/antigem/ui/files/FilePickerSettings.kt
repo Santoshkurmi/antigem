@@ -57,7 +57,10 @@ fun FilePickerSettingsCard(modifier: Modifier = Modifier) {
     remember { runCatching { ChrootManager.init(context) } }
     val installs by ChrootManager.installs.collectAsState()
     val activePath by ChrootManager.activePath.collectAsState()
-    val chroot = remember(installs, activePath) { installs.firstOrNull { it.path == activePath } }
+    // the normal build can't run the chroot (nor its bridge, which serves these files): not shown there
+    val chroot = remember(installs, activePath) {
+        if (ai.antigem.BuildConfig.HAS_CHROOT) installs.firstOrNull { it.path == activePath } else null
+    }
     val homeDir = remember { LocalEnvironmentManager.getHomeDir(context) }
     val homeReady = remember { homeDir.isDirectory }
 

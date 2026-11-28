@@ -810,7 +810,8 @@ class AntiGemDocumentsProvider : DocumentsProvider() {
 
     /** The chroot shown in the picker, or null when there is none or the user hid it. */
     private fun chrootOrNull(context: Context): Chroot? {
-        if (!isChrootShown(context)) return null
+        // the normal build can't run the chroot's bridge, which these files come through
+        if (!ai.antigem.BuildConfig.HAS_CHROOT || !isChrootShown(context)) return null
         val install = runCatching { ChrootManager.activeInstall(context) }.getOrNull() ?: return null
         val sync = context.getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE)
         // with the chroot as the phone's runtime, a bridge address the user set on this phone is the chroot's
