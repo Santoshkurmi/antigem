@@ -57,6 +57,8 @@ class AuthPreferences(private val context: Context) {
         val ENABLED_MODELS = androidx.datastore.preferences.core.stringSetPreferencesKey("enabled_models")
         val IS_DEV_MODE_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_dev_mode_enabled")
         val CHAT_FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("chat_font_scale")
+        /** Settings → Appearance → App text size; read at activity start from syncPrefs (see AppFontScale). */
+        val APP_FONT_SCALE = androidx.datastore.preferences.core.floatPreferencesKey("app_font_scale")
         val WORKING_ANIMATION_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("working_animation_enabled")
         val CHAT_DIVIDERS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("chat_dividers_enabled")
         val IS_LOCAL_TOOLS_ENABLED = androidx.datastore.preferences.core.booleanPreferencesKey("is_local_tools_enabled")
@@ -740,6 +742,17 @@ class AuthPreferences(private val context: Context) {
     suspend fun saveChatFontScale(scale: Float) {
         context.dataStore.edit { prefs ->
             prefs[CHAT_FONT_SCALE] = scale
+        }
+    }
+
+    /** The copy the activity reads when it starts (see AppFontScale); written at once, before the restart. */
+    fun saveAppFontScaleSync(scale: Float) {
+        syncPrefs.edit().putFloat(ai.antigem.theme.AppFontScale.KEY, scale).commit()
+    }
+
+    suspend fun saveAppFontScale(scale: Float) {
+        context.dataStore.edit { prefs ->
+            prefs[APP_FONT_SCALE] = scale
         }
     }
 

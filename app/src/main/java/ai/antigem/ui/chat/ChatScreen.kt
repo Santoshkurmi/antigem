@@ -598,6 +598,13 @@ fun ChatScreen(
         showSettingsDialog = true
         viewModel.consumeRequestedSettingsSection()
     }
+    // the screen restarted for a new app text size from Settings → Appearance: back on that page
+    LaunchedEffect(Unit) {
+        if (ai.antigem.theme.AppFontScale.consumeReopenSettings(context)) {
+            requestedSettingsSection = ai.antigem.ui.settings.SettingsSection.APPEARANCE
+            showSettingsDialog = true
+        }
+    }
 
     // Antigravity cloud agents (Remote Agents): cloud projects, through the hub
     LaunchedEffect(Unit) { ai.antigem.data.agent.agy.AgyCloud.init(context) }
@@ -2587,10 +2594,12 @@ fun ChatScreen(
                         }
                     } else {
                         val currentDensity = androidx.compose.ui.platform.LocalDensity.current
-                        val customDensity = remember(currentDensity, chatFontScale) {
+                        // messages keep Android's font size × the chat slider: the app text size is taken back out
+                        val appFontScale = ai.antigem.theme.LocalAppFontScale.current
+                        val customDensity = remember(currentDensity, chatFontScale, appFontScale) {
                             androidx.compose.ui.unit.Density(
                                 density = currentDensity.density,
-                                fontScale = currentDensity.fontScale * chatFontScale
+                                fontScale = currentDensity.fontScale / appFontScale * chatFontScale
                             )
                         }
 
@@ -3496,6 +3505,10 @@ fun ChatScreen(
             onSetContextWindowLimit = { viewModel.setContextWindowLimit(it) },
             onSetSummaryModelId = { viewModel.setSummaryModelId(it) },
             onSetChatFontScale = { viewModel.setChatFontScale(it) },
+            onApplyAppFontScale = { scale ->
+                viewModel.setAppFontScale(scale)
+                ai.antigem.theme.AppFontScale.restart(context)
+            },
             onSetThemeMode = { viewModel.setThemeMode(it) },
             onSaveServerUrls = { hub, bridge -> viewModel.saveServerUrls(hub, bridge) },
             onSaveTerminalPreferences = { size, cursor, buf, thm -> viewModel.saveTerminalPreferences(size, cursor, buf, thm) },

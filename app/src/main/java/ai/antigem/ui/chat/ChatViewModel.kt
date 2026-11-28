@@ -1616,6 +1616,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Settings → Appearance → App text size; the caller restarts the activity right after (AppFontScale.restart). */
+    fun setAppFontScale(scale: Float) {
+        val v = scale.coerceIn(ai.antigem.theme.AppFontScale.MIN, ai.antigem.theme.AppFontScale.MAX)
+        authPrefs.saveAppFontScaleSync(v)
+        viewModelScope.launch {
+            authPrefs.saveAppFontScale(v)
+        }
+    }
+
     fun setContextWindowLimit(limit: Int) {
         viewModelScope.launch {
             authPrefs.setContextWindowLimit(limit)

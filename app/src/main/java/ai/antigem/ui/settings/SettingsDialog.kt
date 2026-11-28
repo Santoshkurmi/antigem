@@ -60,6 +60,7 @@ import ai.antigem.domain.model.ModelQuota
 import ai.antigem.data.preferences.AuthPreferences
 import ai.antigem.data.local.LocalEnvironmentManager
 import ai.antigem.theme.*
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -252,6 +253,8 @@ fun SettingsDialog(
     onSetContextWindowLimit: (Int) -> Unit = {},
     onSetSummaryModelId: (String) -> Unit = {},
     onSetChatFontScale: (Float) -> Unit = {},
+    /** Saves a new app text size and restarts the screen with it (Settings → Appearance → App text size). */
+    onApplyAppFontScale: (Float) -> Unit = {},
     onSetThemeMode: (String) -> Unit = {},
     onSaveServerUrls: (String, String) -> Unit = { _, _ -> },
     onSaveTerminalPreferences: (Int, String, Int, String) -> Unit = { _, _, _, _ -> },
@@ -604,6 +607,7 @@ fun SettingsDialog(
                         cardBg = cardBg,
                         cardBorder = cardBorder,
                         onSetChatFontScale = onSetChatFontScale,
+                        onApplyAppFontScale = onApplyAppFontScale,
                         onSetFloatingSwitcherOrientation = onSetFloatingSwitcherOrientation,
                         floatingSwitcherHandleIcon = floatingSwitcherHandleIcon,
                         onSetFloatingSwitcherHandleIcon = onSetFloatingSwitcherHandleIcon,
@@ -1669,6 +1673,7 @@ private fun AppearanceSubScreen(
     cardBg: Color,
     cardBorder: BorderStroke,
     onSetChatFontScale: (Float) -> Unit,
+    onApplyAppFontScale: (Float) -> Unit,
     onSetFloatingSwitcherOrientation: (String) -> Unit,
     floatingSwitcherHandleIcon: String,
     onSetFloatingSwitcherHandleIcon: (String) -> Unit,
@@ -1691,6 +1696,86 @@ private fun AppearanceSubScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // App text size: the app's own screens, menus, lists and dialogs (not chat messages). The slider only moves the
+        // sample line; Apply saves it and restarts the screen, so every popup window takes it too (see AppFontScale)
+        val appFontScale = ai.antigem.theme.LocalAppFontScale.current
+        var pendingAppFontScale by remember(appFontScale) { mutableFloatStateOf(appFontScale) }
+        Column {
+            Text(
+                text = L.settings.dialog.appTextSizeValue((pendingAppFontScale * 100).roundToInt()),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = L.settings.dialog.settingsListsMenusAndDialogsChat,
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            border = cardBorder
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("A", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Slider(
+                        value = pendingAppFontScale,
+                        // 5% steps
+                        onValueChange = { pendingAppFontScale = (it * 20).roundToInt() / 20f },
+                        valueRange = ai.antigem.theme.AppFontScale.MIN..ai.antigem.theme.AppFontScale.MAX,
+                        steps = 10,
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(
+                            thumbColor = ClaudeTerracotta,
+                            activeTrackColor = ClaudeTerracotta
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("A", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // drawn at the slider's size (this page itself still has the size the screen started with)
+                Text(
+                    text = L.settings.dialog.thisIsHowTheAppsText,
+                    fontSize = (14f * pendingAppFontScale / appFontScale).sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { pendingAppFontScale = 1f },
+                        enabled = pendingAppFontScale != 1f
+                    ) {
+                        Text(L.settings.dialog.reset, color = if (pendingAppFontScale != 1f) ClaudeTerracotta else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                    }
+                    Button(
+                        onClick = { onApplyAppFontScale(pendingAppFontScale) },
+                        enabled = pendingAppFontScale != appFontScale,
+                        colors = ButtonDefaults.buttonColors(containerColor = ClaudeTerracotta, contentColor = Color.White)
+                    ) {
+                        Text(L.settings.dialog.apply)
+                    }
+                }
+            }
+        }
+
         // Font Scaling Section
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1806,7 +1891,7 @@ private fun AppearanceSubScreen(
                     ) {
                         Text(
                             text = L.settings.dialog.howDoesAntigemConnectToAgy,
-                            fontSize = (13 * chatFontScale).sp,
+                            fontSize = (13 * chatFontScale / appFontScale).sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         )
@@ -1826,8 +1911,8 @@ private fun AppearanceSubScreen(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = L.settings.dialog.antigemConnectsViaGrpcWebTo,
-                                fontSize = (13 * chatFontScale).sp,
-                                lineHeight = (18 * chatFontScale).sp,
+                                fontSize = (13 * chatFontScale / appFontScale).sp,
+                                lineHeight = (18 * chatFontScale / appFontScale).sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }

@@ -59,6 +59,16 @@ class MainActivity : ComponentActivity() {
 
     private val chatViewModel: ChatViewModel by lazy { ChatViewModelHolder.get(application) }
 
+    /** The app text size this activity started with (Settings → Appearance → App text size), and the saved one then. */
+    private var appFontScale = 1f
+    private var appFontScaleSaved = 1f
+
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(newBase)
+        appFontScaleSaved = ai.antigem.theme.AppFontScale.read(newBase)
+        appFontScale = ai.antigem.theme.AppFontScale.applyTo(this, newBase)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -352,6 +362,8 @@ class MainActivity : ComponentActivity() {
             val showFullScreenInstaller = !isInstalledState && !hasSkippedInstaller &&
                 !ai.antigem.data.preferences.AuthPreferences.currentRemoteMode
 
+            // chat messages divide the app text size out again (Settings → Appearance; see AppFontScale)
+            androidx.compose.runtime.CompositionLocalProvider(ai.antigem.theme.LocalAppFontScale provides appFontScale) {
             GeminiTheme(darkTheme = useDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -1030,6 +1042,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            }
         }
     }
 
@@ -1048,6 +1061,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         instanceRef = java.lang.ref.WeakReference(this)
+        // the app text size was changed in the floating chat's Settings: start again with it
+        if (ai.antigem.theme.AppFontScale.read(this) != appFontScaleSaved) {
+            recreate()
+            return
+        }
         if (ai.antigem.ui.components.PermissionUtils.hasNotificationPermission(this)) {
             ai.antigem.data.service.AntiGemService.start(this, fromForeground = true)
             ai.antigem.data.local.LocalServerManager.autoStartOnAppLaunch(this)

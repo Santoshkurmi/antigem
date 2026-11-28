@@ -41,6 +41,22 @@ class FloatingChatActivity : ComponentActivity() {
 
     private val chatViewModel: ChatViewModel by lazy { ChatViewModelHolder.get(application) }
 
+    /** The app text size this window started with (Settings → Appearance → App text size), and the saved one then. */
+    private var appFontScale = 1f
+    private var appFontScaleSaved = 1f
+
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(newBase)
+        appFontScaleSaved = ai.antigem.theme.AppFontScale.read(newBase)
+        appFontScale = ai.antigem.theme.AppFontScale.applyTo(this, newBase)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // the app text size was changed in the full app's Settings: start again with it
+        if (ai.antigem.theme.AppFontScale.read(this) != appFontScaleSaved) recreate()
+    }
+
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +83,8 @@ class FloatingChatActivity : ComponentActivity() {
                 else -> isSystemDark
             }
 
+            // chat messages divide the app text size out again (Settings → Appearance; see AppFontScale)
+            androidx.compose.runtime.CompositionLocalProvider(ai.antigem.theme.LocalAppFontScale provides appFontScale) {
             GeminiTheme(darkTheme = useDarkTheme) {
                 FloatingChatWindow(
                     viewModel = chatViewModel,
@@ -82,6 +100,7 @@ class FloatingChatActivity : ComponentActivity() {
                         finish()
                     }
                 )
+            }
             }
         }
     }
