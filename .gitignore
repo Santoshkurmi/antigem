@@ -36,6 +36,7 @@ termux-daemon/daemon
 termux-daemon/server
 app/src/main/assets/bin/agy_ide_bridge
 app/src/main/assets/bin/agy_ide_bridge.xz
+app/src/main/assets/bin/netcap.xz
 app/src/main/assets/bin/agy_ide_bridge_linux.xz
 termux-am-build/build/
 app/src/main/assets/bin/agy_ide_bridge_linux_amd64
@@ -68,6 +69,8 @@ finally.zip
 # STEM & diagrams render bundle (built by scripts/render_bundle/build_render_bundle.sh, uploaded to GitHub releases)
 scripts/render_bundle/out/
 scripts/render_bundle/.work/
+# Network Interceptor engine files (built by scripts/netcap_release/netcap_release.sh, uploaded to GitHub releases)
+scripts/netcap_release/out/
 # IDE bridge copy of /version.json (copied by the Gradle build and scripts/agy_ide_bridge_builder.sh)
 agy_ide_bridge/pkg/buildinfo/version.json
 # Security audit / fix plan (unfixed vulnerability details, keep out of git)

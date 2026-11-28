@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
@@ -150,6 +151,7 @@ fun OpenCodeMcpPage(backend: OpenCodeChatBackend, onOpenRea: () -> Unit = {}, on
         OpenCodeMcpPreset(L.common.browser, L.common.controlTheInAppBrowser, Icons.Outlined.Language, GeminiBlue, local("browser_mcp", "/browser")),
         OpenCodeMcpPreset(L.common.terminal, L.opencode.mcp.runCommandsInTheTerminal, Icons.Outlined.Terminal, QuotaGreen, local("terminal_mcp", "/terminal")),
         OpenCodeMcpPreset(L.opencode.mcp.android, L.opencode.mcp.tapTypeReadThisPhone, Icons.Outlined.PhoneAndroid, ai.antigem.theme.AppColors.accentTeal, local(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
+        OpenCodeMcpPreset(L.netcap.preset.title, L.netcap.preset.subtitle, Icons.Outlined.NetworkCheck, ai.antigem.theme.AppColors.accentIndigo, local(bridge.NETWORK_MCP_NAME, "/network")),
         OpenCodeMcpPreset(L.common.notesToDos, L.opencode.mcp.readEditYourNotes, Icons.Outlined.EditNote, ai.antigem.theme.AppColors.warning, local(bridge.NOTES_MCP_NAME, "/notes")),
         OpenCodeMcpPreset(L.common.jarvis, L.opencode.mcp.voiceControlOfThisApp, Icons.Outlined.RecordVoiceOver, ai.antigem.theme.AppColors.accentTeal, local(bridge.JARVIS_MCP_NAME, "/jarvis")),
         OpenCodeMcpPreset(L.common.theme, L.opencode.mcp.createSwitchAppThemes, Icons.Outlined.Palette, ai.antigem.theme.AppColors.accentAlt, local(bridge.THEME_MCP_NAME, "/theme")),

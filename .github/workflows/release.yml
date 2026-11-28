@@ -67,6 +67,15 @@ jobs:
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      # The APKs download the Network Interceptor engine of netcap/release.json's version from its own release,
+      # netcap-v<version>. This publishes it the first time (built here), or checks that netcap didn't change without
+      # a version bump, and writes the published files' SHA-256 into netcap/release.json for the APK build below.
+      - name: Publish or check the Network Interceptor engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NETCAP_REPO: ${{ github.repository }}
+        run: bash scripts/netcap_release/netcap_release.sh ci
+
       - name: Restore Keystore from Secret
         run: |
           if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then

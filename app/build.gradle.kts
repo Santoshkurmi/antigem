@@ -123,6 +123,31 @@ fun hasChroot(buildType: String): Boolean = isX86 || when (chrootProp) {
     "false" -> false
     else -> buildType == "debug"
 }
+// The Network Interceptor engine (../netcap, Go, ~7.5 MB) is downloaded by the app the first time it is used, so most
+// users never carry it. netcap/release.json has its version; the release workflow (scripts/netcap_release/netcap_release.sh
+// ci) publishes netcap-v<version> when it's new and writes the SHA-256 of the published files into the file before the
+// APKs are built (locally: `netcap_release.sh pin`). Debug builds pack a fresh build of ../netcap instead
+// (assets/bin/netcap.xz, used when present). `-Pnetcap=download` leaves it out of a debug build (to test the
+// download), `-Pnetcap=bundle` packs it into a release build.
+val netcapProp = (findProperty("netcap") as String?)?.trim()?.lowercase()?.ifEmpty { null }
+require(netcapProp == null || netcapProp == "bundle" || netcapProp == "download") { "-Pnetcap must be bundle or download, not $netcapProp" }
+fun bundlesNetcap(buildType: String): Boolean = when (netcapProp) {
+    "bundle" -> true
+    "download" -> false
+    else -> buildType == "debug"
+}
+val netcapPin: Map<*, *> = rootProject.file("netcap/release.json").let { f ->
+    if (!f.exists()) throw GradleException("netcap/release.json is missing (the engine's pinned version)")
+    StrictJson.parse(f.readText()) as? Map<*, *> ?: throw GradleException("netcap/release.json must be one JSON object")
+}
+val netcapVersion = netcapPin["version"] as? String ?: throw GradleException("netcap/release.json needs \"version\"")
+val netcapArch = if (isX86) "amd64" else "arm64"
+// the pinned file of this APK's CPU: only builds that download the engine need it (checkNetcapPin)
+val netcapAsset = (netcapPin["assets"] as? Map<*, *>)?.get(netcapArch) as? Map<*, *>
+val netcapSha256 = netcapAsset?.get("sha256") as? String
+val netcapSize = (netcapAsset?.get("size") as? Number)?.toLong() ?: 0L
+val netcapUrl = "https://github.com/Santoshkurmi/antigem/releases/download/netcap-v$netcapVersion/netcap-$netcapVersion-android-$netcapArch.xz"
+
 // the APK's name suffix in a release: the in-app updater downloads the file of its own kind
 val apkSuffix = when {
     isX86 -> "-x86_64"
@@ -148,6 +173,11 @@ android {
         buildConfigField("String", "TARGET_ABI", "\"$targetAbi\"")
         // "", "-chroot" or "-x86_64": the release file the in-app updater downloads (AntiGem-v<version><suffix>.apk)
         buildConfigField("String", "APK_SUFFIX", "\"$apkSuffix\"")
+        // the Network Interceptor engine this APK downloads (NetcapManager checks the SHA-256)
+        buildConfigField("String", "NETCAP_VERSION", "\"$netcapVersion\"")
+        buildConfigField("String", "NETCAP_URL", "\"$netcapUrl\"")
+        buildConfigField("String", "NETCAP_SHA256", "\"${netcapSha256 ?: ""}\"")
+        buildConfigField("long", "NETCAP_SIZE", "${netcapSize}L")
         // a beta build (version.json's beta is newer than its stable release): its updater follows the betas too
         buildConfigField("boolean", "IS_BETA", "$isBetaBuild")
     }
@@ -432,6 +462,56 @@ val compressAgyIdeBridge = tasks.register<Exec>("compressAgyIdeBridge") {
   commandLine("sh", "-c", "xz -6 -T1 -c \"$1\" > \"$2\"", "sh", rawFile.absolutePath, File(binDir, "agy_ide_bridge.xz").absolutePath)
 }
 
+// The Network Interceptor engine built from ../netcap for the builds that pack it (bundlesNetcap: debug ones by
+// default), xz-compressed into their own assets by NetcapAssetTask. Release builds download the pinned one instead.
+val netcapRaw = layout.buildDirectory.file("intermediates/netcap/netcap")
+val buildNetcap = tasks.register<Exec>("buildNetcap") {
+  val sourceDir = layout.projectDirectory.dir("../netcap")
+  val rawFile = netcapRaw.get().asFile
+
+  doFirst {
+    rawFile.parentFile.mkdirs()
+  }
+
+  workingDir = sourceDir.asFile
+  environment("GOOS", "android")
+  environment("GOARCH", if (isX86) "amd64" else "arm64")
+  if (isX86) {
+    // android/amd64 links only through cgo, with the NDK's clang (the same as the bridge)
+    val host = if (System.getProperty("os.name").startsWith("Mac")) "darwin-x86_64" else "linux-x86_64"
+    val sdkDir = androidComponents.sdkComponents.sdkDirectory.get().asFile
+    val ndkRoots = listOfNotNull(System.getenv("ANDROID_NDK_HOME"), System.getenv("ANDROID_NDK_LATEST_HOME")).map(::File) +
+      (sdkDir.resolve("ndk").listFiles()?.sortedByDescending { it.name } ?: emptyList())
+    val clang = ndkRoots.map { File(it, "toolchains/llvm/prebuilt/$host/bin/x86_64-linux-android24-clang") }.firstOrNull { it.exists() }
+      ?: throw GradleException("The x86_64 build needs the Android NDK (Go links netcap with its clang): install one in $sdkDir/ndk or set ANDROID_NDK_HOME")
+    environment("CGO_ENABLED", "1")
+    environment("CC", clang.absolutePath)
+  } else {
+    environment("CGO_ENABLED", "0")
+  }
+  commandLine("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -X antigem/netcap/cli.Version=$netcapVersion-local",
+    "-o", rawFile.absolutePath, "./cmd/netcap")
+}
+
+// A build that downloads the engine must pin the published file's SHA-256 (an APK without it could never get one).
+val checkNetcapPin = tasks.register("checkNetcapPin") {
+  val missing = netcapSha256 == null
+  val message = "netcap/release.json has no SHA-256 for the $netcapArch engine $netcapVersion, which this build downloads: " +
+    "the release workflow writes it (scripts/netcap_release/netcap_release.sh ci); for a local build run " +
+    "`bash scripts/netcap_release/netcap_release.sh pin`, or build with -Pnetcap=bundle"
+  doFirst { if (missing) throw GradleException(message) }
+}
+tasks.configureEach {
+  if ((name == "preReleaseBuild" && !bundlesNetcap("release")) || (name == "preDebugBuild" && !bundlesNetcap("debug"))) {
+    dependsOn(checkNetcapPin)
+  }
+}
+
+// Builds before the download wrote the engine into src/main/assets/bin, where every build would package it: removed.
+val deleteLegacyNetcapAsset = tasks.register<Delete>("deleteLegacyNetcapAsset") {
+  delete(layout.projectDirectory.file("src/main/assets/bin/netcap.xz"))
+}
+
 val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
   from(layout.projectDirectory.file("../scripts/backup_bootstrap.sh")) {
     rename { "backup_bootstrap" }
@@ -455,7 +535,7 @@ val copyScriptsToAssets = tasks.register<Copy>("copyScriptsToAssets") {
 }
 
 tasks.named("preBuild") {
-  dependsOn(compressAgyIdeBridge, deleteLegacyLinuxBridgeAsset, copyScriptsToAssets)
+  dependsOn(compressAgyIdeBridge, deleteLegacyNetcapAsset, deleteLegacyLinuxBridgeAsset, copyScriptsToAssets)
 }
 
 
@@ -536,6 +616,28 @@ abstract class LinuxBridgeAssetTask : DefaultTask() {
             .redirectError(ProcessBuilder.Redirect.INHERIT)
             .start()
         if (xz.waitFor() != 0) throw GradleException("xz failed to compress ${rawBridge.get().asFile}")
+    }
+}
+
+/** The Network Interceptor engine for the builds that pack it, xz-compressed into <outputDir>/bin/netcap.xz. */
+abstract class NetcapAssetTask : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val rawEngine: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun compress() {
+        val bin = outputDir.get().asFile.resolve("bin")
+        bin.deleteRecursively()
+        bin.mkdirs()
+        val xz = ProcessBuilder("xz", "-6", "-T1", "-c", rawEngine.get().asFile.absolutePath)
+            .redirectOutput(File(bin, "netcap.xz"))
+            .redirectError(ProcessBuilder.Redirect.INHERIT)
+            .start()
+        if (xz.waitFor() != 0) throw GradleException("xz failed to compress ${rawEngine.get().asFile}")
     }
 }
 
@@ -908,6 +1010,15 @@ androidComponents {
                 rawBridge.set(agyIdeBridgeLinuxRaw)
             }
             variant.sources.assets?.addGeneratedSourceDirectory(linuxBridge, LinuxBridgeAssetTask::outputDir)
+        }
+
+        // the Network Interceptor engine: packed only into the builds that don't download it (debug by default)
+        if (bundlesNetcap(variant.buildType ?: "release")) {
+            val engineAsset = tasks.register<NetcapAssetTask>("netcapAsset${variant.name.replaceFirstChar { it.uppercase() }}") {
+                dependsOn(buildNetcap)
+                rawEngine.set(netcapRaw)
+            }
+            variant.sources.assets?.addGeneratedSourceDirectory(engineAsset, NetcapAssetTask::outputDir)
         }
     }
 }

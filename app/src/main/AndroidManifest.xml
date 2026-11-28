@@ -306,6 +306,28 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- Network Interceptor: a VPN only for the apps the user picks; their traffic goes to the netcap engine -->
+        <service
+            android:name="ai.antigem.data.netcap.NetcapVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Network Interceptor: captures the traffic of apps the user picked, for debugging" />
+        </service>
+
+        <!-- Network Interceptor: shows Android's VPN permission dialog -->
+        <activity
+            android:name="ai.antigem.data.netcap.NetcapConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Jarvis Quick Settings tile: tap to talk from anywhere -->
         <service
             android:name="ai.antigem.data.jarvis.JarvisTileService"
