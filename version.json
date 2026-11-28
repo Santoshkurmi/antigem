@@ -20,19 +20,17 @@
   ],
   "is_critical": false,
   "beta": {
-    "version_code": 147,
-    "version_name": "2.0.5-beta.10",
+    "version_code": 148,
+    "version_name": "2.0.5-beta.11",
     "changelog": [
-      "Added Private Space: an encrypted page for passwords, API keys, 2FA codes and private notes that AI agents can't read. Open it with a master password, fingerprint or PIN, and make encrypted backups",
-      "Added Settings → Troubleshoot: check the bridge, agents, ports and logs, and share a report",
-      "IDE: preview HTML files, and a path bar shows the open file's full path with its folders",
-      "Added provider chips to the Claude Code and OpenCode model pickers, to find a provider's models in one tap",
-      "Your community language now gets updates right in the app",
-      "The page overview remembers where you scrolled (turn it off in Settings → Appearance)",
-      "TalkBack: scrolling up in a chat now stops it from following the agent, and numbered and checklist items in replies are read as one item each",
-      "Fixed a crash when coming back to the app, and attachments going missing when editing an Antigravity message",
-      "Fixed the app showing its bridge offline on mobile data with a carrier proxy, and Antigravity sometimes failing to start with \"text file busy\"",
-      "The chat keeps following the agent when it asks for approval"
+      "Home-screen scripts, like Termux:Widget: run your ~/.shortcuts scripts from the Scripts widget, a home-screen icon or \"AntiGem script\" in your launcher's widget list (Settings → Home screen). Scripts can stay in ~/scripts through a link, get their own icons from ~/.shortcuts/icons, and work in the Ubuntu chroot too",
+      "Scripts can also go in the AntiGem icon's long-press menu, and on Android 11+ be Device controls buttons that show when a background script is done",
+      "Terminal: change the extra keys above the keyboard (more rows, any keys, a ☰ key for the sessions menu, swipe-up keys, macros) and the CTRL shortcuts for sessions in Settings → Terminal → Extra keys and shortcuts. Your Termux settings can be imported",
+      "Beta updates now turn off by themselves once the next stable version is installed; turn them on again in Settings → Updates",
+      "Fixed the home-screen widgets all turning into the Chats widget after a while",
+      "The Scripts widget shows long script names in full when it's narrow",
+      "Antigravity cloud agents: fixed attachments (files up to 20 MB) and the chat list",
+      "Fixed a crash on long press in Private Space, and a crash when dragging something onto a page in the browser"
     ]
   }
 }
