@@ -189,6 +189,9 @@ func (e *Engine) roundTripH1(ctx context.Context, c *sniff.Conn, bw *bufio.Write
 		f.ResHeaders = flow.FromHTTP(resp.Header, "")
 		f.Res.ContentType = resp.Header.Get("Content-Type")
 		f.Res.Encoding = resp.Header.Get("Content-Encoding")
+		if resp.StatusCode != http.StatusSwitchingProtocols {
+			e.cfg.Sink.Update(f) // the response headers are in (the GUI shows the status while the body streams)
+		}
 	}
 	if resp.StatusCode == http.StatusSwitchingProtocols && uc != nil {
 		if err := writeHead(bw, resp, req.Method, false, false); err != nil {

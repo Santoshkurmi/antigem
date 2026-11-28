@@ -39,7 +39,9 @@ enum class AppViewMode {
     /** The Run screen: a folder's commands and their live output (runs keep going on other screens) */
     RUN,
     /** Private Space: passwords, API keys, 2FA and private notes, encrypted; composed only while shown */
-    PRIVATE_SPACE
+    PRIVATE_SPACE,
+    /** The Network Interceptor: capture apps' traffic, inspect, edit and resend (kept once opened, like Run) */
+    NETWORK
 } 
 
 class MainActivity : ComponentActivity() {
@@ -96,6 +98,8 @@ class MainActivity : ComponentActivity() {
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
         handleVoiceCallIntent(intent)
+        // the capture notification's tap: the Network page (also on a cold start, through the first page shown)
+        if (ai.antigem.ui.netcap.NetFloating.handleIntent(intent)) chatViewModel.requestViewMode("NETWORK")
         // Home-screen shortcuts and widgets: the chat / page / script they asked for (not again when recreated); the
         // chat list they show is kept up to date from here on
         if (savedInstanceState == null) ai.antigem.data.homescreen.HomeRouter.handle(this, chatViewModel, intent)
@@ -154,6 +158,7 @@ class MainActivity : ComponentActivity() {
                     "NOTES" -> AppViewMode.NOTES
                     "FILES" -> AppViewMode.FILES
                     "RUN" -> AppViewMode.RUN
+                    "NETWORK" -> AppViewMode.NETWORK
                     else -> AppViewMode.CHAT
                 }
             }
@@ -206,6 +211,11 @@ class MainActivity : ComponentActivity() {
                         "RUN" -> {
                             previousViewMode = currentViewMode
                             currentViewMode = AppViewMode.RUN
+                        }
+
+                        "NETWORK" -> {
+                            previousViewMode = currentViewMode
+                            currentViewMode = AppViewMode.NETWORK
                         }
                     }
                     chatViewModel.consumeRequestedViewMode()
@@ -648,6 +658,63 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
+                                // Network Interceptor page: composed once opened, then kept (the list, filters and scroll stay); the
+                                // capture bubble and the capture notification open it
+                                var hasEverOpenedNetwork by remember { mutableStateOf(false) }
+                                if (currentViewMode == AppViewMode.NETWORK) hasEverOpenedNetwork = true
+                                val networkPageWanted by ai.antigem.ui.netcap.NetFloating.pageWanted.collectAsState()
+                                LaunchedEffect(networkPageWanted) {
+                                    if (networkPageWanted) {
+                                        if (currentViewMode != AppViewMode.NETWORK) {
+                                            previousViewMode = currentViewMode
+                                            currentViewMode = AppViewMode.NETWORK
+                                        }
+                                        ai.antigem.ui.netcap.NetFloating.pageShown()
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            val isVisible = currentViewMode == AppViewMode.NETWORK
+                                            alpha = if (isVisible) 1f else 0f
+                                            translationX = if (isVisible) 0f else 20000f
+                                        }
+                                        .pageSnapshotSource(AppViewMode.NETWORK, pageOverviewInUse)
+                                        .hiddenWhileOffscreen(currentViewMode == AppViewMode.NETWORK)
+                                ) {
+                                    if (hasEverOpenedNetwork) {
+                                        val networkScope = rememberCoroutineScope()
+                                        ai.antigem.ui.netcap.NetworkScreen(
+                                            isVisible = currentViewMode == AppViewMode.NETWORK,
+                                            onClose = {
+                                                currentViewMode =
+                                                    if (previousViewMode == AppViewMode.NETWORK) AppViewMode.CHAT else previousViewMode
+                                            },
+                                            onOpenInIde = { path ->
+                                                networkScope.launch {
+                                                    val f = java.io.File(path)
+                                                    val textual = f.extension.lowercase() in setOf("json", "txt", "html", "xml", "js", "css", "http", "md", "csv", "svg")
+                                                    when (val r = ai.antigem.data.files.IdeFileLauncher.openLocal(path, f.name, f.length(), textual)) {
+                                                        is ai.antigem.data.files.IdeFileLauncher.Outcome.Opened -> {
+                                                            previousViewMode = currentViewMode
+                                                            currentViewMode = AppViewMode.IDE
+                                                        }
+                                                        is ai.antigem.data.files.IdeFileLauncher.Outcome.Failed -> showToast(r.message)
+                                                        is ai.antigem.data.files.IdeFileLauncher.Outcome.NeedsConfirm -> showToast(ai.antigem.i18n.L.netcap.ui.notTextFile)
+                                                    }
+                                                }
+                                            },
+                                            onAskAi = { text ->
+                                                ai.antigem.data.run.RunPanel.chatHandoff.value = text
+                                                previousViewMode = currentViewMode
+                                                currentViewMode = AppViewMode.CHAT
+                                            },
+                                            onOpenSettings = { chatViewModel.requestSettingsSection("NETWORK_INTERCEPTOR") }
+                                        )
+                                    }
+                                }
+
                                 // Private Space (passwords, keys, private notes): composed only while it is the page shown, so nothing of
                                 // it exists off screen, and never pictured for the page overview (PageSnapshots skips it)
                                 if (currentViewMode == AppViewMode.PRIVATE_SPACE) {
@@ -728,6 +795,7 @@ class MainActivity : ComponentActivity() {
                                         "files" -> AppViewMode.FILES
                                         "run" -> AppViewMode.RUN
                                         "private" -> AppViewMode.PRIVATE_SPACE
+                                        "network" -> AppViewMode.NETWORK
                                         else -> null
                                     }
                                     when {
@@ -799,6 +867,10 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToPrivateSpace = {
                                         previousViewMode = currentViewMode
                                         currentViewMode = AppViewMode.PRIVATE_SPACE
+                                    },
+                                    onNavigateToNetwork = {
+                                        previousViewMode = currentViewMode
+                                        currentViewMode = AppViewMode.NETWORK
                                     },
                                     onNavigateBack = switcherNavigateBack,
                                     onPositionSaved = { x, y ->
@@ -987,6 +1059,8 @@ class MainActivity : ComponentActivity() {
         handleIncomingFileIntent(intent)
         handleJarvisIntent(intent)
         handleVoiceCallIntent(intent)
+        // the capture notification's tap: the Network page (also on a cold start, through the first page shown)
+        if (ai.antigem.ui.netcap.NetFloating.handleIntent(intent)) chatViewModel.requestViewMode("NETWORK")
         ai.antigem.data.homescreen.HomeRouter.handle(this, chatViewModel, intent)
     }
 

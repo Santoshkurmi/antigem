@@ -58,6 +58,8 @@ type Options struct {
 	Logf      func(string, ...any)
 	// Dial opens upstream connections (nil = direct). Tests map addresses; later: an upstream proxy.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Version of the engine (shown by the GUI).
+	Version string
 }
 
 // CaptureState is the current capture.
@@ -102,6 +104,10 @@ type Service struct {
 	limit      limiter
 	clientOnce sync.Once
 	httpc      *http.Client
+
+	live    liveHub   // the GUI's live list (ui_live.go)
+	docs    *docCache // decoded bodies the GUI pages through (ui_body.go)
+	uiState stateCache
 }
 
 // Session is one capture project.
@@ -122,6 +128,7 @@ func New(opts Options) (*Service, error) {
 		return nil, err
 	}
 	s := &Service{opts: opts, Hub: NewHub(), opened: map[string]*Session{}, mirrorCh: make(chan mirrorItem, 1024), started: time.Now()}
+	s.docs = newDocCache(filepath.Join(opts.DataDir, "tmp", "view"), 64<<20)
 	s.settings = s.loadSettings()
 	ca := opts.CA
 	if ca == nil {
@@ -169,6 +176,7 @@ func (s *Service) Close() {
 	if s.Scripts != nil {
 		s.Scripts.Close()
 	}
+	s.docs.closeAll()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, sess := range s.opened {
@@ -424,7 +432,10 @@ func (s *Service) sessOf(f *flow.Flow) *Session {
 // Update writes the flow's current state.
 func (s *Service) Update(f *flow.Flow) {
 	f.Endpoint = analyze.EndpointKey(f)
-	s.sessOf(f).Store.Put(f)
+	sess := s.sessOf(f)
+	if c := sess.Store.Put(f); c != nil {
+		s.live.flow(s, sess.ID, c, false)
+	}
 }
 
 // Finish writes the finished flow and tells listeners.
@@ -433,7 +444,9 @@ func (s *Service) Finish(f *flow.Flow) {
 	s.active.Delete(f)
 	f.Done = true
 	f.Endpoint = analyze.EndpointKey(f)
-	sess.Store.Put(f)
+	if stored := sess.Store.Put(f); stored != nil {
+		s.live.flow(s, sess.ID, stored, false)
+	}
 	c := f.Clone()
 	s.Hub.Publish(Event{Session: sess.ID, Flow: c})
 	s.reqBodies.Delete(f)

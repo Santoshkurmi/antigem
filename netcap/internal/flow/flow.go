@@ -135,6 +135,8 @@ type Flow struct {
 	Error       string    `json:"error,omitempty"`
 	Tags        []string  `json:"tags,omitempty"`
 	Note        string    `json:"note,omitempty"`
+	Pinned      bool      `json:"pinned,omitempty"`   // marked by the user in the GUI
+	Color       string    `json:"color,omitempty"`    // the user's color mark (red, green, …)
 	Endpoint    string    `json:"endpoint,omitempty"` // templated "METHOD host/path" for grouping
 	Messages    int       `json:"messages,omitempty"`
 	BytesOut    int64     `json:"bytes_out,omitempty"` // client → server (tcp/tls/ws)

@@ -29,7 +29,7 @@ type Store struct {
 	nextDNS atomic.Int64
 
 	mu         sync.Mutex
-	pending    map[int64]*flow.Flow
+	pending    map[int64]*flow.Flow // snapshots waiting to be written; never changed once queued
 	pendingBlb map[string][]byte
 	pendingMsg []flow.Message
 	pendingDNS []flow.DNS
@@ -38,6 +38,11 @@ type Store struct {
 	flushed    chan struct{} // closed and replaced after every flush
 	stop       chan struct{}
 	done       chan struct{}
+
+	writeMu   sync.Mutex                   // held by a flush while it writes, and by Edit/Delete/Clear
+	sticky    map[int64][]func(*flow.Flow) // GUI edits of running flows, applied to their later Puts
+	deleted   map[int64]time.Time          // deleted ids: later Puts of a running flow are dropped
+	clearedTo int64                        // Clear: flows up to this id are gone for good
 }
 
 const maxPendingMsgs = 50000
@@ -129,7 +134,8 @@ func Open(dir string) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{Dir: dir, Blobs: blobs, db: db, pending: map[int64]*flow.Flow{}, pendingBlb: map[string][]byte{},
-		flushed: make(chan struct{}), stop: make(chan struct{}), done: make(chan struct{})}
+		flushed: make(chan struct{}), stop: make(chan struct{}), done: make(chan struct{}),
+		sticky: map[int64][]func(*flow.Flow){}, deleted: map[int64]time.Time{}}
 	blobs.small = s
 	var maxID, maxDNS sql.NullInt64
 	_ = db.QueryRow(`SELECT max(id) FROM flows`).Scan(&maxID)
@@ -146,12 +152,37 @@ func (s *Store) NewID() int64 { return s.nextID.Add(1) }
 // LastID is the newest flow id given out.
 func (s *Store) LastID() int64 { return s.nextID.Load() }
 
-// Put queues a snapshot of f for writing (later Puts of the same id replace it).
-func (s *Store) Put(f *flow.Flow) {
+// Put queues a snapshot of f for writing (later Puts of the same id replace it) and returns that snapshot (with
+// the GUI's edits applied; nil when the flow was deleted). The snapshot must not be changed.
+func (s *Store) Put(f *flow.Flow) *flow.Flow {
 	c := f.Clone()
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.gone(c.ID) {
+		return nil
+	}
+	if fns, ok := s.sticky[c.ID]; ok {
+		for _, fn := range fns {
+			fn(c)
+		}
+		if c.Done {
+			delete(s.sticky, c.ID)
+		}
+	}
 	s.pending[c.ID] = c
-	s.mu.Unlock()
+	return c
+}
+
+// gone: the flow was deleted (s.mu held).
+func (s *Store) gone(id int64) bool {
+	if id <= s.clearedTo {
+		return true
+	}
+	if len(s.deleted) > 0 {
+		_, ok := s.deleted[id]
+		return ok
+	}
+	return false
 }
 
 func (s *Store) putSmall(hash string, comp []byte) {
@@ -177,6 +208,10 @@ func (s *Store) getSmall(hash string) ([]byte, bool) {
 // PutMessage queues a message (dropped, and counted, when too many are waiting).
 func (s *Store) PutMessage(m flow.Message) {
 	s.mu.Lock()
+	if s.gone(m.FlowID) {
+		s.mu.Unlock()
+		return
+	}
 	if len(s.pendingMsg) >= maxPendingMsgs {
 		s.dropped++
 	} else {
@@ -253,6 +288,8 @@ func (s *Store) loop() {
 }
 
 func (s *Store) flush() {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.mu.Lock()
 	flows, msgs, dns, blbs, fnds := s.pending, s.pendingMsg, s.pendingDNS, s.pendingBlb, s.pendingFnd
 	if len(flows) == 0 && len(msgs) == 0 && len(dns) == 0 && len(blbs) == 0 && len(fnds) == 0 {

@@ -76,9 +76,11 @@ type Rule struct {
 	Action   Action `json:"action"`
 	Priority int    `json:"priority,omitempty"`
 	Hits     int64  `json:"hits"`
+	Once     int    `json:"once,omitempty"` // > 0: the rule removes itself after this many hits (quick breakpoints)
 
 	filter *query.Filter
 	hits   atomic.Int64
+	used   atomic.Int64 // hits counted against Once
 	re     []*regexp.Regexp
 }
 
@@ -113,6 +115,9 @@ func (r *Rule) Validate() error {
 	f, err := query.Parse(r.Match)
 	if err != nil {
 		return fmt.Errorf("match: %w", err)
+	}
+	if r.Once < 0 {
+		return errors.New("once must be 0 (always) or the number of hits after which the rule removes itself")
 	}
 	r.filter = f
 	a := r.Action
@@ -314,6 +319,34 @@ func (s *Set) Enable(id string, on bool) error {
 		return fmt.Errorf("no rule %s", id)
 	}
 	return s.Save()
+}
+
+// TakeOnce counts a hit of a rule with Once set: false when its hits are used up (another flow took the last
+// one); the last hit removes the rule. Rules without Once always return true.
+func (s *Set) TakeOnce(r *Rule) bool {
+	if r.Once <= 0 {
+		return true
+	}
+	n := r.used.Add(1)
+	if n > int64(r.Once) {
+		return false
+	}
+	if n == int64(r.Once) {
+		_ = s.Remove(r.ID)
+	}
+	return true
+}
+
+// Snapshot returns copies of the rules with their live hit counts, safe to read while the set changes.
+func (s *Set) Snapshot() []*Rule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Rule, 0, len(s.list))
+	for _, r := range s.list {
+		out = append(out, &Rule{ID: r.ID, Name: r.Name, Enabled: r.Enabled, Match: r.Match, Phase: r.Phase, Action: r.Action,
+			Priority: r.Priority, Hits: r.hits.Load(), Once: max(0, r.Once-int(r.used.Load()))})
+	}
+	return out
 }
 
 // Get returns a rule.

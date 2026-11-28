@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
@@ -119,6 +120,7 @@ fun FloatingSwitcherWidget(
     onNavigateToFiles: () -> Unit = {},
     onNavigateToRun: () -> Unit = {},
     onNavigateToPrivateSpace: () -> Unit = {},
+    onNavigateToNetwork: () -> Unit = {},
     onNavigateBack: () -> Unit = {},
     onPositionSaved: (Float, Float) -> Unit,
     onOrientationChange: (String) -> Unit = {},
@@ -185,6 +187,7 @@ fun FloatingSwitcherWidget(
             "files" -> onNavigateToFiles()
             "run" -> onNavigateToRun()
             "private" -> onNavigateToPrivateSpace()
+            "network" -> onNavigateToNetwork()
         }
     }
     // The gesture handler lives in a long-running pointerInput(Unit); always call the latest callback.
@@ -350,6 +353,7 @@ fun FloatingSwitcherWidget(
                     "files" -> currentViewMode == AppViewMode.FILES
                     "run" -> currentViewMode == AppViewMode.RUN
                     "private" -> currentViewMode == AppViewMode.PRIVATE_SPACE
+                    "network" -> currentViewMode == AppViewMode.NETWORK
                     else -> false
                 }
                 val iconVector: ImageVector = when (id) {
@@ -361,6 +365,7 @@ fun FloatingSwitcherWidget(
                     "files" -> Icons.Outlined.FolderOpen
                     "run" -> Icons.Outlined.PlayCircle
                     "private" -> Icons.Outlined.Shield
+                    "network" -> Icons.Outlined.SwapVert
                     else -> Icons.Outlined.ChatBubbleOutline
                 }
                 val contentDesc = when (id) {
@@ -372,6 +377,7 @@ fun FloatingSwitcherWidget(
                     "files" -> L.common.files
                     "run" -> L.common.run
                     "private" -> L.privateSpace.title
+                    "network" -> L.netcap.ui.title
                     else -> itemId
                 }
                 FloatingSwitcherItemButton(

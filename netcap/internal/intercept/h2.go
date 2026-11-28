@@ -240,6 +240,7 @@ func (e *Engine) h2Stream(ctx context.Context, w http.ResponseWriter, r *http.Re
 	f.ResHeaders = flow.FromHTTP(resp.Header, "")
 	f.Res.ContentType = resp.Header.Get("Content-Type")
 	f.Res.Encoding = resp.Header.Get("Content-Encoding")
+	e.cfg.Sink.Update(f) // the response headers are in (the GUI shows the status while the body streams)
 
 	h := w.Header()
 	for k, vv := range resp.Header {

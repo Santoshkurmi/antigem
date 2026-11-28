@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antigem/netcap/internal/flow"
@@ -60,7 +61,22 @@ type liveBody struct {
 	tooBig   bool
 	err      error
 	replaced bool
-	decoded  bool // data is the decoded form of raw
+	decoded  bool          // data is the decoded form of raw
+	full     io.ReadCloser // a whole new body of any size (the GUI's breakpoint edit): sent instead of all else
+	fullSize int64
+}
+
+// replaceAll puts a whole new body in place of the old one; the part of a big old body not read yet is read and
+// dropped first (an HTTP/1 connection must get past it).
+func (b *liveBody) replaceAll(r io.ReadCloser, size int64, data []byte) {
+	if b.tooBig && b.rest != nil {
+		_, _ = io.Copy(io.Discard, b.rest)
+		b.rest.Close()
+		b.rest, b.tooBig, b.err = nil, false, nil
+	}
+	b.read = true
+	b.full, b.fullSize = r, size
+	b.data, b.replaced, b.decoded = data, true, false
 }
 
 func (b *liveBody) load(rc io.ReadCloser, encoding string) ([]byte, error) {
@@ -100,6 +116,8 @@ func (b *liveBody) load(rc io.ReadCloser, encoding string) ([]byte, error) {
 // reader gives the body to send on: the original bytes, or the changed ones.
 func (b *liveBody) reader() io.ReadCloser {
 	switch {
+	case b.full != nil:
+		return b.full
 	case b.tooBig:
 		return struct {
 			io.Reader
@@ -113,6 +131,8 @@ func (b *liveBody) reader() io.ReadCloser {
 
 func (b *liveBody) size() int64 {
 	switch {
+	case b.full != nil:
+		return b.fullSize
 	case b.tooBig:
 		return -1
 	case b.replaced:
@@ -164,7 +184,7 @@ func (s *Service) Request(ctx context.Context, f *flow.Flow, req *http.Request) 
 		}
 	}()
 	for _, r := range list {
-		if !r.Filter().Match(f, bodies) {
+		if !r.Filter().Match(f, bodies) || !s.Rules.TakeOnce(r) {
 			continue
 		}
 		r.Hit()
@@ -214,7 +234,7 @@ func (s *Service) Request(ctx context.Context, f *flow.Flow, req *http.Request) 
 
 func setReqBody(req *http.Request, lb *liveBody) {
 	req.Body = lb.reader()
-	if lb.tooBig {
+	if lb.tooBig && lb.full == nil {
 		return
 	}
 	req.ContentLength = lb.size()
@@ -250,7 +270,7 @@ func (s *Service) Response(ctx context.Context, f *flow.Flow, req *http.Request,
 		f.Status = cur.StatusCode
 		f.ResHeaders = flow.FromHTTP(cur.Header, "")
 		f.Res.ContentType = cur.Header.Get("Content-Type")
-		if !r.Filter().Match(f, bodies) {
+		if !r.Filter().Match(f, bodies) || !s.Rules.TakeOnce(r) {
 			continue
 		}
 		r.Hit()
@@ -315,7 +335,7 @@ func setResBody(resp *http.Response, lb *liveBody) {
 	} else {
 		resp.Body = lb.reader()
 	}
-	if lb.tooBig {
+	if lb.tooBig && lb.full == nil {
 		return
 	}
 	resp.ContentLength = lb.size()
@@ -628,13 +648,33 @@ type Paused struct {
 	Since    time.Time     `json:"since"`
 	Timeout  time.Duration `json:"-"`
 	decide   chan Decision
+
+	full   []byte       // the whole body read for the breakpoint (up to editMax; Body is its first 1 MB)
+	tooBig bool         // the body was bigger than editMax: not read
+	size   int64        // body size when known (-1 = unknown)
+	extra  atomic.Int64 // time added by Extend (ns)
 }
+
+// left is the time until the paused flow continues by itself.
+func (p *Paused) left() time.Duration { return time.Until(p.Since.Add(p.total())) }
+
+// total is the auto-continue timeout including extensions.
+func (p *Paused) total() time.Duration { return p.Timeout + time.Duration(p.extra.Load()) }
 
 // Decision for a paused flow.
 type Decision struct {
 	Action string        // continue (default), drop, respond
 	Patch  Patch         // continue: changes
 	Mock   *rules.Action // respond: the answer (status, headers, body, json)
+	Answer *Answer       // respond with a full header list (the GUI); wins over Mock
+}
+
+// Answer is a response given whole: status, every header in order, body.
+type Answer struct {
+	Status    int
+	Headers   flow.Headers
+	Body      []byte
+	BodyPlain bool // Body is decoded text: encode it to match the Content-Encoding header
 }
 
 // Patch changes a request (net_send, breakpoint resume) or a response (breakpoint resume).
@@ -649,12 +689,20 @@ type Patch struct {
 	JSONDelete    []string          `json:"json_delete,omitempty"`
 	Replace       []rules.Replace   `json:"replace,omitempty"`
 	Status        int               `json:"status,omitempty"`
+
+	// full replacements (the GUI's breakpoint editor), any size
+	Headers   *flow.Headers `json:"-"` // the whole header list
+	Body      []byte        `json:"-"` // the whole body (BodySet)
+	BodySet   bool          `json:"-"`
+	BodyFile  string        `json:"-"` // or the body read from a file (streamed)
+	BodyPlain bool          `json:"-"` // Body is decoded text: encode it to match the Content-Encoding header
 }
 
 // Empty reports whether the patch changes nothing.
 func (p Patch) Empty() bool {
 	return p.Method == "" && p.URL == "" && len(p.SetHeaders) == 0 && len(p.RemoveHeaders) == 0 && len(p.Query) == 0 &&
-		p.BodyText == nil && len(p.JSONSet) == 0 && len(p.JSONDelete) == 0 && len(p.Replace) == 0 && p.Status == 0
+		p.BodyText == nil && len(p.JSONSet) == 0 && len(p.JSONDelete) == 0 && len(p.Replace) == 0 && p.Status == 0 &&
+		p.Headers == nil && !p.BodySet && p.BodyFile == ""
 }
 
 func (p Patch) asRule() (*rules.Rule, error) {
@@ -695,6 +743,13 @@ func (s *Service) pause(ctx context.Context, f *flow.Flow, r *rules.Rule, phase 
 	} else {
 		p.Body = body
 	}
+	p.full, p.tooBig, p.size = body, lb.tooBig, int64(len(body))
+	if lb.tooBig {
+		p.size = req.ContentLength
+		if phase == "response" {
+			p.size = resp.ContentLength
+		}
+	}
 	timeout := time.Duration(r.Action.TimeoutS) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -708,23 +763,33 @@ func (s *Service) pause(ctx context.Context, f *flow.Flow, r *rules.Rule, phase 
 	p.ID = "x" + strconv.Itoa(s.paused.next)
 	s.paused.m[p.ID] = p
 	s.paused.mu.Unlock()
+	s.live.pausedChanged()
 	defer func() {
 		s.paused.mu.Lock()
 		delete(s.paused.m, p.ID)
 		s.paused.mu.Unlock()
+		s.live.pausedChanged()
 	}()
 	mark(f, "paused")
+	s.Update(f) // the GUI lists the paused flow
 	s.Hub.Publish(Event{Session: p.Session, Flow: f.Clone(), Paused: p.ID})
 	t := time.NewTimer(timeout)
 	defer t.Stop()
 	var d Decision
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-t.C:
-		f.Note = strings.TrimSpace(f.Note + " breakpoint " + p.ID + " continued after " + timeout.String())
-		return nil, nil
-	case d = <-p.decide:
+	for waiting := true; waiting; {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-t.C:
+			if left := p.left(); left > 0 { // extended meanwhile
+				t.Reset(left)
+				continue
+			}
+			f.Note = strings.TrimSpace(f.Note + " breakpoint " + p.ID + " continued after " + p.total().String())
+			return nil, nil
+		case d = <-p.decide:
+			waiting = false
+		}
 	}
 	return s.applyDecision(ctx, f, phase, req, resp, lb, get, d)
 }
@@ -737,6 +802,9 @@ func (s *Service) applyDecision(ctx context.Context, f *flow.Flow, phase string,
 		return nil, intercept.ErrBlock
 	case "respond":
 		mark(f, "mocked")
+		if d.Answer != nil {
+			return answerResp(req, d.Answer), nil
+		}
 		a := rules.Action{Type: "mock", Status: 200}
 		if d.Mock != nil {
 			a = *d.Mock
@@ -745,6 +813,20 @@ func (s *Service) applyDecision(ctx context.Context, f *flow.Flow, phase string,
 	}
 	if d.Patch.Empty() {
 		return nil, nil
+	}
+	if phase == "request" {
+		if err := replaceRequest(req, lb, d.Patch); err != nil {
+			return nil, err
+		}
+	} else if d.Patch.BodySet || d.Patch.BodyFile != "" {
+		// a new body: answer with a new response, so the engine drops the server's (possibly unread) one
+		if err := s.rewriteStatus(resp, d.Patch); err != nil {
+			return nil, err
+		}
+		mark(f, "modified")
+		return replaceResponse(req, resp, d.Patch)
+	} else if d.Patch.Headers != nil {
+		resp.Header = headersOf(*d.Patch.Headers, nil)
 	}
 	if phase == "request" && d.Patch.URL != "" {
 		if u, err := url.Parse(d.Patch.URL); err == nil && (u.Host != req.URL.Host && u.Host != "" || u.Scheme != "" && u.Scheme != req.URL.Scheme) {
@@ -806,7 +888,7 @@ func (s *Service) PausedText(id string, secrets bool) (string, error) {
 		}
 		var b strings.Builder
 		for _, p := range list {
-			left := time.Until(p.Since.Add(p.Timeout)).Round(time.Second)
+			left := p.left().Round(time.Second)
 			what := p.Method + " " + Cut(p.URL, 90)
 			if p.Phase == "response" {
 				what += fmt.Sprintf(" → %d", p.Status)
@@ -832,7 +914,7 @@ func (s *Service) PausedText(id string, secrets bool) (string, error) {
 		if len(body) > 0 {
 			fmt.Fprintf(&b, "body (%s, %s):\n%s\n", p.BodyType, Size(int64(len(p.Body))), Cut(view.Pretty(body, p.BodyType), 3000))
 		}
-		fmt.Fprintf(&b, "auto-continue in %s", time.Until(p.Since.Add(p.Timeout)).Round(time.Second))
+		fmt.Fprintf(&b, "auto-continue in %s", p.left().Round(time.Second))
 		return b.String(), nil
 	}
 	return "", fmt.Errorf("no paused item %s", id)
@@ -846,7 +928,7 @@ func (s *Service) connectRule(m intercept.Meta, host string) (passthrough, ignor
 	}
 	pseudo := &flow.Flow{App: m.App, Host: host, Kind: flow.KindTLS}
 	for _, r := range s.Rules.Phase("connect") {
-		if r.Filter().Match(pseudo, nil) {
+		if r.Filter().Match(pseudo, nil) && s.Rules.TakeOnce(r) {
 			r.Hit()
 			switch r.Action.Type {
 			case "passthrough":

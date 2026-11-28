@@ -341,7 +341,9 @@ func (s *Service) completeLoop() {
 			}
 		}
 		if changed {
-			it.sess.Store.Put(it.f)
+			if c := it.sess.Store.Put(it.f); c != nil {
+				s.live.flow(s, it.sess.ID, c, false)
+			}
 		}
 		for _, h := range s.extFor("complete", it.f, bodies) {
 			h.complete(it.sess, it.f)

@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
@@ -277,6 +278,7 @@ private fun overviewPage(id: String): OverviewPage? = when (id.lowercase()) {
     "files" -> OverviewPage("files", AppViewMode.FILES, L.common.files, Icons.Outlined.FolderOpen)
     "run" -> OverviewPage("run", AppViewMode.RUN, L.common.run, Icons.Outlined.PlayCircle)
     "private" -> OverviewPage("private", AppViewMode.PRIVATE_SPACE, L.privateSpace.title, Icons.Outlined.Shield)
+    "network" -> OverviewPage("network", AppViewMode.NETWORK, L.netcap.ui.title, Icons.Outlined.SwapVert)
     else -> null
 }
 
@@ -1055,6 +1057,13 @@ private fun pageStatus(
                 ai.antigem.data.privatespace.SpaceStatus.LOCKED -> L.privateSpace.overview.locked
                 ai.antigem.data.privatespace.SpaceStatus.NOT_SET_UP -> L.privateSpace.overview.notSetUp
             }
+        )
+    }
+    "network" -> {
+        val st by ai.antigem.data.netcap.NetcapManager.state.collectAsState()
+        PageStatus(
+            if (st.capturing) L.netcap.ui.overviewCapturing(st.flows) else L.netcap.screen.notCapturing,
+            live = st.capturing
         )
     }
     else -> PageStatus("")

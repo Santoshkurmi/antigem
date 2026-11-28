@@ -95,6 +95,8 @@ type ListOptions struct {
 	Collapse bool
 	Noise    bool
 	Secrets  bool
+	MaxLimit int  // highest Limit allowed (0 = 500)
+	CountAll bool // keep scanning after the page to count every match (Matched)
 }
 
 // ListResult of List.
@@ -107,6 +109,8 @@ type ListResult struct {
 	Scanned  int
 	ScanCut  bool
 	ShowApps bool
+	Matched  int  // CountAll: flows that match (up to the scan limit)
+	CountCut bool // CountAll: counting stopped at the scan limit
 }
 
 // Row is one list line (Count > 1 = collapsed repeats).
@@ -129,8 +133,12 @@ func (s *Service) List(o ListOptions) (*ListResult, error) {
 	if o.Limit <= 0 {
 		o.Limit = 20
 	}
-	if o.Limit > 500 {
-		o.Limit = 500
+	maxLimit := 500
+	if o.MaxLimit > 0 {
+		maxLimit = o.MaxLimit
+	}
+	if o.Limit > maxLimit {
+		o.Limit = maxLimit
 	}
 	sess.Store.Flush()
 	where, args := flt.SQL()
@@ -161,7 +169,11 @@ func (s *Service) List(o ListOptions) (*ListResult, error) {
 	err = sess.Store.Scan(where, args, asc, func(f *flow.Flow) bool {
 		res.Scanned++
 		if res.Scanned > scanMax {
-			res.ScanCut = true
+			if more {
+				res.CountCut = true
+			} else {
+				res.ScanCut = true
+			}
 			return false
 		}
 		if !flt.Match(f, bodies) {
@@ -169,6 +181,14 @@ func (s *Service) List(o ListOptions) (*ListResult, error) {
 		}
 		if hideNoise && query.IsNoise(f) {
 			res.Hidden++
+			return true
+		}
+		res.Matched++
+		if more { // CountAll: the page is full, only counting now (up to 20000 flows scanned)
+			if res.Scanned > 20000 {
+				res.CountCut = true
+				return false
+			}
 			return true
 		}
 		apps[f.App] = true
@@ -186,7 +206,7 @@ func (s *Service) List(o ListOptions) (*ListResult, error) {
 		}
 		if len(res.Rows) >= o.Limit {
 			more = true
-			return false
+			return o.CountAll
 		}
 		res.Rows = append(res.Rows, Row{Flow: f, Count: 1, LastID: f.ID})
 		return true

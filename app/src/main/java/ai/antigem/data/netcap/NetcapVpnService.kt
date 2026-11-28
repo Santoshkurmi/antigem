@@ -26,6 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -44,6 +46,17 @@ class NetcapVpnService : VpnService() {
         when (intent?.action) {
             ACTION_STOP -> {
                 shutdown()
+                return START_NOT_STICKY
+            }
+            ACTION_PAUSE -> {
+                // the notification's Pause / Resume: the engine keeps the tunnel and passes traffic without recording
+                scope.launch {
+                    runCatching {
+                        val paused = runCatching { NetcapApi.get("/v1/status").optJSONObject("capture")?.optBoolean("paused") }.getOrNull()
+                            ?: NetStore.state.value.capture.paused
+                        NetStore.pauseCapture(!paused)
+                    }
+                }
                 return START_NOT_STICKY
             }
             ACTION_START -> {
@@ -90,11 +103,16 @@ class NetcapVpnService : VpnService() {
             return
         }
         watchNetwork()
+        // the capture bubble over other apps (Network page → ⋮ → Floating bubble)
+        ai.antigem.ui.netcap.NetFloating.attach(applicationContext)
         statsJob?.cancel()
         statsJob = scope.launch {
-            NetcapManager.state.collectLatest { st ->
-                getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, notification(apps, st.flows))
-            }
+            // the live count while the page or the bubble keeps the stream open, else the engine's stats (also a count)
+            combine(NetcapManager.state, NetStore.state, NetStore.connected) { m, s, live -> (if (live) s.sessionFlows else m.flows) to s.capture.paused }
+                .distinctUntilChanged()
+                .collectLatest { (flows, paused) ->
+                    getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, notification(apps, flows, paused))
+                }
         }
     }
 
@@ -163,20 +181,24 @@ class NetcapVpnService : VpnService() {
 
     private fun pendingFlags() = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
 
-    private fun notification(list: List<String>, flows: Int): Notification {
+    private fun notification(list: List<String>, flows: Int, paused: Boolean = false): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26 && nm?.getNotificationChannel(CHANNEL) == null) {
             nm?.createNotificationChannel(NotificationChannel(CHANNEL, L.netcap.service.channel, NotificationManager.IMPORTANCE_LOW))
         }
         val stop = PendingIntent.getService(this, 1, Intent(this, NetcapVpnService::class.java).setAction(ACTION_STOP), pendingFlags())
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), pendingFlags())
+        val pause = PendingIntent.getService(this, 2, Intent(this, NetcapVpnService::class.java).setAction(ACTION_PAUSE), pendingFlags())
+        // a tap opens the Network page
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra(ai.antigem.ui.netcap.NetFloating.EXTRA_OPEN, true), pendingFlags())
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(L.netcap.service.capturing)
+            .setContentTitle(if (paused) L.netcap.ui.notifPaused else L.netcap.service.capturing)
             .setContentText(L.netcap.service.status(list.joinToString(", ").ifEmpty { "…" }, flows))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
+            .addAction(0, if (paused) L.netcap.ui.resume else L.common.pause, pause)
             .addAction(0, L.common.stop, stop)
             .build()
     }
@@ -190,6 +212,7 @@ class NetcapVpnService : VpnService() {
         private const val MTU = 9000
         const val ACTION_START = "ai.antigem.netcap.START"
         const val ACTION_STOP = "ai.antigem.netcap.STOP"
+        const val ACTION_PAUSE = "ai.antigem.netcap.PAUSE"
         const val EXTRA_APPS = "apps"
 
         @Volatile var running = false
@@ -217,9 +240,14 @@ class NetcapVpnService : VpnService() {
             return r
         }
 
+        /** Stops the capture; when the VPN already stopped, makes sure nothing still says it runs. */
         fun stop(context: Context) {
-            if (!running) return
+            if (!running) {
+                NetcapManager.tunStopped()
+                return
+            }
             runCatching { context.startService(Intent(context, NetcapVpnService::class.java).setAction(ACTION_STOP)) }
+                .onFailure { NetcapManager.tunStopped() }
         }
     }
 }

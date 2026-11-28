@@ -39,6 +39,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("/v1/flows/", a.authF(a.flow))
 	mux.HandleFunc("/v1/events", a.authF(a.events))
 	mux.HandleFunc("/v1/hooks", a.authF(a.hooks))
+	a.uiRoutes(mux) // the native GUI: /v1/ui/… (ui.go)
 	// profiling (token needed): go tool pprof http://…/debug/pprof/profile?seconds=20&token=…
 	mux.HandleFunc("/debug/pprof/", a.authF(pprof.Index))
 	mux.HandleFunc("/debug/pprof/profile", a.authF(pprof.Profile))

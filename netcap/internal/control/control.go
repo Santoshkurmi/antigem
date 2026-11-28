@@ -396,8 +396,13 @@ func (c *Client) sendStats() {
 		return
 	}
 	sess := c.svc.Current()
-	// LastID, not a COUNT over the table: this runs every 2 s while capturing
-	_ = c.send(map[string]any{"type": "stats", "flows": sess.Store.LastID(), "session": sess.ID, "capture": c.svc.CaptureInfo()})
+	// the number of flows from the UI state's cache (counted at most once a second); LastID only as a fallback. LastID
+	// alone stayed high after a clear or a delete.
+	flows := sess.Store.LastID()
+	if st, err := c.svc.UIState(""); err == nil {
+		flows = int64(st.Session.Flows)
+	}
+	_ = c.send(map[string]any{"type": "stats", "flows": flows, "session": sess.ID, "capture": c.svc.CaptureInfo()})
 }
 
 // ---- service.Platform ----

@@ -96,6 +96,24 @@ func (f *Filter) SQL() (string, []any) {
 	return strings.Join(f.sqlParts, " AND "), f.sqlArgs
 }
 
+// SQLOnly reports whether SQL() alone decides the filter (every term was pushed down), so a count needs no scan.
+func (f *Filter) SQLOnly() bool {
+	switch r := f.root.(type) {
+	case all:
+		return true
+	case *pred:
+		return r.sql != ""
+	case and:
+		for _, n := range r {
+			if p, ok := n.(*pred); !ok || p.sql == "" {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 // Match reports whether a flow matches. bodies may be nil (body terms then never match).
 func (f *Filter) Match(fl *flow.Flow, bodies Bodies) bool {
 	return f.root.eval(&ctx{f: fl, b: bodies, now: time.Now()})
@@ -305,7 +323,8 @@ func isKnownField(f string) bool {
 	switch f {
 	case "app", "host", "method", "path", "url", "status", "type", "req.type", "res.type", "kind", "http", "tls",
 		"size", "req.size", "res.size", "time", "since", "until", "after", "before", "id", "tag", "note", "error",
-		"header", "body", "req.body", "res.body", "req.json", "res.json", "noise", "flag", "js", "uid", "port", "scheme":
+		"header", "body", "req.body", "res.body", "req.json", "res.json", "noise", "flag", "js", "uid", "port", "scheme",
+		"pinned", "color":
 		return true
 	}
 	return strings.HasPrefix(f, "req.header.") || strings.HasPrefix(f, "res.header.") || strings.HasPrefix(f, "header.")
@@ -535,6 +554,30 @@ func (p *parser) term(t *token) (node, error) {
 	case "noise":
 		want := !(strings.EqualFold(v, "false") || v == "0" || strings.EqualFold(v, "no"))
 		return &pred{fn: func(c *ctx) bool { return IsNoise(c.f) == want }}, nil
+	case "pinned":
+		want := !(strings.EqualFold(v, "false") || v == "0" || strings.EqualFold(v, "no"))
+		return &pred{fn: func(c *ctx) bool { return c.f.Pinned == want }}, nil
+	case "color":
+		lv := strings.ToLower(strings.TrimSpace(v))
+		switch lv {
+		case "any", "true", "yes":
+			return &pred{fn: func(c *ctx) bool { return c.f.Color != "" }}, nil
+		case "none", "false", "no":
+			return &pred{fn: func(c *ctx) bool { return c.f.Color == "" }}, nil
+		}
+		alts := strings.Split(lv, ",")
+		n := node(&pred{fn: func(c *ctx) bool {
+			for _, a := range alts {
+				if strings.EqualFold(c.f.Color, strings.TrimSpace(a)) {
+					return true
+				}
+			}
+			return false
+		}})
+		if op == "!=" {
+			n = not{n}
+		}
+		return n, nil
 	case "body", "req.body", "res.body":
 		return bodyTerm(field, v)
 	case "req.json", "res.json":

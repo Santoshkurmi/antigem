@@ -57,7 +57,7 @@ func serve(args []string) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	opts := service.Options{DataDir: *data, APIAddr: *apiAddr, ProxyAddr: *proxyAddr, Logf: logf}
+	opts := service.Options{DataDir: *data, APIAddr: *apiAddr, ProxyAddr: *proxyAddr, Logf: logf, Version: Version}
 	var ctl controller
 	if *control != "" {
 		c, err := newController(ctx, *control, *token)

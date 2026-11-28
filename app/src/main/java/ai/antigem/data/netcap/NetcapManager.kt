@@ -414,8 +414,9 @@ object NetcapManager {
             "stats" -> {
                 val cap = m.optJSONObject("capture")
                 _state.update {
+                    // "capturing" is not taken from here: only the VPN service sets it (sendTun / tunStopped), so a
+                    // stats message still on its way when the VPN stops can't turn it back on
                     it.copy(flows = m.optInt("flows"), session = m.optString("session"),
-                        capturing = cap?.optBoolean("on") == true,
                         apps = cap?.optJSONArray("apps")?.let { a -> (0 until a.length()).map { i -> a.getString(i) } } ?: it.apps)
                 }
             }
@@ -569,6 +570,10 @@ object NetcapManager {
             }.getOrNull()
         }
     }
+
+    /** The engine API's token and HTTP client, for the Network page ([NetcapApi]); never leaves the app. */
+    internal val apiToken: String get() = token
+    internal val apiHttp: OkHttpClient get() = http
 
     private fun apiGet(path: String): String? = runCatching {
         val req = Request.Builder().url("http://127.0.0.1:$apiPort$path").header("X-Netcap-Token", token).get().build()

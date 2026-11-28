@@ -11,8 +11,8 @@ HTTP/1.1, HTTP/2 and WebSocket traffic of the test app, hooks took ~0.4–1 ms e
 script on every request: no failure, same latency as without), external hooks (modify and observe) worked over the
 API. Release APKs don't carry the engine: the app downloads it on first use from the GitHub release `netcap-v<version>`
 (published by the release workflow) and checks the SHA-256 the APK was built with (06-android.md, "Build and
-packaging"). Phases 6–7 (privacy
-report, GUI) are not built. The user-facing name is **Network Interceptor** ("Network Inspector" is the
+packaging"). Phase 7, the GUI (a native Network page, a capture bubble over other apps, the engine's `/v1/ui/*` API), is
+built and tested on the phone (08-gui.md); Phase 6 (privacy report) is not built. The user-facing name is **Network Interceptor** ("Network Inspector" is the
 app's older API-call log).
 
 Built differently from the plan below: the API and the control channel use JSON (no protobuf yet; the GUI phase can
@@ -97,7 +97,7 @@ flowchart TB
 | [05-rules-and-scripts.md](05-rules-and-scripts.md) | rules, variables, breakpoints, JS runner, external hooks |
 | [06-android.md](06-android.md) | VPN service, certificate, app changes, packaging |
 | [07-privacy.md](07-privacy.md) | protecting captured data, privacy report |
-| [08-gui.md](08-gui.md) | the future ProxyPin-style screen |
+| [08-gui.md](08-gui.md) | the Network page, bubble and GUI API (as built) |
 | [09-phases.md](09-phases.md) | build order, tests, risks |
 
 ## Open decisions
@@ -106,5 +106,5 @@ flowchart TB
    the app only exports it.
 2. **Where it lives**: its own page next to Terminal and Files (`AppViewMode.NETWORK`), or under Settings first.
 3. **Script engine**: goja or QuickJS-in-Go, decided by the Phase 0 test (05).
-4. **GUI**: Compose screens or a web UI served by the engine (08).
+4. **GUI**: decided: native Compose page (08).
 5. **Tracker list source** for the privacy report (07).
