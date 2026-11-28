@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.MutableContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -15,6 +16,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
+import android.view.DragEvent
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -953,8 +955,36 @@ class BrowserSessionManager private constructor() {
         } catch (_: Exception) {}
         tab.webView = null
 
-        val wv = object : WebView(context) {
+        // A tab outlives the screen it was made on (this manager is app-wide), so the WebView's context is pointed
+        // at the Activity it is shown in each time it is put on a screen: Chromium then never asks a closed Activity
+        // for anything (a drop onto the page asked a closed one for drag permissions and crashed the app).
+        val screenContext = MutableContextWrapper(activityOrNull(context) ?: context)
+        val wv = object : WebView(screenContext) {
             private fun blocksFlowInput() = tab.blocksUserInput || tab.agentInputLock
+
+            override fun onAttachedToWindow() {
+                var p = parent
+                while (p is View) {
+                    val activity = activityOrNull(p.context)
+                    if (activity != null) {
+                        if (screenContext.baseContext !== activity) screenContext.baseContext = activity
+                        break
+                    }
+                    p = p.parent
+                }
+                super.onAttachedToWindow()
+            }
+
+            // Safety net: a drop the system refuses (e.g. its Activity closed mid-drag) is ignored instead of crashing
+            override fun onDragEvent(event: DragEvent): Boolean = try {
+                super.onDragEvent(event)
+            } catch (e: IllegalArgumentException) {
+                Log.w(TAG, "Drop on tab ${tab.id} refused", e)
+                false
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Drop on tab ${tab.id} refused", e)
+                false
+            }
 
             // While AI automation drives this tab, page input focus must never bring up the soft keyboard
             override fun onCheckIsTextEditor(): Boolean = if (blocksFlowInput()) false else super.onCheckIsTextEditor()
@@ -1274,7 +1304,8 @@ class BrowserSessionManager private constructor() {
                     val popupTab = BrowserTabSession(initialUrl = "", initialTitle = "New Tab").also {
                         it.isDesktopMode = tab.isDesktopMode
                     }
-                    transport.webView = createWebView(context, popupTab, isDark, loadInitialUrl = false)
+                    // the opener's context: the Activity it is shown in now, not the one it was made on
+                    transport.webView = createWebView(view?.context ?: context, popupTab, isDark, loadInitialUrl = false)
                     // A tab the browser MCP opens from a locked tab is locked too
                     BrowserAgentLock.inherit(popupTab, tab)
                     tabs.add(popupTab)
@@ -1807,6 +1838,13 @@ class BrowserSessionManager private constructor() {
             val wv = tab.webView ?: return@post
             repeat(15) { if (!wv.zoomOut()) return@post }
         }
+    }
+
+    /** The Activity [context] belongs to (looking through wrappers), or null. */
+    private fun activityOrNull(context: Context?): Activity? {
+        var c = context
+        while (c is ContextWrapper && c !is Activity) c = c.baseContext
+        return c as? Activity
     }
 
     private fun activityOf(view: WebView): Activity? {

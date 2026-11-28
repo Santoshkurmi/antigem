@@ -10,8 +10,10 @@ import android.text.format.DateUtils
 import android.view.View
 import android.view.accessibility.AccessibilityManager
 import android.view.inputmethod.EditorInfo
+import androidx.compose.ui.platform.AndroidClipboard
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.nativeClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.PlatformTextInputInterceptor
@@ -21,8 +23,11 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
 import ai.antigem.data.privatespace.PrivateSpace
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -186,8 +191,11 @@ internal fun SpaceAlertDialog(
  * The page's clipboard: whatever is copied on it (selected text, a text field's Copy or Cut) is copied like a secret
  * ([PrivateSpace.copySecret]: marked sensitive and Private Space's, cleared after the set time), not left on the
  * clipboard for good. Pasting works as usual.
+ *
+ * It must be an [AndroidClipboard]: Compose's text toolbar (long press in a field) reads the system clipboard through
+ * `nativeClipboardManager`, which throws for any other Clipboard.
  */
-internal class SpaceClipboard(private val context: Context, private val platform: Clipboard) : Clipboard {
+internal class SpaceClipboard(private val context: Context, private val platform: Clipboard) : AndroidClipboard {
     override suspend fun getClipEntry(): ClipEntry? = platform.getClipEntry()
 
     override suspend fun setClipEntry(clipEntry: ClipEntry?) {
@@ -195,7 +203,7 @@ internal class SpaceClipboard(private val context: Context, private val platform
         if (text == null) platform.setClipEntry(clipEntry) else PrivateSpace.copySecret(context, text)
     }
 
-    override val nativeClipboard: android.content.ClipboardManager get() = platform.nativeClipboard
+    override val clipboardManager: android.content.ClipboardManager get() = platform.nativeClipboardManager
 }
 
 /**
@@ -442,43 +450,71 @@ internal fun PinPad(
         }
         Spacer(Modifier.height(24.dp))
         val rows = listOf(listOf('1', '2', '3'), listOf('4', '5', '6'), listOf('7', '8', '9'))
-        rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                row.forEach { d -> PinKey(d.toString(), enabled) { onDigit(d) } }
+        rows.forEachIndexed { r, row ->
+            Row {
+                row.forEachIndexed { c, d -> PinKey(d.toString(), enabled, pinCell(c, r)) { onDigit(d) } }
             }
-            Spacer(Modifier.height(14.dp))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             when {
-                onFingerprint != null -> PinIconKey(Icons.Outlined.Fingerprint, L.privateSpace.lock.useFingerprint, enabled, onFingerprint)
-                onSubmit != null -> PinIconKey(Icons.Outlined.Check, L.common.done, enabled && entered >= PasswordTools.PIN_MIN, onSubmit)
-                else -> Spacer(Modifier.size(72.dp))
+                onFingerprint != null -> PinIconKey(Icons.Outlined.Fingerprint, L.privateSpace.lock.useFingerprint, enabled, pinCell(0, 3), onFingerprint)
+                onSubmit != null -> PinIconKey(Icons.Outlined.Check, L.common.done, enabled && entered >= PasswordTools.PIN_MIN, pinCell(0, 3), onSubmit)
+                else -> Spacer(Modifier.padding(pinCell(0, 3)).size(PIN_KEY_SIZE))
             }
-            PinKey("0", enabled) { onDigit('0') }
-            PinIconKey(Icons.AutoMirrored.Outlined.Backspace, L.privateSpace.lock.deleteDigit, enabled && entered > 0, onBackspace)
+            PinKey("0", enabled, pinCell(1, 3)) { onDigit('0') }
+            PinIconKey(Icons.AutoMirrored.Outlined.Backspace, L.privateSpace.lock.deleteDigit, enabled && entered > 0, pinCell(2, 3), onBackspace)
         }
     }
 }
 
-@Composable
-private fun PinKey(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-        modifier = Modifier.size(72.dp).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(text, fontSize = 28.sp, fontWeight = FontWeight.Medium)
-        }
-    }
-}
+private val PIN_KEY_SIZE = 72.dp
 
+/**
+ * The part of the gaps around key [col], [row] (4 rows of 3) that belongs to it: half of the 20dp gap left and right,
+ * half of the 14dp gap above and below, none on the pad's outer edges. The pad looks the same as with plain gaps.
+ */
+private fun pinCell(col: Int, row: Int) = PaddingValues(
+    start = if (col > 0) 10.dp else 0.dp,
+    end = if (col < 2) 10.dp else 0.dp,
+    top = if (row > 0) 7.dp else 0.dp,
+    bottom = if (row < 3) 7.dp else 0.dp
+)
+
+/**
+ * One key of the pad. It takes taps on its whole cell ([cell] = its share of the gaps), not only on the round key: a
+ * round touch area left about half the pad dead (the gaps and the corners around each circle), so fast typing lost
+ * digits. The press still shows on the round key.
+ */
 @Composable
-private fun PinIconKey(icon: ImageVector, description: String, enabled: Boolean, onClick: () -> Unit) {
+private fun PinCell(enabled: Boolean, cell: PaddingValues, onClick: () -> Unit, content: @Composable () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
     Box(
-        Modifier.size(72.dp).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        Modifier.clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick).padding(cell),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            Modifier.size(PIN_KEY_SIZE).clip(CircleShape).indication(interaction, LocalIndication.current),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun PinKey(text: String, enabled: Boolean, cell: PaddingValues, onClick: () -> Unit) {
+    PinCell(enabled, cell, onClick) {
+        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), modifier = Modifier.fillMaxSize()) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(text, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinIconKey(icon: ImageVector, description: String, enabled: Boolean, cell: PaddingValues, onClick: () -> Unit) {
+    PinCell(enabled, cell, onClick) {
         Icon(icon, contentDescription = description, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 0.8f else 0.3f))
     }
 }
