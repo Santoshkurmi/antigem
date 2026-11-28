@@ -1,5 +1,6 @@
 package ai.antigem.ui.settings
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -17,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -324,7 +323,7 @@ private fun TaskOutput(state: X11DesktopManager.State, task: Task) {
 
 @Composable
 private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderStroke) {
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     val start = "termux-x11 :0 -xstartup \"${desktop.startCommand}\""
     val commands = listOf(
@@ -352,7 +351,7 @@ private fun ManualSetupCard(desktop: Desktop, cardBg: Color, cardBorder: BorderS
                 if (command != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { Mono(command) }
-                        IconButton(onClick = { clipboard.setText(AnnotatedString(command)) }) {
+                        IconButton(onClick = { SafeClipboard.copy(context, "Command", command) }) {
                             Icon(Icons.Outlined.ContentCopy, L.common.copy, Modifier.size(18.dp))
                         }
                     }

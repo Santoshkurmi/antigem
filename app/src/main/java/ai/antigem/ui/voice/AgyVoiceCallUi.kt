@@ -763,9 +763,8 @@ private fun CallLogPanel(log: List<String>, onClose: () -> Unit) {
                 Text(
                     L.common.copy, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
                     modifier = Modifier.clip(RoundedCornerShape(50)).clickable(role = Role.Button) {
-                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Voice call log", "AntiGem voice call log\n" + log.joinToString("\n")))
-                        ai.antigem.ui.components.AppToastHelper.showToast(L.voice.agyVoiceCallUi.callLogCopied, ai.antigem.ui.components.ChatToastType.SUCCESS)
+                        if (ai.antigem.data.clipboard.SafeClipboard.copy(context, "Voice call log", "AntiGem voice call log\n" + log.joinToString("\n")))
+                            ai.antigem.ui.components.AppToastHelper.showToast(L.voice.agyVoiceCallUi.callLogCopied, ai.antigem.ui.components.ChatToastType.SUCCESS)
                     }.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }

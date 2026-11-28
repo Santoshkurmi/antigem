@@ -1,8 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -550,10 +548,7 @@ fun AgentToolCallCard(
 
                         IconButton(
                             onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Tool Output", toolCall.output)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, L.components.agentToolCallCard.outputCopied, Toast.LENGTH_SHORT).show()
+                                if (SafeClipboard.copy(context, "Tool Output", toolCall.output)) Toast.makeText(context, L.components.agentToolCallCard.outputCopied, Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.size(24.dp)
                         ) {

@@ -1,7 +1,6 @@
 package ai.antigem.ui.miniapps
 
 import android.annotation.SuppressLint
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -521,7 +520,11 @@ class MiniAppPage(private val host: MiniAppHost, app: MiniApp, override val path
             if (!touch.recent() && MiniAppPermissions.state(ctx, app, "clipboard") != MiniAppPermissions.State.GRANTED) {
                 throw MiniAppError("NotAllowedError", "device.copy needs a tap by the user right before it (or the clipboard permission)")
             }
-            clipboard().setPrimaryClip(ClipData.newPlainText(app.name, p.optString("text"))); null
+            // too big for the clipboard: the user sees the error and the page's promise is rejected
+            if (!ai.antigem.data.clipboard.SafeClipboard.copy(ctx, app.name, p.optString("text"))) {
+                throw MiniAppError("DataError", "device.copy: the text could not be copied (at most ${ai.antigem.data.clipboard.SafeClipboard.MAX_CHARS} characters)")
+            }
+            null
         }
         "device.paste" -> {
             require("clipboard")

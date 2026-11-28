@@ -1,8 +1,6 @@
 package ai.antigem.ui.settings
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -124,9 +122,7 @@ fun ExtraKeysEditorDialog(onDismiss: () -> Unit) {
                             DropdownMenuItem(text = { Text(L.settings.extraKeys.importFromTermux) }, onClick = { menuOpen = false; importing = true })
                             DropdownMenuItem(text = { Text(L.settings.extraKeys.copyAsTermuxSettings) }, onClick = {
                                 menuOpen = false
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                cm?.setPrimaryClip(ClipData.newPlainText("termux.properties", TerminalExtraKeys.exportText(rows, shortcuts)))
-                                AppToastHelper.showToast(L.settings.extraKeys.copiedPasteItIntoTermux, ChatToastType.SUCCESS)
+                                if (SafeClipboard.copy(context, "termux.properties", TerminalExtraKeys.exportText(rows, shortcuts))) AppToastHelper.showToast(L.settings.extraKeys.copiedPasteItIntoTermux, ChatToastType.SUCCESS)
                             })
                             DropdownMenuItem(text = { Text(L.settings.extraKeys.resetToDefault) }, onClick = { menuOpen = false; askReset = true })
                         }

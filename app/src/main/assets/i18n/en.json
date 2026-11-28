@@ -8407,7 +8407,9 @@
     "settings.updateSettings.betaUpdatesTurnedOffByThemselves": "Beta updates turned off by themselves when this stable version (v{versionName}) was installed. Turn them on again to get the next betas.",
     "settings.updateSettings.betasAreEarlyVersionsForTesting2": "Betas are early versions for testing new features, and they can have bugs.\n\nYou get each new beta until the next stable release. Once that stable version is installed, beta updates turn off by themselves and you get the stable releases only; turn them on again here if you want the betas after it.\n\nOnce a beta is installed you can't go back to the stable version until the next stable release (uninstalling would delete your data).",
     "updater.betaOffNotice.betaUpdatesTurnedOff": "Beta updates turned off",
-    "updater.betaOffNotice.youreNowOnTheStableVersion": "You're now on the stable version v{versionName}.\n\nBeta updates turn off by themselves once a stable version is installed, so no one stays on betas without choosing them again. From now on you get the stable releases only.\n\nTo get the next betas, turn on Get beta updates again in Settings → Updates."
+    "updater.betaOffNotice.youreNowOnTheStableVersion": "You're now on the stable version v{versionName}.\n\nBeta updates turn off by themselves once a stable version is installed, so no one stays on betas without choosing them again. From now on you get the stable releases only.\n\nTo get the next betas, turn on Get beta updates again in Settings → Updates.",
+    "common.tooBigToCopy": "Too big to copy: {size} characters. Android's clipboard takes up to {max}.",
+    "common.couldNotCopy": "Couldn't copy to the clipboard."
   },
   "notes": {
     "settings.language.aiOff": "Segmented button: the agent picks its reply language",

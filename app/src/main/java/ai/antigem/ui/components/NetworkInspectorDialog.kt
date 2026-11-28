@@ -435,8 +435,9 @@ private fun NetworkLogDetailDialog(
 
     fun copyToClipboard(label: String, text: String) {
         // requests carry tokens and cookies: copied as sensitive
-        ai.antigem.data.security.SecretClipboard.copy(context, label, text)
-        Toast.makeText(context, L.components.networkInspector.copiedLabelToClipboard(label), Toast.LENGTH_SHORT).show()
+        if (ai.antigem.data.security.SecretClipboard.copy(context, label, text)) {
+            Toast.makeText(context, L.components.networkInspector.copiedLabelToClipboard(label), Toast.LENGTH_SHORT).show()
+        }
     }
 
     Dialog(

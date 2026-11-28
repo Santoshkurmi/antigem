@@ -1,5 +1,6 @@
 package ai.antigem.ui.drawer
 
+import ai.antigem.data.clipboard.SafeClipboard
 import ai.antigem.ui.components.accent
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -62,9 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1809,7 +1808,6 @@ private fun ChatHistoryItemRow(
         val isClaudeConv = conv.agent == ai.antigem.domain.model.AgentKind.CLAUDE
         // Claude Code and OpenCode chats: renamed, exported and shared through claudeActions (routed by agent)
         val isAgentConv = conv.agent != ai.antigem.domain.model.AgentKind.AGY
-        val clipboardManager = LocalClipboardManager.current
         val context = LocalContext.current
 
         val scope = rememberCoroutineScope()
@@ -1903,8 +1901,7 @@ private fun ChatHistoryItemRow(
                     },
                     onClick = {
                         menuExpanded = false
-                        clipboardManager.setText(AnnotatedString(conv.id))
-                        AppToastHelper.showToast(L.drawer.chatHistoryDrawer.conversationIdCopied, ChatToastType.SUCCESS)
+                        if (SafeClipboard.copy(context, "Conversation ID", conv.id)) AppToastHelper.showToast(L.drawer.chatHistoryDrawer.conversationIdCopied, ChatToastType.SUCCESS)
                     }
                 )
                 if (!conv.readOnly) DropdownMenuItem(

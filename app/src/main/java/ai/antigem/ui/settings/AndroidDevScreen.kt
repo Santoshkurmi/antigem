@@ -1,5 +1,6 @@
 package ai.antigem.ui.settings
 
+import ai.antigem.data.clipboard.SafeClipboard
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -23,7 +23,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -561,11 +560,11 @@ private fun DevInfoCard(
 
 @Composable
 private fun DevCopyLine(text: String, mono: Boolean = false) {
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) {
             if (mono) Mono(text) else Text(text, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
         }
-        IconButton(onClick = { clipboard.setText(AnnotatedString(text)) }) { Icon(Icons.Outlined.ContentCopy, L.common.copy, Modifier.size(18.dp)) }
+        IconButton(onClick = { SafeClipboard.copy(context, "Text", text) }) { Icon(Icons.Outlined.ContentCopy, L.common.copy, Modifier.size(18.dp)) }
     }
 }

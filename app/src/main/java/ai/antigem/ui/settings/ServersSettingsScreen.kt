@@ -1,5 +1,6 @@
 package ai.antigem.ui.settings
 
+import ai.antigem.data.clipboard.SafeClipboard
 import ai.antigem.ui.components.bouncyVerticalScroll
 import ai.antigem.ui.components.mergedIntoRow
 import ai.antigem.ui.components.toggleRowSemantics
@@ -1467,9 +1468,7 @@ private fun PortForwardsCard(cardBg: Color, cardBorder: BorderStroke, subtle: Co
                         Text("server :${f.serverPort} → http://127.0.0.1:${f.localPort} · $state", fontSize = 10.5.sp, fontFamily = FontFamily.Monospace, color = subtle)
                     }
                     androidx.compose.material3.IconButton(onClick = {
-                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Forwarded address", "http://127.0.0.1:${f.localPort}"))
-                        Toast.makeText(context, "Copied http://127.0.0.1:${f.localPort}", Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "Forwarded address", "http://127.0.0.1:${f.localPort}")) Toast.makeText(context, "Copied http://127.0.0.1:${f.localPort}", Toast.LENGTH_SHORT).show()
                     }) { Icon(Icons.Outlined.ContentCopy, L.settings.serversSettings.copyAddress, modifier = Modifier.size(17.dp)) }
                     Switch(
                         checked = f.enabled,

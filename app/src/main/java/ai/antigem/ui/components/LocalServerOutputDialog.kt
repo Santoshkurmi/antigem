@@ -1,5 +1,6 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.compose.foundation.BorderStroke
@@ -181,9 +182,7 @@ fun LocalServerOutputDialog(
                                 if (text.isBlank()) {
                                     AppToastHelper.showToast(L.components.localServerOutput.theLogIsEmpty, ChatToastType.INFO)
                                 } else {
-                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Server log", text))
-                                    AppToastHelper.showToast(L.components.localServerOutput.logCopied, ChatToastType.SUCCESS)
+                                    if (SafeClipboard.copy(context, "Server log", text)) AppToastHelper.showToast(L.components.localServerOutput.logCopied, ChatToastType.SUCCESS)
                                 }
                             },
                             modifier = Modifier.size(34.dp)

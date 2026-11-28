@@ -1013,16 +1013,17 @@ object PrivateSpace {
     /**
      * Copies a secret: marked sensitive (Android 13+ hides it in the copy preview and keyboards skip their history),
      * marked as Private Space's ([isPrivateClip]) and wiped from the clipboard after the chosen time, also when the app
-     * is closed before then (WorkManager).
+     * is closed before then (WorkManager). False, after an error toast, when nothing was copied (too big for the
+     * clipboard, see [ai.antigem.data.clipboard.SafeClipboard]).
      */
-    fun copySecret(context: Context, value: String) {
+    fun copySecret(context: Context, value: String): Boolean {
         val app = context.applicationContext
         val clip = ClipData.newPlainText(CLIP_LABEL, value)
         clip.description.extras = PersistableBundle().apply {
             putBoolean(EXTRA_IS_SENSITIVE, true)
             putBoolean(CLIP_MARK, true)
         }
-        (app.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.setPrimaryClip(clip)
+        if (!ai.antigem.data.clipboard.SafeClipboard.copy(app, clip)) return false
         val seconds = _settings.value.clipboardSeconds
         clipClear?.let { main.removeCallbacks(it) }
         val r = Runnable {
@@ -1037,6 +1038,7 @@ object PrivateSpace {
                 OneTimeWorkRequestBuilder<SpaceClipboardClearWorker>().setInitialDelay(seconds + 2L, TimeUnit.SECONDS).build()
             )
         }.onFailure { Log.w(TAG, "Clipboard clear backup not scheduled: ${it.javaClass.simpleName}") }
+        return true
     }
 
     /** Wipes the clipboard if it holds a Private Space secret, or if it can't be looked at (Android 10+, app not in front). */

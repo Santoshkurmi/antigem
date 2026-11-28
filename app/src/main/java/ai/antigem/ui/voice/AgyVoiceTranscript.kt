@@ -1,7 +1,5 @@
 package ai.antigem.ui.voice
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -103,9 +101,8 @@ fun AgyVoiceTranscriptSheet(record: VoiceChatRecord, onDismiss: () -> Unit) {
                             else -> L.voice.agyVoiceTranscript.tVoiceText(t, l.text)
                         }
                     }
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                        .setPrimaryClip(ClipData.newPlainText("Voice transcript", text))
-                    ai.antigem.ui.components.AppToastHelper.showToast(L.voice.agyVoiceTranscript.transcriptCopied, ai.antigem.ui.components.ChatToastType.SUCCESS)
+                    if (ai.antigem.data.clipboard.SafeClipboard.copy(context, "Voice transcript", text))
+                        ai.antigem.ui.components.AppToastHelper.showToast(L.voice.agyVoiceTranscript.transcriptCopied, ai.antigem.ui.components.ChatToastType.SUCCESS)
                 }) { Text(L.common.copy) }
             }
             Spacer(Modifier.height(12.dp))

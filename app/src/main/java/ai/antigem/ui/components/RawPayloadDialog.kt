@@ -1,8 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
@@ -172,9 +170,7 @@ fun RawPayloadDialog(
                 ) {
                     Button(
                         onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Raw Payload JSON", prettyJson))
-                            Toast.makeText(context, L.components.rawPayload.formattedJsonCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                            if (SafeClipboard.copy(context, "Raw Payload JSON", prettyJson)) Toast.makeText(context, L.components.rawPayload.formattedJsonCopiedToClipboard, Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ai.antigem.theme.AppColors.editorPanel),
                         shape = RoundedCornerShape(8.dp)

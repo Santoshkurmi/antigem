@@ -1,8 +1,7 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -102,10 +101,10 @@ fun StemBlockView(kind: StemKind, code: String, modifier: Modifier = Modifier) {
         }
     }
     val copy = {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(kind.label, code))
-        isCopied = true
-        Toast.makeText(context, L.components.stemBlocks.codeCopied, Toast.LENGTH_SHORT).show()
+        if (SafeClipboard.copy(context, kind.label, code)) {
+            isCopied = true
+            Toast.makeText(context, L.components.stemBlocks.codeCopied, Toast.LENGTH_SHORT).show()
+        }
     }
     // TikZ: the compiled SVG once known (fullscreen shows it without compiling again)
     var tikzSvg by remember(code) { mutableStateOf<String?>(null) }

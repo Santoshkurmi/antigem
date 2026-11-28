@@ -1,5 +1,6 @@
 package ai.antigem.ui.ide
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -29,9 +30,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,7 +146,6 @@ internal fun ActiveFilePathBar(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     val talkBackOn = rememberTalkBackOn()
     val bridgeHome by BridgeHome.home.collectAsState()
     // where MainActivity keeps its copy of a picture shared from another app
@@ -173,8 +171,7 @@ internal fun ActiveFilePathBar(
                 .then(
                     if (fromAnotherApp) Modifier
                     else Modifier.clickable(onClickLabel = L.ide.activeFilePathBar.copyPath) {
-                        clipboard.setText(AnnotatedString(fullPath))
-                        Toast.makeText(context, L.ide.activeFilePathBar.pathCopied, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "File Path", fullPath)) Toast.makeText(context, L.ide.activeFilePathBar.pathCopied, Toast.LENGTH_SHORT).show()
                     }
                 )
         ) {

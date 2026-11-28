@@ -1,5 +1,6 @@
 package ai.antigem.ui.settings
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
@@ -28,7 +29,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -405,7 +405,6 @@ private fun ReposCard(state: GitHubManager.State, cardBg: Color, cardBorder: Bor
 @Composable
 private fun RepoRow(repo: GitHubManager.Repo, ownLogin: String?, onClone: () -> Unit) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     var menu by remember { mutableStateOf(false) }
     val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
     Box {
@@ -430,7 +429,7 @@ private fun RepoRow(repo: GitHubManager.Repo, ownLogin: String?, onClone: () -> 
             DropdownMenuItem(text = { Text(L.settings.gitHub.openOnGithub) }, leadingIcon = { Icon(Icons.Outlined.OpenInBrowser, null) },
                 onClick = { menu = false; openUrl(context, repo.htmlUrl) })
             DropdownMenuItem(text = { Text(L.settings.gitHub.copyCloneUrl) }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) },
-                onClick = { menu = false; clipboard.setText(AnnotatedString(repo.cloneUrl)) })
+                onClick = { menu = false; SafeClipboard.copy(context, "Clone URL", repo.cloneUrl) })
         }
     }
 }

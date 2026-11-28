@@ -386,8 +386,7 @@ internal fun RecoveryKeyScreen(recoveryKey: String, title: String, onBack: (() -
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = {
-                    PrivateSpace.copySecret(context, recoveryKey)
-                    copied = true
+                    if (PrivateSpace.copySecret(context, recoveryKey)) copied = true
                 }, modifier = Modifier.weight(1f)) {
                     Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))

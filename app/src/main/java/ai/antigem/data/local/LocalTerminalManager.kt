@@ -996,9 +996,8 @@ class LocalPtySession(
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
         if (text.isEmpty()) return
         try {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-            val clip = android.content.ClipData.newPlainText("Terminal Text", text)
-            clipboard?.setPrimaryClip(clip)
+            // too big for the clipboard: SafeClipboard shows the error and nothing is copied
+            if (!ai.antigem.data.clipboard.SafeClipboard.copy(context, "Terminal Text", text)) return
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 android.widget.Toast.makeText(context, L.local.terminalManager.copiedText, android.widget.Toast.LENGTH_SHORT).show()
             }

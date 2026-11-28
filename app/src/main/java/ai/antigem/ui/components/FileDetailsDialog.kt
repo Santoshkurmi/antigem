@@ -1,5 +1,6 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -15,9 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,7 +42,6 @@ fun FileDetailsDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
 
     val localFile = remember(path) { File(path) }
     val existsLocally = remember(localFile) {
@@ -197,8 +195,7 @@ fun FileDetailsDialog(
                     actionIcon = Icons.Default.ContentCopy,
                     actionDescription = L.components.fileDetails.copyPath,
                     onActionClick = {
-                        clipboardManager.setText(AnnotatedString(path))
-                        Toast.makeText(context, L.components.fileDetails.pathCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "File Path", path)) Toast.makeText(context, L.components.fileDetails.pathCopiedToClipboard, Toast.LENGTH_SHORT).show()
                     }
                 )
 

@@ -1,8 +1,5 @@
 package ai.antigem.crash
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -86,7 +83,7 @@ class CrashActivity : ComponentActivity() {
                         errorLine = errorLine,
                         report = report,
                         onReport = { reportOnGitHub(report, errorLine) },
-                        onCopy = { copy(report); toast(L.crash.activity.reportCopied) },
+                        onCopy = { if (copy(report)) toast(L.crash.activity.reportCopied) },
                         onShare = { share(report) },
                         onRestart = { restartApp() },
                         onClose = { finishAndRemoveTask() }
@@ -129,12 +126,8 @@ class CrashActivity : ComponentActivity() {
         toast(if (opened) L.crash.activity.reportCopiedTooPasteItIn else L.crash.activity.noBrowserFoundTheReportIs)
     }
 
-    private fun copy(text: String) {
-        runCatching {
-            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                .setPrimaryClip(ClipData.newPlainText("AntiGem crash report", text))
-        }
-    }
+    private fun copy(text: String): Boolean =
+        ai.antigem.data.clipboard.SafeClipboard.copy(this, "AntiGem crash report", text)
 
     private fun share(text: String) {
         runCatching {

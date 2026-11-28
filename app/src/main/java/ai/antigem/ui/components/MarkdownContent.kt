@@ -1,9 +1,7 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.ImageView
@@ -845,11 +843,10 @@ fun MermaidDiagramView(
 
                 IconButton(
                     onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Mermaid Diagram", code)
-                        clipboard.setPrimaryClip(clip)
-                        isCopied = true
-                        Toast.makeText(context, L.components.markdown.diagramCodeCopied, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "Mermaid Diagram", code)) {
+                            isCopied = true
+                            Toast.makeText(context, L.components.markdown.diagramCodeCopied, Toast.LENGTH_SHORT).show()
+                        }
                     },
                     modifier = Modifier.size(28.dp)
                 ) {
@@ -1096,11 +1093,10 @@ fun MermaidFullscreenDialog(
                     // Copy Button
                     IconButton(
                         onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("Mermaid Diagram", code)
-                            clipboard.setPrimaryClip(clip)
-                            isCopied = true
-                            Toast.makeText(context, L.components.markdown.diagramCodeCopied, Toast.LENGTH_SHORT).show()
+                            if (SafeClipboard.copy(context, "Mermaid Diagram", code)) {
+                                isCopied = true
+                                Toast.makeText(context, L.components.markdown.diagramCodeCopied, Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier.size(36.dp)
                     ) {
@@ -1488,7 +1484,6 @@ fun AgentErrorCard(
 
                 IconButton(
                     onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val copyText = buildString {
                             appendLine(L.components.markdown.errorTitle(error.title))
                             if (error.userMessage.isNotBlank()) appendLine(L.components.markdown.messageUsermessage(error.userMessage))
@@ -1498,9 +1493,7 @@ fun AgentErrorCard(
                             if (error.fullError.isNotBlank()) appendLine(L.components.markdown.fullTraceFullerror(error.fullError))
                             if (error.rawJson.isNotBlank()) appendLine(L.components.markdown.rawJsonRawjson(error.rawJson))
                         }.trim()
-                        val clip = ClipData.newPlainText("Error Details", copyText)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, L.components.markdown.errorDetailsCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "Error Details", copyText)) Toast.makeText(context, L.components.markdown.errorDetailsCopiedToClipboard, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.size(24.dp)
                 ) {

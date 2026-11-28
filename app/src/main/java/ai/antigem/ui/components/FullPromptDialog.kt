@@ -1,9 +1,7 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import ai.antigem.i18n.L
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -123,9 +121,7 @@ fun FullPromptDialog(prompt: String, attachmentCount: Int = 0, onDismiss: () -> 
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Full prompt", prompt))
-                        Toast.makeText(context, "Copied the full prompt", Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "Full prompt", prompt)) Toast.makeText(context, "Copied the full prompt", Toast.LENGTH_SHORT).show()
                     }) {
                         Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                         Text("Copy all", modifier = Modifier.padding(start = 6.dp))

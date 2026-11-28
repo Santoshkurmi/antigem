@@ -302,10 +302,10 @@ private fun SpaceList(
                     }
                     if (favorites.isNotEmpty()) {
                         item(key = "h_fav") { ListHeader(L.privateSpace.list.favorites) }
-                        items(favorites, key = { "f_" + it.id }) { ItemRow(it, onClick = { onOpen(it.id) }, onCopy = { v -> PrivateSpace.copySecret(context, v); showMessage(copiedMessage()) }) }
+                        items(favorites, key = { "f_" + it.id }) { ItemRow(it, onClick = { onOpen(it.id) }, onCopy = { v -> if (PrivateSpace.copySecret(context, v)) showMessage(copiedMessage()) }) }
                         item(key = "h_all") { ListHeader(L.privateSpace.list.everything) }
                     }
-                    items(rest, key = { it.id }) { ItemRow(it, onClick = { onOpen(it.id) }, onCopy = { v -> PrivateSpace.copySecret(context, v); showMessage(copiedMessage()) }) }
+                    items(rest, key = { it.id }) { ItemRow(it, onClick = { onOpen(it.id) }, onCopy = { v -> if (PrivateSpace.copySecret(context, v)) showMessage(copiedMessage()) }) }
                 }
             }
 
@@ -429,8 +429,7 @@ private fun ItemViewer(id: String, onBack: () -> Unit, onEdit: (SpaceItemType) -
     if (item == null) return
 
     val copy: (String) -> Unit = { v ->
-        PrivateSpace.copySecret(context, v)
-        showMessage(copiedMessage())
+        if (PrivateSpace.copySecret(context, v)) showMessage(copiedMessage())
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -972,7 +971,7 @@ internal fun GeneratorDialog(onDismiss: () -> Unit, onUse: ((String) -> Unit)?) 
         },
         confirmButton = {
             if (onUse != null) TextButton(onClick = { onUse(value) }) { Text(L.privateSpace.gen.use) }
-            else TextButton(onClick = { PrivateSpace.copySecret(context, value); onDismiss() }) { Text(L.common.copy) }
+            else TextButton(onClick = { if (PrivateSpace.copySecret(context, value)) onDismiss() }) { Text(L.common.copy) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )

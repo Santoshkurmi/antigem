@@ -1,7 +1,6 @@
 package ai.antigem.ui.files
 
-import android.content.ClipData
-import android.content.ClipboardManager
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -123,11 +122,7 @@ private fun arrange(list: List<ExplorerEntry>, s: ExplorerSettings): List<Explor
 
 private fun parentOf(path: String) = path.trimEnd('/').substringBeforeLast('/', "").ifBlank { "/" }
 
-private fun copyText(context: Context, text: String) {
-    runCatching {
-        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("path", text))
-    }
-}
+private fun copyText(context: Context, text: String): Boolean = SafeClipboard.copy(context, "path", text)
 
 private enum class DestOp { COPY, MOVE, EXTRACT }
 
@@ -637,7 +632,7 @@ fun FileExplorer(
                                     DropdownMenuItem(text = { Text(L.common.details) }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = { selMenuOpen = false; detailsFor = sel.first() })
                                 }
                                 DropdownMenuItem(text = { Text(L.files.fileExplorer.copyPaths) }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = {
-                                    selMenuOpen = false; copyText(context, sel.joinToString("\n") { it.path }); snack(L.files.fileExplorer.pathsCopied)
+                                    selMenuOpen = false; if (copyText(context, sel.joinToString("\n") { it.path })) snack(L.files.fileExplorer.pathsCopied)
                                 })
                             }
                         )
@@ -714,7 +709,7 @@ fun FileExplorer(
                                     if (onOpenFolderInIde != null && side == ExplorerSide.BRIDGE) {
                                         DropdownMenuItem(text = { Text(L.files.fileExplorer.openThisFolderInIde) }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = { menuOpen = false; onOpenFolderInIde(path) })
                                     }
-                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.copyFolderPath) }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = { menuOpen = false; copyText(context, path); snack(L.files.fileExplorer.pathCopied) })
+                                    DropdownMenuItem(text = { Text(L.files.fileExplorer.copyFolderPath) }, leadingIcon = { Icon(Icons.Outlined.Link, null) }, onClick = { menuOpen = false; if (copyText(context, path)) snack(L.files.fileExplorer.pathCopied) })
                                     DropdownMenuItem(text = { Text(L.files.fileExplorer.folderDetails) }, leadingIcon = { Icon(Icons.Outlined.Info, null) }, onClick = {
                                         menuOpen = false
                                         detailsFor = ExplorerEntry(name = path.trimEnd('/').substringAfterLast('/').ifBlank { "/" }, path = path, isDir = true, childCount = entries.size)
@@ -751,7 +746,7 @@ fun FileExplorer(
                                 scope.launch { roots = src().roots().second }
                             },
                             onCrumb = { c -> if (c.path != path) go(c.path) },
-                            onCopyPath = { copyText(context, path); snack(L.files.fileExplorer.pathCopied) }
+                            onCopyPath = { if (copyText(context, path)) snack(L.files.fileExplorer.pathCopied) }
                         )
                     }
                     if (busy != null || loading || deepLoading) {
@@ -1083,7 +1078,7 @@ fun FileExplorer(
             onExtractHere = { close(); extract(e, null) },
             onExtractTo = { close(); destRequest = DestRequest(DestOp.EXTRACT, listOf(e)) },
             onViewArchive = { close(); archiveFor = e },
-            onCopyPath = { close(); copyText(context, e.path); snack(L.files.fileExplorer.pathCopied) },
+            onCopyPath = { close(); if (copyText(context, e.path)) snack(L.files.fileExplorer.pathCopied) },
             onDetails = { close(); detailsFor = e },
             onDelete = { close(); deleteTargets = listOf(e) }
         )
@@ -1176,7 +1171,7 @@ fun FileExplorer(
     }
 
     detailsFor?.let { e ->
-        DetailsSheet(entry = e, onCopyPath = { copyText(context, it); snack(L.files.fileExplorer.pathCopied) }, onDismiss = { detailsFor = null }, side = side)
+        DetailsSheet(entry = e, onCopyPath = { if (copyText(context, it)) snack(L.files.fileExplorer.pathCopied) }, onDismiss = { detailsFor = null }, side = side)
     }
 
     archiveFor?.let { e ->

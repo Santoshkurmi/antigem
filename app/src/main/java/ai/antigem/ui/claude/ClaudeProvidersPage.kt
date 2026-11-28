@@ -1,5 +1,6 @@
 package ai.antigem.ui.claude
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -69,9 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -1004,7 +1003,6 @@ private fun ModelIdField(
 /** The request and the raw answer of a model fetch, so a server problem can be told from an app problem. */
 @Composable
 private fun RawResponseDialog(raw: ClaudeFetchRaw, onDismiss: () -> Unit) {
-    val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val muted = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
     val verdict = when {
@@ -1049,8 +1047,7 @@ private fun RawResponseDialog(raw: ClaudeFetchRaw, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(onClick = {
-                clipboard.setText(AnnotatedString(text))
-                Toast.makeText(context, L.common.copied, Toast.LENGTH_SHORT).show()
+                if (SafeClipboard.copy(context, "Raw response", text)) Toast.makeText(context, L.common.copied, Toast.LENGTH_SHORT).show()
             }) { Icon(Icons.Outlined.ContentCopy, null, Modifier.size(14.dp), tint = ClaudeAccent); Spacer(Modifier.width(6.dp)); Text(L.common.copy, color = ClaudeAccent) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.close) } }

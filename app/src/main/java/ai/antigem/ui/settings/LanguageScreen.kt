@@ -1,6 +1,6 @@
 package ai.antigem.ui.settings
 
-import android.content.ClipData
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -254,9 +254,8 @@ fun LanguageScreen(onOpenTexts: (String) -> Unit) {
         scope.launch {
             val json = withContext(Dispatchers.IO) { LanguageManager.export(info.id) }
             if (json == null) { toast(context, L.settings.language.couldNotSave); return@launch }
-            runCatching { clipboard(context).setPrimaryClip(ClipData.newPlainText("AntiGem language", json)) }
-                .onSuccess { toast(context, L.settings.language.copied) }
-                .onFailure { toast(context, L.settings.language.tooBigToCopy) }
+            if (!SafeClipboard.fits(json)) { toast(context, L.settings.language.tooBigToCopy); return@launch }
+            if (SafeClipboard.copy(context, "AntiGem language", json)) toast(context, L.settings.language.copied)
         }
     }
 
@@ -1205,8 +1204,7 @@ private fun TranslateWithAiCard() {
             Text(L.settings.language.translateWithAiAbout, fontSize = 12.5.sp, lineHeight = 17.sp, color = muted)
             Spacer(Modifier.height(10.dp))
             FilledTonalButton(onClick = {
-                runCatching { clipboard(context).setPrimaryClip(ClipData.newPlainText("prompt", L.settings.language.aiPrompt)) }
-                toast(context, L.settings.language.promptCopied)
+                if (SafeClipboard.copy(context, "prompt", L.settings.language.aiPrompt)) toast(context, L.settings.language.promptCopied)
             }) {
                 Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))

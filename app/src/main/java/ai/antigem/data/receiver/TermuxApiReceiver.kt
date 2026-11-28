@@ -3,7 +3,6 @@ package ai.antigem.data.receiver
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -118,9 +117,8 @@ class TermuxApiReceiver : BroadcastReceiver() {
         Handler(Looper.getMainLooper()).post {
             try {
                 val targetContext = ai.antigem.MainActivity.currentInstance ?: context
-                val clipboard = targetContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                val clip = ClipData.newPlainText("Termux Clipboard", text)
-                clipboard?.setPrimaryClip(clip)
+                // too big for the clipboard: SafeClipboard shows the error and nothing is copied
+                ai.antigem.data.clipboard.SafeClipboard.copy(targetContext, "Termux Clipboard", text)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed setting clipboard: ${e.message}")
             }

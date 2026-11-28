@@ -1,7 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -160,9 +159,7 @@ fun MessageBubble(
                             heading()
                             customActions = buildList {
                                 add(CustomAccessibilityAction(L.common.copy) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("Copied Prompt", message.content))
-                                    Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
+                                    if (SafeClipboard.copy(context, "Copied Prompt", message.content)) Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
                                     true
                                 })
                                 add(CustomAccessibilityAction(L.components.messageBubble.editPrompt) { onEdit(message); true })
@@ -200,10 +197,7 @@ fun MessageBubble(
                         // Copy Prompt
                         IconButton(
                             onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Copied Prompt", message.content)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
+                                if (SafeClipboard.copy(context, "Copied Prompt", message.content)) Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
                                 showUserActions = false
                             },
                             modifier = Modifier.size(28.dp)
@@ -319,10 +313,7 @@ fun MessageBubble(
                         ) {
                             IconButton(
                                 onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Copied Response", MemoryBlocks.strip(message.content))
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, L.components.messageBubble.copiedResponse, Toast.LENGTH_SHORT).show()
+                                    if (SafeClipboard.copy(context, "Copied Response", MemoryBlocks.strip(message.content))) Toast.makeText(context, L.components.messageBubble.copiedResponse, Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
@@ -452,9 +443,7 @@ fun UserMessageBubble(
                     heading()
                     customActions = buildList {
                         add(CustomAccessibilityAction(L.common.copy) {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Copied Prompt", message.content))
-                            Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
+                            if (SafeClipboard.copy(context, "Copied Prompt", message.content)) Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
                             true
                         })
                         add(CustomAccessibilityAction(L.components.messageBubble.viewFullPrompt) { showFullPrompt = true; true })
@@ -636,10 +625,7 @@ fun UserMessageBubble(
                 // Copy Prompt
                 IconButton(
                     onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Copied Prompt", message.content)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "Copied Prompt", message.content)) Toast.makeText(context, L.components.messageBubble.copiedPrompt, Toast.LENGTH_SHORT).show()
                         showUserActions = false
                     },
                     modifier = Modifier.size(28.dp)
@@ -767,10 +753,7 @@ fun AssistantMessageFooter(
         ) {
             IconButton(
                 onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Copied Response", MemoryBlocks.strip(message.content))
-                    clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, L.components.messageBubble.copiedResponse, Toast.LENGTH_SHORT).show()
+                    if (SafeClipboard.copy(context, "Copied Response", MemoryBlocks.strip(message.content))) Toast.makeText(context, L.components.messageBubble.copiedResponse, Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.size(28.dp)
             ) {

@@ -1,9 +1,7 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.Toast
@@ -417,11 +415,10 @@ fun CodeBlock(
             // Copy Button
             IconButton(
                 onClick = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Copied Code", code)
-                    clipboard.setPrimaryClip(clip)
-                    isCopied = true
-                    Toast.makeText(context, L.components.codeBlock.codeCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                    if (SafeClipboard.copy(context, "Copied Code", code)) {
+                        isCopied = true
+                        Toast.makeText(context, L.components.codeBlock.codeCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                    }
                 },
                 modifier = Modifier.size(28.dp)
             ) {
@@ -663,11 +660,10 @@ fun CodeBlock(
 
                             IconButton(
                                 onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("Copied Code", code)
-                                    clipboard.setPrimaryClip(clip)
-                                    modalCopied = true
-                                    Toast.makeText(context, L.components.codeBlock.codeCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                                    if (SafeClipboard.copy(context, "Copied Code", code)) {
+                                        modalCopied = true
+                                        Toast.makeText(context, L.components.codeBlock.codeCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             ) {
                                 Icon(

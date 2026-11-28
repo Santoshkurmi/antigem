@@ -1,8 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -74,9 +72,7 @@ fun SelectTextSheet(
                     IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, L.common.close) }
                     Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     IconButton(onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText(if (plainText) title else "Copied Response", content))
-                        Toast.makeText(context, if (plainText) L.common.copied else L.components.selectText.copiedResponse, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, if (plainText) title else "Copied Response", content)) Toast.makeText(context, if (plainText) L.common.copied else L.components.selectText.copiedResponse, Toast.LENGTH_SHORT).show()
                     }) { Icon(Icons.Outlined.ContentCopy, L.components.selectText.copyAll) }
                 }
                 if (!plainText) {

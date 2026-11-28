@@ -1,8 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -220,9 +218,7 @@ fun FileDetailsDialog(
             Row {
                 TextButton(
                     onClick = {
-                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("File Path", details.fullPath))
-                        Toast.makeText(context, L.components.fileLinkHandler.pathCopiedToClipboard, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "File Path", details.fullPath)) Toast.makeText(context, L.components.fileLinkHandler.pathCopiedToClipboard, Toast.LENGTH_SHORT).show()
                     }
                 ) {
                     Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -322,9 +318,7 @@ fun MarkdownDocViewerModal(
                     actions = {
                         IconButton(
                             onClick = {
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cm.setPrimaryClip(ClipData.newPlainText("Markdown Content", content))
-                                Toast.makeText(context, L.components.fileLinkHandler.markdownContentCopied, Toast.LENGTH_SHORT).show()
+                                if (SafeClipboard.copy(context, "Markdown Content", content)) Toast.makeText(context, L.components.fileLinkHandler.markdownContentCopied, Toast.LENGTH_SHORT).show()
                             }
                         ) {
                             Icon(Icons.Outlined.ContentCopy, contentDescription = L.components.fileLinkHandler.copyContent)

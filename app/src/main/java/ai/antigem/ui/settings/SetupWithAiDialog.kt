@@ -1,7 +1,6 @@
 package ai.antigem.ui.settings
 
-import android.content.ClipData
-import android.content.ClipboardManager
+import ai.antigem.data.clipboard.SafeClipboard
 import android.content.Context
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -228,8 +227,7 @@ fun SetupWithAiDialog(source: String, agent: AgentKind, reason: String?, onDismi
                             modifier = Modifier.align(Alignment.TopEnd).padding(6.dp)
                         ) {
                             androidx.compose.material3.IconButton(onClick = {
-                                copyText(context, prompt)
-                                copied = true
+                                if (copyText(context, prompt)) copied = true
                             }, modifier = Modifier.size(36.dp)) {
                                 Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, L.common.copy, tint = accent, modifier = Modifier.size(18.dp))
                             }
@@ -242,7 +240,7 @@ fun SetupWithAiDialog(source: String, agent: AgentKind, reason: String?, onDismi
                     TextButton(onClick = onDismiss) { Text(L.common.close) }
                     Spacer(Modifier.weight(1f))
                     Button(
-                        onClick = { copyText(context, prompt); copied = true },
+                        onClick = { if (copyText(context, prompt)) copied = true },
                         colors = ButtonDefaults.buttonColors(containerColor = accent)
                     ) {
                         Icon(if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy, null, Modifier.size(16.dp), tint = Color.White)
@@ -255,10 +253,7 @@ fun SetupWithAiDialog(source: String, agent: AgentKind, reason: String?, onDismi
     }
 }
 
-private fun copyText(context: Context, text: String) {
-    (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
-        ?.setPrimaryClip(ClipData.newPlainText("AntiGem setup prompt", text))
-}
+private fun copyText(context: Context, text: String): Boolean = SafeClipboard.copy(context, "AntiGem setup prompt", text)
 
 /** A small "Set up with AI" link under an error, to open [SetupWithAiDialog] again. */
 @Composable

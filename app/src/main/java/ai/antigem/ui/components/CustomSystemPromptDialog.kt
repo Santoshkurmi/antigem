@@ -1,9 +1,7 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import ai.antigem.i18n.L
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -181,10 +179,7 @@ Available slash commands: /goal, /schedule, /browser, /plan, /grill-me, /teamwor
                     if (selectedTab == 0) {
                         IconButton(
                             onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Antigravity System Prompt", defaultSystemPrompt)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "System prompt copied to clipboard", Toast.LENGTH_SHORT).show()
+                                if (SafeClipboard.copy(context, "Antigravity System Prompt", defaultSystemPrompt)) Toast.makeText(context, "System prompt copied to clipboard", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.size(32.dp)
                         ) {

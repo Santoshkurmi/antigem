@@ -1,8 +1,7 @@
 package ai.antigem.ui.components
 
+import ai.antigem.data.clipboard.SafeClipboard
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -63,10 +62,8 @@ class InteractiveUiJsBridge(
     @JavascriptInterface
     fun copyToClipboard(text: String) {
         if (!touch.recent()) return
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = ClipData.newPlainText("Interactive UI", text)
-        clipboard.setPrimaryClip(clip)
-        onToast(L.components.interactiveUiView.copiedToClipboard)
+        // runs on the page's script thread; SafeClipboard shows its error toast on the main thread
+        if (SafeClipboard.copy(context, "Interactive UI", text)) onToast(L.components.interactiveUiView.copiedToClipboard)
     }
 }
 

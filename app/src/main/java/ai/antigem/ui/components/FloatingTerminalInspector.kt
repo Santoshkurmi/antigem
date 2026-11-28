@@ -1,8 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -598,10 +596,7 @@ private fun TerminalCommandCard(
 
                 IconButton(
                     onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Output", command.output)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, L.components.floatingTerminalInspector.outputCopied, Toast.LENGTH_SHORT).show()
+                        if (SafeClipboard.copy(context, "Output", command.output)) Toast.makeText(context, L.components.floatingTerminalInspector.outputCopied, Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.size(22.dp)
                 ) {

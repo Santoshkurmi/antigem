@@ -120,9 +120,17 @@ fun GeminiTheme(
     // language, keeping its state; a right-to-left language turns the layout around
     val languageVersion = ai.antigem.i18n.LanguageManager.version
     val rtl = ai.antigem.i18n.LanguageManager.isRtl
+    // Compose's own copies (selected text, text fields) skip text too big for the clipboard instead of crashing
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val platformClipboard = androidx.compose.ui.platform.LocalClipboard.current
+    val safeClipboard = androidx.compose.runtime.remember(context, platformClipboard) {
+        if (platformClipboard is ai.antigem.data.clipboard.SafeComposeClipboard) platformClipboard
+        else ai.antigem.data.clipboard.SafeComposeClipboard(context, platformClipboard)
+    }
     val provided = buildList {
         add(LocalIsDarkTheme provides darkTheme)
         add(ai.antigem.i18n.LocalLanguageVersion provides languageVersion)
+        add(androidx.compose.ui.platform.LocalClipboard provides safeClipboard)
         if (rtl) add(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl)
     }.toTypedArray()
     CompositionLocalProvider(*provided) {

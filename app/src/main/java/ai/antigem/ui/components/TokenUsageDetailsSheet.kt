@@ -1,8 +1,6 @@
 package ai.antigem.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import ai.antigem.data.clipboard.SafeClipboard
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -108,8 +106,7 @@ fun TokenUsageDetailsSheet(usage: TokenUsage, onViewPayload: (() -> Unit)?, onDi
                             if (model.contains('/')) Text(L.components.tokenUsageDetails.providerSubstringbefore(model.substringBefore('/')), fontSize = 11.5.sp, color = muted)
                         }
                         IconButton(onClick = {
-                            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Model", model))
-                            Toast.makeText(context, L.components.tokenUsageDetails.modelNameCopied, Toast.LENGTH_SHORT).show()
+                            if (SafeClipboard.copy(context, "Model", model)) Toast.makeText(context, L.components.tokenUsageDetails.modelNameCopied, Toast.LENGTH_SHORT).show()
                         }) { Icon(Icons.Outlined.ContentCopy, L.components.tokenUsageDetails.copyModelName, tint = muted, modifier = Modifier.size(18.dp)) }
                     }
                 }
