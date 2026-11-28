@@ -48,6 +48,8 @@ class AndroidLocalBridgeServer private constructor() {
         const val THEME_MCP_NAME = "theme_mcp"
         const val LANGUAGE_MCP_NAME = "language_mcp"
         const val MINI_APP_DEVELOPER_MCP_NAME = "mini_app_developer_mcp"
+        /** network_mcp lives in the Network Interceptor engine (Go); /network forwards to it (NetcapManager). */
+        const val NETWORK_MCP_NAME = "network_mcp"
         fun isDeveloperMcpName(name: String) = name == DEVELOPER_MCP_NAME || name == LEGACY_DEVELOPER_MCP_NAME
         private const val TAG = "AndroidBridgeServer"
         private const val MAX_HEADER_BYTES = 64 * 1024
@@ -272,6 +274,11 @@ class AndroidLocalBridgeServer private constructor() {
                     path == "/theme" -> handleMcpHttp(McpEndpoint.THEME, method, body, out)
                     path == "/language" -> handleMcpHttp(McpEndpoint.LANGUAGE, method, body, out)
                     path == "/mini_app_developer" -> handleMcpHttp(McpEndpoint.MINI_APP_DEVELOPER, method, body, out)
+                    path == "/network" -> {
+                        val (code, type, text) = ai.antigem.data.netcap.NetcapManager.proxyMcp(ctx, method, body)
+                        if (code == 202 && text.isEmpty()) sendResponse(out, 202, "application/json", "")
+                        else sendResponse(out, code, type, text)
+                    }
                     path == "/api/health" -> {
                         val res = JSONObject().apply {
                             put("status", "ok")
@@ -303,7 +310,7 @@ class AndroidLocalBridgeServer private constructor() {
             if (out != null && req != null && !out.used) {
                 runCatching {
                     val path = req.rawPath.substringBefore("?")
-                    if (path == "/browser" || path == "/terminal" || path == "/google_flow" || path == "/extension_developer" || path == "/android" || path == "/notes" || path == "/jarvis" || path == "/theme" || path == "/mini_app_developer") {
+                    if (path == "/browser" || path == "/terminal" || path == "/google_flow" || path == "/extension_developer" || path == "/android" || path == "/notes" || path == "/jarvis" || path == "/theme" || path == "/mini_app_developer" || path == "/network") {
                         val id = runCatching { JSONObject(req.body).opt("id") }.getOrNull()
                         sendResponse(out, 200, "application/json", jsonRpcError(id, -32603, "Internal error: ${t.message ?: t.javaClass.simpleName}").toString())
                     } else {

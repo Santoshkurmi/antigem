@@ -155,6 +155,7 @@ enum class SettingsSection(private val titleText: () -> String, private val subt
     GITHUB({ "GitHub" }, { L.settings.dialog.signInWithTheGithubCli }),
     ADB_CONNECT({ L.settings.dialog.adbConnect }, { L.settings.dialog.shellAccessToThisPhoneThrough }),
     ANDROID_AUTOMATION({ L.settings.dialog.androidAutomation }, { L.settings.dialog.letAiAgentsSeeAndControl }),
+    NETWORK_INTERCEPTOR({ L.settings.dialog.networkInterceptor }, { L.settings.dialog.networkInterceptorSubtitle }),
     REA({ L.settings.dialog.reaReverseEngineering }, { L.settings.dialog.letAgentsAnalyzeApksFlutterReact }),
     REA_GROUPS({ L.settings.dialog.reaToolGroups }, { L.settings.dialog.whichReaToolsEachReaMcp }),
     ANDROID_DEV({ L.settings.dialog.androidDevelopment }, { L.settings.dialog.buildKotlinComposeFlutterAndReact }),
@@ -898,6 +899,10 @@ fun SettingsDialog(
                         cardBorder = cardBorder,
                         onOpenAdbConnect = { currentSection = SettingsSection.ADB_CONNECT }
                     )
+                    SettingsSection.NETWORK_INTERCEPTOR -> NetcapSettingsScreen(
+                        cardBg = cardBg,
+                        cardBorder = cardBorder
+                    )
                     SettingsSection.TERMUX_SUPPORT -> TermuxSupportMenu(
                         cardBg = cardBg,
                         onNavigate = { currentSection = it }
@@ -1112,6 +1117,7 @@ private fun MainSettingsMenu(
                 githubRow,
                 deviceTools.adb,
                 deviceTools.automation,
+                row(SettingsSection.NETWORK_INTERCEPTOR, Icons.Outlined.NetworkCheck, c.accentTeal),
                 reaRow,
                 androidDevRow,
                 // Termux:API and X11, used by the Termux packages in the terminal; with the Ubuntu chroot only X11
@@ -3005,6 +3011,8 @@ private fun McpSubScreen(
                 McpPreset(L.common.terminal, L.settings.dialog.runCommandsInTheTerminal, Icons.Outlined.Terminal, QuotaGreen, localSpec("terminal_mcp", "/terminal")),
                 McpPreset(L.settings.dialog.android, L.settings.dialog.tapTypeReadThisPhone, Icons.Outlined.PhoneAndroid, ai.antigem.theme.AppColors.accentTeal,
                     localSpec(bridge.ANDROID_AUTOMATION_MCP_NAME, "/android")),
+                McpPreset(L.netcap.preset.title, L.netcap.preset.subtitle, Icons.Outlined.NetworkCheck, ai.antigem.theme.AppColors.accentIndigo,
+                    localSpec(bridge.NETWORK_MCP_NAME, "/network")),
                 McpPreset(L.common.notesToDos, L.settings.dialog.readEditYourNotes, Icons.Outlined.EditNote, ai.antigem.theme.AppColors.warning, localSpec(bridge.NOTES_MCP_NAME, "/notes")),
                 McpPreset(L.common.jarvis, L.settings.dialog.voiceControlOfThisApp, Icons.Outlined.RecordVoiceOver, ai.antigem.theme.AppColors.accentTeal, localSpec(bridge.JARVIS_MCP_NAME, "/jarvis")),
                 McpPreset(L.common.theme, L.settings.dialog.createSwitchAppThemes, Icons.Outlined.Palette, ai.antigem.theme.AppColors.accentAlt, localSpec(bridge.THEME_MCP_NAME, "/theme")),
