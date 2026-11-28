@@ -249,6 +249,8 @@ class MainActivity : ComponentActivity() {
             val updateManager = remember { ai.antigem.data.updater.AppUpdateManager(this@MainActivity) }
 
             var appUpdateCheckDone by remember { mutableStateOf(false) }
+            // beta updates turned off by themselves with this stable version: told once, after the app's update dialog
+            var showBetaOffNotice by remember { mutableStateOf(ai.antigem.data.updater.BetaUpdates.offNoticeDue(this@MainActivity)) }
 
             LaunchedEffect(Unit) {
                 updateManager.checkForUpdates().onSuccess { info ->
@@ -265,9 +267,9 @@ class MainActivity : ComponentActivity() {
             }
             val languageUpdateOffer = ai.antigem.i18n.LanguageUpdateCheck.offer
             var languageUpdateTurn by remember { mutableStateOf(false) }
-            LaunchedEffect(appUpdateCheckDone, pendingUpdateInfo == null, languageUpdateOffer) {
+            LaunchedEffect(appUpdateCheckDone, pendingUpdateInfo == null, showBetaOffNotice, languageUpdateOffer) {
                 languageUpdateTurn = false
-                if (appUpdateCheckDone && pendingUpdateInfo == null && languageUpdateOffer != null) {
+                if (appUpdateCheckDone && pendingUpdateInfo == null && !showBetaOffNotice && languageUpdateOffer != null) {
                     // a moment after the app's dialog closed, so it doesn't look like the same dialog coming back
                     kotlinx.coroutines.delay(600)
                     languageUpdateTurn = true
@@ -934,8 +936,16 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
 
+                                // Beta updates turned off by this stable version (once, after the app's update dialog)
+                                if (showBetaOffNotice && appUpdateCheckDone && pendingUpdateInfo == null) {
+                                    ai.antigem.ui.updater.BetaOffNoticeDialog(onDismiss = {
+                                        ai.antigem.data.updater.BetaUpdates.offNoticeShown(this@MainActivity)
+                                        showBetaOffNotice = false
+                                    })
+                                }
+
                                 // A newer version of the community language on screen (never together with the app's)
-                                if (languageUpdateTurn && pendingUpdateInfo == null) languageUpdateOffer?.let { offer ->
+                                if (languageUpdateTurn && pendingUpdateInfo == null && !showBetaOffNotice) languageUpdateOffer?.let { offer ->
                                     ai.antigem.ui.updater.LanguageUpdateDialog(
                                         offer = offer,
                                         onNotNow = { ai.antigem.i18n.LanguageUpdateCheck.notNow(this@MainActivity) },

@@ -22,22 +22,58 @@ private const val TAG = "AppUpdateManager"
 private const val DEFAULT_VERSION_URL = "https://raw.githubusercontent.com/santoshkurmi/antigem/standalone/version.json"
 // the updater's prefs (UpdateCheckWorker keeps its "last notified" version there too)
 private const val UPDATE_PREFS = "app_update_prefs"
-private const val KEY_BETA_UPDATES = "beta_updates"
+// the version_code beta updates were turned on at (on a beta build: the beta's own, kept up to date by offNoticeDue)
+private const val KEY_BETA_ON_AT = "beta_updates_on_at"
+// the version_code whose "beta updates turned off" notice was shown
+private const val KEY_BETA_OFF_NOTICE = "beta_updates_off_notice"
+// before: a plain on/off kept for good; read once by offNoticeDue, then removed
+private const val KEY_BETA_UPDATES_OLD = "beta_updates"
 
 /**
- * "Get beta updates" (Settings > About). Saved in the app's data, so it stays through updates: someone who turns it on
- * keeps getting each beta, and the stable releases in between, for good. Never set, it follows the installed APK: a
- * beta build gets betas, a stable build doesn't (so a tester who installed a beta from a link goes back to stable-only
- * once the stable release has replaced it).
+ * "Get beta updates" (Settings > Updates). It lasts until the next stable release: a beta build always gets betas
+ * (the switch can't be turned off there), and a stable build only while it is still the version the switch was turned
+ * on at. So installing any newer stable version turns it off by itself, and the user turns it on again to get the
+ * betas after it: no one stays on betas only because the switch was once on.
  */
 object BetaUpdates {
-    fun isEnabled(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
-        return if (prefs.contains(KEY_BETA_UPDATES)) prefs.getBoolean(KEY_BETA_UPDATES, false) else BuildConfig.IS_BETA
+    private fun prefs(context: Context) = context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
+
+    fun isEnabled(context: Context): Boolean =
+        BuildConfig.IS_BETA || prefs(context).getInt(KEY_BETA_ON_AT, -1) == BuildConfig.VERSION_CODE
+
+    /** Only on a stable build (on a beta the switch is locked on). */
+    fun setEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().apply {
+            if (enabled) putInt(KEY_BETA_ON_AT, BuildConfig.VERSION_CODE) else remove(KEY_BETA_ON_AT)
+        }.apply()
     }
 
-    fun setEnabled(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_BETA_UPDATES, enabled).apply()
+    /** Beta updates were on for an older version and turned off by themselves when this stable version was installed. */
+    fun turnedOffByStable(context: Context): Boolean {
+        if (BuildConfig.IS_BETA) return false
+        val prefs = prefs(context)
+        return prefs.contains(KEY_BETA_ON_AT) && prefs.getInt(KEY_BETA_ON_AT, -1) != BuildConfig.VERSION_CODE
+    }
+
+    /**
+     * At app start (MainActivity): true on the first start of the stable version that turned beta updates off, so
+     * the app tells the user once ([offNoticeShown] after). On a beta it notes the beta, so the next stable one tells.
+     */
+    fun offNoticeDue(context: Context): Boolean {
+        val prefs = prefs(context)
+        prefs.edit().apply {
+            if (prefs.contains(KEY_BETA_UPDATES_OLD)) {
+                // turned on before this version (old switch): it turned off with this update too
+                if (prefs.getBoolean(KEY_BETA_UPDATES_OLD, false) && !prefs.contains(KEY_BETA_ON_AT)) putInt(KEY_BETA_ON_AT, 0)
+                remove(KEY_BETA_UPDATES_OLD)
+            }
+            if (BuildConfig.IS_BETA) putInt(KEY_BETA_ON_AT, BuildConfig.VERSION_CODE)
+        }.apply()
+        return turnedOffByStable(context) && prefs.getInt(KEY_BETA_OFF_NOTICE, -1) != BuildConfig.VERSION_CODE
+    }
+
+    fun offNoticeShown(context: Context) {
+        prefs(context).edit().putInt(KEY_BETA_OFF_NOTICE, BuildConfig.VERSION_CODE).apply()
     }
 }
 
@@ -142,7 +178,7 @@ class AppUpdateManager(private val context: Context) {
      * The release this install follows in version.json. Without beta updates ([BetaUpdates]) it reads only the top
      * level, as every installed app always has, so it never sees a beta. With them it takes the newer (higher
      * version_code) of the stable release and the "beta" block: each next beta and, once a stable release passes it,
-     * the stable one. Turned off on a beta, the app gets nothing until the next stable release, which is higher.
+     * the stable one. Once that stable one is installed beta updates are off again ([BetaUpdates]).
      */
     private fun releaseFor(json: JSONObject): RemoteRelease {
         val stable = RemoteRelease(json.optInt("version_code", 0), json.optString("version_name", "1.0.0"), changelogOf(json))

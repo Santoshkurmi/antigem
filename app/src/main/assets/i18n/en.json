@@ -7013,9 +7013,6 @@
     "settings.updateSettings.betaUpdates": "Beta updates",
     "settings.updateSettings.getBetaUpdates2": "Get beta updates",
     "settings.updateSettings.earlyVersionsWithNewFeaturesBefore": "Early versions with new features before everyone else. They can have bugs.",
-    "settings.updateSettings.noMoreBetasYouStayOn": "No more betas. You stay on this one until the next stable release, which then comes as a normal update.",
-    "settings.updateSettings.youreOnABetaVVersion": "You're on a beta (v{vERSION_NAME}). You get each new beta, and the stable releases.",
-    "settings.updateSettings.youGetEachNewBetaAs": "You get each new beta as soon as it's out, and the stable releases.",
     "settings.updateSettings.youGetTheStableReleasesOnly": "You get the stable releases only.",
     "settings.updateSettings.backgroundChecks": "Background checks",
     "settings.updateSettings.checkInTheBackground": "Check in the background",
@@ -7024,8 +7021,6 @@
     "settings.updateSettings.enterANumberFrom1To": "Enter a number from 1 to {mAX_EVERY}.",
     "settings.updateSettings.antigemChecksDescribeInTheBackground": "AntiGem checks {describe} in the background, and every time you open it.",
     "settings.updateSettings.noBackgroundChecksAntigemStillChecks": "No background checks. AntiGem still checks every time you open it.",
-    "settings.updateSettings.betasAreEarlyVersionsForTesting": "Betas are early versions for testing new features, and they can have bugs.\n\nOnce a beta is installed you can't go back to the stable version until the next stable release (uninstalling would delete your data). Turning this off later stops new betas; you then get the next stable release as a normal update.",
-    "settings.updateSettings.youreOnABetaVVersion2": "You're on a beta (v{vERSION_NAME}). The next stable release comes as a normal update; no more betas until then.",
     "settings.webViewExtensions.pluginOperationFailed": "Plugin operation failed",
     "settings.webViewExtensions.installedFoldernameLabel": "Installed {folderName} {label}",
     "settings.webViewExtensions.repositories": "Repositories",
@@ -8329,7 +8324,13 @@
     "privateSpace.overview.locked": "Locked",
     "privateSpace.overview.notSetUp": "Not set up",
     "settings.switcherOverviewSettings.keepScrollPosition": "Remember scroll position",
-    "settings.switcherOverviewSettings.keepScrollPositionHint": "Opens where you left it. Off: it always opens at the top."
+    "settings.switcherOverviewSettings.keepScrollPositionHint": "Opens where you left it. Off: it always opens at the top.",
+    "settings.updateSettings.youreOnABetaVVersionname": "You're on a beta (v{versionName}). You get each new beta, then the next stable release. Once that stable version is installed, beta updates turn off by themselves.",
+    "settings.updateSettings.youGetEachNewBetaUntil": "You get each new beta until the next stable release. Once that stable version is installed, beta updates turn off by themselves; turn them on again here to get the betas after it.",
+    "settings.updateSettings.betaUpdatesTurnedOffByThemselves": "Beta updates turned off by themselves when this stable version (v{versionName}) was installed. Turn them on again to get the next betas.",
+    "settings.updateSettings.betasAreEarlyVersionsForTesting2": "Betas are early versions for testing new features, and they can have bugs.\n\nYou get each new beta until the next stable release. Once that stable version is installed, beta updates turn off by themselves and you get the stable releases only; turn them on again here if you want the betas after it.\n\nOnce a beta is installed you can't go back to the stable version until the next stable release (uninstalling would delete your data).",
+    "updater.betaOffNotice.betaUpdatesTurnedOff": "Beta updates turned off",
+    "updater.betaOffNotice.youreNowOnTheStableVersion": "You're now on the stable version v{versionName}.\n\nBeta updates turn off by themselves once a stable version is installed, so no one stays on betas without choosing them again. From now on you get the stable releases only.\n\nTo get the next betas, turn on Get beta updates again in Settings → Updates."
   },
   "notes": {
     "settings.language.aiOff": "Segmented button: the agent picks its reply language",

@@ -72,6 +72,8 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
     var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
 
     var betaUpdates by remember { mutableStateOf(BetaUpdates.isEnabled(context)) }
+    // turned off by themselves when this stable version was installed (until the user turns them on or off here)
+    var betaTurnedOff by remember { mutableStateOf(BetaUpdates.turnedOffByStable(context)) }
     var showBetaConfirm by remember { mutableStateOf(false) }
 
     val saved = remember { BackgroundUpdateCheck.get(context) }
@@ -92,7 +94,7 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
             title = { Text(L.settings.updateSettings.getBetaUpdates) },
             text = {
                 Text(
-                    L.settings.updateSettings.betasAreEarlyVersionsForTesting
+                    L.settings.updateSettings.betasAreEarlyVersionsForTesting2
                 )
             },
             confirmButton = {
@@ -100,6 +102,7 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                     onClick = {
                         BetaUpdates.setEnabled(context, true)
                         betaUpdates = true
+                        betaTurnedOff = false
                         showBetaConfirm = false
                         // look for a beta right away instead of at the next check
                         scope.launch {
@@ -136,31 +139,23 @@ internal fun UpdateSettingsScreen(cardBg: Color, cardBorder: BorderStroke) {
                 title = L.settings.updateSettings.getBetaUpdates2,
                 subtitle = L.settings.updateSettings.earlyVersionsWithNewFeaturesBefore,
                 checked = betaUpdates,
+                // on a beta it stays on until the next stable release: turning it off there would change nothing
+                enabled = !BuildConfig.IS_BETA,
                 onCheckedChange = { on ->
                     if (on) {
-                        // already on a beta: nothing new to warn about
-                        if (BuildConfig.IS_BETA) {
-                            BetaUpdates.setEnabled(context, true)
-                            betaUpdates = true
-                        } else {
-                            showBetaConfirm = true
-                        }
+                        showBetaConfirm = true
                     } else {
                         BetaUpdates.setEnabled(context, false)
                         betaUpdates = false
-                        if (BuildConfig.IS_BETA) Toast.makeText(
-                            context,
-                            L.settings.updateSettings.noMoreBetasYouStayOn,
-                            Toast.LENGTH_LONG
-                        ).show()
+                        betaTurnedOff = false
                     }
                 }
             )
             Text(
                 text = when {
-                    BuildConfig.IS_BETA && betaUpdates -> L.settings.updateSettings.youreOnABetaVVersion(BuildConfig.VERSION_NAME)
-                    BuildConfig.IS_BETA -> L.settings.updateSettings.youreOnABetaVVersion2(BuildConfig.VERSION_NAME)
-                    betaUpdates -> L.settings.updateSettings.youGetEachNewBetaAs
+                    BuildConfig.IS_BETA -> L.settings.updateSettings.youreOnABetaVVersionname(BuildConfig.VERSION_NAME)
+                    betaUpdates -> L.settings.updateSettings.youGetEachNewBetaUntil
+                    betaTurnedOff -> L.settings.updateSettings.betaUpdatesTurnedOffByThemselves(BuildConfig.VERSION_NAME)
                     else -> L.settings.updateSettings.youGetTheStableReleasesOnly
                 },
                 fontSize = 12.sp,
@@ -260,9 +255,15 @@ private fun CardTitle(icon: ImageVector, title: String) {
 }
 
 @Composable
-private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().toggleRowSemantics(checked, onCheckedChange),
+        modifier = Modifier.fillMaxWidth().toggleRowSemantics(checked, onCheckedChange, enabled = enabled),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -278,6 +279,7 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheck
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            enabled = enabled,
             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = QuotaGreen),
             modifier = Modifier.mergedIntoRow()
         )
