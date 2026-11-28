@@ -1531,6 +1531,8 @@ fun IdeScreen(
                                 factory = { ctx ->
                                     CodeEditorView(ctx).apply {
                                         applyThemeColors(editorThemeColors)
+                                        // the pinch-zoomed size carries over to the next tab
+                                        rememberTextSize()
                                         isWordWrapEnabled = isWordWrap
                                         isReadOnly = activeTab.isReadOnly
                                         setFile(activeTab.name, activeTab.content)

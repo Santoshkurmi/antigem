@@ -8,6 +8,7 @@ import android.util.AttributeSet
 import android.util.Log
 import android.widget.FrameLayout
 import io.github.rosemoe.sora.event.ContentChangeEvent
+import io.github.rosemoe.sora.event.TextSizeChangeEvent
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
@@ -22,6 +23,8 @@ class CodeEditorView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "CodeEditorDebug"
+        private const val PREFS = "anti_gem_sync_prefs"
+        private const val KEY_TEXT_SIZE = "ide_editor_text_size_dp"
     }
 
     private var currentFile = ""
@@ -40,6 +43,21 @@ class CodeEditorView @JvmOverloads constructor(
     }
 
     private var appliedTheme: EditorThemeColors? = null
+
+    /**
+     * Keeps the text size the user pinch-zoomed to: every file tab is a new editor, so it starts with the last saved
+     * size, and each zoom step is saved. Until the first zoom the editor keeps its default 14 sp. Saved in dp, so it
+     * stays as zoomed when Android's or the app's text size changes.
+     */
+    fun rememberTextSize() {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val density = resources.displayMetrics.density
+        val savedDp = prefs.getFloat(KEY_TEXT_SIZE, 0f)
+        if (savedDp > 0f) editor.setTextSizePx(savedDp * density)
+        editor.subscribeEvent(TextSizeChangeEvent::class.java) { event, _ ->
+            prefs.edit().putFloat(KEY_TEXT_SIZE, event.newTextSize / density).apply()
+        }
+    }
 
     /** Colors the editor with the app theme's IDE colors; does nothing when they did not change. */
     fun applyThemeColors(theme: EditorThemeColors) {
