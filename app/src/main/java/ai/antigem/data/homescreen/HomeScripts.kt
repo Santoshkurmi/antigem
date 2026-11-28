@@ -522,17 +522,33 @@ case "${'$'}l" in "${'$'}HOME"/.shortcuts/*) ;; *) exit 2;; esac
         }
     }
 
+    /** How a background script is doing, for a Device controls button ([runInBackground]'s onState). */
+    sealed interface RunState {
+        data object Started : RunState
+        data class Ended(val status: RunStatus, val exit: Int?) : RunState
+        /** It did not start (a toast said why). */
+        data object Refused : RunState
+    }
+
     /** Runs the script without a terminal (on the Run page) and says when it is done. Main thread. */
-    fun runInBackground(context: Context, target: HomeLinks.Target.Script) {
+    fun runInBackground(context: Context, target: HomeLinks.Target.Script, onState: ((RunState) -> Unit)? = null) {
         val app = context.applicationContext
         val name = target.path.substringAfterLast('/')
+        fun refused() {
+            onState?.invoke(RunState.Refused)
+        }
         if (remoteTerminal()) {
             toast(app, L.homescreen.homeScripts.scriptsRunOnThisPhoneTurn)
+            refused()
             return
         }
-        if (!sameRuntime(app, target)) return
+        if (!sameRuntime(app, target)) {
+            refused()
+            return
+        }
         if (!LocalEnvironmentManager.isInstalled(app)) {
             toast(app, L.homescreen.homeScripts.setUpTheTerminalFirstOpen)
+            refused()
             return
         }
         scope.launch {
@@ -543,12 +559,17 @@ case "${'$'}l" in "${'$'}HOME"/.shortcuts/*) ;; *) exit 2;; esac
                 val shared = sharedFolders(app, install)
                 if (shared == null) {
                     toast(app, L.homescreen.homeScripts.couldNotReadTheUbuntuChroot(statusError()))
+                    refused()
                     return@launch
                 }
                 folder = chrootCached(app, install).home ?: ""
                 command = sh(SH_RUN, listOf(target.path) + shared)
             } else {
-                val real = termuxReal(app, target.path) ?: return@launch
+                val real = termuxReal(app, target.path)
+                if (real == null) {
+                    refused()
+                    return@launch
+                }
                 folder = LocalEnvironmentManager.getHomeDir(app).absolutePath
                 command = command(real)
             }
@@ -558,11 +579,18 @@ case "${'$'}l" in "${'$'}HOME"/.shortcuts/*) ;; *) exit 2;; esac
                 RunManager.start(app, name = name, command = command, folder = folder, origin = "home")
             }.getOrElse {
                 toast(app, L.homescreen.homeScripts.couldNotStartNameMessage(name, it.message))
+                refused()
                 return@launch
             }
             toast(app, L.homescreen.homeScripts.runningName(name))
+            onState?.invoke(RunState.Started)
             val end = RunManager.runs.map { list -> list.firstOrNull { it.id == run.id } }
-                .first { it == null || it.status != RunStatus.RUNNING } ?: return@launch
+                .first { it == null || it.status != RunStatus.RUNNING }
+            if (end == null) {
+                onState?.invoke(RunState.Ended(RunStatus.STOPPED, null))
+                return@launch
+            }
+            onState?.invoke(RunState.Ended(end.status, end.exitCode))
             notifyDone(app, end.id, name, end.status, end.exitCode)
         }
     }
@@ -721,16 +749,44 @@ case "${'$'}l" in "${'$'}HOME"/.shortcuts/*) ;; *) exit 2;; esac
 
     // ------------------------------------------------------------------ the end of a background script
 
+    private fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel(CHANNEL) == null) {
+                nm.createNotificationChannel(NotificationChannel(CHANNEL, "Home screen scripts", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = L.homescreen.homeScripts.whenAScriptStartedFromThe
+                })
+            }
+        }
+    }
+
+    /**
+     * A Device controls button asked for a terminal tab but Android didn't let the app come to the front by itself: a
+     * notification opens it (its intent stays with Android, like a widget's).
+     */
+    fun notifyTapToOpen(context: Context, name: String, target: HomeLinks.Target.Script) {
+        runCatching {
+            ensureChannel(context)
+            val code = ("open:" + target.path).hashCode()
+            val open = PendingIntent.getActivity(
+                context, code, HomeLinks.intent(context, target),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val n = NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_home_terminal)
+                .setContentTitle(L.homescreen.homeScripts.openNameInTheTerminal(name))
+                .setContentText(L.homescreen.homeScripts.androidDidntLetAntigemOpenBy)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setTimeoutAfter(5 * 60_000L)
+                .build()
+            NotificationManagerCompat.from(context).notify(code, n)
+        }
+    }
+
     private fun notifyDone(context: Context, runId: String, name: String, status: RunStatus, exit: Int?) {
         runCatching {
-            if (Build.VERSION.SDK_INT >= 26) {
-                val nm = context.getSystemService(NotificationManager::class.java)
-                if (nm.getNotificationChannel(CHANNEL) == null) {
-                    nm.createNotificationChannel(NotificationChannel(CHANNEL, "Home screen scripts", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                        description = L.homescreen.homeScripts.whenAScriptStartedFromThe
-                    })
-                }
-            }
+            ensureChannel(context)
             val ok = status == RunStatus.SUCCEEDED
             val title = when (status) {
                 RunStatus.SUCCEEDED -> "✓ $name finished"

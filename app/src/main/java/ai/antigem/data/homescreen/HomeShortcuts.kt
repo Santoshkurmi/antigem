@@ -23,6 +23,11 @@ object HomeShortcuts {
     private const val TAG = "HomeShortcuts"
     private const val CHAT_PREFIX = "chat:"
     private const val RECENT_COUNT = 3
+    private const val SCRIPT_PREFIX = "script:"
+    /** Scripts the user may put in the app icon's menu (launchers show about 4 entries in all). */
+    const val MENU_SCRIPTS_MAX = 4
+    /** After Voice call and Jarvis (unranked), before the newest chats (10+). */
+    private const val SCRIPT_RANK = 5
 
     fun chatShortcutId(id: String) = CHAT_PREFIX + id
 
@@ -46,7 +51,11 @@ object HomeShortcuts {
      * One script's shortcut. Its icon is ~/.shortcuts/icons/<name>.png when there is one (as in Termux:Widget), else
      * a terminal (or a task) glyph.
      */
-    suspend fun scriptInfo(context: Context, script: HomeScripts.Script): ShortcutInfoCompat {
+    /** A script's shortcut id: the same for its home-screen icon and its entry in the app icon's menu. */
+    fun scriptShortcutId(script: HomeScripts.Script): String =
+        SCRIPT_PREFIX + (if (script.chroot) "chroot:" else "") + script.path
+
+    suspend fun scriptInfo(context: Context, script: HomeScripts.Script, rank: Int? = null): ShortcutInfoCompat {
         val custom = HomeScripts.icon(context, script)
         val icon = custom?.let { IconCompat.createWithBitmap(it) } ?: HomeIcons.glyphIcon(
             context,
@@ -54,12 +63,12 @@ object HomeShortcuts {
             if (script.background) ai.antigem.R.drawable.ic_home_task else ai.antigem.R.drawable.ic_home_terminal
         )
         // the old id for AntiGem's own scripts: shortcuts pinned before keep theirs
-        val id = "script:" + (if (script.chroot) "chroot:" else "") + script.path
-        return ShortcutInfoCompat.Builder(context, id)
+        return ShortcutInfoCompat.Builder(context, scriptShortcutId(script))
             .setShortLabel(script.name.substringBeforeLast('.').ifBlank { script.name }.take(24))
             .setLongLabel(script.label.take(40))
             .setIcon(icon)
             .setIntent(HomeLinks.intent(context, HomeLinks.Target.Script(script.path, script.background, script.chroot)))
+            .apply { if (rank != null) setRank(rank) }
             .build()
     }
 
@@ -142,6 +151,57 @@ object HomeShortcuts {
         runCatching { ShortcutManagerCompat.reportShortcutUsed(context, chatShortcutId(id)) }
     }
 
+    /** [script] is one of the scripts chosen for the app icon's menu. */
+    fun isInMenu(script: HomeScripts.Script): Boolean = scriptShortcutId(script) in HomePrefs.menuScripts.value
+
+    /**
+     * Puts [script] in the app icon's menu or takes it out ([syncScripts] then updates the menu). False when
+     * [MENU_SCRIPTS_MAX] scripts of this runtime are in it already.
+     */
+    fun setInMenu(context: Context, script: HomeScripts.Script, on: Boolean): Boolean {
+        val id = scriptShortcutId(script)
+        val now = HomePrefs.menuScripts.value
+        if (on && id !in now) {
+            val present = HomeScripts.list(context).map { scriptShortcutId(it) }.toSet()
+            if (now.count { it in present } >= MENU_SCRIPTS_MAX) return false
+        }
+        HomePrefs.setMenuScripts(if (on) now + id else now - id)
+        return true
+    }
+
+    /** The scripts in the app icon's menu now (id and label, in order): the same again changes nothing. */
+    @Volatile private var lastScripts: List<Pair<String, String>>? = null
+
+    /**
+     * The chosen scripts of the phone's runtime into the app icon's menu, after Voice call and Jarvis and before the
+     * newest chats, within Android's limit of entries (5 up to Android 9). Scripts deleted or renamed drop out. Called
+     * while the app is on screen: Android limits how often an app in the background may change these.
+     */
+    suspend fun syncScripts(context: Context) {
+        if (Build.VERSION.SDK_INT < 25) return
+        val app = context.applicationContext
+        val listing = HomeScripts.listing(app)
+        // the Ubuntu chroot's list not read (or not readable) yet: leave the menu as it is
+        if (!listing.read || listing.error != null) return
+        val chosen = HomePrefs.menuScripts.value
+        runCatching {
+            val dynamic = ShortcutManagerCompat.getDynamicShortcuts(app)
+            val others = dynamic.count { !it.id.startsWith(SCRIPT_PREFIX) && !it.id.startsWith(CHAT_PREFIX) }
+            val room = (ShortcutManagerCompat.getMaxShortcutCountPerActivity(app) - others).coerceIn(0, MENU_SCRIPTS_MAX)
+            val keep = listing.scripts.filter { scriptShortcutId(it) in chosen }.take(room)
+            val sig = keep.map { scriptShortcutId(it) to it.label }
+            val present = dynamic.map { it.id }.filter { it.startsWith(SCRIPT_PREFIX) }
+            if (sig == lastScripts && present.toSet() == sig.map { it.first }.toSet()) return
+            val keepIds = sig.map { it.first }.toSet()
+            val stale = present.filter { it !in keepIds }
+            if (stale.isNotEmpty()) ShortcutManagerCompat.removeDynamicShortcuts(app, stale)
+            keep.forEachIndexed { i, s -> ShortcutManagerCompat.pushDynamicShortcut(app, scriptInfo(app, s, rank = SCRIPT_RANK + i)) }
+            lastScripts = sig
+            // the chats take what is left
+            lastRecent = null
+        }.onFailure { Log.w(TAG, "scripts in menu: ${it.message}") }
+    }
+
     /** What the app icon's menu shows now: the same again changes nothing. */
     @Volatile private var lastRecent: List<Pair<String, String>>? = null
 
@@ -151,7 +211,10 @@ object HomeShortcuts {
      */
     fun sync(context: Context, chats: List<HomeChat>, recentOn: Boolean) {
         runCatching {
-            val recent = if (recentOn) chats.sortedByDescending { it.updatedAt }.take(RECENT_COUNT) else emptyList()
+            // after Voice call, Jarvis and the chosen scripts, within Android's limit of entries
+            val others = ShortcutManagerCompat.getDynamicShortcuts(context).count { !it.id.startsWith(CHAT_PREFIX) }
+            val room = (ShortcutManagerCompat.getMaxShortcutCountPerActivity(context) - others).coerceIn(0, RECENT_COUNT)
+            val recent = if (recentOn) chats.sortedByDescending { it.updatedAt }.take(room) else emptyList()
             val sig = recent.map { it.id to it.title }
             if (sig != lastRecent) {
                 val keep = recent.map { chatShortcutId(it.id) }.toSet()

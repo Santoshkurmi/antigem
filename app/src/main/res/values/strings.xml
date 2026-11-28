@@ -21,4 +21,5 @@
     <string name="widget_scripts_label">Scripts</string>
     <string name="widget_scripts_description">Run your ~/.shortcuts scripts, like Termux:Widget</string>
     <string name="shortcut_script_label">AntiGem script</string>
+    <string name="controls_scripts_label">AntiGem scripts</string>
 </resources>

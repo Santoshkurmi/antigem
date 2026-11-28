@@ -196,6 +196,13 @@ object HomeSnapshot {
                 .debounce(1200)
                 .collect { (s, _, on) -> HomeShortcuts.sync(app, s.chats, on) }
         }
+        // the scripts chosen for the app icon's menu: when the list or the choice changes, also only while on screen
+        scope.launch {
+            combine(HomeScripts.changes, HomePrefs.menuScripts, VoiceCallLauncher.appVisible) { _, _, visible -> visible }
+                .filter { it }
+                .debounce(800)
+                .collect { HomeShortcuts.syncScripts(app) }
+        }
     }
 
     private class Inputs(

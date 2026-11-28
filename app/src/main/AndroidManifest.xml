@@ -390,6 +390,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Scripts of ~/.shortcuts as Device controls buttons (Android 11+: power menu / Quick Settings tile).
+             Only the system UI can bind it (BIND_CONTROLS). -->
+        <service
+            android:name="ai.antigem.data.homescreen.ScriptControlsService"
+            android:exported="true"
+            android:label="@string/controls_scripts_label"
+            android:permission="android.permission.BIND_CONTROLS"
+            tools:targetApi="r">
+            <intent-filter>
+                <action android:name="android.service.controls.ControlsProviderService" />
+            </intent-filter>
+        </service>
+
         <!-- Home-screen widgets: Chats, Quick actions, One chat, Scripts -->
         <receiver
             android:name="ai.antigem.ui.homescreen.ChatsWidgetReceiver"

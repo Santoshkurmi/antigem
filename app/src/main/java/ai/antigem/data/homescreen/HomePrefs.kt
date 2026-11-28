@@ -25,6 +25,10 @@ object HomePrefs {
     /** The widgets' background, 100 = solid; lower lets the wallpaper show through. */
     val opacity: StateFlow<Int> = _opacity.asStateFlow()
 
+    private val _menuScripts = MutableStateFlow<Set<String>>(emptySet())
+    /** Scripts in the long-press menu of the AntiGem icon: their shortcut ids ([HomeShortcuts.scriptShortcutId]). */
+    val menuScripts: StateFlow<Set<String>> = _menuScripts.asStateFlow()
+
     private val _hideTitles = MutableStateFlow(false)
     /** Widgets show "Claude Code chat" instead of the chat's name, and no reply text (for a home screen others see). */
     val hideTitles: StateFlow<Boolean> = _hideTitles.asStateFlow()
@@ -38,6 +42,12 @@ object HomePrefs {
         _colors.value = p.getString("colors", COLORS_APP) ?: COLORS_APP
         _opacity.value = p.getInt("opacity", 100).coerceIn(30, 100)
         _hideTitles.value = p.getBoolean("hide_titles", false)
+        _menuScripts.value = p.getStringSet("menu_scripts", emptySet())?.toSet().orEmpty()
+    }
+
+    fun setMenuScripts(ids: Set<String>) {
+        _menuScripts.value = ids
+        sp?.edit()?.putStringSet("menu_scripts", ids.toSet())?.apply()
     }
 
     fun setRecentInMenu(on: Boolean) {

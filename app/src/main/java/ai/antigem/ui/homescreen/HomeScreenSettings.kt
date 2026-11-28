@@ -17,6 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Description
@@ -230,26 +236,64 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                 }) { Text(L.homescreen.settings.makeTheFolders) }
                 scripts.isEmpty() -> Text(L.homescreen.settings.noScriptsYet, fontSize = 12.5.sp, color = subtle())
             }
+            val menuIds by HomePrefs.menuScripts.collectAsState()
+            // the app icon's long-press menu exists from Android 7.1
+            val hasIconMenu = Build.VERSION.SDK_INT >= 25
             scripts.forEach { s ->
+                val inMenu = HomeShortcuts.scriptShortcutId(s) in menuIds
+                var moreOpen by remember(s.path, s.chroot) { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(s.label, fontWeight = FontWeight.Medium, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (s.background) L.homescreen.settings.inTheBackground else L.homescreen.settings.inATerminalTab, fontSize = 11.5.sp, color = subtle())
-                    }
-                    if (s.link) {
-                        // a link added here (or by ln -s): only the link goes, the script stays
-                        TextButton(onClick = {
-                            scope.launch {
-                                if (HomeScripts.removeLink(context, s)) {
-                                    AppToastHelper.showToast(L.homescreen.settings.removedNameTheScriptItself(s.label), ChatToastType.SUCCESS)
-                                    HomeWidgets.refreshScripts(context)
-                                } else {
-                                    AppToastHelper.showToast(L.homescreen.settings.couldNotRemoveName(s.label), ChatToastType.ERROR)
-                                }
-                            }
-                        }) { Text(L.common.remove) }
+                        Text(
+                            (if (s.background) L.homescreen.settings.inTheBackground else L.homescreen.settings.inATerminalTab) +
+                                if (inMenu) " · " + L.homescreen.settings.appIconMenu else "",
+                            fontSize = 11.5.sp, color = subtle()
+                        )
                     }
                     TextButton(onClick = { scope.launch { HomeShortcuts.pinScript(context, s) } }) { Text(L.homescreen.settings.addIcon) }
+                    if (hasIconMenu || s.link) {
+                        Box {
+                            IconButton(onClick = { moreOpen = true }) {
+                                Icon(Icons.Outlined.MoreVert, L.homescreen.settings.moreForName(s.label))
+                            }
+                            DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                                if (hasIconMenu) {
+                                    DropdownMenuItem(
+                                        text = { Text(L.homescreen.settings.inAppIconMenu) },
+                                        leadingIcon = {
+                                            Icon(if (inMenu) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank, null)
+                                        },
+                                        onClick = {
+                                            moreOpen = false
+                                            if (!HomeShortcuts.setInMenu(context, s, !inMenu)) {
+                                                AppToastHelper.showToast(
+                                                    L.homescreen.settings.upToCountScriptsFitIn(HomeShortcuts.MENU_SCRIPTS_MAX), ChatToastType.INFO
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                                if (s.link) {
+                                    // a link added here (or by ln -s): only the link goes, the script stays
+                                    DropdownMenuItem(
+                                        text = { Text(L.common.remove) },
+                                        onClick = {
+                                            moreOpen = false
+                                            scope.launch {
+                                                if (HomeScripts.removeLink(context, s)) {
+                                                    AppToastHelper.showToast(L.homescreen.settings.removedNameTheScriptItself(s.label), ChatToastType.SUCCESS)
+                                                    HomeWidgets.refreshScripts(context)
+                                                } else {
+                                                    AppToastHelper.showToast(L.homescreen.settings.couldNotRemoveName(s.label), ChatToastType.ERROR)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (scriptList.hasFolder || scriptList.chroot) {
@@ -269,6 +313,10 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                     }) { Icon(Icons.Outlined.Refresh, L.homescreen.settings.lookAgain) }
                     Hint(L.homescreen.settings.addedOrRenamedScriptsLookAgain)
                 }
+            }
+            if (Build.VERSION.SDK_INT >= 30 && (scriptList.hasFolder || scriptList.chroot)) {
+                Spacer(Modifier.height(6.dp))
+                Hint(L.homescreen.settings.deviceControlsYourScriptsCanAlso)
             }
         }
 
