@@ -119,6 +119,28 @@ class AgyProjectService {
     }
 
     /**
+     * Copies a file that is on the daemon host ([path], absolute) into the daemon's temp media and returns its uri. The
+     * daemon reads the file itself (a Media with a uri and no inline data), so its bytes never go through this app.
+     * Files over 20 MiB are refused.
+     */
+    suspend fun saveFileAsArtifact(
+        path: String,
+        mimeType: String,
+        description: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val req = SaveMediaAsArtifactRequest(
+            media = Media(
+                mime_type = mimeType,
+                uri = path,
+                description = description
+            )
+        )
+        AgyLanguageService.SaveMediaAsArtifact().executeSafely(req).map { res ->
+            res.uri
+        }
+    }
+
+    /**
      * Deletes a media artifact file on the host.
      */
     suspend fun deleteMediaArtifact(

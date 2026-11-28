@@ -190,7 +190,9 @@ class AgyHubClient {
         val durationSeconds: Int = 0,
         val description: String = "Voice note",
         val uri: String? = null,
-        val thumbnail: String? = null
+        val thumbnail: String? = null,
+        // the file's own name (set for files sent to a cloud chat; empty: not sent, as before)
+        val displayName: String = ""
     )
 
     suspend fun startCascade(
@@ -322,6 +324,10 @@ class AgyHubClient {
         hubUrl: String = AuthPreferences.currentHubUrl
     ): Result<String> =
         projectService.saveMediaAsArtifact(mimeType, base64Data, description, thumbnailBase64, hubUrl)
+
+    /** A file on the hub's machine copied into the hub's temp media by the hub itself; returns its uri. */
+    suspend fun saveFileAsArtifact(path: String, mimeType: String, description: String): Result<String> =
+        projectService.saveFileAsArtifact(path, mimeType, description)
 
     suspend fun deleteMediaArtifact(
         uri: String,

@@ -169,7 +169,8 @@ class AgyChatService {
                 inline_data = rawBytes,
                 duration_seconds = if (m.durationSeconds > 0) m.durationSeconds.toFloat() else 0f,
                 description = m.description,
-                uri = m.uri ?: ""
+                uri = m.uri ?: "",
+                display_name = m.displayName
             )
         }
 

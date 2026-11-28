@@ -114,7 +114,8 @@ data class ChatAttachment(
     /**
      * A file the agent opens in place: [path] is its real path on the agent's machine and it goes to the agent only as a
      * line in the message's hidden `<attached-files>` list (see AttachedFiles). An image may also carry [base64], a
-     * shrunk copy the model sees directly. Never uploaded or inlined by the backends.
+     * shrunk copy the model sees directly. Never uploaded or inlined by the backends, except for an Antigravity cloud
+     * chat (the path means nothing in Google's cloud): there the hub copies the file and sends it with the message.
      */
     val reference: Boolean = false
 )

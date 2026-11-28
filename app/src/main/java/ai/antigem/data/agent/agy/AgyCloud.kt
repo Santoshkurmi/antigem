@@ -44,6 +44,12 @@ object AgyCloud {
     private val BACKEND = BackendType.BACKEND_TYPE_REMOTE_AICODE
     const val WEB_URL = "https://antigravity.google.com/remote"
 
+    /**
+     * The biggest file a cloud chat can be sent: the hub copies each file into its temp media (SaveMediaAsArtifact)
+     * and inlines that into the message, both capped at 20 MiB a file (agy 1.5.x).
+     */
+    const val MAX_FILE_BYTES = 20L * 1024 * 1024
+
     data class CloudProject(val id: String, val name: String, val repos: List<RemoteResource>, val raw: Project)
 
     data class CloudPlugin(

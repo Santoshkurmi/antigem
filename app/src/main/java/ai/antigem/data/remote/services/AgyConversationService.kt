@@ -77,13 +77,18 @@ class AgyConversationService {
                         }
 
                         val summary = annTitle ?: rawSummary ?: "Conversation"
+                        val createdTime = summaryObj.created_time?.let { ts ->
+                            ts.seconds * 1000L + (ts.nanos / 1_000_000L)
+                        }
                         val lastModEpoch = summaryObj.last_modified_time?.let { ts ->
                             ts.seconds * 1000L + (ts.nanos / 1_000_000L)
-                        } ?: System.currentTimeMillis()
+                        } ?: if (cloud || summaryObj.cloud) {
+                            // a cloud chat without the time: its start time (0 if none; AgyChatBackend keeps the newest
+                            // time it saw), never "now", which lifted it to the top of the list until the next frame
+                            createdTime ?: 0L
+                        } else System.currentTimeMillis()
 
-                        val createdEpoch = summaryObj.created_time?.let { ts ->
-                            ts.seconds * 1000L + (ts.nanos / 1_000_000L)
-                        } ?: lastModEpoch
+                        val createdEpoch = createdTime ?: lastModEpoch
 
                         val notFullyIdle = summaryObj.not_fully_idle
                         val hasActivity = summaryObj.has_activity

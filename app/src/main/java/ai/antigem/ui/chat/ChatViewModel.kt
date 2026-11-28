@@ -600,12 +600,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun sendNow(content: String) {
         val refs = ai.antigem.data.files.AttachedFiles.refsOf(_attachments.value)
+        // an Antigravity cloud chat runs in Google's cloud, where these paths mean nothing: its files go with the
+        // message itself (AgyChatBackend.sendMessage), so its text gets no file list
+        val listed = if (currentConversation.value?.isCloud == true) emptyList() else refs
         val jarvis = ai.antigem.data.jarvis.JarvisController
         val chatId = currentConversation.value?.id
         // (EGM's commands tell a Jarvis chat to run the reviewers as task chats)
         val typed = PromptExpansion.expand(content, jarvis = jarvis.isAttached && jarvis.isJarvisTarget(chatId))
-        val expanded = if (refs.isEmpty()) typed
-            else listOf(typed, ai.antigem.data.files.AttachedFiles.block(refs)).filter { it.isNotBlank() }.joinToString("\n\n")
+        val expanded = if (listed.isEmpty()) typed
+            else listOf(typed, ai.antigem.data.files.AttachedFiles.block(listed)).filter { it.isNotBlank() }.joinToString("\n\n")
         // a Jarvis chat on screen: its message carries Jarvis' hidden note (or goes to the voice Jarvis chat as a typed turn)
         val intercepted = (if (jarvis.isAttached) jarvis.interceptScreenMessage(chatId, expanded) else expanded) ?: return
         rememberCopies(chatId, refs)
@@ -1095,6 +1098,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun newAttachmentId() = "att_${System.currentTimeMillis()}_${(0..999).random()}"
 
+    /**
+     * True (with a toast) for a file an Antigravity cloud chat can't take: the hub sends it files up to
+     * [ai.antigem.data.agent.agy.AgyCloud.MAX_FILE_BYTES]. Always false in other chats, and when the size is unknown.
+     */
+    private fun tooLargeForCloud(fileName: String, size: Long): Boolean {
+        if (size <= ai.antigem.data.agent.agy.AgyCloud.MAX_FILE_BYTES || currentConversation.value?.isCloud != true) return false
+        ai.antigem.ui.components.AppToastHelper.showToast(
+            L.chat.viewModel.filenameIsTooLargeCloudAgents(fileName), ai.antigem.ui.components.ChatToastType.ERROR
+        )
+        return true
+    }
+
     private suspend fun addFromUri(uri: android.net.Uri, context: android.content.Context) {
         var fileName = "attachment_${System.currentTimeMillis()}"
         try {
@@ -1133,6 +1148,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 // an image Android cannot decode (e.g. TIFF) goes to the agent as a file
             }
+            if (tooLargeForCloud(fileName, fileSize)) return
             startCopy(uri, context, fileName, fileSize, mimeType)
         } catch (t: Throwable) {
             if (t is kotlinx.coroutines.CancellationException) throw t
@@ -1231,6 +1247,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             att = att.copy(isImage = true, mimeType = shrunk.mimeType, base64 = android.util.Base64.encodeToString(shrunk.bytes, android.util.Base64.NO_WRAP))
                         }
                     }
+                    // (an image goes to a cloud chat as its shrunk copy, any size)
+                    if (att.base64.isNullOrBlank() && tooLargeForCloud(e.name, e.size)) continue
                     _attachments.value = _attachments.value + att
                 }
             } finally {
