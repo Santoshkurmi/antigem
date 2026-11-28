@@ -10,7 +10,6 @@ import ai.antigem.ui.browser.BrowserSessionManager
 import ai.antigem.ui.chat.ChatViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.io.File
 import ai.antigem.i18n.L
 
 /** MainActivity's side of a home-screen link ([HomeLinks.ACTION_SHOW], forwarded by [HomeLaunchActivity]). */
@@ -48,8 +47,7 @@ object HomeRouter {
             }
             is HomeLinks.Target.Script -> {
                 if (!trusted) return
-                val f = File(target.path)
-                if (target.background) HomeScripts.runInBackground(activity, f) else HomeScripts.runInTerminal(activity, vm, f)
+                if (target.background) HomeScripts.runInBackground(activity, target) else HomeScripts.runInTerminal(activity, vm, target)
             }
             is HomeLinks.Target.RunEntry -> {
                 RunPanel.show(target.id)

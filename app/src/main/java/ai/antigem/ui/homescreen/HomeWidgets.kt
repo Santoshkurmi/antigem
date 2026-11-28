@@ -107,10 +107,14 @@ object HomeWidgets {
         }
     }
 
+    /** Reads ~/.shortcuts again (in the Ubuntu chroot through root) and redraws the Scripts widgets. */
     fun refreshScripts(context: Context) {
         HomeScripts.touch()
         val app = context.applicationContext
-        scope.launch { runCatching { ScriptsWidget().updateAll(app) } }
+        scope.launch {
+            runCatching { HomeScripts.refresh(app) }
+            runCatching { ScriptsWidget().updateAll(app) }
+        }
     }
 
     fun count(context: Context, kind: WidgetKind): Int =

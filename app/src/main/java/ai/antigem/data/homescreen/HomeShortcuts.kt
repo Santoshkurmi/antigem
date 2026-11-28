@@ -1,10 +1,15 @@
 package ai.antigem.data.homescreen
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import ai.antigem.domain.model.AgentKind
 import ai.antigem.i18n.L
 
@@ -37,22 +42,32 @@ object HomeShortcuts {
                 .build()
         )
 
-    fun pinScript(context: Context, script: HomeScripts.Script): Boolean =
-        pin(
+    /**
+     * One script's shortcut. Its icon is ~/.shortcuts/icons/<name>.png when there is one (as in Termux:Widget), else
+     * a terminal (or a task) glyph.
+     */
+    suspend fun scriptInfo(context: Context, script: HomeScripts.Script): ShortcutInfoCompat {
+        val custom = HomeScripts.icon(context, script)
+        val icon = custom?.let { IconCompat.createWithBitmap(it) } ?: HomeIcons.glyphIcon(
             context,
-            ShortcutInfoCompat.Builder(context, "script:${script.file.absolutePath}")
-                .setShortLabel(script.file.nameWithoutExtension.ifBlank { script.file.name }.take(24))
-                .setLongLabel(script.label.take(40))
-                .setIcon(
-                    HomeIcons.glyphIcon(
-                        context,
-                        if (script.background) 0xFF0F766E.toInt() else 0xFF334155.toInt(),
-                        if (script.background) ai.antigem.R.drawable.ic_home_task else ai.antigem.R.drawable.ic_home_terminal
-                    )
-                )
-                .setIntent(HomeLinks.intent(context, HomeLinks.Target.Script(script.file.absolutePath, script.background)))
-                .build()
+            if (script.background) 0xFF0F766E.toInt() else 0xFF334155.toInt(),
+            if (script.background) ai.antigem.R.drawable.ic_home_task else ai.antigem.R.drawable.ic_home_terminal
         )
+        // the old id for AntiGem's own scripts: shortcuts pinned before keep theirs
+        val id = "script:" + (if (script.chroot) "chroot:" else "") + script.path
+        return ShortcutInfoCompat.Builder(context, id)
+            .setShortLabel(script.name.substringBeforeLast('.').ifBlank { script.name }.take(24))
+            .setLongLabel(script.label.take(40))
+            .setIcon(icon)
+            .setIntent(HomeLinks.intent(context, HomeLinks.Target.Script(script.path, script.background, script.chroot)))
+            .build()
+    }
+
+    /** Asks the launcher to place [script]'s shortcut. */
+    suspend fun pinScript(context: Context, script: HomeScripts.Script): Boolean {
+        val info = scriptInfo(context, script)
+        return withContext(Dispatchers.Main) { pin(context, info) }
+    }
 
     fun pinWeb(context: Context, title: String, url: String): Boolean =
         pin(
@@ -70,10 +85,35 @@ object HomeShortcuts {
             Toast.makeText(context, L.homescreen.homeShortcuts.thisHomeScreenAppCantAdd, Toast.LENGTH_LONG).show()
             return false
         }
-        return runCatching { ShortcutManagerCompat.requestPinShortcut(context, info, null) }
-            .onFailure { Log.w(TAG, "pin: ${it.message}") }
-            .getOrDefault(false)
+        // Android 8+: Android keeps the link and asks the launcher (it never sees the link itself)
+        if (Build.VERSION.SDK_INT >= 26) {
+            return runCatching { ShortcutManagerCompat.requestPinShortcut(context, info, null) }
+                .onFailure { Log.w(TAG, "pin: ${it.message}") }
+                .getOrDefault(false)
+        }
+        return pinLegacy(context, info)
     }
+
+    /**
+     * Android 7 pins through the INSTALL_SHORTCUT broadcast, with the shortcut's signed link in it. androidx sends it
+     * to every app listening for it, so any app could take the link; here it goes only to the launchers that may have
+     * it ([HomeLaunchers]: the default home app, or one that came with the phone).
+     */
+    private fun pinLegacy(context: Context, info: ShortcutInfoCompat): Boolean = runCatching {
+        val action = "com.android.launcher.action.INSTALL_SHORTCUT"
+        val targets = context.packageManager.queryBroadcastReceivers(Intent(action), 0)
+            .mapNotNull { it.activityInfo?.packageName }
+            .distinct()
+            .filter { HomeLaunchers.isTrusted(context, it) && it != context.packageName }
+        if (targets.isEmpty()) {
+            Toast.makeText(context, L.homescreen.homeShortcuts.thisHomeScreenAppCantAdd, Toast.LENGTH_LONG).show()
+            return@runCatching false
+        }
+        // the old-style extras (link, name, icon) launchers of Android 7 read
+        val base = ShortcutManagerCompat.createShortcutResultIntent(context, info).setAction(action)
+        targets.forEach { pkg -> context.sendBroadcast(Intent(base).setPackage(pkg)) }
+        true
+    }.onFailure { Log.w(TAG, "pin (Android 7): ${it.message}") }.getOrDefault(false)
 
     private fun chatInfo(context: Context, id: String, agent: AgentKind, title: String, rank: Int? = null): ShortcutInfoCompat {
         val name = title.trim().takeIf { it.isNotBlank() && it != "New Chat" } ?: "${HomeIcons.agentLabel(agent)} chat"

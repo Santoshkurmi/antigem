@@ -40,12 +40,12 @@ import androidx.glance.text.TextStyle
 import ai.antigem.R
 import ai.antigem.data.homescreen.HomeLinks
 import ai.antigem.data.homescreen.HomeScripts
-import java.io.File
 import ai.antigem.i18n.L
 
 /**
  * The Scripts widget, like Termux:Widget: the files in ~/.shortcuts (each opens a terminal tab running it) and in
- * ~/.shortcuts/tasks (each runs in the background, with a notification when it ends). ⟳ reads the folder again.
+ * folders named tasks (each runs in the background, with a notification when it ends). ⟳ reads the folder again; in
+ * the Ubuntu chroot it is read through root, so the widget shows what ⟳ (or Settings) read last.
  */
 class ScriptsWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -55,10 +55,13 @@ class ScriptsWidget : GlanceAppWidget() {
     }
 
     override suspend fun providePreview(context: Context, widgetCategory: Int) {
-        val sample = listOf(
-            HomeScripts.Script(File("/preview/backup.sh"), false, "backup.sh"),
-            HomeScripts.Script(File("/preview/git-pull-all.sh"), false, "git-pull-all.sh"),
-            HomeScripts.Script(File("/preview/tasks/sync-notes.sh"), true, "sync-notes.sh")
+        val sample = HomeScripts.Listing(
+            listOf(
+                HomeScripts.Script("/preview/backup.sh", false, "backup.sh"),
+                HomeScripts.Script("/preview/git-pull-all.sh", false, "git-pull-all.sh"),
+                HomeScripts.Script("/preview/tasks/sync-notes.sh", true, "sync-notes.sh")
+            ),
+            chroot = false, hasFolder = true, home = "/preview"
         )
         provideContent { HomeWidgetTheme { ScriptsContent(sample) } }
     }
@@ -71,16 +74,17 @@ class ScriptsWidgetReceiver : GlanceAppWidgetReceiver() {
 /** ⟳ on the Scripts widget. */
 class RefreshScriptsAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        HomeScripts.touch()
+        HomeScripts.refresh(context)
         ScriptsWidget().update(context, glanceId)
     }
 }
 
 @Composable
-private fun ScriptsContent(sample: List<HomeScripts.Script>?) {
+private fun ScriptsContent(sample: HomeScripts.Listing?) {
     val ctx = LocalContext.current
     val tick by HomeScripts.changes.collectAsState()
-    val scripts = sample ?: remember(tick) { HomeScripts.list(ctx) }
+    val listing = sample ?: remember(tick) { HomeScripts.listing(ctx) }
+    val scripts = listing.scripts
     val c = GlanceTheme.colors
     Column(widgetRoot(GlanceModifier.fillMaxSize()).padding(10.dp)) {
         Row(GlanceModifier.fillMaxWidth().padding(start = 2.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -88,28 +92,36 @@ private fun ScriptsContent(sample: List<HomeScripts.Script>?) {
             Spacer(GlanceModifier.width(8.dp))
             Column(GlanceModifier.defaultWeight()) {
                 Label(L.homescreen.scriptsWidget.scripts, 15.sp, c.onSurface, bold = true)
-                Label("~/.shortcuts", 11.sp, c.onSurfaceVariant)
+                Label(if (listing.chroot) L.homescreen.scriptsWidget.ubuntuShortcuts else "~/.shortcuts", 11.sp, c.onSurfaceVariant)
             }
             Box(GlanceModifier.clickable(actionRunCallback<RefreshScriptsAction>())) {
                 GlyphDisc(32.dp, cardColor(), R.drawable.ic_home_refresh, c.onSurfaceVariant)
             }
         }
         if (scripts.isEmpty()) {
+            // the chroot's list not read yet (⟳ reads it), or it could not be read, or there are no scripts
+            val (title, body) = when {
+                listing.chroot && !listing.read -> L.homescreen.scriptsWidget.scripts to L.homescreen.scriptsWidget.tapToReadShortcutsInUbuntu
+                listing.error != null -> L.homescreen.scriptsWidget.couldNotReadUbuntusShortcuts to listing.error.orEmpty()
+                else -> L.homescreen.scriptsWidget.noScriptsYet to L.homescreen.scriptsWidget.putScriptsInShortcutsATerminal
+            }
+            val tap = if (listing.chroot && (!listing.read || listing.error != null)) actionRunCallback<RefreshScriptsAction>()
+            else open(ctx, HomeLinks.Target.Settings("HOME_SCREEN"))
             Column(
-                GlanceModifier.fillMaxSize().clickable(open(ctx, HomeLinks.Target.Settings("HOME_SCREEN"))),
+                GlanceModifier.fillMaxSize().clickable(tap),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(L.homescreen.scriptsWidget.noScriptsYet, style = TextStyle(color = c.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), maxLines = 1)
+                Text(title, style = TextStyle(color = c.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center), maxLines = 1)
                 Spacer(GlanceModifier.height(4.dp))
                 Text(
-                    L.homescreen.scriptsWidget.putScriptsInShortcutsATerminal,
+                    body,
                     style = TextStyle(color = c.onSurfaceVariant, fontSize = 12.sp, textAlign = TextAlign.Center), maxLines = 3
                 )
             }
         } else {
             LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                items(scripts, itemId = { it.file.absolutePath.hashCode().toLong() }) { s -> ScriptRow(s) }
+                items(scripts, itemId = { it.path.hashCode().toLong() }) { s -> ScriptRow(s) }
             }
         }
     }
@@ -123,7 +135,7 @@ private fun ScriptRow(s: HomeScripts.Script) {
         Row(
             GlanceModifier.fillMaxWidth().cornerRadius(14.dp).background(cardColor())
                 .padding(horizontal = 10.dp, vertical = 8.dp)
-                .clickable(open(ctx, HomeLinks.Target.Script(s.file.absolutePath, s.background))),
+                .clickable(open(ctx, HomeLinks.Target.Script(s.path, s.background, s.chroot))),
             verticalAlignment = Alignment.CenterVertically
         ) {
             GlyphDisc(

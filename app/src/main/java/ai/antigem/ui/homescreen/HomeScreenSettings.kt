@@ -17,6 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,7 +100,18 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
     val opacity by HomePrefs.opacity.collectAsState()
     val hideTitles by HomePrefs.hideTitles.collectAsState()
     val scriptsTick by HomeScripts.changes.collectAsState()
-    val scripts = remember(scriptsTick) { HomeScripts.list(context) }
+    val scriptList = remember(scriptsTick) { HomeScripts.listing(context) }
+    val scripts = scriptList.scripts
+    // the Ubuntu chroot's ~/.shortcuts is read through root: once when the page opens, then with ⟳
+    var readingScripts by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (HomeScripts.chrootInstall(context) != null) {
+            readingScripts = true
+            HomeScripts.refresh(context)
+            readingScripts = false
+        }
+    }
+    var addingScript by remember { mutableStateOf(false) }
     // how many of each widget are placed: counted again whenever this page comes back
     var counts by remember { mutableStateOf(WidgetKind.entries.associateWith { HomeWidgets.count(context, it) }) }
     val owner = LocalLifecycleOwner.current
@@ -187,23 +206,29 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
         }
 
         Section(Icons.Outlined.Terminal, L.homescreen.settings.scriptsShortcuts) {
-            Hint(
-                "Like Termux:Widget: files in ~/.shortcuts open a terminal tab that runs them; files in ~/.shortcuts/tasks run " +
-                    "in the background and notify you when they end. The first line picks the interpreter (#!/usr/bin/env python3), " +
-                    "otherwise bash. Use the Scripts widget, or add one script as its own icon:"
-            )
+            Hint(L.homescreen.settings.likeTermuxWidgetFilesInShortcuts)
+            if (scriptList.chroot) {
+                Spacer(Modifier.height(4.dp))
+                Hint(L.homescreen.settings.inTheUbuntuChrootTheScripts)
+            }
             Spacer(Modifier.height(6.dp))
-            if (!HomeScripts.dir(context).isDirectory) {
-                OutlinedButton(onClick = {
-                    if (HomeScripts.ensureFolders(context)) {
-                        AppToastHelper.showToast(L.homescreen.settings.madeShortcutsAndShortcutsTasks, ChatToastType.SUCCESS)
-                        HomeWidgets.refreshScripts(context)
-                    } else {
-                        AppToastHelper.showToast(L.homescreen.settings.setUpTheTerminalFirst, ChatToastType.INFO)
+            when {
+                readingScripts && !scriptList.read -> Hint(L.homescreen.settings.readingUbuntusShortcuts)
+                scriptList.error != null -> Text(
+                    L.homescreen.homeScripts.couldNotReadTheUbuntuChroot(scriptList.error),
+                    fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error
+                )
+                scriptList.read && !scriptList.hasFolder -> OutlinedButton(onClick = {
+                    scope.launch {
+                        if (HomeScripts.ensureFolders(context)) {
+                            AppToastHelper.showToast(L.homescreen.settings.madeShortcutsAndShortcutsTasks, ChatToastType.SUCCESS)
+                            HomeWidgets.refreshScripts(context)
+                        } else {
+                            AppToastHelper.showToast(L.homescreen.settings.setUpTheTerminalFirst, ChatToastType.INFO)
+                        }
                     }
                 }) { Text(L.homescreen.settings.makeTheFolders) }
-            } else if (scripts.isEmpty()) {
-                Text(L.homescreen.settings.noScriptsYet, fontSize = 12.5.sp, color = subtle())
+                scripts.isEmpty() -> Text(L.homescreen.settings.noScriptsYet, fontSize = 12.5.sp, color = subtle())
             }
             scripts.forEach { s ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -211,12 +236,37 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
                         Text(s.label, fontWeight = FontWeight.Medium, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(if (s.background) L.homescreen.settings.inTheBackground else L.homescreen.settings.inATerminalTab, fontSize = 11.5.sp, color = subtle())
                     }
-                    TextButton(onClick = { HomeShortcuts.pinScript(context, s) }) { Text(L.homescreen.settings.addIcon) }
+                    if (s.link) {
+                        // a link added here (or by ln -s): only the link goes, the script stays
+                        TextButton(onClick = {
+                            scope.launch {
+                                if (HomeScripts.removeLink(context, s)) {
+                                    AppToastHelper.showToast(L.homescreen.settings.removedNameTheScriptItself(s.label), ChatToastType.SUCCESS)
+                                    HomeWidgets.refreshScripts(context)
+                                } else {
+                                    AppToastHelper.showToast(L.homescreen.settings.couldNotRemoveName(s.label), ChatToastType.ERROR)
+                                }
+                            }
+                        }) { Text(L.common.remove) }
+                    }
+                    TextButton(onClick = { scope.launch { HomeShortcuts.pinScript(context, s) } }) { Text(L.homescreen.settings.addIcon) }
                 }
             }
-            if (HomeScripts.dir(context).isDirectory) {
+            if (scriptList.hasFolder || scriptList.chroot) {
+                Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { HomeWidgets.refreshScripts(context) }) { Icon(Icons.Outlined.Refresh, L.homescreen.settings.lookAgain) }
+                    if (scriptList.hasFolder) {
+                        OutlinedButton(onClick = { addingScript = true }) { Text(L.homescreen.settings.addAScript) }
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    IconButton(onClick = {
+                        scope.launch {
+                            readingScripts = true
+                            HomeScripts.refresh(context)
+                            HomeWidgets.refreshScripts(context)
+                            readingScripts = false
+                        }
+                    }) { Icon(Icons.Outlined.Refresh, L.homescreen.settings.lookAgain) }
                     Hint(L.homescreen.settings.addedOrRenamedScriptsLookAgain)
                 }
             }
@@ -274,6 +324,14 @@ fun HomeScreenSettingsCard(modifier: Modifier = Modifier) {
         )
     }
 
+    if (addingScript) {
+        AddScriptDialog(onDismiss = { addingScript = false }) { name ->
+            addingScript = false
+            AppToastHelper.showToast(L.homescreen.settings.nameIsOnTheScriptsWidget(name), ChatToastType.SUCCESS)
+            HomeWidgets.refreshScripts(context)
+        }
+    }
+
     if (pickingChat) {
         ChatPickerDialog(
             title = L.homescreen.settings.whichChatShouldGetAnIcon,
@@ -303,6 +361,132 @@ private fun ChatPickerDialog(title: String, chats: List<HomeChat>, onDismiss: ()
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text(L.common.cancel) } }
     )
+}
+
+/**
+ * Picks a script anywhere in the home (AntiGem's, or the Ubuntu chroot's) and puts a link to it in ~/.shortcuts, or in
+ * ~/.shortcuts/tasks to run in the background: the script stays where it is, no copy.
+ */
+@Composable
+private fun AddScriptDialog(onDismiss: () -> Unit, onAdded: (String) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val home = remember { HomeScripts.pickerHome(context) }
+    // null: the home
+    var dir by remember { mutableStateOf<String?>(null) }
+    var browse by remember { mutableStateOf<HomeScripts.Browse?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var showHidden by remember { mutableStateOf(false) }
+    var picked by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }
+    var background by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(dir) {
+        loading = true
+        browse = HomeScripts.browse(context, dir)
+        loading = false
+    }
+    fun tilde(path: String): String =
+        if (home != null && (path == home || path.startsWith("$home/"))) "~" + path.removePrefix(home) else path
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (picked == null) L.homescreen.settings.pickAScript else L.homescreen.settings.addToTheScriptsWidget, fontSize = 18.sp) },
+        text = {
+            val chosen = picked
+            if (chosen == null) {
+                val cur = browse?.dir ?: dir ?: home.orEmpty()
+                Column {
+                    Text(tilde(cur), fontSize = 12.5.sp, color = subtle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        Modifier.fillMaxWidth().toggleRowSemantics(showHidden, { showHidden = it }),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(L.homescreen.settings.showHiddenFiles, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Switch(checked = showHidden, onCheckedChange = { showHidden = it }, modifier = Modifier.mergedIntoRow())
+                    }
+                    val entries = browse?.entries.orEmpty().filter { showHidden || !it.name.startsWith(".") }
+                    LazyColumn(Modifier.heightIn(max = 380.dp)) {
+                        if (home != null && cur != home && cur.startsWith("$home/")) {
+                            item {
+                                PickRow(Icons.Outlined.ArrowUpward, L.homescreen.settings.upOneFolder) { dir = cur.substringBeforeLast('/') }
+                            }
+                        }
+                        items(entries, key = { (if (it.dir) "d:" else "f:") + it.name }) { e ->
+                            PickRow(if (e.dir) Icons.Outlined.Folder else Icons.Outlined.Description, e.name + if (e.dir) "/" else "") {
+                                if (e.dir) dir = "$cur/${e.name}"
+                                else {
+                                    picked = "$cur/${e.name}"
+                                    name = e.name
+                                    problem = null
+                                }
+                            }
+                        }
+                    }
+                    when {
+                        loading -> Hint(L.common.loading)
+                        browse?.error != null -> Text(browse?.error.orEmpty(), fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error)
+                        entries.isEmpty() -> Hint(L.homescreen.settings.nothingHere)
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(tilde(chosen), fontSize = 12.5.sp, color = subtle(), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Hint(L.homescreen.settings.aLinkToItGoesIn)
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it; problem = null }, singleLine = true,
+                        label = { Text(L.common.name) }, modifier = Modifier.fillMaxWidth()
+                    )
+                    listOf(false to L.homescreen.scriptsWidget.opensATerminalTab, true to L.homescreen.scriptsWidget.runsInTheBackground).forEach { (bg, label) ->
+                        Row(
+                            Modifier.fillMaxWidth().selectable(selected = background == bg, role = Role.RadioButton) { background = bg }.padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = background == bg, onClick = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(label, fontSize = 13.5.sp)
+                        }
+                    }
+                    problem?.let { Text(it, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.error) }
+                }
+            }
+        },
+        confirmButton = {
+            val chosen = picked
+            if (chosen != null) {
+                TextButton(
+                    enabled = !busy && HomeScripts.isGoodName(name.trim()),
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            val n = name.trim()
+                            val r = HomeScripts.addLink(context, chosen, n, background)
+                            busy = false
+                            if (r == null) onAdded(n) else problem = r
+                        }
+                    }
+                ) { Text(L.common.add) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { if (picked != null) { picked = null; problem = null } else onDismiss() }) {
+                Text(if (picked != null) L.common.back else L.common.cancel)
+            }
+        }
+    )
+}
+
+@Composable
+private fun PickRow(icon: ImageVector, text: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 @Composable

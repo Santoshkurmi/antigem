@@ -16,7 +16,6 @@ import ai.antigem.data.voice.VoiceCallLauncher
 import ai.antigem.ui.bubble.FloatingChatActivity
 import ai.antigem.ui.chat.ChatViewModelHolder
 import ai.antigem.ui.miniapps.MiniAppsActivity
-import java.io.File
 
 /**
  * The invisible screen every home-screen shortcut, app-icon menu entry and widget tap opens (see [HomeLinks]). It
@@ -69,7 +68,7 @@ class HomeLaunchActivity : Activity() {
             }
             is HomeLinks.Target.Script ->
                 if (!target.background) openApp(intent)
-                else if (trusted) HomeScripts.runInBackground(this, File(target.path))
+                else if (trusted) HomeScripts.runInBackground(this, target)
             else -> openApp(intent)
         }
     }

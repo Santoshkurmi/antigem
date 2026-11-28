@@ -374,6 +374,22 @@
             </intent-filter>
         </activity>
 
+        <!-- "AntiGem script" in the launcher's widgets/shortcuts list (like Termux:Widget's): pick a script of
+             ~/.shortcuts, the launcher gets its signed shortcut back. Exported: launchers start it. -->
+        <activity
+            android:name="ai.antigem.ui.homescreen.ScriptShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/shortcut_script_label"
+            android:taskAffinity="${applicationId}.scriptshortcut"
+            android:theme="@style/Theme.Gemini"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize">
+            <intent-filter>
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Home-screen widgets: Chats, Quick actions, One chat, Scripts -->
         <receiver
             android:name="ai.antigem.ui.homescreen.ChatsWidgetReceiver"

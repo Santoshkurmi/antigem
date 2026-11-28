@@ -20,4 +20,5 @@
     <string name="widget_actions_description">One-tap buttons: new chats, Terminal, Browser, Code, Files and more</string>
     <string name="widget_scripts_label">Scripts</string>
     <string name="widget_scripts_description">Run your ~/.shortcuts scripts, like Termux:Widget</string>
+    <string name="shortcut_script_label">AntiGem script</string>
 </resources>

@@ -19,8 +19,9 @@ import ai.antigem.i18n.L
  *
  * Each link's intent carries the app's signature of exactly that link ([AppIntentKey], purpose = the link's URI): the
  * launcher screen is exported (launchers of Android 7 start shortcuts as themselves), and no other app may run the
- * user's scripts, start Jarvis or the voice call, or open web pages through it. A leaked shortcut (Android 7 hands
- * pinned shortcuts to every app in a broadcast) unlocks only its own link.
+ * user's scripts, start Jarvis or the voice call, or open web pages through it. Links only ever go to Android's
+ * shortcut service and to trusted launchers ([HomeLaunchers]: pinning on Android 7, the "AntiGem script" picker); a
+ * leaked shortcut would still unlock only its own link.
  */
 object HomeLinks {
     /** [HomeLaunchActivity]: open the link in the intent's data. */
@@ -53,8 +54,11 @@ object HomeLinks {
         data class OpenPage(val page: Page) : Target
         /** A web page in AntiGem's browser. */
         data class Web(val url: String) : Target
-        /** A script of ~/.shortcuts: in a new terminal tab, or in the background (a Run with a notification at the end). */
-        data class Script(val path: String, val background: Boolean) : Target
+        /**
+         * A script of ~/.shortcuts: in a new terminal tab, or in the background (a Run with a notification at the end).
+         * [chroot]: [path] is inside the Ubuntu chroot (links made before the chroot had scripts have no "rt").
+         */
+        data class Script(val path: String, val background: Boolean, val chroot: Boolean = false) : Target
         /** One run on the Run page (the finished-script notification). */
         data class RunEntry(val id: String) : Target
         data object TerminalWindow : Target
@@ -76,6 +80,7 @@ object HomeLinks {
             is Target.Web -> b.authority("web").appendQueryParameter("u", target.url)
             is Target.Script -> b.authority("script").appendQueryParameter("p", target.path)
                 .appendQueryParameter("bg", if (target.background) "1" else "0")
+                .apply { if (target.chroot) appendQueryParameter("rt", "chroot") }
             is Target.RunEntry -> b.authority("run").appendPath(target.id)
             Target.TerminalWindow -> b.authority("terminal-window")
             Target.VoiceCall -> b.authority("voice")
@@ -101,7 +106,11 @@ object HomeLinks {
                 "new" -> Target.NewChat(agent(seg.getOrNull(0)))
                 "page" -> Target.OpenPage(Page.entries.firstOrNull { it.name.equals(seg.getOrNull(0), true) } ?: return null)
                 "web" -> Target.Web(uri.getQueryParameter("u")?.takeIf { it.isNotBlank() } ?: return null)
-                "script" -> Target.Script(uri.getQueryParameter("p")?.takeIf { it.isNotBlank() } ?: return null, uri.getQueryParameter("bg") == "1")
+                "script" -> Target.Script(
+                    uri.getQueryParameter("p")?.takeIf { it.isNotBlank() } ?: return null,
+                    uri.getQueryParameter("bg") == "1",
+                    uri.getQueryParameter("rt") == "chroot"
+                )
                 "run" -> Target.RunEntry(seg.getOrNull(0) ?: return null)
                 "terminal-window" -> Target.TerminalWindow
                 "voice" -> Target.VoiceCall
